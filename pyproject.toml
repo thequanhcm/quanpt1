@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quan-ai-brain"
+version = "0.1.0"
+description = "Safety-first executive assistant foundation for QUAN AI BRAIN"
+readme = "README_SPRINT1.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary - internal project" }
+authors = [{ name = "QUAN AI BRAIN project" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0,<10.0"]
+
+[project.scripts]
+quan-ai-brain = "quan_ai_brain.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-ra"
