@@ -7,11 +7,12 @@ from pathlib import Path
 from typing import Any
 
 from quan_ai_brain.core.redaction import redact_value
-from quan_ai_brain.tools.path_guard import PathGuard
 
 
 class AuditLogger:
     def __init__(self, workspace: str | Path, relative_log_path: str = "logs/audit.jsonl") -> None:
+        from quan_ai_brain.tools.path_guard import PathGuard
+
         self.workspace = Path(workspace).resolve()
         self.guard = PathGuard(self.workspace)
         self.log_path = self.guard.resolve(relative_log_path)

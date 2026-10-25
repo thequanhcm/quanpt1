@@ -1,0 +1,1339 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QUAN AI BRAIN — Phòng Điều Hành & Tham Vấn Chủ Nhân (Port 8766)</title>
+  <meta name="description" content="Trung tâm điều hành và tham vấn ý kiến Chủ nhân Quanpt1 của Trợ lý Nhân sự Số QUAN AI BRAIN.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/executive.css">
+  <script>
+    window.switchTab = function(tabId) {
+      try {
+        const tabs = document.querySelectorAll(".nav-tab");
+        const contents = document.querySelectorAll(".tab-content");
+        const navBtn = document.querySelector(`.nav-tab[data-tab="${tabId}"]`);
+        const targetSection = document.getElementById(tabId);
+
+        tabs.forEach(t => t.classList.remove("active"));
+        contents.forEach(c => c.classList.remove("active"));
+
+        if (navBtn) navBtn.classList.add("active");
+        if (targetSection) {
+          targetSection.classList.add("active");
+          targetSection.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        if (tabId === "tab-consultation" && window.loadConsultations) window.loadConsultations();
+        if (tabId === "tab-learning" && window.loadLearningReports) window.loadLearningReports();
+        if (tabId === "tab-persona" && window.loadCapabilities) window.loadCapabilities();
+        if (tabId === "tab-edge-sync" || tabId === "tab-pi5-embodiment") {
+          if (window.loadEdgeTelemetry) window.loadEdgeTelemetry();
+          if (window.loadPiFiles) window.loadPiFiles();
+        }
+      } catch (err) {
+        console.error("switchTab error:", err);
+      }
+    };
+  </script>
+</head>
+<body>
+  <div class="cockpit-container">
+    <!-- Top Executive Header -->
+    <header class="executive-header">
+      <div class="header-branding">
+        <div class="brand-avatar">
+          <span class="avatar-glow"></span>
+          <span class="avatar-text">QB</span>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <h1 class="brand-title">QUAN AI BRAIN</h1>
+            <span class="badge-role">BẢN SAO NHÂN SỰ SỐ</span>
+            <span class="badge-port">PORT :8766</span>
+          </div>
+          <p class="brand-subtitle">Trợ Lý Điều Hành Số Đa Lĩnh Vực — Đại Diện & Thấu Hiểu Quyền Năng Của Quanpt1</p>
+        </div>
+      </div>
+
+      <div class="header-telemetry">
+        <div class="telemetry-pill">
+          <span class="dot live-pulse"></span>
+          <span class="pill-label">Local LLM:</span>
+          <span class="pill-value" id="status-llm">Đang kết nối...</span>
+        </div>
+        <div class="telemetry-pill">
+          <span class="pill-label">Trí Nhớ:</span>
+          <span class="pill-value" id="status-memories">... ký ức</span>
+        </div>
+        <div class="telemetry-pill pill-warning" id="pill-consultation-count">
+          <span class="pill-label">Cần Tham Vấn:</span>
+          <span class="pill-value" id="status-pending-count">0 phiếu</span>
+        </div>
+        <div class="telemetry-pill pill-wake-word" id="pill-wake-word" title="Đánh thức rảnh tay: Gọi 'Tony ơi', 'Hi Tony', 'Chào trợ lý'...">
+          <span class="wake-dot" id="wake-dot-indicator"></span>
+          <span class="pill-label">Đánh Thức:</span>
+          <button class="wake-toggle-btn" id="btn-toggle-wake">OFF</button>
+          <span class="wake-state-label" id="wake-state-text">TẮT</span>
+        </div>
+        <a href="http://127.0.0.1:8765/" target="_blank" class="nav-switch-link" title="Mở Web Chat Console nhanh">
+          💬 Chat Cục Bộ (:8765) ↗
+        </a>
+      </div>
+    </header>
+
+    <!-- ================= VISUAL COCKPIT HERO: DIGITAL AVATAR & EXECUTIVE STATUS ================= -->
+    <section class="visual-cockpit-hero" id="visual-cockpit-hero">
+      <div class="cockpit-hero-grid">
+
+        <!-- Column 1: TONY Digital Avatar Stage -->
+        <div class="card cockpit-avatar-card" id="cockpit-avatar-card">
+          <div class="avatar-stage-header">
+            <div class="avatar-identity">
+              <span class="live-dot pulse"></span>
+              <strong>TONY</strong>
+              <span class="avatar-role-tag">DIGITAL HUMAN (MẪU A — DỊU DÀNG, THÂN THIỆN)</span>
+            </div>
+            <div class="avatar-state-tag state-idle" id="avatar-state-tag">
+              <span class="state-icon" id="avatar-state-icon">●</span>
+              <span class="state-name" id="avatar-state-name">IDLE (SẴN SÀNG)</span>
+            </div>
+          </div>
+
+          <!-- Digital Human (Model A) Canvas Viewport -->
+          <div class="avatar-viewport digital-human-viewport state-idle" id="avatar-viewport">
+            <canvas id="tony-avatar-canvas" width="480" height="480" class="digital-human-canvas"></canvas>
+          </div>
+
+          <!-- Real-Time Audio Waveform Canvas -->
+          <div class="avatar-waveform-box">
+            <span class="waveform-label">Sóng Âm Thanh / Trạng Thái:</span>
+            <canvas id="avatar-waveform-canvas" width="220" height="28" class="waveform-canvas"></canvas>
+          </div>
+
+          <!-- 11 States Quick Preview / Selector for Quanpt1 -->
+          <div class="avatar-state-pills-wrap">
+            <span class="pills-title">Biểu cảm 11 trạng thái:</span>
+            <div class="avatar-state-pills" id="avatar-state-pills">
+              <button class="pill-state active" data-state="IDLE" title="Sẵn sàng, chớp mắt nhẹ">IDLE</button>
+              <button class="pill-state" data-state="LISTENING" title="Đang nghe sau từ đánh thức">LISTEN</button>
+              <button class="pill-state" data-state="THINKING" title="Đang suy luận lập kế hoạch">THINK</button>
+              <button class="pill-state" data-state="RESEARCHING" title="Đang rà soát tài liệu">RESEARCH</button>
+              <button class="pill-state" data-state="LEARNING" title="Đang học hỏi tự cải tiến">LEARN</button>
+              <button class="pill-state" data-state="SPEAKING" title="Đang phát giọng nói TTS">SPEAK</button>
+              <button class="pill-state" data-state="WAITING_FOR_OWNER" title="Chờ Quanpt1 duyệt">WAITING</button>
+              <button class="pill-state" data-state="BLOCKED" title="Bị chặn bởi ranh giới R5">BLOCKED</button>
+              <button class="pill-state" data-state="ERROR" title="Cảnh báo sự cố">ERROR</button>
+              <button class="pill-state" data-state="SAFE_MODE" title="Đóng băng an toàn">SAFE</button>
+              <button class="pill-state" data-state="OFFLINE" title="Ngoại tuyến / Mất kết nối">OFFLINE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 2: Supervisor & Active Focus -->
+        <div class="card cockpit-focus-card">
+          <div class="focus-card-header">
+            <span class="card-tag">ĐIỀU HÀNH THỜI GIAN THỰC</span>
+            <span class="badge badge-autonomy" id="badge-autonomy-level">LEVEL_A — GIÁM SÁT KỶ LUẬT</span>
+          </div>
+
+          <div class="active-task-hero">
+            <div class="task-id-row">
+              <span class="task-lbl">NHIỆM VỤ ĐANG TẬP TRUNG:</span>
+              <code class="task-id-code" id="hero-task-id">task_executive_supervision</code>
+            </div>
+            <h3 class="task-goal-text" id="hero-task-goal">
+              Giám Sát & Điều Hành Trợ Lý Bản Sao Số Dưới Quyền Quanpt1
+            </h3>
+            
+            <div class="task-progress-box">
+              <div class="progress-labels">
+                <span id="hero-step-label">Tiến trình DAG: Bước 2 / 3</span>
+                <span class="progress-pct" id="hero-progress-pct">66%</span>
+              </div>
+              <div class="progress-track">
+                <div class="progress-bar-fill" id="hero-progress-bar" style="width: 66%;"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="focus-telemetry-grid">
+            <div class="telem-box">
+              <span class="telem-lbl">Lõi LLM:</span>
+              <strong class="telem-val" id="telem-model-val">qwen2.5:7b (Local)</strong>
+            </div>
+            <div class="telem-box">
+              <span class="telem-lbl">Chu Kỳ Tự Học:</span>
+              <strong class="telem-val text-accent" id="telem-learning-val">Kỳ #1 (Đạt 5/5 Benchmark)</strong>
+            </div>
+            <div class="telem-box">
+              <span class="telem-lbl">Trạng Thái Giám Sát:</span>
+              <strong class="telem-val text-success" id="telem-supervisor-status">ONLINE — ACTIVE</strong>
+            </div>
+            <div class="telem-box">
+              <span class="telem-lbl">Đồng Bộ UTC:</span>
+              <strong class="telem-val mono" id="telem-clock-utc">--:--:-- UTC</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Column 3: Governance Boundaries & Emergency Control -->
+        <div class="card cockpit-safety-card">
+          <div class="safety-card-header">
+            <span class="card-tag">RANH GIỚI AN TOÀN & KHẨN CẤP</span>
+            <span class="badge badge-normal" id="badge-emergency-status">BÌNH THƯỜNG</span>
+          </div>
+
+          <div class="boundary-strip">
+            <div class="boundary-cell cell-auto" title="R0-R2: Tự động thực thi an toàn trong Sandbox">
+              <span class="b-tier">R0-R2</span>
+              <span class="b-status">TỰ ĐỘNG</span>
+            </div>
+            <div class="boundary-cell cell-quarantine" title="R3: Cách ly tri thức mới vào Quarantine Store">
+              <span class="b-tier">R3</span>
+              <span class="b-status">CÁCH LY</span>
+            </div>
+            <div class="boundary-cell cell-gated" title="R4: Bắt buộc xin ý kiến Quanpt1">
+              <span class="b-tier">R4</span>
+              <span class="b-status">CHỜ DUYỆT</span>
+            </div>
+            <div class="boundary-cell cell-blocked" title="R5: Cấm tuyệt đối, không có cơ chế bỏ qua">
+              <span class="b-tier">R5</span>
+              <span class="b-status">KHÓA CỨNG</span>
+            </div>
+          </div>
+
+          <div class="edge-link-box" id="edge-link-box">
+            <div class="edge-link-header">
+              <span class="edge-icon" id="edge-link-icon">📡</span>
+              <strong>Raspberry Pi 5 Edge Kiosk:</strong>
+              <span class="edge-rtt-tag" id="edge-rtt-tag" style="display:none;">RTT: --ms</span>
+            </div>
+            <div class="edge-link-status">
+              <span class="badge badge-planned" id="badge-edge-status">STANDBY — Chờ Thiết Bị</span>
+              <span class="edge-auth-tag">HMAC-SHA256 Token</span>
+            </div>
+            <div class="edge-alert-banner" id="edge-alert-banner" style="display:none;">
+              <span class="alert-icon" id="edge-alert-icon">⚠️</span>
+              <div class="alert-content">
+                <strong class="alert-title" id="edge-alert-title">CẢNH BÁO MẤT KẾT NỐI</strong>
+                <p class="alert-msg" id="edge-alert-msg"></p>
+              </div>
+            </div>
+            <div class="edge-actions-row" style="display: flex; flex-direction: column; gap: 8px;">
+              <button class="btn btn-edge-addon" id="btn-open-edge-addon" onclick="window.switchTab('tab-edge-sync'); return false;" title="Mở bảng điều khiển, truyền dữ liệu và biểu cảm Mẫu A trên Pi 5">
+                ⚡ ĐIỀU KHIỂN &amp; TRUYỀN TIN PI 5
+              </button>
+              <button class="btn btn-edge-addon" id="btn-quick-open-camera" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(0, 229, 255, 0.35)); border-color: #00e5ff; color: #e0f2fe; font-weight: 700;" title="Mở nhanh khung hình trực tiếp và chụp ảnh camera Pi 5">
+                📷 XEM CAMERA PI 5 TRỰC TIẾP
+              </button>
+            </div>
+          </div>
+
+          <!-- Emergency Action Buttons -->
+          <div class="emergency-actions-box">
+            <button class="btn btn-emergency-stop" id="btn-emergency-stop" title="Dừng ngay lập tức toàn bộ công cụ và tác vụ">
+              🛑 STOP KHẨN CẤP
+            </button>
+            <button class="btn btn-emergency-freeze" id="btn-emergency-freeze" title="Đóng băng hệ thống về chế độ chỉ đọc">
+              ❄️ ĐÓNG BĂNG (FREEZE)
+            </button>
+            <button class="btn btn-emergency-resume hidden" id="btn-emergency-resume" title="Khôi phục trạng thái vận hành bình thường">
+              ▶️ KHÔI PHỤC VẬN HÀNH
+            </button>
+          </div>
+          <div class="emergency-note" id="emergency-notice-text">
+            * Nhấn nút Khẩn Cấp để khóa toàn diện hệ thống trong &lt; 0.1 giây.
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Main Navigation Tabs -->
+    <nav class="executive-nav">
+      <button class="nav-tab active" data-tab="tab-persona" id="nav-btn-persona">
+        <span class="tab-icon">👤</span>
+        <span class="tab-text">Nhân Sự Số Điều Hành</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-consultation" id="nav-btn-consultation">
+        <span class="tab-icon">📬</span>
+        <span class="tab-text">Hộp Thư Tham Vấn & Phê Duyệt</span>
+        <span class="tab-badge" id="badge-consultation-counter">0</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-learning" id="nav-btn-learning">
+        <span class="tab-icon">🔬</span>
+        <span class="tab-text">Báo Cáo Tự Học Định Kỳ</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-orchestration" id="nav-btn-orchestration">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-text">Điều Hành & Ranh Giới An Toàn</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-dialogue" id="nav-btn-dialogue">
+        <span class="tab-icon">💬</span>
+        <span class="tab-text">Hội Thoại Trực Tiếp Với Bản Sao</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-edge-sync" id="nav-btn-edge-sync">
+        <span class="tab-icon">📡</span>
+        <span class="tab-text">Đồng Bộ &amp; Truyền Tin Pi 5</span>
+        <span class="tab-badge badge-green" id="badge-edge-tab-status">LIVE</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-pi5-embodiment" id="nav-btn-pi5-embodiment">
+        <span class="tab-icon">✨</span>
+        <span class="tab-text">Bật/Tắt Hình Thể Pi 5</span>
+        <span class="tab-badge" id="badge-tab-embodiment-state" style="background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);">STANDBY</span>
+      </button>
+    </nav>
+
+    <!-- Content Area: Dedicated Sections -->
+    <main class="executive-main">
+
+      <!-- ================= TAB 1: EXECUTIVE PERSONA ================= -->
+      <section id="tab-persona" class="tab-content active">
+        <div class="section-intro">
+          <h2>Hồ Sơ Bản Sao Số Của Quanpt1 & Tuyên Ngôn Kỷ Luật</h2>
+          <p>Nhân sự số thừa hành các công việc phân tích, quản trị và điều phối dưới quyền của Anh.</p>
+        </div>
+
+        <div class="persona-grid">
+          <div class="card card-persona-profile">
+            <div class="card-header">
+              <span class="card-tag">HỒ SƠ ĐIỀU HÀNH</span>
+              <h3>Bản Sao Nhân Sự Số Cấp Cao</h3>
+            </div>
+            <div class="profile-details">
+              <div class="detail-row">
+                <span class="detail-key">Tên nhân sự số:</span>
+                <span class="detail-val highlight">QUAN AI BRAIN</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-key">Chủ nhân & Chỉ huy:</span>
+                <span class="detail-val highlight">Quanpt1 (Thẩm quyền tối cao)</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-key">Chế độ vận hành:</span>
+                <span class="detail-val">EXECUTIVE_REPLICA (Bản sao kỷ luật)</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-key">Phong cách ứng xử:</span>
+                <span class="detail-val">Chuẩn mực, xưng "Em" gọi "Anh", quyết đoán, nói có sách mách có chứng.</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-key">Triết lý cốt lõi:</span>
+                <span class="detail-val text-accent">Evidence-Based Governance & Zero-Trust Safety</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card-directives">
+            <div class="card-header">
+              <span class="card-tag">ĐIỀU LỆ THỰC THI</span>
+              <h3>5 Nguyên Tắc Bất Di Bất Dịch Của Bản Sao</h3>
+            </div>
+            <div class="directives-list" id="persona-directives-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Capability Matrix Section -->
+        <div class="card card-capability-matrix mt-24">
+          <div class="card-header flex-between">
+            <div>
+              <span class="card-tag">GROUND-TRUTH ARCHITECTURE</span>
+              <h3>Ma Trận Năng Lực Hệ Thống (Thực Tế Đã Kiểm Chứng)</h3>
+            </div>
+            <button class="btn btn-outline btn-sm" id="btn-refresh-caps">🔄 Làm mới ma trận</button>
+          </div>
+          <p class="section-desc">Bộ đăng ký năng lực chính xác 100% giúp bản sao trả lời trung thực, không bịa đặt hoặc ảo tưởng sức mạnh.</p>
+          <div class="capabilities-table-wrapper">
+            <table class="cap-table">
+              <thead>
+                <tr>
+                  <th>Năng Lực / Phân Hệ</th>
+                  <th>Phạm Vi</th>
+                  <th>Trạng Thái Vận Hành</th>
+                  <th>Mức Rủi Ro</th>
+                  <th>Ghi Chú Kiểm Chứng (Bằng Chứng)</th>
+                </tr>
+              </thead>
+              <tbody id="capabilities-tbody">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 2: CONSULTATION INBOX ================= -->
+      <section id="tab-consultation" class="tab-content">
+        <div class="section-intro flex-between">
+          <div>
+            <h2>Hộp Thư Tham Vấn & Xin Ý Kiến Chỉ Đạo Của Anh</h2>
+            <p>Nơi Brain chủ động trình các vấn đề chiến lược, bản vá nâng cấp mã nguồn (R4/R5) và các đề xuất cần Anh quyết sách.</p>
+          </div>
+          <div class="filter-group">
+            <button class="btn btn-sm btn-filter active" data-filter="ALL">Tất cả</button>
+            <button class="btn btn-sm btn-filter" data-filter="PENDING_REVIEW">Chờ duyệt</button>
+            <button class="btn btn-sm btn-filter" data-filter="APPROVED">Đã duyệt</button>
+            <button class="btn btn-sm btn-filter" data-filter="DIRECTED">Đã chỉ đạo</button>
+          </div>
+        </div>
+
+        <div class="consultation-layout">
+          <div class="consultation-cards-container" id="consultation-tickets-list">
+            <!-- Dynamic Ticket Cards -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 3: PERIODIC LEARNING ================= -->
+      <section id="tab-learning" class="tab-content">
+        <div class="section-intro flex-between">
+          <div>
+            <h2>Báo Cáo Tự Học Định Kỳ & Hồ Sơ Nâng Cấp Hệ Thống</h2>
+            <p>Hệ thống tự học có giám sát: phát hiện lỗi lặp lại, nghiên cứu tài liệu, tự sinh bản vá và cách ly an toàn.</p>
+          </div>
+          <button class="btn btn-primary" id="btn-trigger-learning-cycle">
+            🚀 Kích Hoạt Chu Kỳ Tự Học Ngay
+          </button>
+        </div>
+
+        <div class="learning-dashboard-grid">
+          <div class="card card-learning-history">
+            <div class="card-header">
+              <span class="card-tag">LỊCH SỬ CHU KỲ TỰ HỌC</span>
+              <h3>Danh Sách Các Kỳ Báo Cáo</h3>
+            </div>
+            <div class="reports-list" id="learning-reports-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <div class="card card-learning-detail" id="learning-report-detail-view">
+            <div class="card-header flex-between">
+              <div>
+                <span class="card-tag">CHI TIẾT HỒ SƠ TỰ HỌC</span>
+                <h3 id="rep-detail-title">Chọn một kỳ báo cáo để xem</h3>
+              </div>
+              <span class="badge badge-success" id="rep-detail-status">ALL_PASSED</span>
+            </div>
+            <div class="report-body" id="rep-detail-content">
+              <p class="placeholder-text">Đang tải dữ liệu hồ sơ tự học...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 4: ORCHESTRATION & GOVERNANCE ================= -->
+      <section id="tab-orchestration" class="tab-content">
+        <div class="section-intro">
+          <h2>Điều Hành Kế Hoạch Đa Lĩnh Vực & Giám Sát Ranh Giới An Toàn</h2>
+          <p>Mô hình DAG không thực thi bừa bãi. Phân định rạch ròi giữa lập kế hoạch (Planning) và thực thi (Execution).</p>
+        </div>
+
+        <div class="governance-grid">
+          <div class="card card-governance-levels">
+            <div class="card-header">
+              <span class="card-tag">CHÍNH SÁCH RỦI RO R0-R5</span>
+              <h3>Ranh Giới Thẩm Quyền Điều Hành</h3>
+            </div>
+            <div class="risk-tiers">
+              <div class="risk-tier-item tier-r0">
+                <span class="tier-badge">R0</span>
+                <div class="tier-info">
+                  <strong>Truy vấn Trí nhớ & Suy Luận Cục Bộ:</strong> Tự động thực thi, không làm thay đổi trạng thái hệ thống.
+                </div>
+              </div>
+              <div class="risk-tier-item tier-r1">
+                <span class="tier-badge">R1</span>
+                <div class="tier-info">
+                  <strong>Lập Kế Hoạch DAG & Phân Rã Công Việc:</strong> Tự động lập kế hoạch an toàn không kích hoạt OS tool.
+                </div>
+              </div>
+              <div class="risk-tier-item tier-r2">
+                <span class="tier-badge">R2</span>
+                <div class="tier-info">
+                  <strong>Công Cụ Hộp Cát Đọc Dữ Liệu Cục Bộ:</strong> Chỉ đọc các tệp được cấp phép qua PathGuard.
+                </div>
+              </div>
+              <div class="risk-tier-item tier-r3">
+                <span class="tier-badge">R3</span>
+                <div class="tier-info">
+                  <strong>Ghi Dữ Liệu Nội Bộ & Lưu Trữ Tri Thức Mới:</strong> Tự động lưu vào vùng cách ly (Quarantine Store).
+                </div>
+              </div>
+              <div class="risk-tier-item tier-r4">
+                <span class="tier-badge tier-alert">R4</span>
+                <div class="tier-info">
+                  <strong>Nâng Cấp Mã Nguồn & Tương Tác OS:</strong> Bắt buộc lập hồ sơ xin ý kiến Anh trên Hộp thư tham vấn.
+                </div>
+              </div>
+              <div class="risk-tier-item tier-r5">
+                <span class="tier-badge tier-danger">R5</span>
+                <div class="tier-info">
+                  <strong>Hành Động Phá Hủy / Sản Xuất Nguy Cấp:</strong> Tuyệt đối CẤM (Hard-Blocked) — Không có cơ chế bỏ qua.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card card-satellite-ecosystem">
+            <div class="card-header">
+              <span class="card-tag">BẢO TỒN HỆ SINH THÁI VỆ TINH</span>
+              <h3>Trạng Thái Các Dự Án Vệ Tinh Của Anh</h3>
+            </div>
+            <p class="section-desc">Nguyên tắc bảo tồn tuyệt đối: Không can thiệp, không ghi đè, kết nối qua Adapter một chiều khi Anh phê duyệt.</p>
+            <div class="satellite-list">
+              <div class="satellite-item">
+                <div class="sat-header">
+                  <strong>DC-COMMAND & CLAE</strong>
+                  <span class="badge badge-planned">Bảo Tồn Read-Only</span>
+                </div>
+                <p>Hệ thống điều khiển trung tâm dữ liệu. Sẵn sàng kết nối qua Adapter đọc tài liệu SOP khi Anh chỉ đạo.</p>
+              </div>
+              <div class="satellite-item">
+                <div class="sat-header">
+                  <strong>SKILL_BAT_AI & BATTERY_AI_V4</strong>
+                  <span class="badge badge-planned">Bảo Tồn Read-Only</span>
+                </div>
+                <p>Hệ thống chuyên gia chẩn đoán pin Lithium & ắc quy. Không sửa đổi mã nguồn gốc.</p>
+              </div>
+              <div class="satellite-item">
+                <div class="sat-header">
+                  <strong>Kernel L3 & VDCIM Ecosystem</strong>
+                  <span class="badge badge-staging">Inert Staging</span>
+                </div>
+                <p>Cấu trúc tiến trình lõi hệ điều hành. Chờ phê duyệt kiến trúc trong Sprint 6+.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Durable Task Ledger & DAG Orchestration -->
+          <div class="card card-tasks-orchestration" style="grid-column: 1 / -1; margin-top: 16px;">
+            <div class="card-header flex-between">
+              <div>
+                <span class="card-tag">BẢNG ĐIỀU PHỐI NHIỆM VỤ BỀN VỮNG (DURABLE TASK REGISTRY)</span>
+                <h3 style="margin: 4px 0 0 0;">Tiến Trình Nhiệm Vụ &amp; Trực Quan Hóa Bước DAG</h3>
+              </div>
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <span class="badge badge-ready" id="badge-tasks-count">0 nhiệm vụ</span>
+                <button class="btn btn-sm btn-primary" id="btn-open-create-task" style="padding: 6px 14px; font-size: 13px;">➕ Khởi Tạo Nhiệm Vụ Mới</button>
+                <button class="btn btn-sm btn-outline" id="btn-refresh-tasks" style="padding: 6px 12px; font-size: 13px;">🔄 Làm Mới</button>
+              </div>
+            </div>
+
+            <!-- Inline Task Creator Form -->
+            <div id="box-create-task-form" style="display: none; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 16px; margin: 16px 0;">
+              <h4 style="margin-top: 0; color: #38bdf8; font-size: 14px;">➕ Khởi Tạo Kế Hoạch Nhiệm Vụ Mới (DAG Decomposition)</h4>
+              <div style="display: flex; flex-direction: column; gap: 10px;">
+                <div>
+                  <label style="font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px;">Mục tiêu nhiệm vụ (Goal):</label>
+                  <input type="text" id="input-task-goal" placeholder="Ví dụ: Rà soát hiệu năng hệ thống, kiểm toán bảo mật và lập báo cáo kỹ thuật..." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 13px; box-sizing: border-box;" />
+                </div>
+                <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
+                  <div>
+                    <label style="font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px;">Mức tự chủ (Autonomy Level):</label>
+                    <select id="select-task-autonomy" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 13px;">
+                      <option value="LEVEL_A" selected>LEVEL_A — Giám Sát Kỷ Luật (Khuyến nghị)</option>
+                      <option value="LEVEL_B">LEVEL_B — Bán Tự Động (R0-R2 tự hành)</option>
+                      <option value="LEVEL_C">LEVEL_C — Tự Chủ Có Ranh Giới (Chặn cứng R4/R5)</option>
+                    </select>
+                  </div>
+                  <div style="margin-top: 18px; display: flex; gap: 8px;">
+                    <button class="btn btn-sm btn-primary" id="btn-submit-create-task">🚀 Phân Rã &amp; Đăng Ký Nhiệm Vụ</button>
+                    <button class="btn btn-sm btn-outline" id="btn-cancel-create-task">Hủy</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Task List Table -->
+            <div class="tasks-table-wrapper" style="overflow-x: auto; margin-top: 12px;">
+              <table class="table-custom" style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.2); text-align: left; color: #94a3b8;">
+                    <th style="padding: 10px;">Mã Nhiệm Vụ</th>
+                    <th style="padding: 10px;">Mục Tiêu</th>
+                    <th style="padding: 10px;">Rủi Ro</th>
+                    <th style="padding: 10px;">Tự Chủ</th>
+                    <th style="padding: 10px;">Trạng Thái</th>
+                    <th style="padding: 10px;">Tiến Độ DAG</th>
+                    <th style="padding: 10px; text-align: right;">Hành Động</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-tasks-list">
+                  <tr>
+                    <td colspan="7" style="padding: 24px; text-align: center; color: #64748b;">
+                      Đang nạp danh sách nhiệm vụ từ DurableTaskRegistry...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Task Step DAG Detail Drawer -->
+            <div id="box-task-steps-detail" style="display: none; margin-top: 20px; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 16px;">
+              <div class="flex-between">
+                <h4 style="margin: 0; color: #38bdf8; font-size: 14px;" id="detail-task-title">Chi Tiết Các Bước DAG: task_xxx</h4>
+                <button class="btn btn-sm btn-outline" id="btn-close-task-detail" style="padding: 4px 10px; font-size: 12px;">✕ Đóng</button>
+              </div>
+              <div id="container-dag-steps" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 5: EXECUTIVE DIALOGUE ================= -->
+      <section id="tab-dialogue" class="tab-content">
+        <div class="dialogue-container">
+          <div class="dialogue-header">
+            <div>
+              <h3>Bàn Hội Thoại Trực Tiếp Với Bản Sao Nhân Sự Số</h3>
+              <p>Hỏi đáp kế hoạch, trao đổi chiến lược, chỉ đạo công việc. Phản hồi luôn tuân thủ nguyên tắc kỷ luật.</p>
+            </div>
+            <div class="dialogue-tools">
+              <span class="wake-badge" id="dialogue-wake-badge" title="Trạng thái lắng nghe từ khóa">🎙️ Đánh thức: TẮT</span>
+              <button class="btn btn-sm btn-outline" id="btn-dialogue-tts-toggle" title="Bật/Tắt đọc thành tiếng (TTS)">🔊 Đọc: BẬT</button>
+              <button class="btn btn-sm btn-outline" id="btn-clear-dialogue">🗑️ Xóa hội thoại</button>
+            </div>
+          </div>
+
+          <div class="dialogue-messages" id="dialogue-messages-list">
+            <div class="msg-bubble msg-assistant">
+              <div class="msg-author">QUAN AI BRAIN — BẢN SAO SỐ</div>
+              <div class="msg-text">
+                Kính chào Anh Quanpt1! Em là Bản sao nhân sự số của Anh, đã sẵn sàng tiếp nhận các chỉ đạo điều hành, báo cáo tiến độ và tham vấn quyết sách chiến lược. Anh cần em thực hiện hoặc chuẩn bị nội dung gì ạ?
+              </div>
+              <div class="msg-time">Bây giờ</div>
+            </div>
+          </div>
+
+          <div class="dialogue-input-bar">
+            <textarea id="dialogue-input" placeholder="Nhập chỉ đạo hoặc câu hỏi điều hành gửi Bản sao số của Anh... (Enter để gửi, Shift+Enter xuống dòng)" rows="2"></textarea>
+            <div class="dialogue-actions">
+              <button class="btn btn-voice" id="btn-dialogue-voice" title="Bật/Tắt Nhận diện giọng nói">🎙️</button>
+              <button class="btn btn-primary" id="btn-dialogue-send">Gửi Chỉ Đạo ➤</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 6: PI 5 EDGE SYNC & CONTROL ADD-ON ================= -->
+      <section id="tab-edge-sync" class="tab-content">
+        <div class="section-intro">
+          <h2>Bảng Điều Khiển &amp; Giám Sát Truyền Dữ Liệu Raspberry Pi 5 (Edge Add-On)</h2>
+          <p>Kênh truyền hai chiều Wi-Fi thời gian thực giữa PC Central Brain Core và Hình Thể Số Mẫu A trên Pi 5.</p>
+        </div>
+
+        <div class="edge-addon-grid">
+          <!-- Column 1: Live Wi-Fi Pipeline & Telemetry -->
+          <div class="card edge-telemetry-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="card-tag">WI-FI DATA PIPELINE</span>
+                <h3>Dòng Dữ Liệu Thời Gian Thực</h3>
+              </div>
+              <span class="badge badge-ready" id="addon-badge-link-state">🟢 ĐỒNG BỘ 100%</span>
+            </div>
+
+            <!-- Pipeline Visual Diagram -->
+            <div class="pipeline-flow-diagram">
+              <div class="pipeline-node node-pc">
+                <span class="node-icon">💻</span>
+                <strong>PC Core</strong>
+                <span class="node-ip" id="addon-pc-ip">192.168.1.11:8766</span>
+              </div>
+              <div class="pipeline-channel">
+                <div class="channel-line">
+                  <span class="pulse-dot"></span>
+                </div>
+                <div class="channel-info">
+                  <span class="rtt-counter" id="addon-live-rtt">RTT: 11ms</span>
+                  <span class="protocol-label">HMAC-SHA256 • 1.0s/tick</span>
+                </div>
+              </div>
+              <div class="pipeline-node node-pi">
+                <span class="node-icon">🍓</span>
+                <strong>Pi 5 Edge</strong>
+                <span class="node-ip" id="addon-pi-ip">192.168.1.21:8768</span>
+              </div>
+            </div>
+
+            <!-- Ping Graph Canvas -->
+            <div class="ping-graph-wrapper mt-16">
+              <div class="ping-header flex-between">
+                <span>Biểu đồ độ trễ Wi-Fi (Ping History):</span>
+                <span class="ping-val-highlight" id="addon-ping-avg">Trung bình: ~11ms</span>
+              </div>
+              <canvas id="canvas-ping-graph" width="460" height="75" class="ping-canvas"></canvas>
+            </div>
+
+            <!-- Packet Counters Grid -->
+            <div class="packet-stats-grid mt-16">
+              <div class="stat-box">
+                <span class="stat-lbl">Gói Nhịp Tim Nhận (In):</span>
+                <strong class="stat-val text-accent" id="addon-packets-in">0</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-lbl">Gói Điều Khiển Gửi (Out):</span>
+                <strong class="stat-val text-success" id="addon-packets-out">0</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-lbl">Chu Kỳ Polling:</span>
+                <strong class="stat-val">1.0 giây</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-lbl">Màn Hình Đích:</span>
+                <strong class="stat-val">7" DSI (1280x720)</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: Virtual 7" Screen Mirror & Direct Access -->
+          <div class="card edge-mirror-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="card-tag">VIRTUAL SCREEN MIRROR</span>
+                <h3>Gương Mặt Cô Trợ Lý Mẫu A Trên Pi 5</h3>
+              </div>
+              <a href="http://192.168.1.21:8768/" target="_blank" class="btn btn-sm btn-outline" id="btn-open-kiosk-direct">
+                🔗 Mở Tab Trực Tiếp
+              </a>
+            </div>
+
+            <div class="virtual-kiosk-frame">
+              <div class="virtual-kiosk-screen" id="virtual-kiosk-screen">
+                <canvas id="virtual-avatar-canvas" width="420" height="420" class="virtual-canvas"></canvas>
+                <div class="virtual-status-overlay">
+                  <span class="virtual-dot online"></span>
+                  <span class="virtual-status-text" id="virtual-status-text">PI 5 KIOSK: ONLINE</span>
+                  <span class="virtual-expr-tag" id="virtual-expr-tag">IDLE</span>
+                </div>
+                <div class="virtual-transcript" id="virtual-transcript">
+                  "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ."
+                </div>
+              </div>
+            </div>
+
+            <div class="mirror-quick-actions mt-12 flex-between">
+              <span class="note-sub">Mô phỏng gương mặt hiển thị 1280x720 trên Pi 5</span>
+              <button class="btn btn-sm btn-outline" id="btn-blink-now">✨ Chớp Mắt Ngay</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 2: Interactive Remote Expression & Mouth-Sync Controls -->
+        <div class="card mt-24">
+          <div class="card-header">
+            <span class="card-tag">REMOTE AVATAR CONTROL</span>
+            <h3>Bảng Điều Khiển Sắc Thái Biểu Cảm &amp; Khẩu Hình Giọng Nói Từ Xa</h3>
+          </div>
+
+          <!-- Expression Triggers -->
+          <div class="remote-expr-controls mt-16">
+            <span class="ctrl-group-lbl">Chọn nhanh biểu cảm hiển thị tức thì trên Pi 5:</span>
+            <div class="expr-btn-grid mt-8">
+              <button class="btn-expr active" data-expr="IDLE">😊 Sẵn Sàng (IDLE)</button>
+              <button class="btn-expr" data-expr="HAPPY">🌸 Mỉm Cười Vui Vẻ</button>
+              <button class="btn-expr" data-expr="EMPATHETIC">💖 Dịu Dàng Đồng Cảm</button>
+              <button class="btn-expr" data-expr="THINKING">🤔 Suy Nghĩ Phân Tích</button>
+              <button class="btn-expr" data-expr="LISTENING">🎙️ Đang Lắng Nghe</button>
+              <button class="btn-expr" data-expr="SPEAKING">🗣️ Đang Báo Cáo</button>
+              <button class="btn-expr" data-expr="SUCCESS">✨ Thành Công Xác Minh</button>
+              <button class="btn-expr" data-expr="CONFUSED">❓ Chưa Rõ (Hỏi Lại)</button>
+              <button class="btn-expr" data-expr="WARNING">⚠️ Cảnh Báo An Toàn</button>
+              <button class="btn-expr" data-expr="WAITING_FOR_OWNER">📬 Chờ Anh Phê Duyệt</button>
+              <button class="btn-expr" data-expr="RECONNECTING">🔄 Đang Kết Nối Lại</button>
+              <button class="btn-expr" data-expr="OFFLINE">💤 Tạm Nghỉ / Offline</button>
+            </div>
+          </div>
+
+          <!-- Speech & Mouth-Sync Test -->
+          <div class="remote-speech-test mt-20">
+            <span class="ctrl-group-lbl">Nói Thử &amp; Đồng Bộ Khẩu Hình Tiếng Việt Hai Chiều (Mouth-Sync):</span>
+            <div class="speech-input-row mt-8">
+              <input type="text" id="remote-speech-input" class="remote-input" placeholder="Nhập câu tiếng Việt để cả PC và Pi 5 phát giọng nói và cử động môi..." value="Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ." />
+              <button class="btn btn-primary" id="btn-remote-speak">🗣️ Phát Lời Nói &amp; Đồng Bộ Khẩu Hình</button>
+            </div>
+            <div class="speech-sample-chips mt-8">
+              <span class="chip-lbl">Câu mẫu:</span>
+              <button class="chip-btn" data-text="Chào Anh Quanpt1! Em đã kết nối đồng bộ thành công.">"Chào Anh Quanpt1! Em đã kết nối đồng bộ thành công."</button>
+              <button class="chip-btn" data-text="Báo cáo Anh, hệ thống QUAN AI BRAIN đang chạy ổn định.">"Báo cáo Anh, hệ thống đang chạy ổn định."</button>
+              <button class="chip-btn" data-text="Em luôn tuân thủ nguyên tắc kỷ luật và an toàn tuyệt đối.">"Em luôn tuân thủ kỷ luật và an toàn."</button>
+            </div>
+          </div>
+
+          <!-- Kiosk Actions & Display Toggle -->
+          <div class="remote-tools-row mt-20 flex-between" style="flex-wrap: wrap; gap: 12px;">
+            <div class="toggle-group" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button class="btn btn-outline" id="btn-start-pi-kiosk" style="border-color: #10b981; color: #10b981; font-weight:700;" title="Khởi động giao diện hình thể Kiosk và bật sáng màn hình 7'' DSI">
+                🚀 Bật Hình Thể Kiosk
+              </button>
+              <button class="btn btn-outline" id="btn-toggle-face-only">
+                👁️ Chế Độ Chỉ Gương Mặt: <strong id="lbl-face-only-status">BẬT</strong>
+              </button>
+              <button class="btn btn-outline" id="btn-reload-pi-ui" title="Yêu cầu Pi 5 tải lại giao diện trình duyệt ngay lập tức">
+                🔄 Tải Lại Kiosk Pi 5
+              </button>
+              <button class="btn btn-outline" id="btn-pause-pi-avatar" style="border-color: #f59e0b; color: #f59e0b;" title="Cho trợ lý trên Pi 5 tạm nghỉ ngơi (nhắm mắt)">
+                ⏸️ Tạm Dừng Trợ Lý
+              </button>
+              <button class="btn btn-outline" id="btn-resume-pi-avatar" style="border-color: #10b981; color: #10b981;" title="Đánh thức trợ lý trở lại trạng thái sẵn sàng hoạt động">
+                ▶️ Kích Hoạt Hoạt Động
+              </button>
+              <button class="btn btn-outline" id="btn-setup-audio-pi" style="border-color: #38bdf8; color: #38bdf8;" title="Tự động cấu hình và định tuyến Loa & Micro mặc định sang USB Audio trên Pi 5">
+                🎧 Định Tuyến USB Audio
+              </button>
+              <button class="btn btn-outline" id="btn-shutdown-pi-kiosk" style="border-color: #ef4444; color: #ef4444;" title="Tắt hẳn hình thể Kiosk hoặc tắt nguồn an toàn Raspberry Pi 5">
+                🛑 Tắt Hẳn Hình Thể Pi 5
+              </button>
+            </div>
+            <div class="volume-group" style="display:flex; align-items:center; gap:8px;">
+              <span class="note-sub">🔊 Loa Pi 5:</span>
+              <input type="range" id="slider-pi-volume" min="0" max="100" value="85" style="width:100px; cursor:pointer;" />
+              <span class="note-sub" id="lbl-pi-volume" style="font-weight:700; color:#38bdf8;">85%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Row 3: Remote File Management & Bi-directional Asset Transfer -->
+        <div class="card mt-24">
+          <div class="card-header flex-between" style="flex-wrap: wrap; gap: 12px;">
+            <div>
+              <span class="card-tag">REMOTE FILE MANAGER • WI-FI ASSET TRANSFER</span>
+              <h3>Quản Trị Tệp Tin &amp; Truyền Dữ Liệu Tức Thì Lên Raspberry Pi 5</h3>
+            </div>
+            <div class="file-action-buttons" style="display:flex; gap:8px; flex-wrap: wrap;">
+              <input type="file" id="pi-file-upload-input" style="display:none;" accept="image/*,audio/*,.json,.css,.js" />
+              <button class="btn btn-primary" id="btn-trigger-upload">
+                📤 Tải Lên Tệp Mới
+              </button>
+              <button class="btn btn-outline" id="btn-sync-all-assets" style="border-color: #00e5ff; color: #00e5ff;">
+                🔄 Đồng Bộ Toàn Bộ Sang Pi 5
+              </button>
+              <button class="btn btn-outline btn-sm" id="btn-refresh-file-list" title="Tải lại danh sách tệp">
+                🔄 Làm Mới
+              </button>
+            </div>
+          </div>
+
+          <div id="pi-file-alert" class="file-status-banner hidden"></div>
+
+          <!-- Quickstart 1-Step Activation & Voice Interaction Workflow Card -->
+          <div class="pi5-quickstart-card mt-16">
+            <div class="quickstart-header flex-between">
+              <div class="quickstart-title-box">
+                <span class="badge-pulsing">⚡ KÍCH HOẠT NHANH 1 BƯỚC</span>
+                <h4>Đồng Bộ Toàn Bộ &amp; Định Tuyến Âm Thanh USB Trên Raspberry Pi 5</h4>
+              </div>
+              <div class="quickstart-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline" id="btn-copy-pi-cmd" title="Sao chép dòng lệnh vào clipboard">
+                  📋 Sao Chép Lệnh
+                </button>
+                <button class="btn btn-sm btn-primary" id="btn-quick-sync-audio" title="Tự động đồng bộ toàn bộ và kích hoạt âm thanh từ PC Core">
+                  ⚡ Đẩy Đồng Bộ &amp; Kích Hoạt Từ Core
+                </button>
+              </div>
+            </div>
+
+            <!-- 1-Step Command Box -->
+            <div class="command-box-wrap mt-12">
+              <div class="command-box-label flex-between">
+                <span>Mở Terminal trên Pi 5 (hoặc qua SSH) và dán chạy dòng lệnh duy nhất sau:</span>
+                <span class="text-accent text-mono" id="copy-status-indicator" style="font-weight:600; font-size:0.75rem;"></span>
+              </div>
+              <div class="command-code-box">
+                <code id="pi5-install-command">curl -s http://192.168.1.11:8766/edge_client/sync_assets.py | python3 &amp;&amp; bash edge_client/setup_pi5_audio.sh</code>
+              </div>
+            </div>
+
+            <div class="auto-tasks-grid mt-12">
+              <div class="auto-task-item">
+                <span class="auto-task-icon">📥</span>
+                <div class="auto-task-content">
+                  <strong>Tải Mã Nguồn Kiosk Mới Nhất:</strong>
+                  <span>Tự động cập nhật <code>wake_engine.js</code>, <code>kiosk.js</code>, <code>avatar_engine.js</code> và các âm thanh thông báo từ PC Core (192.168.1.11:8766).</span>
+                </div>
+              </div>
+              <div class="auto-task-item">
+                <span class="auto-task-icon">🎧</span>
+                <div class="auto-task-content">
+                  <strong>Định Tuyến USB Loa &amp; Micro:</strong>
+                  <span>Tự động nhận diện thiết bị USB Audio, đặt làm Default Sink/Source và cố định âm lượng chuẩn 90%.</span>
+                </div>
+              </div>
+              <div class="auto-task-item">
+                <span class="auto-task-icon">🔄</span>
+                <div class="auto-task-content">
+                  <strong>Lắng Nghe Liên Tục 24/7:</strong>
+                  <span>Tự động tải lại Kiosk trên màn hình cảm ứng 7" DSI, kích hoạt bộ nhận diện giọng nói và cử động khẩu hình.</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Voice Interaction Workflow 4 Steps -->
+            <div class="voice-workflow-box mt-16">
+              <div class="voice-workflow-title">
+                <span class="workflow-badge">CHU TRÌNH 4 BƯỚC</span>
+                <strong style="color:#f8fafc; font-size:0.85rem;">Chu Trình Tương Tác Giọng Nói Sau Khi Kích Hoạt</strong>
+              </div>
+              <div class="voice-steps-grid mt-12">
+                <div class="voice-step-card">
+                  <div class="step-num">01</div>
+                  <div class="step-icon">🗣️</div>
+                  <div class="step-title">Gọi Đánh Thức</div>
+                  <div class="step-desc">Anh gọi <em>"Hi TONY"</em> (hoặc <em>"Tony ơi"</em>, hoặc chạm trực tiếp nút micro trên màn hình Pi 5).</div>
+                </div>
+                <div class="voice-step-card">
+                  <div class="step-num">02</div>
+                  <div class="step-icon">🔔</div>
+                  <div class="step-title">Phản Hồi Sẵn Sàng</div>
+                  <div class="step-desc">Pi 5 phát tiếng chuông báo hiệu <em>ting...</em> và gương mặt chuyển sang <strong>LISTENING</strong> (Đang Lắng Nghe).</div>
+                </div>
+                <div class="voice-step-card">
+                  <div class="step-num">03</div>
+                  <div class="step-icon">💬</div>
+                  <div class="step-title">Ra Khẩu Lệnh</div>
+                  <div class="step-desc">Anh ra lệnh: <em>"Báo cáo tình hình hệ thống"</em> (hoặc nói bất kỳ câu hỏi/chỉ đạo nào).</div>
+                </div>
+                <div class="voice-step-card">
+                  <div class="step-num">04</div>
+                  <div class="step-icon">🤖</div>
+                  <div class="step-title">Thực Thi &amp; Khẩu Hình</div>
+                  <div class="step-desc">Gương mặt chuyển <strong>THINKING</strong> &rarr; Nhận phản hồi từ PC Core &rarr; Phát giọng đọc nữ Việt Nam qua Loa USB và khẩu hình cử động theo từng âm tiết!</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="file-manager-container mt-16">
+            <div class="table-responsive">
+              <table class="cap-table" id="table-pi-files">
+                <thead>
+                  <tr>
+                    <th style="width: 70px;">Xem Trước</th>
+                    <th>Tên Tệp Tin</th>
+                    <th>Định Dạng</th>
+                    <th>Kích Thước</th>
+                    <th>Thời Gian</th>
+                    <th style="text-align: right; width: 100px;">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-pi-files">
+                  <tr>
+                    <td colspan="6" class="text-center" style="padding: 24px; color: var(--text-dim);">
+                      Đang kết nối Wi-Fi và quét danh sách tệp trên Raspberry Pi 5...
+                    </td>
+                  </tr>
+                </tbody>
+        <!-- Row 4: Remote Audio & Microphone Control Panel (ADDENDUM V2.1) -->
+        <div class="card mt-24" id="card-remote-audio">
+          <div class="card-header flex-between" style="flex-wrap: wrap; gap: 12px;">
+            <div>
+              <span class="card-tag">REMOTE AUDIO &amp; MICROPHONE CONTROL</span>
+              <h3>Điều Khiển Microphone &amp; Giám Sát Cường Độ Âm Thanh Pi 5 Từ Xa</h3>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <span class="badge" id="badge-mic-state" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;">🟢 READY</span>
+              <span class="badge" id="badge-wake-state" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">🎙️ WAKE: BẬT</span>
+              <span class="badge" id="badge-listen-mode" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #a855f7;">CHẾ ĐỘ: WAKE WORD</span>
+            </div>
+          </div>
+
+          <!-- Mic Metadata & Telemetry Strip -->
+          <div class="audio-telemetry-grid mt-16" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px;">
+            <div class="stat-box">
+              <span class="stat-lbl">Thiết Bị Nguồn Thu:</span>
+              <strong class="stat-val text-accent" id="lbl-mic-device" style="font-size:0.88rem;">Jieli UACDemoV1.0 (Card 2)</strong>
+            </div>
+            <div class="stat-box">
+              <span class="stat-lbl">Tần Số &amp; Kênh Thu:</span>
+              <strong class="stat-val" id="lbl-mic-format">16,000 Hz • Mono (1CH)</strong>
+            </div>
+            <div class="stat-box">
+              <span class="stat-lbl">Mức Tín Hiệu Gần Nhất:</span>
+              <strong class="stat-val text-success" id="lbl-mic-level">-18.0 dB</strong>
+            </div>
+            <div class="stat-box">
+              <span class="stat-lbl">Lần Kiểm Tra Cuối:</span>
+              <strong class="stat-val" id="lbl-mic-timestamp" style="font-size:0.82rem; color:var(--text-dim);">Chưa kiểm tra</strong>
+            </div>
+          </div>
+
+          <!-- Audio Level Meter Bar -->
+          <div class="audio-meter-wrap mt-16" style="background: rgba(15, 23, 42, 0.6); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(0, 229, 255, 0.2);">
+            <div class="flex-between" style="margin-bottom: 6px;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: #94a3b8; display:flex; align-items:center; gap:6px;">
+                📊 Audio Level Meter (Cường độ âm thanh thực từ Hardware Micro):
+              </span>
+              <span id="lbl-meter-db" style="font-size: 0.85rem; font-weight: 700; color: #38bdf8;">-18.0 dB (Chuẩn hoạt động)</span>
+            </div>
+            <div class="meter-bar-container" style="height: 16px; background: rgba(30, 41, 59, 0.8); border-radius: 4px; overflow: hidden; position: relative;">
+              <div id="meter-bar-fill" style="width: 65%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #06b6d4 70%, #f59e0b 90%, #ef4444 100%); transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></div>
+              <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display:flex; justify-content:space-between; padding: 0 4px; font-size: 9px; color: rgba(255,255,255,0.4); line-height: 16px; pointer-events: none;">
+                <span>-60dB</span>
+                <span>-40dB</span>
+                <span>-20dB</span>
+                <span>-6dB</span>
+                <span>0dB</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Buttons Control Row -->
+          <div class="audio-buttons-row mt-16" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-outline" id="btn-mic-on" style="border-color: #10b981; color: #10b981;">
+              🟢 BẬT MICRO (MIC ON)
+            </button>
+            <button class="btn btn-outline" id="btn-mic-off" style="border-color: #ef4444; color: #ef4444;">
+              🔴 TẮT MICRO (MIC OFF)
+            </button>
+            <button class="btn btn-outline" id="btn-mic-mute" style="border-color: #f59e0b; color: #f59e0b;">
+              🔇 TẮT TIẾNG (MUTE)
+            </button>
+            <button class="btn btn-outline" id="btn-mic-unmute" style="border-color: #06b6d4; color: #06b6d4;">
+              🔊 BẬT TIẾNG (UNMUTE)
+            </button>
+            <button class="btn btn-outline" id="btn-toggle-wake-word" style="border-color: #a855f7; color: #c084fc;">
+              🎙️ BẬT/TẮT TỪ KHÓA "HI TONY"
+            </button>
+            <button class="btn btn-primary" id="btn-mic-ptt" style="background: linear-gradient(135deg, #0284c7, #0369a1);">
+              ⚡ PUSH TO TALK (NÓI NGAY)
+            </button>
+            <button class="btn btn-outline" id="btn-test-mic" style="border-color: #38bdf8; color: #38bdf8;">
+              🧪 KIỂM TRA MICRO (1 GIÂY)
+            </button>
+            <button class="btn btn-outline btn-sm" id="btn-refresh-audio" title="Tải lại trạng thái âm thanh">
+              🔄 LÀM MỚI
+            </button>
+          </div>
+          <div id="audio-alert-banner" class="file-status-banner hidden mt-12"></div>
+        </div>
+
+        <!-- Row 5: Remote Camera & Vision Control Panel (ADDENDUM V2.1) -->
+        <div class="card mt-24" id="card-remote-camera">
+          <div class="card-header flex-between" style="flex-wrap: wrap; gap: 12px;">
+            <div>
+              <span class="card-tag">REMOTE CAMERA &amp; VISION • USB WEBCAM V4L2</span>
+              <h3>Quan Sát Hình Ảnh Camera Pi 5 Trực Tiếp &amp; Chụp Ảnh Snapshot</h3>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <a href="/api/executive/edge/camera/stream" target="_blank" class="btn btn-sm btn-outline" style="border-color:#38bdf8; color:#38bdf8;" title="Mở luồng hình ảnh camera trong tab trình duyệt riêng">🔗 Mở Tab Khung Hình Riêng</a>
+              <span class="badge" id="badge-camera-state" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #64748b;">🔴 CAMERA OFF</span>
+              <span class="badge" id="badge-camera-node" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">/dev/video0 (V4L2)</span>
+            </div>
+          </div>
+
+          <div class="camera-content-grid mt-16" style="display:grid; grid-template-columns: minmax(320px, 1.2fr) minmax(300px, 1fr); gap: 20px;">
+            <!-- Column 1: Live Viewport Box -->
+            <div class="camera-viewport-card" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 12px; display:flex; flex-direction:column; gap:10px;">
+              <div class="camera-screen-box" style="width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                <img id="camera-live-img" src="/static/assets/avatar/camera_snapshot.jpg" alt="Pi 5 Camera View" style="width:100%; height:100%; object-fit:contain; display:none;" onerror="this.style.display='none'; document.getElementById('camera-placeholder-box').style.display='flex';" />
+                <div id="camera-placeholder-box" style="display:flex; flex-direction:column; align-items:center; justify-content:center; color: #64748b; gap: 8px; padding: 20px; text-align:center;">
+                  <span style="font-size: 2.4rem;">📷</span>
+                  <strong style="color: #94a3b8; font-size: 0.95rem;" id="camera-placeholder-text">Camera đang ở chế độ TẮT (Camera OFF)</strong>
+                  <span style="font-size: 0.78rem; color: #475569; max-width: 280px;">Bấm "BẬT CAMERA" và "BẮT ĐẦU XEM" để quan sát trực tiếp hoặc chụp snapshot khung hình.</span>
+                </div>
+                <div class="camera-overlay-badge" style="position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
+                  <span id="camera-overlay-tag">🔴 TẮT</span>
+                </div>
+                <div class="camera-overlay-res" style="position: absolute; bottom: 8px; right: 10px; font-size: 0.7rem; color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px;">
+                  <span id="camera-overlay-res-val">640x480 • V4L2 USB</span>
+                </div>
+              </div>
+
+              <div class="camera-telemetry-row flex-between" style="font-size: 0.78rem; color: #94a3b8; padding: 0 4px;">
+                <span>Thiết bị: <strong id="lbl-camera-device-name" style="color:#38bdf8;">Sirius USB2.0 Camera</strong></span>
+                <span>Thời điểm: <strong id="lbl-camera-timestamp">Chưa có khung hình</strong></span>
+              </div>
+            </div>
+
+            <!-- Column 2: Controls & Snapshot Metadata -->
+            <div class="camera-controls-card" style="display:flex; flex-direction:column; gap:14px;">
+              <div class="ctrl-subcard" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                <span class="ctrl-group-lbl" style="font-size:0.8rem; font-weight:700; color:#38bdf8; display:block; margin-bottom:10px;">Thao Tác Điều Khiển Camera:</span>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                  <button class="btn btn-outline" id="btn-camera-on" style="border-color: #10b981; color: #10b981;">
+                    📷 BẬT CAMERA
+                  </button>
+                  <button class="btn btn-outline" id="btn-camera-off" style="border-color: #ef4444; color: #ef4444;">
+                    🛑 TẮT CAMERA
+                  </button>
+                  <button class="btn btn-primary" id="btn-camera-start-live" style="background: linear-gradient(135deg, #059669, #10b981);">
+                    ▶️ BẮT ĐẦU XEM
+                  </button>
+                  <button class="btn btn-outline" id="btn-camera-stop-live">
+                    ⏹️ DỪNG XEM
+                  </button>
+                  <button class="btn btn-outline" id="btn-camera-capture" style="border-color: #00e5ff; color: #00e5ff;">
+                    📸 CHỤP SNAPSHOT
+                  </button>
+                  <button class="btn btn-outline" id="btn-camera-save-core" style="border-color: #a855f7; color: #c084fc;">
+                    💾 LƯU VỀ CORE
+                  </button>
+                  <button class="btn btn-outline" id="btn-test-camera" style="border-color: #38bdf8; color: #38bdf8;">
+                    🧪 TEST CAMERA
+                  </button>
+                  <button class="btn btn-outline" id="btn-camera-clear">
+                    🧹 XÓA KHUNG XEM
+                  </button>
+                </div>
+              </div>
+
+              <!-- Snapshot Inspection Box -->
+              <div class="ctrl-subcard" id="box-snapshot-meta" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                <span class="ctrl-group-lbl" style="font-size:0.8rem; font-weight:700; color:#38bdf8; display:block; margin-bottom:8px;">Chi Tiết Khung Hình Snapshot:</span>
+                <div style="display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">
+                  <div class="flex-between">
+                    <span style="color:#94a3b8;">Mã Snapshot:</span>
+                    <strong id="lbl-snap-id" style="color:var(--text-bright);">Chưa chụp</strong>
+                  </div>
+                  <div class="flex-between">
+                    <span style="color:#94a3b8;">Dung Lượng:</span>
+                    <strong id="lbl-snap-size">0 bytes</strong>
+                  </div>
+                  <div class="flex-between">
+                    <span style="color:#94a3b8;">Mã Băm SHA-256:</span>
+                    <code id="lbl-snap-hash" style="color:#00e5ff; font-size:0.72rem; max-width:180px; overflow:hidden; text-overflow:ellipsis;">--</code>
+                  </div>
+                  <div class="flex-between">
+                    <span style="color:#94a3b8;">Xác Minh Toàn Vẹn:</span>
+                    <span class="badge badge-ready" id="lbl-snap-verif" style="font-size:0.7rem; padding:1px 6px;">CHỜ XÁC MINH</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="camera-alert-banner" class="file-status-banner hidden mt-12"></div>
+        </div>
+
+        <!-- Row 6: Core Capture Library & Media Management (ADDENDUM V2.1) -->
+        <div class="card mt-24" id="card-core-capture-library">
+          <div class="card-header flex-between" style="flex-wrap: wrap; gap: 12px;">
+            <div>
+              <span class="card-tag">CORE CAPTURE LIBRARY • PATHGUARD SECURE REPOSITORY</span>
+              <h3>Kho Dữ Liệu Hình Ảnh Snapshot Đã Lưu Trữ Trên PC Core</h3>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <span class="note-sub" id="lbl-library-quota" style="color: #38bdf8; font-weight: 600;">Dung lượng: 0 KB / 500 MB</span>
+              <button class="btn btn-outline btn-sm" id="btn-refresh-library" title="Làm mới danh sách ảnh đã lưu">
+                🔄 Làm Mới Thư Viện
+              </button>
+            </div>
+          </div>
+
+          <div class="library-container mt-16">
+            <div class="table-responsive">
+              <table class="cap-table" id="table-core-captures">
+                <thead>
+                  <tr>
+                    <th style="width: 70px;">Xem Trước</th>
+                    <th>Mã Snapshot</th>
+                    <th>Thời Điểm Chụp</th>
+                    <th>Dung Lượng</th>
+                    <th>Mã Băm SHA-256</th>
+                    <th>Trạng Thái</th>
+                    <th style="text-align: right; width: 140px;">Thao Tác</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-core-captures">
+                  <tr>
+                    <td colspan="7" class="text-center" style="padding: 24px; color: var(--text-dim);">
+                      Đang đọc danh sách ảnh từ kho dữ liệu PC Core (data/edge_media/captures/)...
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB 7: PI 5 EMBODIMENT CONTROL & ON-DEMAND ACTIVATION ================= -->
+      <section id="tab-pi5-embodiment" class="tab-content">
+        <div class="section-intro">
+          <h2>✨ Trung Tâm Quản Trị &amp; Khởi Động Hình Thể Pi 5 (On-Demand Embodiment)</h2>
+          <p>Điều khiển khởi động và tắt giao diện hình thể Model A trên màn hình cảm ứng 7" DSI Raspberry Pi 5 theo nhu cầu thực tế của Anh Quân.</p>
+        </div>
+
+        <!-- Policy Banner: On-Demand Boot Configuration -->
+        <div class="policy-notice-card mb-20" style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 18px 22px; display: flex; align-items: flex-start; gap: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+          <div style="font-size: 2rem; line-height: 1;">⚡</div>
+          <div style="flex: 1;">
+            <div style="font-weight: 700; color: #34d399; font-size: 0.98rem; margin-bottom: 6px;">
+              Chế Độ Tiết Kiệm Năng Lượng &amp; Khởi Động Hình Thể Theo Yêu Cầu (On-Demand Mode)
+            </div>
+            <div style="font-size: 0.84rem; color: #94a3b8; line-height: 1.55;">
+              Khi cấp nguồn Raspberry Pi 5, tiến trình nền Daemon sẽ kết nối sẵn sàng với PC Core, nhưng <strong>Giao Diện Hình Thể Kiosk 7" DSI sẽ KHÔNG tự khởi động</strong> để tránh tiêu hao tài nguyên và bảo vệ tuổi thọ màn hình. Hình thể chỉ hiển thị khi Anh thao tác kích hoạt từ Tab này.
+            </div>
+          </div>
+          <div class="badge-status-wrap">
+            <span class="badge" id="badge-embodiment-pill" style="background: rgba(100, 116, 139, 0.3); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px;">
+              CHẾ ĐỘ CHỜ (STANDBY)
+            </span>
+          </div>
+        </div>
+
+        <div class="edge-addon-grid">
+          <!-- Column 1: Live Status & Telemetry -->
+          <div class="card embodiment-state-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="card-tag">TRẠNG THÁI HÌNH THỂ</span>
+                <h3>Thiết Bị &amp; Tiến Trình Kiosk Pi 5</h3>
+              </div>
+              <span class="badge badge-ready" id="embodiment-live-state-badge">STANDBY</span>
+            </div>
+
+            <!-- Big Visual Status Display -->
+            <div class="embodiment-hero-visual" style="text-align: center; padding: 26px 16px; background: rgba(10, 15, 30, 0.7); border-radius: 12px; margin: 16px 0; border: 1px solid rgba(255, 255, 255, 0.08);">
+              <div class="embodiment-avatar-halo" id="embodiment-avatar-halo" style="width: 120px; height: 120px; margin: 0 auto 16px auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0) 70%); border: 2px dashed rgba(16, 185, 129, 0.4); position: relative; transition: all 0.3s ease;">
+                <span id="embodiment-icon-status" style="font-size: 3.2rem;">💤</span>
+              </div>
+              <div id="embodiment-main-text" style="font-size: 1.2rem; font-weight: 700; color: #f8fafc; margin-bottom: 6px;">
+                Hình Thể Đang Ở Chế Độ Nghỉ (Standby)
+              </div>
+              <div id="embodiment-sub-text" style="font-size: 0.82rem; color: #94a3b8; max-width: 380px; margin: 0 auto; line-height: 1.5;">
+                Màn hình 7" DSI đang tắt nguồn hiển thị (DPMS off). Bấm nút kích hoạt bên cạnh để bật trợ lý Model A.
+              </div>
+            </div>
+
+            <!-- Detail Metrics Table -->
+            <div class="packet-stats-grid mt-16">
+              <div class="stat-box">
+                <span class="stat-lbl">Thiết Bị Pi 5:</span>
+                <strong class="stat-val text-accent" id="stat-embodiment-ip">192.168.1.21:8768</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-lbl">Tiến Trình Chromium:</span>
+                <strong class="stat-val" id="stat-embodiment-process" style="color: #94a3b8;">ĐÃ DỪNG</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-lbl">Màn Hình Hiển Thị:</span>
+                <strong class="stat-val" id="stat-embodiment-screen">7" DSI (1280x720)</strong>
+              </div>
+              <div class="stat-box">
+                <span class="stat-lbl">Độ Trễ Mạng Wi-Fi:</span>
+                <strong class="stat-val text-success" id="stat-embodiment-rtt">-- ms</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Column 2: On-Demand Action Deck -->
+          <div class="card embodiment-action-card">
+            <div class="card-header flex-between">
+              <div>
+                <span class="card-tag">BẢNG ĐIỀU KHIỂN HÌNH THỂ</span>
+                <h3>Thao Tác Kích Hoạt &amp; Quản Trị</h3>
+              </div>
+            </div>
+
+            <div class="embodiment-actions-container" style="display: flex; flex-direction: column; gap: 14px; margin-top: 16px;">
+              <!-- Action 1: START KIOSK HERO BUTTON -->
+              <button class="btn btn-hero-start" id="btn-tab-start-kiosk" style="display: flex; align-items: center; gap: 16px; padding: 18px 22px; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; border: none; border-radius: 12px; cursor: pointer; text-align: left; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4); transition: all 0.25s ease;">
+                <span style="font-size: 2.4rem; line-height: 1;">🚀</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 1.1rem; font-weight: 800; letter-spacing: 0.5px;">
+                    BẬT HỆ THỐNG HÌNH THỂ PI 5
+                  </div>
+                  <div style="font-size: 0.8rem; opacity: 0.92; margin-top: 4px; font-weight: 400; line-height: 1.4;">
+                    Khởi chạy Chromium Kiosk và bật sáng màn hình 7" DSI hiển thị Cô Trợ Lý Model A
+                  </div>
+                </div>
+              </button>
+
+              <!-- Action 2: STOP KIOSK HERO BUTTON -->
+              <button class="btn btn-hero-stop" id="btn-tab-stop-kiosk" style="display: flex; align-items: center; gap: 16px; padding: 16px 22px; background: rgba(30, 41, 59, 0.9); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 12px; cursor: pointer; text-align: left; transition: all 0.25s ease;">
+                <span style="font-size: 2.2rem; line-height: 1;">🌙</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 1rem; font-weight: 700;">
+                    TẮT GIAO DIỆN HÌNH THỂ (KIOSK SLEEP)
+                  </div>
+                  <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 4px; line-height: 1.4;">
+                    Đóng trình duyệt Chromium và đưa màn hình 7" vào chế độ nghỉ (DPMS off), Pi 5 vẫn duy trì kết nối
+                  </div>
+                </div>
+              </button>
+
+              <!-- Action 3: STARTUP SEQUENCE & HARDWARE SELF-TEST -->
+              <button class="btn btn-outline" id="btn-tab-startup-sequence" style="display: flex; align-items: center; gap: 14px; padding: 14px 20px; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.5); color: #38bdf8; border-radius: 12px; cursor: pointer; text-align: left; transition: all 0.25s ease;" title="Phát câu chào 'Chào anh ạ, rất vui được gặp anh' và tự kiểm tra mic/camera báo cáo qua loa">
+                <span style="font-size: 1.8rem; line-height: 1;">🔊</span>
+                <div style="flex: 1;">
+                  <div style="font-size: 0.95rem; font-weight: 700;">
+                    CHÀO &amp; TỰ KIỂM TRA PHẦN CỨNG (SELF-TEST)
+                  </div>
+                  <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 3px; line-height: 1.35;">
+                    Phát loa 'Chào anh ạ, rất vui được gặp anh', kiểm tra tín hiệu Micro, Camera và báo cáo hiện trạng qua loa Pi
+                  </div>
+                </div>
+              </button>
+
+              <!-- Secondary Row -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;">
+                <button class="btn btn-outline" id="btn-tab-reload-kiosk" style="border-color: rgba(56, 189, 248, 0.5); color: #38bdf8; padding: 12px; font-size: 0.85rem; font-weight:600;" title="Tải lại trang giao diện Kiosk">
+                  🔄 Tải Lại Kiosk
+                </button>
+                <button class="btn btn-outline" id="btn-tab-audio-config" style="border-color: rgba(168, 85, 247, 0.5); color: #c084fc; padding: 12px; font-size: 0.85rem; font-weight:600;" title="Định tuyến USB Audio mặc định">
+                  🎧 Định Tuyến Audio
+                </button>
+              </div>
+
+              <!-- Poweroff Safe Action -->
+              <button class="btn btn-outline" id="btn-tab-poweroff-pi" style="border-color: rgba(239, 68, 68, 0.5); color: #f87171; padding: 12px; font-size: 0.85rem; font-weight:600; margin-top: 4px; display:flex; align-items:center; justify-content:center; gap:8px;" title="Tắt nguồn toàn bộ thiết bị Pi 5">
+                🔌 Tắt Nguồn Toàn Bộ Thiết Bị Pi 5 (Safe Poweroff)
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Modal Safe Embodiment Shutdown -->
+  <div class="modal-overlay hidden" id="modal-pi-shutdown">
+    <div class="modal-card" style="max-width: 520px; border-color: rgba(239, 68, 68, 0.4);">
+      <div class="modal-header flex-between">
+        <h3 style="color: #f87171; display:flex; align-items:center; gap:8px; margin:0; font-size:1.1rem;">
+          🛑 Quản Trị Tắt Hình Thể / Nguồn Pi 5
+        </h3>
+        <button class="modal-close" id="btn-close-shutdown-modal">&times;</button>
+      </div>
+      <div class="modal-body mt-12">
+        <p style="color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; margin:0 0 12px 0;">
+          Anh muốn tắt riêng <strong>Giao Diện Hình Thể Kiosk</strong> hay tắt nguồn toàn bộ thiết bị <strong>Raspberry Pi 5</strong>?
+        </p>
+        <div class="shutdown-options-grid" style="display:flex; flex-direction:column; gap:12px;">
+          <div class="shutdown-opt-box" id="opt-close-kiosk" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;">
+            <div style="font-weight: 700; color: #f59e0b; margin-bottom: 4px;">
+              🌙 Tắt Riêng Giao Diện Hình Thể (Kiosk Sleep)
+            </div>
+            <div style="font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
+              Đóng trình duyệt Chromium Kiosk và đưa màn hình 7" DSI vào chế độ nghỉ (DPMS off). Pi 5 vẫn duy trì kết nối mạng Wi-Fi và có thể bật lại bất cứ lúc nào.
+            </div>
+          </div>
+          <div class="shutdown-opt-box" id="opt-poweroff-pi" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;">
+            <div style="font-weight: 700; color: #ef4444; margin-bottom: 4px;">
+              🔌 Tắt Nguồn Hoàn Toàn Pi 5 (Safe Poweroff)
+            </div>
+            <div style="font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
+              Thực hiện lệnh tắt nguồn hệ thống an toàn (<code>sudo poweroff</code>) để bảo vệ thẻ nhớ/SSD và phần cứng Pi 5.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer mt-16 flex-between">
+        <button class="btn btn-outline" id="btn-cancel-shutdown">Hủy Bỏ</button>
+        <span style="font-size:0.75rem; color:var(--text-dim);">Bảo vệ thiết bị chuẩn an toàn</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/wake_engine.js?v=4.0"></script>
+  <script src="/static/avatar_engine.js?v=4.0"></script>
+  <script src="/static/executive.js?v=4.0"></script>
+</body>
+</html>

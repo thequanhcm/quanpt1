@@ -9,13 +9,13 @@ from typing import Any
 
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 _AUTH_ASSIGNMENT_RE = re.compile(
-    r"(?i)([\"']?\b(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|"
+    r"(?i)([\"']?\b(?:api[_ -]?key|(?:access[_ -]?|refresh[_ -]?)?token|"
     r"password|passwd|secret|authorization|client[_ -]?secret)[\"']?\s*[:=]\s*)"
     r"(?:\"[^\"]*\"|'[^']*'|[^\s,;]+)"
 )
 _URL_CREDENTIAL_RE = re.compile(r"(?i)(https?://)[^/@\s:]+:[^/@\s]+@")
 _SENSITIVE_KEY_RE = re.compile(
-    r"(?i)(?:^|[^a-z0-9])(?:api[_ -]?key|access[_ -]?token|refresh[_ -]?token|"
+    r"(?i)(?:^|[^a-z0-9])(?:api[_ -]?key|(?:access[_ -]?|refresh[_ -]?)?token|"
     r"password|passwd|secret|authorization|client[_ -]?secret|private[_ -]?key)(?:$|[^a-z0-9])"
 )
 

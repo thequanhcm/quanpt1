@@ -5,9 +5,6 @@ from dataclasses import dataclass
 from enum import Enum, IntEnum
 from pathlib import Path
 
-from quan_ai_brain.tools.path_guard import PathGuard, PathOutsideWorkspaceError
-
-
 class RiskLevel(IntEnum):
     R0 = 0  # Read/query operations
     R1 = 1  # Analysis/planning/compute in memory
@@ -44,6 +41,8 @@ class PolicyEngine:
     """Policy-only component. It must not run the requested action itself."""
 
     def __init__(self, workspace: str | Path) -> None:
+        from quan_ai_brain.tools.path_guard import PathGuard
+
         self.workspace = Path(workspace).resolve()
         self.path_guard = PathGuard(self.workspace)
 
@@ -58,6 +57,8 @@ class PolicyEngine:
         if risk == RiskLevel.R2:
             if request.target_path is None:
                 return PolicyDecision(DecisionStatus.DENY, risk, "R2 write actions must declare a workspace-relative target path.")
+            from quan_ai_brain.tools.path_guard import PathOutsideWorkspaceError
+
             try:
                 target = self.path_guard.resolve(request.target_path)
             except (PathOutsideWorkspaceError, ValueError) as exc:

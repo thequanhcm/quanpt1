@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QUAN AI BRAIN — Trợ Lý Điều Hành Số</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-wrapper">
+                    <div class="logo-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2a10 10 0 0 1 10 10c0 4.42-2.87 8.17-6.84 9.5-.5.08-.66-.23-.66-.5v-1.69c0-.62-.22-1.07-.46-1.28 2.53-.28 5.19-1.26 5.19-5.63 0-1.24-.45-2.26-1.18-3.05.12-.29.51-1.46-.11-3.05 0 0-.96-.31-3.14 1.17A10.9 10.9 0 0 0 12 7.1c-.97 0-1.94.13-2.86.38-2.18-1.48-3.14-1.17-3.14-1.17-.62 1.59-.23 2.76-.11 3.05-.73.79-1.18 1.81-1.18 3.05 0 4.35 2.64 5.34 5.17 5.63-.19.16-.36.45-.42.9-.38.17-1.34.46-1.93-.55 0 0-.35-.64-1.02-.69 0 0-.65-.01-.05.41 0 0 .43.2.73.96.22.56.76 1.48 2.22 1.08v1.07c0 .27-.16.58-.67.5C4.87 20.17 2 16.42 2 12A10 10 0 0 1 12 2z"/>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <h2>QUAN AI BRAIN</h2>
+                        <span class="badge badge-primary">v0.2.0 • Executive</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Status Widget -->
+            <div class="status-card" id="system-status-widget">
+                <div class="status-row">
+                    <span class="status-indicator online" id="ollama-indicator"></span>
+                    <span class="status-label">Local Ollama</span>
+                    <span class="status-val" id="ollama-status-text">Đang kiểm tra...</span>
+                </div>
+                <div class="status-subrow">
+                    <span class="sub-label">Model active:</span>
+                    <span class="sub-val" id="active-model-name">qwen2.5:7b</span>
+                </div>
+                <div class="status-subrow">
+                    <span class="sub-label">Governance:</span>
+                    <span class="sub-val highlight">Hiến pháp R0-R5</span>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="nav-menu">
+                <button class="nav-item active" id="tab-btn-chat" data-tab="chat">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    <span>Hội Thoại Nhận Thức</span>
+                </button>
+                <button class="nav-item" id="tab-btn-memories" data-tab="memories">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                    <span>Trí Nhớ Dài Hạn</span>
+                </button>
+                <button class="nav-item" id="tab-btn-planning" data-tab="planning">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                    <span>Kế Hoạch An Toàn</span>
+                </button>
+                <button class="nav-item" id="tab-btn-learning" data-tab="learning">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                    <span>Động Cơ Tự Học</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="owner-badge">
+                    <div class="avatar">Q</div>
+                    <div class="owner-info">
+                        <strong>Quanpt1</strong>
+                        <span>Owner Authority</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top App Bar -->
+            <header class="top-bar">
+                <div class="top-title">
+                    <h1 id="page-title">Hội Thoại Nhận Thức & Giọng Nói</h1>
+                    <p class="subtitle" id="page-subtitle">Trợ lý điều hành cá nhân bảo mật cao • Truy xuất trí nhớ & mô hình local</p>
+                </div>
+                <div class="top-actions">
+                    <div class="voice-toggle-wrapper" title="Bật/Tắt trợ lý tự đọc câu trả lời bằng giọng nói">
+                        <label class="switch">
+                            <input type="checkbox" id="tts-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                        <span class="switch-label">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                            Giọng đọc TTS
+                        </span>
+                        <span id="tts-status-badge" class="tts-badge ready" title="Trạng thái giọng đọc tiếng Việt">vi-VN (Hoài My)</span>
+                    </div>
+                    <select class="model-select" id="model-selector">
+                        <option value="qwen2.5:7b" selected>qwen2.5:7b (Khuyến nghị)</option>
+                        <option value="qwen2.5:1.5b">qwen2.5:1.5b (Siêu tốc)</option>
+                        <option value="llama3.1:latest">llama3.1:latest</option>
+                        <option value="mistral:latest">mistral:latest</option>
+                    </select>
+                </div>
+            </header>
+
+            <!-- TAB 1: CHAT PANEL -->
+            <section class="tab-panel active" id="panel-chat">
+                <div class="chat-layout-split">
+                    <!-- Column 1: Dialogue & Input Wrapper -->
+                    <div class="chat-wrapper">
+                        <!-- Messages Container -->
+                        <div class="messages-container" id="chat-messages">
+                            <!-- Welcome message -->
+                            <div class="message-row assistant">
+                                <div class="msg-avatar">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"></rect><circle cx="12" cy="5" r="2"></circle><path d="M12 7v4"></path><line x1="8" y1="16" x2="8" y2="16"></line><line x1="16" y1="16" x2="16" y2="16"></line></svg>
+                                </div>
+                                <div class="msg-bubble">
+                                    <div class="msg-header">
+                                        <span class="msg-sender">QUAN AI BRAIN</span>
+                                        <span class="msg-time">Vừa xong</span>
+                                    </div>
+                                    <div class="msg-body">
+                                        <p>Xin chào Anh <strong>Quanpt1</strong>! Em là QUAN AI BRAIN — Trợ lý điều hành số của Anh.</p>
+                                        <p>Hệ thống đã kết nối hoàn tất với mô hình <code>qwen2.5:7b</code> cục bộ và trợ lý số <strong>TONY (Mẫu A)</strong>. Anh có thể gõ câu hỏi hoặc <strong>bấm nút Micro 🎙️ bên dưới để nói chuyện trực tiếp bằng giọng nói tự nhiên</strong>!</p>
+                                    </div>
+                                    <div class="msg-meta">
+                                        <span class="meta-tag">Provider: Ollama Local</span>
+                                        <span class="meta-tag">Governance: R0-R5 Active</span>
+                                        <span class="meta-tag">Voice: vi-VN-HoaiMyNeural (Đồng bộ Pi 5)</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Voice Listening Pulse Overlay (When recording) -->
+                        <div class="voice-listening-banner" id="voice-listening-banner" style="display: none;">
+                            <div class="pulse-ring"></div>
+                            <span class="voice-text">Đang lắng nghe giọng nói của Anh... Hãy nói vào Micro!</span>
+                            <button class="btn-cancel-voice" id="btn-cancel-voice">Dừng nghe</button>
+                        </div>
+
+                        <!-- Input Bar -->
+                        <div class="chat-input-bar">
+                            <button class="btn-mic" id="btn-mic" title="Bấm để nói chuyện bằng giọng nói (Voice Input)">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                            </button>
+                            <textarea class="chat-textarea" id="chat-input" placeholder="Hỏi Trợ lý bất kỳ điều gì, hoặc bấm Micro để nói..." rows="1"></textarea>
+                            <button class="btn-send" id="btn-send" title="Gửi tin nhắn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Digital Human (Model A — TONY) Stage & Edge Pi 5 Audio Sync -->
+                    <aside class="chat-avatar-sidebar" id="chat-avatar-sidebar">
+                        <div class="cockpit-avatar-card" id="cockpit-avatar-card">
+                            <div class="avatar-stage-header">
+                                <div class="avatar-identity">
+                                    <span class="live-dot pulse"></span>
+                                    <strong>TONY</strong>
+                                    <span class="avatar-role-tag">DIGITAL HUMAN (MẪU A — DỊU DÀNG, THÂN THIỆN)</span>
+                                </div>
+                                <div class="avatar-state-tag state-idle" id="avatar-state-tag">
+                                    <span class="state-icon" id="avatar-state-icon">●</span>
+                                    <span class="state-name" id="avatar-state-name">IDLE (SẴN SÀNG)</span>
+                                </div>
+                            </div>
+
+                            <!-- Digital Human (Model F) Canvas Viewport -->
+                            <div class="avatar-viewport digital-human-viewport state-idle" id="avatar-viewport">
+                                <canvas id="tony-avatar-canvas" width="480" height="480" class="digital-human-canvas"></canvas>
+                            </div>
+
+                            <!-- Real-Time Audio Waveform Canvas -->
+                            <div class="avatar-waveform-box">
+                                <span class="waveform-label">Sóng Âm Thanh / Trạng Thái:</span>
+                                <canvas id="avatar-waveform-canvas" width="220" height="28" class="waveform-canvas"></canvas>
+                            </div>
+
+                            <!-- Pi 5 Edge Audio Synchronization Box -->
+                            <div class="pi5-audio-sync-card" id="pi5-audio-sync-card">
+                                <div class="pi5-sync-header">
+                                    <span class="pi5-sync-led online" id="pi5-sync-led"></span>
+                                    <span class="pi5-sync-title">Loa Raspberry Pi 5:</span>
+                                    <span class="pi5-sync-status" id="pi5-sync-status">ĐỒNG BỘ PHÁT THOẠI</span>
+                                </div>
+                                <div class="pi5-sync-controls">
+                                    <button class="btn-pi5-action" id="btn-pi5-speak-test" title="Phát ngay lời thoại chào mừng lên Raspberry Pi 5">
+                                        🔊 Phát lời thoại trên Pi 5
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- 11 States Quick Reaction Previewer -->
+                            <div class="avatar-state-pills-wrap">
+                                <span class="pills-title">Biểu cảm phản hồi linh động:</span>
+                                <div class="avatar-state-pills" id="avatar-state-pills">
+                                    <button class="pill-state active" data-state="IDLE" title="Sẵn sàng, chớp mắt nhẹ">IDLE</button>
+                                    <button class="pill-state" data-state="LISTENING" title="Đang nghe Anh nói">LISTEN</button>
+                                    <button class="pill-state" data-state="THINKING" title="Đang suy luận lập kế hoạch">THINK</button>
+                                    <button class="pill-state" data-state="SPEAKING" title="Đang phát giọng nói TTS">SPEAK</button>
+                                    <button class="pill-state" data-state="RESEARCHING" title="Đang tra cứu dữ liệu">RESEARCH</button>
+                                    <button class="pill-state" data-state="LEARNING" title="Đang tự học hỏi">LEARN</button>
+                                    <button class="pill-state" data-state="WAITING_FOR_OWNER" title="Chờ Quanpt1 duyệt">WAITING</button>
+                                    <button class="pill-state" data-state="SAFE_MODE" title="Chế độ bảo vệ an toàn">SAFE</button>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- TAB 2: MEMORIES PANEL -->
+            <section class="tab-panel" id="panel-memories">
+                <div class="panel-content">
+                    <div class="panel-header-action">
+                        <h3>Kho Tri Thức & Trí Nhớ Dài Hạn (SQLite WAL)</h3>
+                        <button class="btn btn-primary" id="btn-open-add-memory">+ Ghi nhớ mới</button>
+                    </div>
+                    <div class="memories-grid" id="memories-list">
+                        <!-- Loaded dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: PLANNING PANEL -->
+            <section class="tab-panel" id="panel-planning">
+                <div class="panel-content">
+                    <div class="plan-form-card">
+                        <h3>Lập Kế Hoạch Nhiệm Vụ An Toàn (DAG Planner)</h3>
+                        <p class="desc">Phân rã mục tiêu thành các bước hành động, đánh giá cấp độ rủi ro R0-R5 và áp dụng chốt chặn quyền Chủ nhân.</p>
+                        <div class="form-row">
+                            <input type="text" id="plan-goal-input" class="form-input" placeholder="Nhập mục tiêu (VD: Kiểm tra toàn diện hệ thống bộ nhớ và sao lưu)">
+                            <button class="btn btn-accent" id="btn-generate-plan">Lập Kế Hoạch</button>
+                        </div>
+                    </div>
+                    <div class="plan-result-card" id="plan-result-container" style="display: none;">
+                        <!-- Plan details rendered dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: SELF-LEARNING PANEL -->
+            <section class="tab-panel" id="panel-learning">
+                <div class="panel-content">
+                    <div class="learning-header-card">
+                        <h3>Động Cơ Tự Học & Nâng Cấp Phần Mềm (Phase F)</h3>
+                        <p class="desc">Tự phát hiện lỗ hổng năng lực (Learning Gap) -> Tự nghiên cứu tài liệu -> Đưa vào cách ly (Quarantine) -> Đề xuất nâng cấp (Chủ nhân quyết định).</p>
+                        <button class="btn btn-gradient" id="btn-run-learning-cycle">⚡ Chạy Một Chu Kỳ Tự Học Mẫu (Supervised Dry-Run)</button>
+                    </div>
+                    <div class="learning-result-card" id="learning-result-container" style="display: none;">
+                        <!-- Learning dossier and proposal rendered here -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal Add Memory -->
+    <div class="modal-overlay" id="modal-add-memory" style="display: none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Ghi Nhớ Sự Kiện Mới Vào Não Bộ</h3>
+                <button class="btn-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <label for="new-memory-summary">Tóm tắt sự kiện / Quy tắc:</label>
+                <textarea id="new-memory-summary" class="form-input" rows="3" placeholder="Ví dụ: Quy tắc vận hành hệ thống luôn yêu cầu kiểm tra cổng trước khi gọi API"></textarea>
+                <label for="new-memory-kind">Phân loại:</label>
+                <select id="new-memory-kind" class="form-input">
+                    <option value="task">Tác vụ (Task)</option>
+                    <option value="preference">Sở thích / Phong cách (Preference)</option>
+                    <option value="rule">Quy tắc điều hành (Rule)</option>
+                    <option value="fact">Sự kiện đã xác minh (Fact)</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-memory">Hủy</button>
+                <button class="btn btn-primary" id="btn-save-memory">Lưu vào Não bộ</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/avatar_engine.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>

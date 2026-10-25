@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>QUAN AI BRAIN — Raspberry Pi 5 Edge Kiosk</title>
+  <link rel="stylesheet" href="/kiosk.css">
+</head>
+<body>
+  <div class="kiosk-app">
+    <!-- Top System Header Bar -->
+    <header class="kiosk-header">
+      <div class="header-left">
+        <span class="status-indicator-dot online" id="core-status-dot"></span>
+        <span class="status-label" id="core-status-text">CORE: ONLINE (127.0.0.1:8766)</span>
+        <span class="device-pill" id="device-id-tag">EDGE-PI5-DESK</span>
+      </div>
+      <div class="header-right">
+        <span class="clock-display" id="kiosk-clock">--:--:--</span>
+      </div>
+    </header>
+
+    <!-- Main Avatar Stage -->
+    <main class="kiosk-stage">
+      <div class="avatar-card">
+        <!-- Digital Human (Avatar V2 - Cybernetic Assistant) Viewport -->
+        <div class="kiosk-avatar-viewport digital-human-viewport state-idle" id="avatar-viewport">
+          <canvas id="kiosk-avatar-canvas" width="720" height="720" class="digital-human-canvas"></canvas>
+        </div>
+
+        <!-- Audio Waveform Glow Line -->
+        <div class="kiosk-waveform-wrap">
+          <canvas id="kiosk-waveform" width="280" height="20" class="kiosk-waveform"></canvas>
+        </div>
+      </div>
+    </main>
+
+    <!-- Consultation Notification Banner (if pending) -->
+    <div class="consultation-banner hidden" id="consultation-banner">
+      <span class="banner-icon">📬</span>
+      <span class="banner-text" id="consultation-banner-text">Có 1 đề xuất nâng cấp cần Anh duyệt trên PC</span>
+    </div>
+
+    <!-- Bottom Touch Control Bar -->
+    <footer class="kiosk-footer">
+      <button class="kiosk-btn btn-wake" id="btn-touch-wake" title="Chạm để bắt đầu nói">
+        <span class="btn-icon">🎤</span>
+        <span class="btn-text">TONY ƠI...</span>
+      </button>
+
+      <div class="task-summary-glance" id="task-glance">
+        <span class="task-glance-lbl">Nhiệm vụ:</span>
+        <span class="task-glance-val" id="task-glance-text">Giám sát & Điều hành trợ lý</span>
+      </div>
+
+      <button class="kiosk-btn btn-stop" id="btn-touch-stop" title="Dừng khẩn cấp toàn bộ tác vụ">
+        <span class="btn-icon">🛑</span>
+        <span class="btn-text">STOP</span>
+      </button>
+    </footer>
+
+    <!-- Fail-Safe Disconnected Overlay -->
+    <div class="offline-overlay hidden" id="offline-overlay">
+      <div class="overlay-card">
+        <span class="overlay-alert-icon">⚠️</span>
+        <h2>MẤT KẾT NỐI VỚI BRAIN CORE (PC)</h2>
+        <p>Không thể kết nối đến máy tính trung tâm qua mạng LAN. Micro và các tiến trình ngoại vi đã được ngắt an toàn.</p>
+        <div class="retry-spinner"></div>
+        <p class="retry-text">Đang tự động thử kết nối lại...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/avatar_engine.js?v=model_a_final_v3"></script>
+  <script src="/wake_engine.js?v=model_a_final_v3"></script>
+  <script src="/kiosk.js?v=model_a_final_v3"></script>
+</body>
+</html>
+

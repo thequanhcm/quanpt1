@@ -1,0 +1,2847 @@
+"""Lightweight, standard-library HTTP server for QUAN AI BRAIN Local Web UI."""
+from __future__ import annotations
+
+import base64
+import http.server
+import json
+import mimetypes
+import os
+from datetime import datetime, timezone
+from pathlib import Path
+import socket
+import socketserver
+import sys
+import threading
+import time
+import urllib.parse
+import urllib.request
+import webbrowser
+
+from quan_ai_brain.cognition import (
+    CapabilityRegistry,
+    CognitiveRetriever,
+    ExecutivePersona,
+    GLOBAL_AUTONOMOUS_MIND,
+    MemoryQuery,
+    PromptContextBuilder,
+)
+from quan_ai_brain.cognition.session_memory import SessionMemoryManager
+from quan_ai_brain.core.autonomic import GLOBAL_AUTONOMIC_SYSTEM
+from quan_ai_brain.core.guardrails import OutputGuardrails
+from quan_ai_brain.core.redaction import redact_text
+from quan_ai_brain.daemon.health import health_as_dict
+from quan_ai_brain.governance.consultation_inbox import (
+    ConsultationCategory,
+    ConsultationStore,
+    ConsultationTicket,
+    TicketStatus,
+)
+from quan_ai_brain.learning.periodic_reporter import PeriodicLearningReporter
+from quan_ai_brain.llm import FallbackMode, LLMProvider, LLMRequest
+from quan_ai_brain.llm.router import LLMRouter
+from quan_ai_brain.memory.sqlite_store import MemoryStore
+from quan_ai_brain.cognition.role_orchestrator import (
+    ExecutiveRole,
+    ExecutiveRoleOrchestrator,
+    ROLE_METADATA,
+)
+from quan_ai_brain.edge.models import (
+    DataClassification,
+    DeviceIdentity,
+    ReleaseManifest,
+    TransferChunk,
+    TransferDirection,
+    TransferManifest,
+    TransferStatus,
+)
+from quan_ai_brain.edge.release_manager import EdgeReleaseManager
+from quan_ai_brain.edge.transfer_service import EdgeTransferService
+from quan_ai_brain.voice import VoiceState, WakeWordConfig
+from quan_ai_brain.voice.mouth_sync import MouthSyncEngine
+from quan_ai_brain.voice.tts_config import (
+    GLOBAL_TTS_MANAGER,
+    TTSStatus,
+    normalize_text_for_vietnamese_tts,
+)
+from quan_ai_brain.voice.voice_pipeline import XiaoZhiVoicePipeline
+from quan_ai_brain.web.edge_monitor import (
+    EdgeAlertCode,
+    EdgeConnectionMonitor,
+    EdgeConnectionState,
+)
+
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+_GLOBAL_WAKE_CONFIG = WakeWordConfig(enabled=False)
+_GLOBAL_EDGE_PAIRING_PIN = "888666"
+_GLOBAL_PAIRED_EDGE_DEVICES: dict[str, dict[str, Any]] = {}
+_GLOBAL_EDGE_MONITOR = EdgeConnectionMonitor(heartbeat_timeout_sec=4.0)
+_GLOBAL_MOUTH_SYNC = MouthSyncEngine(frame_interval_ms=50)
+_GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
+    "packets_in": 0,
+    "packets_out": 0,
+    "rtt_history": [11.0, 11.2, 10.8, 11.5, 12.0, 11.0],
+    "edge_ip": "192.168.1.21",
+    "edge_port": 8768,
+    "last_telemetry": {},
+    "pending_commands": [],
+    "target_avatar_state": "IDLE",
+    "transcript": "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.",
+    "face_only_mode": True,
+}
+_GLOBAL_ROLE_ORCHESTRATOR = ExecutiveRoleOrchestrator(edge_telemetry=_GLOBAL_EDGE_TELEMETRY)
+_GLOBAL_VOICE_PIPELINE = XiaoZhiVoicePipeline(
+    role_orchestrator=_GLOBAL_ROLE_ORCHESTRATOR,
+    mouth_sync=_GLOBAL_MOUTH_SYNC,
+    wake_config=_GLOBAL_WAKE_CONFIG,
+)
+_GLOBAL_TRANSFER_SERVICE = EdgeTransferService()
+_GLOBAL_RELEASE_MANAGER = EdgeReleaseManager()
+_GLOBAL_SUPERVISOR = None
+
+
+def _get_global_supervisor():
+    global _GLOBAL_SUPERVISOR
+    if _GLOBAL_SUPERVISOR is None:
+        workspace = _find_workspace_root()
+        tasks_db = workspace / "data" / "tasks.db"
+        gov_db = workspace / "data" / "governance.db"
+        from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+        from quan_ai_brain.governance.state_store import GovernanceStateStore
+        from quan_ai_brain.orchestration.supervisor import ContinuousAutonomySupervisor
+        registry = DurableTaskRegistry(tasks_db, workspace=workspace)
+        gov_store = GovernanceStateStore(gov_db, workspace=workspace)
+        _GLOBAL_SUPERVISOR = ContinuousAutonomySupervisor(
+            workspace=workspace,
+            task_registry=registry,
+            governance_store=gov_store,
+        )
+    return _GLOBAL_SUPERVISOR
+
+
+def _send_edge_request(path: str, method: str = "GET", data: dict | None = None, timeout: float = 3.0) -> dict:
+    """Send an HTTP request to the Raspberry Pi 5 Kiosk Daemon over Wi-Fi with resilient timeout."""
+    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+
+    # Fast non-blocking pre-check of TCP socket before urllib to prevent Windows 21s SYN stall
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(min(timeout, 1.0))
+        res = sock.connect_ex((edge_ip, edge_port))
+        sock.close()
+        if res != 0:
+            return {"success": False, "error": f"Port {edge_port} not reachable", "offline": True}
+    except Exception as e:
+        return {"success": False, "error": str(e), "offline": True}
+
+    url = f"http://{edge_ip}:{edge_port}{path}"
+    try:
+        body_bytes = json.dumps(data).encode("utf-8") if data is not None else None
+        req = urllib.request.Request(url, data=body_bytes, method=method)
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw)
+    except urllib.error.HTTPError as he:
+        try:
+            raw_err = he.read().decode("utf-8")
+            err_data = json.loads(raw_err)
+            if isinstance(err_data, dict):
+                err_data.setdefault("offline", False)
+                return err_data
+        except Exception:
+            pass
+        return {"success": False, "error": f"HTTP {he.code}: {he.reason}", "offline": False}
+    except Exception as exc:
+        return {"success": False, "error": str(exc), "offline": True}
+
+
+def get_local_lan_ip() -> str:
+    """Detect local Wi-Fi / LAN IP address for Raspberry Pi 5 discovery."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return str(s.getsockname()[0])
+    except Exception:
+        return "127.0.0.1"
+
+
+def _find_workspace_root() -> Path:
+    current = Path.cwd().resolve()
+    if (current / "src" / "quan_ai_brain").exists():
+        return current
+    anchor = Path(__file__).resolve().parents[3]
+    if (anchor / "src" / "quan_ai_brain").exists():
+        return anchor
+    return current
+
+
+class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
+    """Handles static files and JSON REST API for QUAN AI BRAIN."""
+
+    server_version = "QuanAIBrainWeb/1.0"
+
+    def log_message(self, format: str, *args: object) -> None:
+        # Keep console output clean
+        try:
+            if sys.stdout:
+                sys.stdout.write(f"[{time.strftime('%H:%M:%S')}] {self.address_string()} - {format % args}\n")
+                sys.stdout.flush()
+        except Exception:
+            pass
+
+    def _send_json(self, data: object, status: int = 200) -> None:
+        payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def _send_error_json(self, message: str, status: int = 400) -> None:
+        self._send_json({"error": message, "success": False}, status=status)
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
+
+    def do_GET(self) -> None:
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        port = self.server.server_address[1] if hasattr(self.server, "server_address") else 8765
+
+        if path in ("/", "/index.html"):
+            if port == 8766:
+                self._serve_file(STATIC_DIR / "executive.html")
+            else:
+                self._serve_file(STATIC_DIR / "index.html")
+            return
+
+        if path in ("/executive", "/executive.html"):
+            self._serve_file(STATIC_DIR / "executive.html")
+            return
+
+        if path.startswith("/static/"):
+            rel = path[len("/static/"):]
+            target = (STATIC_DIR / rel).resolve()
+            if not str(target).startswith(str(STATIC_DIR.resolve())):
+                self.send_error(403, "Forbidden")
+                return
+            self._serve_file(target)
+            return
+
+        if path == "/api/status":
+            self._handle_api_status()
+            return
+
+        if path == "/api/memories":
+            self._handle_api_list_memories()
+            return
+
+        if path == "/api/executive/overview":
+            self._handle_api_executive_overview()
+            return
+
+        if path == "/api/executive/persona":
+            self._handle_api_executive_persona()
+            return
+
+        if path == "/api/executive/capabilities":
+            self._handle_api_executive_capabilities()
+            return
+
+        if path == "/api/executive/consultations":
+            self._handle_api_executive_consultations(parsed.query)
+            return
+
+        if path == "/api/executive/learning/reports":
+            self._handle_api_executive_learning_reports()
+            return
+
+        if path == "/api/executive/tasks":
+            self._handle_api_executive_tasks()
+            return
+
+        if path == "/api/executive/tasks/detail":
+            self._handle_api_executive_task_detail(parsed.query)
+            return
+
+        if path == "/api/executive/supervisor":
+            self._handle_api_executive_supervisor()
+            return
+
+        if path == "/api/executive/edge/alerts":
+            self._handle_api_edge_alerts()
+            return
+
+        if path == "/api/executive/edge/status":
+            self._handle_api_edge_status()
+            return
+
+        if path == "/api/executive/edge/telemetry":
+            self._handle_api_edge_telemetry()
+            return
+
+        if path == "/api/executive/edge/files":
+            self._handle_api_edge_list_files()
+            return
+
+        if path == "/api/executive/edge/audio/status":
+            self._handle_api_edge_audio_status()
+            return
+
+        if path == "/api/executive/edge/camera/status":
+            self._handle_api_edge_camera_status()
+            return
+
+        if path == "/api/executive/edge/camera/snapshot":
+            self._handle_api_edge_camera_snapshot()
+            return
+
+        if path == "/api/executive/edge/camera/stream":
+            self._handle_api_edge_camera_stream()
+            return
+
+        if path == "/api/executive/edge/camera/library":
+            self._handle_api_edge_camera_library(parsed.query)
+            return
+
+        if path == "/api/executive/edge/camera/image":
+            self._handle_api_edge_camera_serve_image(parsed.query)
+            return
+
+        if path == "/api/executive/roles":
+            self._handle_api_executive_roles()
+            return
+
+        if path == "/api/executive/edge/transfer/status":
+            self._handle_api_edge_transfer_status(parsed.query)
+            return
+
+        if path == "/api/executive/edge/transfer/history":
+            self._handle_api_edge_transfer_history(parsed.query)
+            return
+
+        if path == "/api/executive/edge/release/list":
+            self._handle_api_edge_release_list()
+            return
+
+        if path == "/api/voice/wake-config":
+            self._handle_api_voice_get_config()
+            return
+
+        if path == "/api/voice/tts-config":
+            self._handle_api_voice_get_tts_config()
+            return
+
+        if path == "/api/voice/tts-voices":
+            self._handle_api_voice_get_tts_voices()
+            return
+
+        if path == "/api/chat/history":
+            self._handle_api_chat_history(parsed.query)
+            return
+
+        if path == "/api/autonomic/status":
+            self._handle_api_autonomic_status()
+            return
+
+        if path == "/api/mind/state":
+            self._handle_api_mind_state()
+            return
+
+        if path == "/api/mind/thoughts":
+            self._handle_api_mind_thoughts(parsed.query)
+            return
+
+        if path == "/api/supervisor/state":
+            self._handle_api_supervisor_state()
+            return
+
+        if path.startswith("/edge_client/"):
+            workspace = _find_workspace_root()
+            rel = path.lstrip("/").replace("edge_client/", "")
+            target = (workspace / "edge_client" / rel).resolve()
+            base = (workspace / "edge_client").resolve()
+            try:
+                target.relative_to(base)
+                if target.exists() and target.is_file():
+                    self._serve_file(target)
+                    return
+            except ValueError:
+                pass
+
+        # Fallback to static file if exists
+        target = STATIC_DIR / path.lstrip("/")
+        if target.exists() and target.is_file():
+            self._serve_file(target)
+            return
+
+        self.send_error(404, "Not Found")
+
+    def do_POST(self) -> None:
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length > 10_000_000:
+            self._send_error_json("Payload too large", 413)
+            return
+
+        body_raw = self.rfile.read(content_length).decode("utf-8", errors="replace")
+        try:
+            body = json.loads(body_raw) if body_raw else {}
+        except json.JSONDecodeError:
+            self._send_error_json("Invalid JSON body", 400)
+            return
+
+        if path == "/api/chat":
+            self._handle_api_chat(body)
+            return
+
+        if path == "/api/memories":
+            self._handle_api_add_memory(body)
+            return
+
+        if path == "/api/plan":
+            self._handle_api_plan(body)
+            return
+
+        if path == "/api/learning":
+            self._handle_api_learning(body)
+            return
+
+        if path == "/api/executive/persona":
+            self._handle_api_executive_persona_update(body)
+            return
+
+        if path == "/api/executive/consultations/respond":
+            self._handle_api_executive_consultation_respond(body)
+            return
+
+        if path == "/api/executive/consultations/create":
+            self._handle_api_executive_consultation_create(body)
+            return
+
+        if path == "/api/executive/learning/trigger":
+            self._handle_api_executive_learning_trigger(body)
+            return
+
+        if path == "/api/executive/tasks/create":
+            self._handle_api_executive_task_create(body)
+            return
+
+        if path == "/api/executive/tasks/execute":
+            self._handle_api_executive_task_execute(body)
+            return
+
+        if path == "/api/executive/tasks/cancel":
+            self._handle_api_executive_task_cancel(body)
+            return
+
+        if path == "/api/executive/emergency":
+            self._handle_api_executive_emergency(body)
+            return
+
+        if path == "/api/voice/wake-config":
+            self._handle_api_voice_set_config(body)
+            return
+
+        if path == "/api/voice/tts-config":
+            self._handle_api_voice_set_tts_config(body)
+            return
+
+        if path == "/api/voice/tts-synthesize":
+            self._handle_api_voice_tts_synthesize(body)
+            return
+
+        if path == "/api/voice/telemetry":
+            self._handle_api_voice_telemetry(body)
+            return
+
+        if path == "/api/autonomic/selftest":
+            self._handle_api_autonomic_selftest(body)
+            return
+
+        if path == "/api/autonomic/vocalize":
+            self._handle_api_autonomic_vocalize(body)
+            return
+
+        if path == "/api/mind/cogitate":
+            self._handle_api_mind_cogitate(body)
+            return
+
+        if path == "/api/supervisor/tick":
+            self._handle_api_supervisor_tick(body)
+            return
+
+        if path == "/api/edge/pair":
+            self._handle_api_edge_pair(body)
+            return
+
+        if path == "/api/executive/edge/heartbeat":
+            self._handle_api_edge_heartbeat(body)
+            return
+
+        if path == "/api/executive/edge/mouth-sync":
+            self._handle_api_edge_mouth_sync(body)
+            return
+
+        if path == "/api/executive/edge/control":
+            self._handle_api_edge_control(body)
+            return
+
+        if path == "/api/executive/edge/startup-sequence":
+            self._handle_api_edge_startup_sequence(body)
+            return
+
+        if path == "/api/executive/edge/files/upload":
+            self._handle_api_edge_upload_file(body)
+            return
+
+        if path == "/api/executive/edge/files/sync-all":
+            self._handle_api_edge_sync_all_assets()
+            return
+
+        if path == "/api/executive/edge/files/delete":
+            self._handle_api_edge_delete_file(body)
+            return
+
+        if path == "/api/executive/edge/action":
+            self._handle_api_edge_remote_action(body)
+            return
+
+        if path == "/api/executive/edge/audio/control":
+            self._handle_api_edge_audio_control(body)
+            return
+
+        if path == "/api/executive/edge/camera/control":
+            self._handle_api_edge_camera_control(body)
+            return
+
+        if path == "/api/executive/edge/camera/save":
+            self._handle_api_edge_camera_save(body)
+            return
+
+        if path == "/api/executive/edge/camera/delete":
+            self._handle_api_edge_camera_delete(body)
+            return
+
+        if path == "/api/voice/interact":
+            self._handle_api_voice_interact(body)
+            return
+
+        if path == "/api/voice/barge-in":
+            self._handle_api_voice_barge_in(body)
+            return
+
+        if path == "/api/executive/edge/transfer/initiate":
+            self._handle_api_edge_transfer_initiate(body)
+            return
+
+        if path == "/api/executive/edge/transfer/chunk":
+            self._handle_api_edge_transfer_chunk(body)
+            return
+
+        if path == "/api/executive/edge/transfer/ack":
+            self._handle_api_edge_transfer_ack(body)
+            return
+
+        if path == "/api/executive/edge/release/create":
+            self._handle_api_edge_release_create(body)
+            return
+
+        if path == "/api/executive/edge/release/stage":
+            self._handle_api_edge_release_stage(body)
+            return
+
+        if path == "/api/executive/edge/release/activate":
+            self._handle_api_edge_release_activate(body)
+            return
+
+        if path == "/api/executive/edge/release/rollback":
+            self._handle_api_edge_release_rollback(body)
+            return
+
+        self.send_error(404, "Endpoint not found")
+
+    def _serve_file(self, file_path: Path) -> None:
+        if not file_path.exists() or not file_path.is_file():
+            self.send_error(404, "File not found")
+            return
+
+        mime_type, _ = mimetypes.guess_type(str(file_path))
+        if not mime_type:
+            mime_type = "application/octet-stream"
+
+        try:
+            with open(file_path, "rb") as f:
+                content = f.read()
+        except OSError as exc:
+            self.send_error(500, f"Failed to read file: {exc}")
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", f"{mime_type}; charset=utf-8" if "text" in mime_type or "json" in mime_type or "javascript" in mime_type else mime_type)
+        self.send_header("Content-Length", str(len(content)))
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        self.end_headers()
+        self.wfile.write(content)
+
+    def _handle_api_status(self) -> None:
+        try:
+            provider = LLMProvider()
+            health = provider.health()
+        except Exception as exc:
+            health = {"ollama_online": False, "error": str(exc)}
+
+        health["reachable"] = bool(health.get("ollama_online"))
+        health["model"] = health.get("default_model", "qwen2.5:7b")
+
+        mem_count = 0
+        try:
+            workspace = _find_workspace_root()
+            db_path = workspace / "data" / "brain.db"
+            if db_path.exists():
+                with MemoryStore(db_path, workspace=workspace) as store:
+                    mem_count = len(store.list_episodes(limit=500))
+        except Exception:
+            pass
+
+        sys_health = health_as_dict()
+        self._send_json({
+            "success": True,
+            "llm": health,
+            "system": sys_health,
+            "memories": {"count": mem_count},
+        })
+
+    def _handle_api_list_memories(self) -> None:
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            with MemoryStore(db_path, workspace=workspace) as store:
+                episodes = store.list_episodes(limit=100)
+            self._send_json({"success": True, "memories": episodes})
+        except Exception as exc:
+            self._send_error_json(f"Database error: {exc}", 500)
+
+    def _handle_api_add_memory(self, body: dict) -> None:
+        summary = str(body.get("summary", "")).strip()
+        if not summary:
+            self._send_error_json("Summary is required", 400)
+            return
+
+        kind = str(body.get("kind", "user_note")).strip()
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            with MemoryStore(db_path, workspace=workspace) as store:
+                record_id = store.add_episode(
+                    summary=summary,
+                    kind=kind,
+                    source_ref="web_ui",
+                    metadata={"client": "web_chat_ui"},
+                )
+            self._send_json({"success": True, "record_id": record_id})
+        except Exception as exc:
+            self._send_error_json(f"Failed to record memory: {exc}", 500)
+
+    def _handle_api_chat_history(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        session_id = params.get("session_id", ["default_executive_session"])[0]
+        limit = int(params.get("limit", [10])[0])
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            with MemoryStore(db_path, workspace=workspace) as store:
+                session_mgr = SessionMemoryManager(store)
+                history = session_mgr.get_recent_session_history(session_id, limit=limit)
+            self._send_json({"success": True, "session_id": session_id, "history": history})
+        except Exception as exc:
+            self._send_error_json(f"Error fetching session history: {exc}", 500)
+
+    def _handle_api_autonomic_status(self) -> None:
+        """Return the latest autonomic health report, active pains, and hardware organ audits."""
+        try:
+            report = GLOBAL_AUTONOMIC_SYSTEM.get_last_report()
+            self._send_json({"success": True, "report": report.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Failed to fetch autonomic status: {exc}", 500)
+
+    def _handle_api_autonomic_selftest(self, body: dict) -> None:
+        """Trigger an on-demand self-test across all organ systems and return results."""
+        try:
+            report = GLOBAL_AUTONOMIC_SYSTEM.run_self_test()
+            vocalize = bool(body.get("vocalize", False))
+            if vocalize and report.vocal_summary:
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = report.vocal_summary
+                target_state = "IDLE" if report.is_healthy else "THINKING"
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = target_state
+            self._send_json({"success": True, "report": report.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Failed to execute self-test: {exc}", 500)
+
+    def _handle_api_autonomic_vocalize(self, body: dict) -> None:
+        """Trigger the assistant to vocalize its current health or pain condition."""
+        try:
+            report = GLOBAL_AUTONOMIC_SYSTEM.get_last_report()
+            speech_text = report.vocal_summary
+            _GLOBAL_EDGE_TELEMETRY["transcript"] = speech_text
+            _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING" if not report.is_healthy else "HAPPY"
+            try:
+                _send_edge_request("/api/avatar/action", method="POST", data={
+                    "action": "speak",
+                    "text": speech_text,
+                    "expression": "sad" if not report.is_healthy else "happy",
+                }, timeout=1.0)
+            except Exception:
+                pass
+            self._send_json({
+                "success": True,
+                "vocal_text": speech_text,
+                "pain_level": report.overall_pain_level.value,
+                "health_score": report.health_score,
+            })
+        except Exception as exc:
+            self._send_error_json(f"Failed to vocalize pain: {exc}", 500)
+
+    def _handle_api_mind_state(self) -> None:
+        """Return the current autonomous mind state and mental focus."""
+        try:
+            state = GLOBAL_AUTONOMOUS_MIND.get_state()
+            self._send_json({"success": True, "state": state})
+        except Exception as exc:
+            self._send_error_json(f"Failed to fetch mind state: {exc}", 500)
+
+    def _handle_api_mind_thoughts(self, query_str: str) -> None:
+        """Return the stream of consciousness / internal thoughts."""
+        try:
+            params = urllib.parse.parse_qs(query_str)
+            limit = int(params.get("limit", [10])[0])
+            thoughts = GLOBAL_AUTONOMOUS_MIND.get_recent_thoughts(limit=limit)
+            self._send_json({"success": True, "thoughts": thoughts})
+        except Exception as exc:
+            self._send_error_json(f"Failed to fetch thoughts: {exc}", 500)
+
+    def _handle_api_mind_cogitate(self, body: dict) -> None:
+        """Execute one cycle of autonomous thinking on demand."""
+        try:
+            trigger = str(body.get("trigger", "IDLE_REFLECTION"))
+            topic = str(body.get("topic", "")).strip() or None
+            notes = str(body.get("notes", "")).strip()
+            thought = GLOBAL_AUTONOMOUS_MIND.cogitate(
+                trigger=trigger,
+                topic_override=topic,
+                context_notes=notes,
+            )
+            _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "THINKING"
+            self._send_json({"success": True, "thought": thought.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Failed to execute cogitation: {exc}", 500)
+
+    def _handle_api_chat(self, body: dict) -> None:
+        query = str(body.get("query") or body.get("message", "")).strip()
+        if not query:
+            self._send_error_json("Query cannot be empty", 400)
+            return
+
+        session_id = str(body.get("session_id", "default_executive_session")).strip() or "default_executive_session"
+        allow_fallback = bool(body.get("fallback", False))
+        scope = body.get("scope") or None
+        timeout = float(body.get("timeout", 120.0))
+        explicit_model = str(body.get("model", "")).strip() or None
+
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+
+        start_time = time.perf_counter()
+        try:
+            # 1. Routing Model
+            router = LLMRouter()
+            mode = FallbackMode.ON_ERROR if allow_fallback else FallbackMode.NEVER
+            provider = LLMProvider(fallback_mode=mode)
+            avail_models: list[str] = []
+            if provider.is_online(timeout=1.0):
+                try:
+                    avail_models = [m.name for m in provider.list_models(allow_fallback=True)]
+                except Exception:
+                    avail_models = []
+
+            decision = router.route(
+                query,
+                task_hint="chat",
+                explicit_model=explicit_model,
+                available_models=avail_models,
+            )
+            selected_model = decision.model
+
+            # 2. Memory Retrieval & Session History
+            with MemoryStore(db_path, workspace=workspace) as store:
+                session_mgr = SessionMemoryManager(store)
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
+
+                retriever = CognitiveRetriever(store)
+                m_query = MemoryQuery(
+                    query=query,
+                    project_scope=scope,
+                    top_k=5,
+                    max_chars=4000,
+                )
+                retrieval = retriever.retrieve(m_query)
+                builder = PromptContextBuilder(default_max_chars=4000)
+                context = builder.build(
+                    user_query=query,
+                    retrieval=retrieval,
+                    max_chars=4000,
+                    project_scope=scope,
+                    conversation_history=recent_history,
+                )
+
+            # 3. LLM Generation
+            req = LLMRequest(
+                prompt=context.rendered_context,
+                system_prompt=context.system_instructions,
+                model=selected_model,
+                timeout_seconds=timeout,
+            )
+            resp = provider.generate(req)
+
+            # 4. Output Guardrails & Grounding Analysis
+            sanitized_reply, guardrail_warnings = OutputGuardrails.sanitize(resp.text)
+            grounding_analysis = OutputGuardrails.analyze_grounding(sanitized_reply, context=context)
+
+            # 5. Continuous Session & Memory Persistence
+            persistence_info: dict[str, Any] = {}
+            if resp.success and sanitized_reply:
+                with MemoryStore(db_path, workspace=workspace) as store:
+                    session_mgr = SessionMemoryManager(store)
+                    persistence_info = session_mgr.persist_chat_turn(
+                        session_id=session_id,
+                        user_query=query,
+                        assistant_reply=sanitized_reply,
+                        model_used=resp.model,
+                        used_memory_ids=[m.memory_id for m in context.used_memories],
+                        project_scope=scope or "general",
+                    )
+
+            all_warnings: list[str] = []
+            if resp.warning:
+                all_warnings.append(resp.warning)
+            if guardrail_warnings:
+                all_warnings.extend(guardrail_warnings)
+
+            # 6. Task Plan & Durable Registration if requested
+            durable_task_dict: dict[str, Any] | None = None
+            if resp.success and bool(body.get("create_task", False)):
+                try:
+                    from quan_ai_brain.governance.policy import PolicyEngine
+                    from quan_ai_brain.planning import ExecutiveCoordinator
+                    from quan_ai_brain.orchestration.plan_orchestrator import PlanOrchestrator
+                    from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+                    from quan_ai_brain.governance.state_store import GovernanceStateStore
+                    from quan_ai_brain.governance.consultation_inbox import ConsultationStore
+
+                    with MemoryStore(db_path, workspace=workspace) as plan_mem:
+                        p_retriever = CognitiveRetriever(plan_mem)
+                        p_builder = PromptContextBuilder()
+                        p_policy = PolicyEngine(workspace)
+                        p_coord = ExecutiveCoordinator(
+                            workspace=workspace,
+                            llm_provider=provider,
+                            policy_engine=p_policy,
+                            retriever=p_retriever,
+                            context_builder=p_builder,
+                        )
+                        task_plan = p_coord.plan(goal=query, project_scope=scope, model=selected_model, fallback=allow_fallback)
+
+                    tasks_db = workspace / "data" / "tasks.db"
+                    gov_db = workspace / "data" / "governance.db"
+                    cst_db = workspace / "data" / "consultations.db"
+                    t_reg = DurableTaskRegistry(tasks_db, workspace=workspace)
+                    g_store = GovernanceStateStore(gov_db, workspace=workspace)
+                    c_store = ConsultationStore(cst_db)
+
+                    t_orch = PlanOrchestrator(task_registry=t_reg, workspace=workspace, governance_store=g_store, consultation_store=c_store)
+                    task_rec = t_orch.submit_plan(task_plan)
+                    durable_task_dict = task_rec.to_dict()
+                    plan_note = f"\n\n📋 *Nhiệm vụ đã được tự động phân rã và đăng ký bền vững vào DurableTaskRegistry: `{task_rec.task_id}` (Rủi ro: {task_rec.risk_level}, Tiến trình: {len(task_rec.approved_scope)} bước DAG).* "
+                    sanitized_reply += plan_note
+                except Exception as plan_err:
+                    all_warnings.append(f"Auto-planning registration: {plan_err}")
+
+            elapsed = round((time.perf_counter() - start_time) * 1000, 2)
+            warning_out = "; ".join(all_warnings) if all_warnings else None
+
+            self._send_json({
+                "success": resp.success,
+                "answer": sanitized_reply,
+                "reply": sanitized_reply,
+                "model": resp.model,
+                "provider": resp.provider,
+                "is_mock": resp.is_mock,
+                "warning": warning_out,
+                "error_message": resp.error_message,
+                "elapsed_ms": elapsed,
+                "used_memory_ids": [m.memory_id for m in context.used_memories],
+                "used_memories": [
+                    {
+                        "id": getattr(m, "memory_id", str(getattr(m, "id", ""))),
+                        "summary": getattr(m, "summary", getattr(m, "content", str(m))),
+                        "content": getattr(m, "content", ""),
+                        "type": str(getattr(getattr(m, "memory_type", None), "value", getattr(m, "memory_type", "SEMANTIC"))),
+                    }
+                    for m in context.used_memories
+                ],
+                "grounding": grounding_analysis.to_dict(),
+                "session_id": session_id,
+                "routing": {
+                    "tier": decision.tier,
+                    "reason": decision.reason,
+                    "model": decision.model,
+                    "is_fallback": decision.is_fallback,
+                },
+                "persistence": persistence_info,
+                "durable_task": durable_task_dict,
+            })
+        except Exception as exc:
+            self._send_error_json(f"Chat execution error: {exc}", 500)
+
+    def _handle_api_plan(self, body: dict) -> None:
+        goal = str(body.get("goal", "")).strip()
+        if not goal:
+            self._send_error_json("Goal is required", 400)
+            return
+
+        model = str(body.get("model", "qwen2.5:7b")).strip()
+        fallback_val = body.get("fallback")
+        if fallback_val is None:
+            fallback_val = body.get("allow_fallback", True)
+        allow_fallback = bool(fallback_val)
+        scope = body.get("scope") or None
+
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            from quan_ai_brain.governance.policy import PolicyEngine
+            from quan_ai_brain.planning import ExecutiveCoordinator
+
+            with MemoryStore(db_path, workspace=workspace) as store:
+                retriever = CognitiveRetriever(store)
+                builder = PromptContextBuilder()
+                policy = PolicyEngine(workspace)
+                mode = FallbackMode.ON_ERROR if allow_fallback else FallbackMode.NEVER
+                provider = LLMProvider(fallback_mode=mode, default_model=model)
+
+                coordinator = ExecutiveCoordinator(
+                    workspace=workspace,
+                    llm_provider=provider,
+                    policy_engine=policy,
+                    retriever=retriever,
+                    context_builder=builder,
+                )
+                plan = coordinator.plan(
+                    goal=goal,
+                    project_scope=scope,
+                    model=model,
+                    fallback=allow_fallback,
+                )
+
+            # Persist and register task into DurableTaskRegistry via PlanOrchestrator
+            task_record_dict = None
+            if plan.status.value != "failed":
+                try:
+                    from quan_ai_brain.orchestration.plan_orchestrator import PlanOrchestrator
+                    from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+                    from quan_ai_brain.governance.state_store import GovernanceStateStore
+
+                    tasks_db = workspace / "data" / "tasks.db"
+                    gov_db = workspace / "data" / "governance.db"
+                    task_reg = DurableTaskRegistry(tasks_db, workspace=workspace)
+                    gov_store = GovernanceStateStore(gov_db, workspace=workspace)
+                    orchestrator = PlanOrchestrator(task_registry=task_reg, workspace=workspace, governance_store=gov_store)
+                    task_rec = orchestrator.submit_plan(plan)
+                    task_record_dict = task_rec.to_dict()
+                except Exception as orch_err:
+                    plan.warning = f"Plan created but orchestration registration deferred: {orch_err}"
+
+            self._send_json({
+                "success": plan.status.value != "failed",
+                "plan": plan.to_dict(),
+                "explanation": plan.explain(),
+                "durable_task": task_record_dict,
+            })
+        except Exception as exc:
+            self._send_error_json(f"Planning error: {exc}", 500)
+
+    def _handle_api_learning(self, body: dict) -> None:
+        scope = str(body.get("scope", "general")).strip()
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "learning_sandbox.db"
+        try:
+            import uuid
+            from quan_ai_brain.contract.models import EvidenceRecord, TaskOutcome, TaskState
+            from quan_ai_brain.learning.engine import SelfLearningEngine
+
+            with MemoryStore(db_path, workspace=workspace) as store:
+                engine = SelfLearningEngine(workspace=workspace, memory_store=store)
+
+                error_desc = str(body.get("error") or "Simulated capability gap: Local Ollama daemon unreachable at 127.0.0.1:11434 (Connection refused).")
+                outcome = TaskOutcome(
+                    task_id=f"task_{uuid.uuid4().hex[:8]}",
+                    correlation_id=f"corr_{uuid.uuid4().hex[:8]}",
+                    state=TaskState.FAILED,
+                    error_message=error_desc,
+                    evidence=[
+                        EvidenceRecord(
+                            evidence_id=f"ev_{uuid.uuid4().hex[:8]}",
+                            source_type="local_system_probe",
+                            description="Observed execution failure or capability bottleneck",
+                            evidence_payload={"error": error_desc, "scope": scope},
+                        )
+                    ],
+                    is_outcome_certain=False,
+                )
+
+                gap = engine.observe_task(outcome)
+                if gap is None:
+                    self._send_json({"success": True, "status": "no_gap"})
+                    return
+
+                authorized_sources = [
+                    {"title": "System Baseline", "path": "docs/SYSTEM_BASELINE.md", "type": "architecture_doc"},
+                    {"title": "Local LLM Client", "path": "src/quan_ai_brain/llm/client.py", "type": "source_code"},
+                    {"title": "Python Standard Library Specification", "path": "stdlib", "type": "standard_library"},
+                ]
+                dossier = engine.research_gap(
+                    gap=gap,
+                    question=f"How to address: {gap.description} with standard-library code?",
+                    authorized_sources=authorized_sources,
+                    findings="Use standard library pre-flight socket probing with bounded timeout (<=50ms) to detect offline dependencies instantly.",
+                    candidate_statement="Fast TCP socket pre-flight probing enables instant offline detection without thread blocking.",
+                    confidence_score=0.88,
+                )
+
+                cand_rec = engine.quarantine_candidate(dossier)
+                diff_sample = """--- a/src/quan_ai_brain/llm/client.py\n+++ b/src/quan_ai_brain/llm/client.py\n@@ -35,6 +35,14 @@\n+    def is_daemon_online(self) -> bool:\n+        \"\"\"Pre-flight TCP check to detect offline daemon without HTTP latency.\"\"\"\n+        import socket\n+        try:\n+            with socket.create_connection((self.host, self.port), timeout=0.05):\n+                return True\n+        except OSError:\n+            return False\n"""
+                proposal = engine.create_upgrade_proposal(
+                    problem_statement=gap.description,
+                    target_goal="Detect offline status within <=50ms and fail fast to fallback without worker thread stall.",
+                    proposed_solution="Implement standard-library pre-flight socket probe before attempting HTTP calls.",
+                    unified_diff=diff_sample,
+                    pros=["Instant fail-fast", "Eliminates UI freeze", "Standard library only"],
+                    cons=["Adds 1 extra loopback socket handshake (<0.1ms)"],
+                    risk_assessment="Low: only probes loopback address, does not change core parsing.",
+                    files_to_modify=["src/quan_ai_brain/llm/client.py"],
+                    new_candidate_ids=[cand_rec.memory_id],
+                )
+
+            self._send_json({
+                "success": True,
+                "gap": gap.to_dict(),
+                "dossier": dossier.to_dict(),
+                "proposal": proposal.to_dict(),
+                "explanation": proposal.explain(),
+            })
+        except Exception as exc:
+            self._send_error_json(f"Learning cycle error: {exc}", 500)
+
+    def _handle_api_executive_overview(self) -> None:
+        workspace = _find_workspace_root()
+        persona = ExecutivePersona()
+        caps = CapabilityRegistry().list_capabilities()
+        cst_store = ConsultationStore(workspace / "data" / "consultations.db")
+        try:
+            pending_count = cst_store.count_pending()
+        finally:
+            cst_store.close()
+        reporter = PeriodicLearningReporter(workspace)
+        try:
+            latest_rep = reporter.get_latest_report()
+        finally:
+            reporter.close()
+        self._send_json({
+            "success": True,
+            "persona": persona.to_dict(),
+            "capability_count": len(caps),
+            "pending_consultations": pending_count,
+            "latest_report": latest_rep.to_dict() if latest_rep else None,
+        })
+
+    def _handle_api_executive_persona(self) -> None:
+        persona = ExecutivePersona()
+        self._send_json(persona.to_dict())
+
+    def _handle_api_executive_persona_update(self, body: dict) -> None:
+        approved = bool(body.get("approved_by_owner", False))
+        approver = str(body.get("approver", "")).strip()
+        if not approved or approver != "Quanpt1":
+            self._send_error_json(
+                "Sửa đổi cấu hình Persona bị từ chối: Bắt buộc phải có phê duyệt hợp lệ từ Anh Quân (Quanpt1).",
+                403,
+            )
+            return
+        self._send_json({"success": True, "message": "Persona updated with verified owner approval."})
+
+    def _handle_api_executive_capabilities(self) -> None:
+        caps = CapabilityRegistry().list_capabilities()
+        self._send_json({"success": True, "capabilities": [c.to_dict() for c in caps]})
+
+    def _handle_api_executive_consultations(self, query_str: str) -> None:
+        workspace = _find_workspace_root()
+        params = urllib.parse.parse_qs(query_str)
+        status_filter = params.get("status", [None])[0]
+        if status_filter == "ALL":
+            status_filter = None
+        store = ConsultationStore(workspace / "data" / "consultations.db")
+        try:
+            tickets = store.list_tickets(status=status_filter)
+            self._send_json({"success": True, "tickets": [t.to_dict() for t in tickets]})
+        finally:
+            store.close()
+
+    def _handle_api_executive_consultation_respond(self, body: dict) -> None:
+        ticket_id = str(body.get("ticket_id", "")).strip()
+        decision = str(body.get("decision", "DIRECT")).strip()
+        guidance = str(body.get("guidance", "")).strip()
+        if not ticket_id:
+            self._send_error_json("ticket_id is required", 400)
+            return
+        workspace = _find_workspace_root()
+        store = ConsultationStore(workspace / "data" / "consultations.db")
+        try:
+            updated = store.respond_ticket(ticket_id, decision=decision, guidance=guidance)
+            self._send_json({"success": True, "ticket": updated.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Error responding to ticket: {exc}", 500)
+        finally:
+            store.close()
+
+    def _handle_api_executive_consultation_create(self, body: dict) -> None:
+        title = str(body.get("title", "")).strip()
+        if not title:
+            self._send_error_json("Title is required", 400)
+            return
+        category_str = str(body.get("category", "STRATEGIC_DIRECTION")).strip()
+        category = (
+            ConsultationCategory(category_str)
+            if category_str in ConsultationCategory._value2member_map_
+            else ConsultationCategory.STRATEGIC_DIRECTION
+        )
+        ticket = ConsultationTicket(
+            ticket_id=str(body.get("ticket_id", "")).strip(),
+            title=title,
+            category=category,
+            priority=str(body.get("priority", "MEDIUM")).strip(),
+            context_summary=str(body.get("context_summary", "")).strip(),
+            proposed_action=str(body.get("proposed_action", "")).strip(),
+            options=body.get("options", []),
+            evidence_notes=str(body.get("evidence_notes", "")).strip(),
+        )
+        workspace = _find_workspace_root()
+        store = ConsultationStore(workspace / "data" / "consultations.db")
+        try:
+            tid = store.create_ticket(ticket)
+            self._send_json({"success": True, "ticket_id": tid})
+        finally:
+            store.close()
+
+    def _handle_api_executive_learning_reports(self) -> None:
+        workspace = _find_workspace_root()
+        reporter = PeriodicLearningReporter(workspace)
+        try:
+            reports = reporter.list_reports()
+            self._send_json({"success": True, "reports": [r.to_dict() for r in reports]})
+        finally:
+            reporter.close()
+
+    def _handle_api_executive_learning_trigger(self, body: dict) -> None:
+        reason = str(body.get("trigger_reason", "manual_desk_trigger")).strip()
+        workspace = _find_workspace_root()
+        reporter = PeriodicLearningReporter(workspace)
+        try:
+            report = reporter.trigger_learning_cycle(trigger_reason=reason)
+            self._send_json({"success": True, "report": report.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Error triggering learning cycle: {exc}", 500)
+        finally:
+            reporter.close()
+
+    def _handle_api_executive_task_create(self, body: dict) -> None:
+        goal = str(body.get("goal", "")).strip()
+        if not goal:
+            self._send_error_json("Goal is required", 400)
+            return
+        autonomy_str = str(body.get("autonomy_level", "LEVEL_A")).strip()
+        model = str(body.get("model", "qwen2.5:7b")).strip()
+        allow_fallback = bool(body.get("allow_fallback", True))
+        scope = body.get("scope") or None
+
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            from quan_ai_brain.governance.policy import PolicyEngine
+            from quan_ai_brain.planning import ExecutiveCoordinator
+            from quan_ai_brain.orchestration.plan_orchestrator import PlanOrchestrator
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+            from quan_ai_brain.orchestration.models import AutonomyLevel
+            from quan_ai_brain.governance.state_store import GovernanceStateStore
+            from quan_ai_brain.governance.consultation_inbox import ConsultationStore
+
+            with MemoryStore(db_path, workspace=workspace) as store:
+                retriever = CognitiveRetriever(store)
+                builder = PromptContextBuilder()
+                policy = PolicyEngine(workspace)
+                mode = FallbackMode.ALWAYS_MOCK if model == "mock" else (FallbackMode.ON_ERROR if allow_fallback else FallbackMode.NEVER)
+                provider = LLMProvider(fallback_mode=mode, default_model=model)
+
+                coordinator = ExecutiveCoordinator(
+                    workspace=workspace,
+                    llm_provider=provider,
+                    policy_engine=policy,
+                    retriever=retriever,
+                    context_builder=builder,
+                )
+                plan = coordinator.plan(
+                    goal=goal,
+                    project_scope=scope,
+                    model=model,
+                    fallback=allow_fallback,
+                )
+
+            tasks_db = workspace / "data" / "tasks.db"
+            gov_db = workspace / "data" / "governance.db"
+            cst_db = workspace / "data" / "consultations.db"
+            task_reg = DurableTaskRegistry(tasks_db, workspace=workspace)
+            gov_store = GovernanceStateStore(gov_db, workspace=workspace)
+            cst_store = ConsultationStore(cst_db)
+
+            autonomy = AutonomyLevel(autonomy_str) if autonomy_str in AutonomyLevel._value2member_map_ else AutonomyLevel.LEVEL_A
+
+            orchestrator = PlanOrchestrator(
+                task_registry=task_reg,
+                workspace=workspace,
+                governance_store=gov_store,
+                consultation_store=cst_store,
+            )
+            task_rec = orchestrator.submit_plan(plan, autonomy_level=autonomy)
+
+            self._send_json({
+                "success": True,
+                "task": task_rec.to_dict(),
+                "plan": plan.to_dict(),
+                "message": f"Nhiệm vụ '{task_rec.task_id}' đã được khởi tạo và ghi nhận bền vững vào DurableTaskRegistry.",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi khởi tạo nhiệm vụ: {exc}", 500)
+
+    def _handle_api_executive_tasks(self) -> None:
+        workspace = _find_workspace_root()
+        task_list = []
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            tasks = registry.list_tasks(limit=50)
+            for t in tasks:
+                t_dict = t.to_dict()
+                steps = registry.list_steps_for_task(t.task_id)
+                completed_steps = sum(1 for s in steps if str(getattr(s.status, "value", s.status)).upper() == "COMPLETED")
+                total_steps = len(steps)
+                is_task_done = str(getattr(t.status, "value", t.status)).upper() == "COMPLETED"
+                pct = round((completed_steps / total_steps * 100), 1) if total_steps > 0 else (100.0 if is_task_done else 0.0)
+                t_dict["steps_count"] = total_steps
+                t_dict["completed_steps_count"] = completed_steps
+                t_dict["progress_pct"] = pct
+                t_dict["steps"] = [s.to_dict() for s in steps]
+                task_list.append(t_dict)
+        except Exception:
+            pass
+
+        self._send_json({
+            "success": True,
+            "orchestration_mode": "DAG_SAFE_PLANNING",
+            "active_tasks": task_list,
+            "total_tasks": len(task_list),
+            "governance_bounds": {
+                "R0": "Active",
+                "R1": "Active",
+                "R2": "Active",
+                "R3": "Quarantined",
+                "R4": "Approval-Gated",
+                "R5": "Hard-Blocked",
+            },
+        })
+
+    def _handle_api_executive_task_detail(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        task_id = params.get("task_id", [None])[0]
+        if not task_id:
+            self._send_error_json("task_id is required", 400)
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            task = registry.get_task(task_id)
+            if not task:
+                self._send_error_json(f"Task '{task_id}' not found", 404)
+                return
+            steps = registry.list_steps_for_task(task_id)
+            self._send_json({
+                "success": True,
+                "task": task.to_dict(),
+                "steps": [s.to_dict() for s in steps],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Error fetching task detail: {exc}", 500)
+
+    def _handle_api_executive_task_execute(self, body: dict) -> None:
+        task_id = str(body.get("task_id", "")).strip()
+        if not task_id:
+            self._send_error_json("task_id is required", 400)
+            return
+        dry_run = bool(body.get("dry_run", True))
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.governance.consultation_inbox import ConsultationStore
+            from quan_ai_brain.governance.state_store import GovernanceStateStore
+            from quan_ai_brain.orchestration.plan_orchestrator import PlanOrchestrator
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            gov_store = GovernanceStateStore(workspace / "data" / "governance.db", workspace=workspace)
+            cst_store = ConsultationStore(workspace / "data" / "consultations.db")
+            orchestrator = PlanOrchestrator(
+                task_registry=registry,
+                workspace=workspace,
+                governance_store=gov_store,
+                consultation_store=cst_store,
+            )
+            outcome = orchestrator.execute_lifecycle(task_id, dry_run=dry_run)
+            task = registry.get_task(task_id)
+            steps = registry.list_steps_for_task(task_id)
+            self._send_json({
+                "success": True,
+                "outcome": outcome.to_dict(),
+                "task": task.to_dict() if task else None,
+                "steps": [s.to_dict() for s in steps],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Error executing task lifecycle: {exc}", 500)
+
+    def _handle_api_executive_task_cancel(self, body: dict) -> None:
+        task_id = str(body.get("task_id", "")).strip()
+        reason = str(body.get("reason", "Cancelled by owner via Executive Desk")).strip()
+        if not task_id:
+            self._send_error_json("task_id is required", 400)
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.governance.consultation_inbox import ConsultationStore
+            from quan_ai_brain.governance.state_store import GovernanceStateStore
+            from quan_ai_brain.orchestration.plan_orchestrator import PlanOrchestrator
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            gov_store = GovernanceStateStore(workspace / "data" / "governance.db", workspace=workspace)
+            cst_store = ConsultationStore(workspace / "data" / "consultations.db")
+            orchestrator = PlanOrchestrator(
+                task_registry=registry,
+                workspace=workspace,
+                governance_store=gov_store,
+                consultation_store=cst_store,
+            )
+            updated = orchestrator.cancel_task(task_id, reason=reason)
+            self._send_json({
+                "success": True,
+                "task": updated.to_dict(),
+                "message": f"Task '{task_id}' cancelled successfully.",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Error cancelling task: {exc}", 500)
+
+    def _handle_api_executive_supervisor(self) -> None:
+        workspace = _find_workspace_root()
+        state = "READY"
+        emergency_state = "normal"
+        try:
+            from quan_ai_brain.governance.state_store import GovernanceStateStore
+            gov_store = GovernanceStateStore(workspace / "data" / "governance.db", workspace=workspace)
+            emergency = gov_store.get_emergency_state()
+            emergency_state = emergency.state
+            if emergency.state == "stop":
+                state = "STOPPED"
+            elif emergency.state == "freeze":
+                state = "SAFE_MODE"
+        except Exception:
+            pass
+
+        # Check if request comes from Edge device or Cockpit UI
+        device_hdr = (
+            self.headers.get("X-QuanAI-Device")
+            or self.headers.get("X-Quan-Device-Id")
+            or self.headers.get("X-QuanAI-Device-Id")
+        )
+        if device_hdr:
+            _GLOBAL_EDGE_TELEMETRY["packets_in"] += 1
+            if hasattr(self, "client_address") and self.client_address:
+                _GLOBAL_EDGE_TELEMETRY["edge_ip"] = self.client_address[0]
+            rtt_val = 15.0
+            try:
+                rtt_val = float(self.headers.get("X-QuanAI-RTT-Ms", 15.0))
+            except Exception:
+                pass
+            _GLOBAL_EDGE_TELEMETRY["rtt_history"].append(rtt_val)
+            if len(_GLOBAL_EDGE_TELEMETRY["rtt_history"]) > 30:
+                _GLOBAL_EDGE_TELEMETRY["rtt_history"].pop(0)
+
+            if not _GLOBAL_EDGE_MONITOR.paired:
+                _GLOBAL_EDGE_MONITOR.record_pairing(device_hdr, "Raspberry Pi 5 Digital Avatar")
+            _GLOBAL_EDGE_MONITOR.record_heartbeat(device_hdr, rtt_ms=rtt_val)
+        else:
+            _GLOBAL_EDGE_MONITOR.check_deadline()
+
+        edge_status = _GLOBAL_EDGE_MONITOR.get_status()
+        edge_info = {
+            "device_id": edge_status["device_id"],
+            "device_label": edge_status["device_label"],
+            "status": edge_status["state"],
+            "paired": edge_status["paired"],
+            "lan_ip": get_local_lan_ip(),
+            "pairing_pin": _GLOBAL_EDGE_PAIRING_PIN,
+            "last_heartbeat_utc": edge_status["last_heartbeat_utc"],
+            "seconds_since_heartbeat": edge_status["seconds_since_heartbeat"],
+            "rtt_ms": edge_status["rtt_ms"],
+            "active_alert_count": edge_status["active_alert_count"],
+            "active_alerts": edge_status["active_alerts"],
+        }
+
+        _GLOBAL_EDGE_TELEMETRY["packets_out"] += 1
+        cmd = None
+        if device_hdr:
+            cmd = _GLOBAL_EDGE_TELEMETRY["pending_commands"].pop(0) if _GLOBAL_EDGE_TELEMETRY["pending_commands"] else None
+
+        # Current Task for Cockpit Hero & Telemetry
+        current_task_info = None
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            tasks = registry.list_tasks(limit=10)
+            active_tasks = [t for t in tasks if str(getattr(t.status, "value", t.status)).upper() in ("IN_PROGRESS", "PENDING", "WAITING_APPROVAL")]
+            candidate = active_tasks[0] if active_tasks else (tasks[0] if tasks else None)
+            if candidate:
+                steps = registry.list_steps_for_task(candidate.task_id)
+                completed_steps = sum(1 for s in steps if str(getattr(s.status, "value", s.status)).upper() == "COMPLETED")
+                total_steps = len(steps)
+                is_task_done = str(getattr(candidate.status, "value", candidate.status)).upper() == "COMPLETED"
+                current_step_name = steps[completed_steps].name if completed_steps < total_steps else ("Đã hoàn thành" if is_task_done else "Đang khởi tạo")
+                pct = round((completed_steps / total_steps * 100), 1) if total_steps > 0 else (100.0 if is_task_done else 0.0)
+                current_task_info = {
+                    "task_id": candidate.task_id,
+                    "goal": candidate.goal,
+                    "status": candidate.status.value,
+                    "risk_level": candidate.risk_level,
+                    "autonomy_level": candidate.autonomy_level.value,
+                    "total_steps": total_steps,
+                    "completed_steps": completed_steps,
+                    "current_step_name": current_step_name,
+                    "progress_pct": pct,
+                }
+        except Exception:
+            pass
+
+        self._send_json({
+            "success": True,
+            "state": state,
+            "emergency_state": emergency_state,
+            "active_model": "qwen2.5:7b",
+            "edge_device": edge_info,
+            "current_task": current_task_info,
+            "target_avatar_state": _GLOBAL_EDGE_TELEMETRY.get("target_avatar_state", "IDLE"),
+            "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
+            "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
+            "remote_command": cmd,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        })
+
+    def _handle_api_edge_status(self) -> None:
+        _GLOBAL_EDGE_MONITOR.check_deadline()
+        self._send_json({
+            "success": True,
+            "edge": _GLOBAL_EDGE_MONITOR.get_status(),
+        })
+
+    def _handle_api_edge_telemetry(self) -> None:
+        _GLOBAL_EDGE_MONITOR.check_deadline()
+        edge_status = _GLOBAL_EDGE_MONITOR.get_status()
+        self._send_json({
+            "success": True,
+            "core_ip": f"{get_local_lan_ip()}:8766",
+            "edge_ip": f"{_GLOBAL_EDGE_TELEMETRY.get('edge_ip', '192.168.1.21')}:8768",
+            "edge_status": edge_status,
+            "packets_in": _GLOBAL_EDGE_TELEMETRY.get("packets_in", 0),
+            "packets_out": _GLOBAL_EDGE_TELEMETRY.get("packets_out", 0),
+            "rtt_ms": edge_status["rtt_ms"],
+            "rtt_history": _GLOBAL_EDGE_TELEMETRY.get("rtt_history", []),
+            "target_avatar_state": _GLOBAL_EDGE_TELEMETRY.get("target_avatar_state", "IDLE"),
+            "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
+            "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
+            "last_telemetry": _GLOBAL_EDGE_TELEMETRY.get("last_telemetry", {}),
+        })
+
+    def _handle_api_edge_control(self, body: dict) -> None:
+        try:
+            action = str(body.get("action", "")).strip().lower()
+            if action == "set_expression":
+                state = str(body.get("state", "IDLE")).strip().upper()
+                transcript = str(body.get("transcript", "")).strip()
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = state
+                if transcript:
+                    _GLOBAL_EDGE_TELEMETRY["transcript"] = transcript
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
+                    "action": "set_expression",
+                    "state": state,
+                    "transcript": transcript,
+                })
+                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "set_expression", "state": state, "transcript": transcript})
+                self._send_json({"success": True, "action": action, "state": state, "transcript": transcript})
+                return
+
+            if action == "speak":
+                text = str(body.get("text", "")).strip()
+                state = str(body.get("state", "SPEAKING")).strip().upper()
+                duration_ms = int(body.get("duration_ms", max(1200, len(text) * 110)))
+                audio_base64 = body.get("audio_base64")
+                timeline_dict = body.get("timeline")
+
+                # If no audio provided, synthesize via Core TTS engine
+                if not audio_base64 and text:
+                    try:
+                        import base64
+                        voice_id = str(body.get("voice_id", "vi-VN-HoaiMyNeural"))
+                        audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(text, voice_id=voice_id)
+                        if audio_bytes:
+                            audio_base64 = base64.b64encode(audio_bytes).decode("ascii")
+                    except Exception as exc:
+                        pass
+
+                if not timeline_dict:
+                    timeline = _GLOBAL_MOUTH_SYNC.generate_timeline(
+                        utterance_id=f"utt_ctrl_{int(time.time()*1000)}",
+                        text=text,
+                        target_duration_ms=duration_ms,
+                    )
+                    timeline_dict = timeline.to_dict()
+
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = state
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = text
+                cmd_data = {
+                    "action": "speak",
+                    "text": text,
+                    "state": state,
+                    "timeline": timeline_dict,
+                    "duration_ms": duration_ms,
+                }
+                if audio_base64:
+                    cmd_data["audio_base64"] = audio_base64
+
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append(cmd_data)
+                threading.Thread(
+                    target=_send_edge_request,
+                    args=("/api/kiosk/control", "POST", cmd_data, 10.0),
+                    daemon=True,
+                ).start()
+                self._send_json({
+                    "success": True,
+                    "action": action,
+                    "text": text,
+                    "timeline": timeline_dict,
+                    "has_audio": bool(audio_base64),
+                })
+                return
+
+            if action == "toggle_face_only":
+                cur = _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True)
+                _GLOBAL_EDGE_TELEMETRY["face_only_mode"] = not cur
+                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "set_face_only", "face_only": _GLOBAL_EDGE_TELEMETRY["face_only_mode"]})
+                self._send_json({"success": True, "face_only_mode": _GLOBAL_EDGE_TELEMETRY["face_only_mode"]})
+                return
+
+            if action == "reload_ui":
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "reload_ui"})
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({"action": "reload_ui"})
+                self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi tín hiệu tải lại giao diện Kiosk trên Pi 5."})
+                return
+
+            if action == "pause":
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SLEEPING"
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = "Trợ lý đang tạm nghỉ ngơi theo chỉ đạo của Anh."
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
+                    "action": "pause",
+                    "state": "SLEEPING",
+                    "transcript": "Trợ lý đang tạm nghỉ ngơi theo chỉ đạo của Anh.",
+                })
+                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "pause"})
+                self._send_json({"success": True, "action": "pause", "state": "SLEEPING", "message": "Đã chuyển trợ lý Pi 5 sang chế độ tạm nghỉ ngơi."})
+                return
+
+            if action == "resume":
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "IDLE"
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = "Chào Anh Quanpt1! Em đã sẵn sàng tiếp tục công việc."
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
+                    "action": "resume",
+                    "state": "IDLE",
+                    "transcript": "Chào Anh Quanpt1! Em đã sẵn sàng tiếp tục công việc.",
+                })
+                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "resume"})
+                self._send_json({"success": True, "action": "resume", "state": "IDLE", "message": "Đã kích hoạt trợ lý Pi 5 hoạt động bình thường."})
+                return
+
+            if action == "set_volume":
+                vol = max(0, min(100, int(body.get("volume", 85))))
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "set_volume", "volume": vol})
+                self._send_json({"success": True, "action": action, "volume": vol, "pi5_result": resp})
+                return
+
+            if action in ("start_kiosk", "launch_kiosk", "open_kiosk"):
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "IDLE"
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = "Giao diện hình thể đã được khởi động theo lệnh của Anh."
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "start_kiosk"})
+                self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi lệnh bật giao diện hình thể Kiosk trên Pi 5."})
+                return
+
+            if action == "close_kiosk":
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "OFFLINE"
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = "Giao diện hình thể đã đóng theo lệnh của Anh."
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "close_kiosk"})
+                self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi lệnh tắt hẳn giao diện Kiosk trên Pi 5."})
+                return
+
+            if action == "poweroff_pi":
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "OFFLINE"
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = "Đang tắt nguồn an toàn thiết bị Raspberry Pi 5..."
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "poweroff_pi"})
+                self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đang thực hiện tắt nguồn an toàn Raspberry Pi 5..."})
+                return
+
+            if action in ("auto_configure_audio", "setup_audio"):
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "auto_configure_audio"})
+                self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi lệnh tự động định tuyến âm thanh USB trên Pi 5."})
+                return
+
+            if action in ("startup_sequence", "test_and_greet"):
+                self._handle_api_edge_startup_sequence(body)
+                return
+
+            self._send_error_json(f"Unknown control action: {action}", 400)
+
+        except Exception as exc:
+            self._send_error_json(f"Edge control execution error: {exc}", 500)
+
+    def _handle_api_edge_alerts(self) -> None:
+        _GLOBAL_EDGE_MONITOR.check_deadline()
+        self._send_json({
+            "success": True,
+            "status": _GLOBAL_EDGE_MONITOR.get_status(),
+            "active_alerts": [a.to_dict() for a in _GLOBAL_EDGE_MONITOR.active_alerts.values()],
+            "history": _GLOBAL_EDGE_MONITOR.get_alert_history(limit=30),
+        })
+
+    def _handle_api_edge_heartbeat(self, body: dict) -> None:
+        _GLOBAL_EDGE_TELEMETRY["packets_in"] += 1
+        if hasattr(self, "client_address") and self.client_address:
+            _GLOBAL_EDGE_TELEMETRY["edge_ip"] = self.client_address[0]
+
+        device_id = str(body.get("device_id", "EDGE-PI5-DESK-01")).strip()
+        rtt_ms = float(body.get("rtt_ms", 0.0))
+        if rtt_ms > 0:
+            _GLOBAL_EDGE_TELEMETRY["rtt_history"].append(rtt_ms)
+            if len(_GLOBAL_EDGE_TELEMETRY["rtt_history"]) > 30:
+                _GLOBAL_EDGE_TELEMETRY["rtt_history"].pop(0)
+
+        subsystems_ready = bool(body.get("subsystems_ready", True))
+        if not _GLOBAL_EDGE_MONITOR.paired:
+            _GLOBAL_EDGE_MONITOR.record_pairing(device_id, "Raspberry Pi 5 Digital Avatar")
+        telemetry_payload = body.get("telemetry")
+        if telemetry_payload:
+            _GLOBAL_EDGE_TELEMETRY["last_telemetry"] = telemetry_payload
+
+        status = _GLOBAL_EDGE_MONITOR.record_heartbeat(
+            device_id=device_id,
+            rtt_ms=rtt_ms,
+            subsystems_ready=subsystems_ready,
+            metadata=telemetry_payload,
+        )
+        _GLOBAL_EDGE_TELEMETRY["packets_out"] += 1
+        cmd = _GLOBAL_EDGE_TELEMETRY["pending_commands"].pop(0) if _GLOBAL_EDGE_TELEMETRY["pending_commands"] else None
+        self._send_json({
+            "success": True,
+            "edge_status": status,
+            "target_avatar_state": _GLOBAL_EDGE_TELEMETRY.get("target_avatar_state", "IDLE"),
+            "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
+            "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
+            "remote_command": cmd,
+        })
+
+    def _handle_api_edge_mouth_sync(self, body: dict) -> None:
+        action = str(body.get("action", "generate")).strip().lower()
+        utterance_id = str(body.get("utterance_id", f"utt_{int(time.time()*1000)}")).strip()
+
+        if action == "cancel":
+            _GLOBAL_MOUTH_SYNC.cancel_utterance(utterance_id)
+            self._send_json({"success": True, "cancelled": True, "utterance_id": utterance_id})
+            return
+
+        text = str(body.get("text", "")).strip()
+        duration_ms = body.get("duration_ms")
+        timeline = _GLOBAL_MOUTH_SYNC.generate_timeline(
+            utterance_id=utterance_id,
+            text=text,
+            target_duration_ms=int(duration_ms) if duration_ms else None,
+        )
+        self._send_json({"success": True, "timeline": timeline.to_dict()})
+
+    def _handle_api_edge_pair(self, body: dict) -> None:
+        global _GLOBAL_EDGE_PAIRING_PIN, _GLOBAL_PAIRED_EDGE_DEVICES
+        device_id = str(body.get("device_id", "EDGE-PI5-DESK-01")).strip()
+        device_label = str(body.get("device_label", "Bàn Làm Việc Quanpt1")).strip()
+        pairing_pin = str(body.get("pairing_pin", "")).strip()
+
+        if pairing_pin != _GLOBAL_EDGE_PAIRING_PIN:
+            _GLOBAL_EDGE_MONITOR.record_auth_failure(
+                "Mã PIN ghép cặp không chính xác",
+                metadata={"attempted_pin": pairing_pin, "device_id": device_id},
+            )
+            self._send_error_json("Mã PIN ghép cặp không chính xác. Vui lòng kiểm tra mã PIN hiển thị trên Bàn Điều Hành PC.", 403)
+            return
+
+        import secrets
+        shared_secret = secrets.token_hex(32)
+        now_ts = datetime.now(timezone.utc).isoformat()
+        lan_ip = get_local_lan_ip()
+
+        _GLOBAL_PAIRED_EDGE_DEVICES[device_id] = {
+            "device_id": device_id,
+            "device_label": device_label,
+            "shared_secret": shared_secret,
+            "paired_at_utc": now_ts,
+            "last_seen_utc": now_ts,
+            "status": "ONLINE_PAIRED",
+        }
+
+        # Update monitor
+        _GLOBAL_EDGE_MONITOR.record_pairing(device_id, device_label)
+        _GLOBAL_EDGE_MONITOR.record_heartbeat(device_id)
+
+        self._send_json({
+            "success": True,
+            "device_id": device_id,
+            "device_label": device_label,
+            "shared_secret": shared_secret,
+            "core_host": lan_ip,
+            "core_port": 8766,
+            "paired_at_utc": now_ts,
+            "message": "Ghép cặp thiết bị Edge thành công! Khóa bí mật đã được lưu.",
+        })
+
+    def _handle_api_executive_emergency(self, body: dict) -> None:
+        action = str(body.get("action", "")).strip().lower()
+        reason = str(body.get("reason", "Action requested from Executive Cockpit"))
+        if action not in ("stop", "freeze", "resume", "normal"):
+            self._send_error_json("Invalid action; must be 'stop', 'freeze', or 'resume'", 400)
+            return
+        target_state = "normal" if action in ("resume", "normal") else action
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.governance.state_store import GovernanceStateStore
+            gov_store = GovernanceStateStore(workspace / "data" / "governance.db", workspace=workspace)
+            record = gov_store.set_emergency_state(
+                state=target_state,
+                reason=reason,
+                activated_by="Quanpt1 (Executive Cockpit)",
+            )
+            self._send_json({
+                "success": True,
+                "emergency_state": record.state,
+                "activated_by": record.activated_by,
+                "activated_at": record.activated_at_utc,
+            })
+        except Exception as exc:
+            self._send_error_json(f"Emergency state error: {exc}", 500)
+
+    def _handle_api_voice_get_config(self) -> None:
+        global _GLOBAL_WAKE_CONFIG
+        self._send_json({
+            "success": True,
+            "config": _GLOBAL_WAKE_CONFIG.to_dict(),
+        })
+
+    def _handle_api_voice_set_config(self, body: dict) -> None:
+        global _GLOBAL_WAKE_CONFIG
+        try:
+            enabled = bool(body.get("enabled", _GLOBAL_WAKE_CONFIG.enabled))
+            lang = str(body.get("language_mode", _GLOBAL_WAKE_CONFIG.language_mode))
+            timeout_val = body.get("silence_timeout_seconds", body.get("silence_timeout_sec", _GLOBAL_WAKE_CONFIG.silence_timeout_seconds))
+            silence_timeout = float(timeout_val)
+            chime_enabled = bool(body.get("chime_enabled", _GLOBAL_WAKE_CONFIG.chime_enabled))
+
+            _GLOBAL_WAKE_CONFIG.enabled = enabled
+            _GLOBAL_WAKE_CONFIG.language_mode = lang
+            _GLOBAL_WAKE_CONFIG.silence_timeout_seconds = silence_timeout
+            _GLOBAL_WAKE_CONFIG.chime_enabled = chime_enabled
+
+            # Check if toggling specific keyword item
+            if "keyword_id" in body and "keyword_enabled" in body:
+                _GLOBAL_WAKE_CONFIG.update_item(str(body["keyword_id"]), bool(body["keyword_enabled"]))
+
+            self._send_json({
+                "success": True,
+                "config": _GLOBAL_WAKE_CONFIG.to_dict(),
+            })
+        except Exception as exc:
+            self._send_error_json(f"Failed to update wake config: {exc}", 400)
+
+    def _handle_api_voice_get_tts_config(self) -> None:
+        self._send_json({
+            "success": True,
+            **GLOBAL_TTS_MANAGER.get_config(),
+        })
+
+    def _handle_api_voice_get_tts_voices(self) -> None:
+        active = GLOBAL_TTS_MANAGER.get_active_voice()
+        self._send_json({
+            "success": True,
+            "voices": [v.to_dict() for v in GLOBAL_TTS_MANAGER.available_voices],
+            "active_voice": active.to_dict() if active else None,
+        })
+
+    def _handle_api_voice_set_tts_config(self, body: dict) -> None:
+        enabled = body.get("enabled", body.get("tts_enabled"))
+        voice_id = body.get("voice_id", body.get("tts_voice_preference"))
+        rate = body.get("rate")
+        pitch = body.get("pitch")
+        volume = body.get("volume")
+        provider = body.get("provider")
+        locale = body.get("locale", body.get("tts_locale"))
+
+        ok = GLOBAL_TTS_MANAGER.update_config(
+            enabled=enabled,
+            voice_id=voice_id,
+            rate=rate,
+            pitch=pitch,
+            volume=volume,
+            provider=provider,
+            locale=locale,
+        )
+        if not ok:
+            self._send_error_json(GLOBAL_TTS_MANAGER.config.last_error or "Cập nhật cấu hình TTS thất bại.", 400)
+            return
+
+        self._send_json({
+            "success": True,
+            **GLOBAL_TTS_MANAGER.get_config(),
+        })
+
+    def _handle_api_voice_tts_synthesize(self, body: dict) -> None:
+        import base64
+        text = str(body.get("text", "")).strip()
+        if not text:
+            self._send_error_json("Văn bản tổng hợp âm thanh không được để trống.", 400)
+            return
+
+        voice_id = body.get("voice_id")
+        audio_bytes, err = GLOBAL_TTS_MANAGER.synthesize_audio(text, voice_id=voice_id)
+        if not audio_bytes:
+            status_code = 400 if GLOBAL_TTS_MANAGER.config.status == TTSStatus.ERROR.value else 503
+            self._send_json({
+                "success": False,
+                "status": GLOBAL_TTS_MANAGER.config.status,
+                "error": err or "Không thể tạo âm thanh giọng nói.",
+                "audio_base64": None,
+            }, status=status_code)
+            return
+
+        # Generate mouth sync timeline
+        clean_text = normalize_text_for_vietnamese_tts(text)
+        timeline = _GLOBAL_MOUTH_SYNC.generate_timeline(
+            utterance_id=f"utt_synth_{int(time.time()*1000)}",
+            text=clean_text,
+        )
+
+        active = GLOBAL_TTS_MANAGER.get_active_voice()
+        audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+        self._send_json({
+            "success": True,
+            "status": "READY",
+            "audio_base64": audio_b64,
+            "format": "audio/mpeg",
+            "text": clean_text,
+            "voice_id": active.voice_id if active else GLOBAL_TTS_MANAGER.active_voice_id,
+            "locale": active.locale if active else "vi-VN",
+            "gender": active.gender if active else "female",
+            "timeline": timeline.to_dict(),
+        })
+
+    def _handle_api_voice_telemetry(self, body: dict) -> None:
+        state = str(body.get("state", "UNKNOWN"))
+        event = str(body.get("event", ""))
+        keyword = str(body.get("keyword", ""))
+        sys.stdout.write(f"[VOICE-TELEMETRY] state={state} event={event} keyword={keyword}\n")
+        sys.stdout.flush()
+        self._send_json({"success": True})
+
+    def _handle_api_edge_list_files(self) -> None:
+        workspace = _find_workspace_root()
+        local_assets_dir = workspace / "edge_client" / "assets" / "avatar"
+        local_files = []
+        if local_assets_dir.exists() and local_assets_dir.is_dir():
+            for p in sorted(local_assets_dir.iterdir()):
+                if p.is_file() and not p.name.startswith("."):
+                    stat = p.stat()
+                    local_files.append({
+                        "name": p.name,
+                        "size": stat.st_size,
+                        "mtime": int(stat.st_mtime),
+                        "url": f"/edge_client/assets/avatar/{p.name}",
+                        "ext": p.suffix.lower(),
+                    })
+
+        # Include root edge client scripts so Pi 5 sync_assets updates root files as well
+        edge_root = workspace / "edge_client"
+        for rf in ["avatar_engine.js", "kiosk.html", "kiosk.js", "kiosk.css", "client_daemon.py"]:
+            rf_path = edge_root / rf
+            if rf_path.exists():
+                local_files.append({
+                    "name": f"../../{rf}",
+                    "size": rf_path.stat().st_size,
+                    "mtime": int(rf_path.stat().st_mtime),
+                    "url": f"/edge_client/{rf}",
+                    "ext": rf_path.suffix.lower(),
+                })
+
+        edge_resp = _send_edge_request("/api/kiosk/files", method="GET", timeout=3.0)
+        remote_files = edge_resp.get("files", []) if isinstance(edge_resp, dict) and edge_resp.get("success") else []
+        pi5_online = not edge_resp.get("offline", False) if isinstance(edge_resp, dict) else False
+
+        self._send_json({
+            "success": True,
+            "pi5_online": pi5_online,
+            "edge_ip": f"{_GLOBAL_EDGE_TELEMETRY.get('edge_ip', '192.168.1.21')}:{_GLOBAL_EDGE_TELEMETRY.get('edge_port', 8768)}",
+            "remote_files": remote_files,
+            "local_files": local_files,
+            "count": len(local_files),
+        })
+
+    def _handle_api_edge_upload_file(self, body: dict) -> None:
+        import base64
+        filename = str(body.get("filename", "")).strip()
+        content_b64 = str(body.get("content_b64", "")).strip()
+        if not filename or not content_b64:
+            self._send_error_json("Missing filename or content_b64", 400)
+            return
+
+        clean_name = Path(filename).name
+        allowed_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".json", ".wav", ".mp3", ".js", ".css"}
+        if Path(clean_name).suffix.lower() not in allowed_exts:
+            self._send_error_json(f"File extension not permitted: {clean_name}", 400)
+            return
+
+        # Save locally to edge_client/assets/avatar
+        workspace = _find_workspace_root()
+        local_dir = workspace / "edge_client" / "assets" / "avatar"
+        local_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            file_bytes = base64.b64decode(content_b64)
+            with open(local_dir / clean_name, "wb") as f:
+                f.write(file_bytes)
+        except Exception as exc:
+            self._send_error_json(f"Lỗi lưu tệp trên PC: {exc}", 500)
+            return
+
+        # Forward to Pi 5 Kiosk Daemon
+        resp = _send_edge_request(
+            "/api/kiosk/files/upload",
+            method="POST",
+            data={"filename": clean_name, "content_b64": content_b64},
+            timeout=15.0,
+        )
+        self._send_json({
+            "success": True,
+            "filename": clean_name,
+            "local_saved": True,
+            "pi5_synced": resp.get("success", False),
+            "pi5_message": resp.get("message", resp.get("error", "")),
+        })
+
+    def _handle_api_edge_sync_all_assets(self) -> None:
+        import base64
+        workspace = _find_workspace_root()
+        local_dir = workspace / "edge_client" / "assets" / "avatar"
+        if not local_dir.exists():
+            self._send_error_json("Local assets directory not found", 404)
+            return
+
+        synced = []
+        errors = []
+        lan_ip = get_local_lan_ip()
+
+        # 1. Queue sync_assets command for Raspberry Pi 5 to pick up in heartbeat
+        _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
+            "action": "sync_assets",
+            "core_url": f"http://{lan_ip}:8766",
+        })
+
+        # 2. Check once if Pi 5 port 8768 is reachable for direct push
+        pi_online = False
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1.0)
+            pi_online = (sock.connect_ex((_GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21"), _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768))) == 0)
+            sock.close()
+        except Exception:
+            pi_online = False
+
+        # 2. Push root kiosk files and avatar assets to Pi 5
+        edge_root = workspace / "edge_client"
+        root_files = ["kiosk.html", "kiosk.js", "kiosk.css", "avatar_engine.js", "wake_engine.js", "setup_pi5_audio.sh"]
+        for fname in root_files:
+            fp = edge_root / fname
+            if fp.exists() and fp.is_file():
+                synced.append(fname)
+                if pi_online:
+                    try:
+                        with open(fp, "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode("ascii")
+                        _send_edge_request(
+                            "/api/kiosk/files/upload",
+                            method="POST",
+                            data={"filename": fname, "content_b64": b64},
+                            timeout=10.0,
+                        )
+                    except Exception:
+                        pass
+
+        for p in sorted(local_dir.iterdir()):
+            if p.is_file() and not p.name.startswith("."):
+                synced.append(p.name)
+                if pi_online:
+                    try:
+                        with open(p, "rb") as f:
+                            b64 = base64.b64encode(f.read()).decode("ascii")
+                        _send_edge_request(
+                            "/api/kiosk/files/upload",
+                            method="POST",
+                            data={"filename": p.name, "content_b64": b64},
+                            timeout=10.0,
+                        )
+                    except Exception:
+                        pass
+
+        # 3. Queue reload_ui command for Pi 5
+        _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({"action": "reload_ui"})
+
+
+        self._send_json({
+            "success": True,
+            "synced_count": len(synced),
+            "synced_files": synced,
+            "errors": errors,
+            "message": f"Đã phát lệnh đồng bộ {len(synced)} tài sản sang Pi 5 qua Wi-Fi và yêu cầu tải lại giao diện.",
+        })
+
+    def _handle_api_edge_delete_file(self, body: dict) -> None:
+        filename = str(body.get("filename", "")).strip()
+        clean_name = Path(filename).name
+        if not clean_name:
+            self._send_error_json("Filename is required", 400)
+            return
+
+        resp = _send_edge_request(
+            "/api/kiosk/files/delete",
+            method="POST",
+            data={"filename": clean_name},
+        )
+        self._send_json(resp)
+
+    def _handle_api_edge_remote_action(self, body: dict) -> None:
+        self._handle_api_edge_control(body)
+
+    # =========================================================================
+    # REMOTE SENSORS, AUDIO CONTROL & CAMERA VIEW (ADDENDUM V2.1)
+    # =========================================================================
+
+    def _get_captures_dir(self) -> Path:
+        workspace = _find_workspace_root()
+        captures_dir = workspace / "data" / "edge_media" / "captures"
+        captures_dir.mkdir(parents=True, exist_ok=True)
+        return captures_dir
+
+    def _handle_api_edge_audio_status(self) -> None:
+        """Fetch remote microphone and audio status from Pi 5."""
+        resp = _send_edge_request("/api/kiosk/audio/status", method="GET", timeout=3.0)
+        if isinstance(resp, dict) and not resp.get("offline", False):
+            self._send_json({
+                "success": True,
+                "pi5_online": True,
+                "audio": resp,
+            })
+        else:
+            self._send_json({
+                "success": False,
+                "pi5_online": False,
+                "error": "Pi 5 offline hoặc chưa khởi động Kiosk Daemon",
+                "audio": {
+                    "mic_enabled": False,
+                    "mic_muted": True,
+                    "wake_word_enabled": False,
+                    "listening_mode": "OFF",
+                    "audio_level_db": -99.0,
+                    "status": "DISCONNECTED",
+                    "device_name": "Jieli Technology UACDemoV1.0 (Chưa kết nối)",
+                },
+            })
+
+    def _handle_api_edge_audio_control(self, body: dict) -> None:
+        """Dispatch microphone control command (mic_on, mic_off, mute, unmute, wake_word_toggle, test_mic)."""
+        action = str(body.get("action", "")).strip().lower()
+        resp = _send_edge_request("/api/kiosk/audio/control", method="POST", data=body, timeout=6.0)
+
+        if isinstance(resp, dict) and resp.get("offline"):
+            self._send_json({
+                "success": False,
+                "action": action,
+                "error": "COMMAND_NOT_DELIVERED: Pi 5 offline, không thể gửi lệnh điều khiển micro.",
+                "offline": True,
+            }, status=503)
+            return
+
+        if isinstance(resp, dict) and not resp.get("success", False):
+            if "error" in resp:
+                _GLOBAL_EDGE_MONITOR.record_mic_fault(resp["error"])
+
+        self._send_json(resp)
+
+    def _handle_api_edge_camera_status(self) -> None:
+        """Fetch remote camera status from Pi 5."""
+        resp = _send_edge_request("/api/kiosk/camera/status", method="GET", timeout=3.0)
+        if isinstance(resp, dict) and not resp.get("offline", False):
+            self._send_json({
+                "success": True,
+                "pi5_online": True,
+                "camera": resp,
+            })
+        else:
+            self._send_json({
+                "success": False,
+                "pi5_online": False,
+                "error": "Pi 5 offline hoặc camera chưa sẵn sàng",
+                "camera": {
+                    "camera_enabled": False,
+                    "camera_streaming": False,
+                    "status": "CAMERA_OFF",
+                    "device_name": "Sirius USB2.0 Camera (Chưa kết nối)",
+                },
+            })
+
+    def _handle_api_edge_camera_control(self, body: dict) -> None:
+        """Dispatch camera control command (camera_on, camera_off, start_live, stop_live)."""
+        action = str(body.get("action", "")).strip().lower()
+        resp = _send_edge_request("/api/kiosk/camera/control", method="POST", data=body, timeout=5.0)
+
+        if isinstance(resp, dict) and resp.get("offline"):
+            self._send_json({
+                "success": False,
+                "action": action,
+                "error": "COMMAND_NOT_DELIVERED: Pi 5 offline, không thể gửi lệnh điều khiển camera.",
+                "offline": True,
+            }, status=503)
+            return
+
+        self._send_json(resp)
+
+    def _handle_api_edge_camera_snapshot(self) -> None:
+        """Request Pi 5 to capture a single camera snapshot and stream it back."""
+        resp = _send_edge_request("/api/kiosk/camera/capture", method="POST", data={}, timeout=10.0)
+        if isinstance(resp, dict) and resp.get("offline"):
+            self._send_json({
+                "success": False,
+                "error": "COMMAND_NOT_DELIVERED: Pi 5 offline, không thể chụp ảnh.",
+                "offline": True,
+            }, status=503)
+            return
+
+        if isinstance(resp, dict) and not resp.get("success", False):
+            _GLOBAL_EDGE_MONITOR.record_camera_fault(resp.get("error", "Chụp ảnh camera thất bại"))
+
+        if isinstance(resp, dict) and resp.get("success"):
+            if "capture_id" in resp and "snapshot_id" not in resp:
+                resp["snapshot_id"] = resp["capture_id"]
+            if "image_base64" in resp and "image_b64" not in resp:
+                resp["image_b64"] = resp["image_base64"]
+            if "sha256" in resp and "sha256_hash" not in resp:
+                resp["sha256_hash"] = resp["sha256"]
+            if "captured_at_utc" in resp and "timestamp" not in resp:
+                resp["timestamp"] = resp["captured_at_utc"]
+
+        self._send_json(resp)
+
+    def _handle_api_edge_camera_stream(self) -> None:
+        """Proxy camera live frame from Raspberry Pi 5."""
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        url = f"http://{edge_ip}:{edge_port}/api/kiosk/camera/stream"
+        try:
+            req = urllib.request.Request(url, method="GET")
+            with urllib.request.urlopen(req, timeout=3.0) as resp:
+                frame_data = resp.read()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(frame_data)))
+                self.send_header("Cache-Control", "no-store, no-cache, must-revalidate")
+                self.end_headers()
+                self.wfile.write(frame_data)
+        except urllib.error.HTTPError as he:
+            self.send_response(he.code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": False, "error": f"Camera stream error: {he.reason}"}).encode("utf-8"))
+        except Exception as exc:
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(json.dumps({"success": False, "error": f"Camera stream unavailable: {exc}"}).encode("utf-8"))
+
+    def _handle_api_edge_camera_save(self, body: dict) -> None:
+        """Validate hash integrity, enforce PathGuard and persist snapshot into Core capture library."""
+        import base64
+        import hashlib
+        b64_data = str(body.get("image_base64") or body.get("image_b64") or "").strip()
+        expected_hash = str(body.get("sha256") or body.get("content_hash") or body.get("sha256_hash") or "").strip().lower()
+        capture_id = str(body.get("capture_id") or body.get("snapshot_id") or f"cap_{int(time.time()*1000)}").strip()
+        captured_at = str(body.get("captured_at_utc") or body.get("captured_at") or body.get("timestamp") or datetime.now(timezone.utc).isoformat()).strip()
+        device_id = str(body.get("device_id", "EDGE-PI5-DESK-01")).strip()
+        purpose = str(body.get("purpose", "Chụp ảnh theo yêu cầu chủ sở hữu")).strip()
+
+        if not b64_data:
+            self._send_error_json("Dữ liệu ảnh rỗng (image_base64 is required)", 400)
+            return
+
+        try:
+            image_bytes = base64.b64decode(b64_data)
+        except Exception as e:
+            self._send_error_json(f"Lỗi giải mã base64: {e}", 400)
+            return
+
+        # 1. Cryptographic SHA-256 Hash Verification (CAM-04 / NET-02)
+        computed_hash = hashlib.sha256(image_bytes).hexdigest().lower()
+        if expected_hash and computed_hash != expected_hash:
+            self._send_json({
+                "success": False,
+                "error": f"HASH_MISMATCH: Hash tính toán ({computed_hash[:12]}...) không khớp hash khai báo ({expected_hash[:12]}...). Từ chối lưu trữ ảnh.",
+                "verification_status": "FAILED",
+                "computed_hash": computed_hash,
+                "expected_hash": expected_hash,
+            }, status=400)
+            return
+
+        # 2. PathGuard Confinement (UI-02)
+        captures_dir = self._get_captures_dir().resolve()
+        clean_ts = captured_at.replace(":", "-").replace(".", "_")
+        filename_base = f"{clean_ts}_{capture_id}"
+        img_path = (captures_dir / f"{filename_base}.jpg").resolve()
+        meta_path = (captures_dir / f"{filename_base}.json").resolve()
+
+        if not str(img_path).startswith(str(captures_dir)):
+            self._send_error_json("PathGuard: Thư mục lưu trữ vượt ra ngoài phạm vi cho phép", 403)
+            return
+
+        metadata = {
+            "capture_id": capture_id,
+            "snapshot_id": capture_id,
+            "source_device_id": device_id,
+            "captured_at": captured_at,
+            "timestamp": captured_at,
+            "received_at": datetime.now(timezone.utc).isoformat(),
+            "content_hash": computed_hash,
+            "sha256": computed_hash,
+            "sha256_hash": computed_hash,
+            "media_type": "image/jpeg",
+            "size_bytes": len(image_bytes),
+            "capture_mode": "SNAPSHOT_ON_DEMAND",
+            "purpose": purpose,
+            "retention_policy": "OWNER_CONTROLLED_30D",
+            "verification_status": "VERIFIED_PASS",
+            "relative_file": f"data/edge_media/captures/{filename_base}.jpg",
+            "file_path": f"data/edge_media/captures/{filename_base}.jpg",
+            "filename": f"{filename_base}.jpg",
+        }
+
+        try:
+            img_path.write_bytes(image_bytes)
+            meta_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+            self._send_json({
+                "success": True,
+                "capture_id": capture_id,
+                "snapshot_id": capture_id,
+                "saved_path": metadata["relative_file"],
+                "file_path": metadata["relative_file"],
+                "filename": metadata["filename"],
+                "size_bytes": len(image_bytes),
+                "sha256": computed_hash,
+                "sha256_hash": computed_hash,
+                "verification_status": "VERIFIED_PASS",
+                "message": f"Ảnh đã được xác minh toàn vẹn và lưu trữ an toàn tại {metadata['relative_file']}",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi ghi tệp lưu trữ Core: {exc}", 500)
+
+    def _handle_api_edge_camera_library(self, query_str: str) -> None:
+        """List all verified snapshots stored in Core library."""
+        captures_dir = self._get_captures_dir().resolve()
+        captures: list[dict[str, Any]] = []
+        total_bytes = 0
+
+        for json_file in sorted(captures_dir.glob("*.json"), reverse=True):
+            try:
+                meta = json.loads(json_file.read_text(encoding="utf-8"))
+                img_file = captures_dir / meta.get("filename", json_file.stem + ".jpg")
+                if img_file.exists():
+                    total_bytes += img_file.stat().st_size
+                    meta["exists"] = True
+                    meta["size_bytes"] = img_file.stat().st_size
+                    # Aliases for UI flexibility
+                    if "snapshot_id" not in meta and "capture_id" in meta:
+                        meta["snapshot_id"] = meta["capture_id"]
+                    if "sha256_hash" not in meta and "sha256" in meta:
+                        meta["sha256_hash"] = meta["sha256"]
+                    if "timestamp" not in meta and "captured_at" in meta:
+                        meta["timestamp"] = meta["captured_at"]
+                    captures.append(meta)
+            except Exception:
+                pass
+
+        self._send_json({
+            "success": True,
+            "total_count": len(captures),
+            "total_size_bytes": total_bytes,
+            "total_size_kb": round(total_bytes / 1024.0, 1),
+            "quota_bytes": 500 * 1024 * 1024,  # 500MB quota
+            "storage_path": "data/edge_media/captures/",
+            "storage_dir": "data/edge_media/captures/",
+            "captures": captures,
+            "items": captures,
+        })
+
+    def _handle_api_edge_camera_serve_image(self, query_str: str) -> None:
+        """Serve a stored capture image securely."""
+        params = urllib.parse.parse_qs(query_str)
+        ident = params.get("file", [""])[0] or params.get("id", [""])[0]
+        clean_name = Path(ident).name
+        if not clean_name:
+            self.send_error(400, "Invalid file or id parameter")
+            return
+
+        captures_dir = self._get_captures_dir().resolve()
+
+        # Find file: direct filename or match by snapshot/capture ID
+        target = captures_dir / clean_name
+        if not target.exists() and not clean_name.endswith((".jpg", ".jpeg", ".png")):
+            # Try adding .jpg
+            cand = captures_dir / f"{clean_name}.jpg"
+            if cand.exists():
+                target = cand
+            else:
+                # Search json metadata for matching capture_id
+                for jf in captures_dir.glob("*.json"):
+                    try:
+                        m = json.loads(jf.read_text(encoding="utf-8"))
+                        if m.get("capture_id") == clean_name or m.get("snapshot_id") == clean_name:
+                            fn = m.get("filename", jf.stem + ".jpg")
+                            if (captures_dir / fn).exists():
+                                target = captures_dir / fn
+                                break
+                    except Exception:
+                        pass
+
+        # PathGuard bounds check
+        if not str(target.resolve()).startswith(str(captures_dir)):
+            self.send_error(403, "PathGuard: Access outside captures directory blocked")
+            return
+
+        if target.exists() and target.is_file():
+            self._serve_file(target)
+        else:
+            self.send_error(404, "Image not found")
+
+    def _handle_api_edge_camera_delete(self, body: dict) -> None:
+        """Delete a capture from library with owner verification and PathGuard confinement."""
+        ident = str(body.get("filename") or body.get("id") or body.get("snapshot_id") or body.get("capture_id") or "").strip()
+        clean_name = Path(ident).name
+        if not clean_name:
+            self._send_error_json("Filename or ID is required", 400)
+            return
+
+        captures_dir = self._get_captures_dir().resolve()
+
+        # Path traversal guard (UI-02)
+        if ".." in ident or "/" in ident or "\\" in ident:
+            # Check if resolved path escapes
+            test_path = (captures_dir / ident).resolve()
+            if not str(test_path).startswith(str(captures_dir)):
+                self._send_error_json("PathGuard: Đường dẫn vượt quá giới hạn thư mục captures", 403)
+                return
+
+        img_target = captures_dir / clean_name
+        meta_target = captures_dir / (Path(clean_name).stem + ".json")
+
+        if not img_target.exists():
+            # Match by capture_id / snapshot_id in json
+            for jf in captures_dir.glob("*.json"):
+                try:
+                    m = json.loads(jf.read_text(encoding="utf-8"))
+                    if m.get("capture_id") == clean_name or m.get("snapshot_id") == clean_name:
+                        meta_target = jf
+                        fn = m.get("filename", jf.stem + ".jpg")
+                        img_target = captures_dir / fn
+                        break
+                except Exception:
+                    pass
+
+        deleted = False
+        if img_target.exists():
+            img_target.unlink(missing_ok=True)
+            deleted = True
+        if meta_target.exists():
+            meta_target.unlink(missing_ok=True)
+            deleted = True
+
+        if deleted:
+            self._send_json({
+                "success": True,
+                "deleted": clean_name,
+                "message": f"Đã xóa ảnh {clean_name} an toàn khỏi thư viện PC Core.",
+            })
+        else:
+            self._send_error_json(f"Không tìm thấy ảnh {clean_name}", 404)
+
+    def _handle_api_edge_startup_sequence(self, body: dict) -> None:
+        """Chu trình khởi động đồng bộ Raspberry Pi 5:
+        1. Phát lời chào từ loa Pi 5: 'Chào anh ạ, rất vui được gặp anh.'
+        2. Tự động kiểm tra microphone & camera phần cứng trên Pi 5.
+        3. Tổng hợp báo cáo hiện trạng và phát ra loa của Pi 5.
+        """
+        greeting_text = str(body.get("greeting", "Chào anh ạ, rất vui được gặp anh.")).strip()
+
+        # Check if Pi 5 is reachable
+        status_check = _send_edge_request("/api/kiosk/status", method="GET", timeout=2.0)
+        if isinstance(status_check, dict) and status_check.get("offline"):
+            self._send_json({
+                "success": False,
+                "pi5_online": False,
+                "message": "Raspberry Pi 5 hiện chưa kết nối mạng hoặc daemon chưa sẵn sàng.",
+            })
+            return
+
+        # 1. Phát câu chào ra loa Pi 5
+        greeting_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(greeting_text)
+        greeting_b64 = base64.b64encode(greeting_bytes).decode("ascii") if greeting_bytes else None
+
+        greet_res = _send_edge_request(
+            "/api/kiosk/control",
+            method="POST",
+            data={
+                "action": "speak",
+                "text": greeting_text,
+                "state": "SPEAKING",
+                "audio_base64": greeting_b64,
+                "force_hardware": True,
+                "duration_ms": max(2200, len(greeting_text) * 120),
+            },
+            timeout=5.0,
+        )
+
+        # 2. Thực hiện tự kiểm tra mic và camera
+        time.sleep(1.8)
+        test_res = _send_edge_request(
+            "/api/kiosk/control",
+            method="POST",
+            data={"action": "self_test"},
+            timeout=6.0,
+        )
+
+        mic_ok = True
+        cam_ok = True
+        mic_details = {}
+        cam_details = {}
+
+        if isinstance(test_res, dict) and test_res.get("success"):
+            mic_ok = bool(test_res.get("mic_ok", True))
+            cam_ok = bool(test_res.get("camera_ok", True))
+            mic_details = test_res.get("mic_data", {})
+            cam_details = test_res.get("camera_data", {})
+
+        # 3. Soạn văn bản báo cáo hiện trạng
+        if mic_ok and cam_ok:
+            report_text = "Báo cáo anh: Hệ thống Micro hoạt động tốt, Camera hoạt động tốt. Sẵn sàng phục vụ anh ạ."
+        elif mic_ok and not cam_ok:
+            report_text = "Báo cáo anh: Hệ thống Micro hoạt động tốt, Camera chưa nhận diện. Các dịch vụ khác sẵn sàng phục vụ anh ạ."
+        elif not mic_ok and cam_ok:
+            report_text = "Báo cáo anh: Micro cần kiểm tra lại, Camera hoạt động tốt. Sẵn sàng phục vụ anh ạ."
+        else:
+            report_text = "Báo cáo anh: Cần kiểm tra lại kết nối Micro và Camera trên Pi. Hệ thống điều hành vẫn sẵn sàng phục vụ anh ạ."
+
+        # 4. Phát câu báo cáo ra loa Pi 5
+        report_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(report_text)
+        report_b64 = base64.b64encode(report_bytes).decode("ascii") if report_bytes else None
+
+        rep_res = _send_edge_request(
+            "/api/kiosk/control",
+            method="POST",
+            data={
+                "action": "speak",
+                "text": report_text,
+                "state": "SPEAKING",
+                "audio_base64": report_b64,
+                "force_hardware": True,
+                "duration_ms": max(3200, len(report_text) * 115),
+            },
+            timeout=6.0,
+        )
+
+        self._send_json({
+            "success": True,
+            "pi5_online": True,
+            "greeting_sent": bool(isinstance(greet_res, dict) and greet_res.get("success")),
+            "greeting_text": greeting_text,
+            "mic_ok": mic_ok,
+            "camera_ok": cam_ok,
+            "report_text": report_text,
+            "report_sent": bool(isinstance(rep_res, dict) and rep_res.get("success")),
+            "mic_details": mic_details,
+            "camera_details": cam_details,
+        })
+
+    def _handle_api_executive_roles(self) -> None:
+        roles_list = []
+        for role, meta in ROLE_METADATA.items():
+            roles_list.append({
+                "role_id": role.value,
+                "title_vi": meta["title_vi"],
+                "description": meta["description"],
+                "icon": meta["icon"],
+                "priority": meta["priority"],
+                "is_active": role == _GLOBAL_ROLE_ORCHESTRATOR.current_role,
+            })
+        self._send_json({
+            "success": True,
+            "roles": roles_list,
+            "current_role": _GLOBAL_ROLE_ORCHESTRATOR.current_role.value,
+        })
+
+    def _handle_api_voice_interact(self, body: dict) -> None:
+        text = str(body.get("text") or body.get("query", "")).strip()
+        is_push_to_talk = bool(body.get("is_push_to_talk", True))
+        playback_active = bool(body.get("playback_active", False))
+        res = _GLOBAL_VOICE_PIPELINE.handle_voice_input(
+            text,
+            is_push_to_talk=is_push_to_talk,
+            current_playback_active=playback_active,
+        )
+
+        spoken = res.spoken_text or res.response_text
+        audio_b64 = None
+        try:
+            import base64
+            voice_id = str(body.get("voice_id", "vi-VN-HoaiMyNeural"))
+            audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(spoken, voice_id=voice_id)
+            if audio_bytes:
+                audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+        except Exception:
+            pass
+
+        timeline_dict = res.mouth_timeline
+        if not timeline_dict:
+            timeline_dict = _GLOBAL_MOUTH_SYNC.generate_timeline(
+                utterance_id=f"utt_voice_{int(time.time()*1000)}",
+                text=spoken,
+                target_duration_ms=int(max(1000, len(spoken) * 110)),
+            ).to_dict()
+
+        # Update telemetry state and dispatch to Raspberry Pi 5 if connected
+        _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
+        _GLOBAL_EDGE_TELEMETRY["transcript"] = spoken
+
+        if audio_b64:
+            cmd_data = {
+                "action": "speak",
+                "text": spoken,
+                "state": "SPEAKING",
+                "timeline": timeline_dict,
+                "audio_base64": audio_b64,
+            }
+            threading.Thread(
+                target=_send_edge_request,
+                args=("/api/kiosk/control", "POST", cmd_data, 10.0),
+                daemon=True,
+            ).start()
+
+        self._send_json({
+            "success": True,
+            "query": res.query,
+            "response_text": res.response_text,
+            "reply": res.response_text,
+            "spoken_text": spoken,
+            "audio_base64": audio_b64,
+            "has_audio": bool(audio_b64),
+            "active_role": res.active_role,
+            "state": res.state,
+            "barge_in": res.barge_in_occurred,
+            "mouth_timeline": timeline_dict,
+            "duration_ms": res.duration_ms,
+        })
+
+
+    def _handle_api_voice_barge_in(self, body: dict) -> None:
+        reason = str(body.get("reason", "User interrupted")).strip()
+        interrupted = _GLOBAL_VOICE_PIPELINE.process_barge_in(reason)
+        self._send_json({"success": True, "interrupted": interrupted})
+
+    def _handle_api_edge_transfer_initiate(self, body: dict) -> None:
+        try:
+            device_id = str(body.get("device_id", "pi5_kiosk_01"))
+            direction_str = str(body.get("direction", "PC_TO_EDGE"))
+            direction = TransferDirection(direction_str)
+            relative_path = str(body.get("relative_path", "")).strip()
+            classification_str = str(body.get("classification", "INTERNAL_OPERATIONAL"))
+            classification = DataClassification(classification_str)
+            content_bytes_b64 = body.get("content_base64")
+
+            import base64
+            if content_bytes_b64:
+                content_bytes = base64.b64decode(content_bytes_b64)
+            else:
+                content_str = str(body.get("content", ""))
+                content_bytes = content_str.encode("utf-8")
+
+            manifest = _GLOBAL_TRANSFER_SERVICE.initiate_transfer(
+                device_id=device_id,
+                direction=direction,
+                relative_path=relative_path,
+                content_bytes=content_bytes,
+                classification=classification,
+            )
+            self._send_json({
+                "success": manifest.status == TransferStatus.IN_PROGRESS,
+                "manifest": manifest.to_dict(),
+            })
+        except Exception as exc:
+            self._send_error_json(str(exc), 400)
+
+    def _handle_api_edge_transfer_chunk(self, body: dict) -> None:
+        try:
+            transfer_id = str(body.get("transfer_id", ""))
+            chunk_index = int(body.get("chunk_index", 0))
+            total_chunks = int(body.get("total_chunks", 1))
+            chunk_data_b64 = str(body.get("chunk_data_base64", ""))
+            chunk_hash = str(body.get("chunk_hash", ""))
+
+            import base64
+            data_bytes = base64.b64decode(chunk_data_b64)
+            chunk = TransferChunk(
+                transfer_id=transfer_id,
+                chunk_index=chunk_index,
+                total_chunks=total_chunks,
+                data_bytes=data_bytes,
+                chunk_hash=chunk_hash,
+            )
+            success, msg, manifest = _GLOBAL_TRANSFER_SERVICE.receive_chunk(chunk)
+            self._send_json({
+                "success": success,
+                "message": msg,
+                "manifest": manifest.to_dict() if manifest else None,
+            })
+        except Exception as exc:
+            self._send_error_json(str(exc), 400)
+
+    def _handle_api_edge_transfer_ack(self, body: dict) -> None:
+        transfer_id = str(body.get("transfer_id", ""))
+        receiver_hash = str(body.get("receiver_hash", ""))
+        success, msg = _GLOBAL_TRANSFER_SERVICE.acknowledge_transfer(transfer_id, receiver_hash)
+        self._send_json({"success": success, "message": msg})
+
+    def _handle_api_edge_transfer_status(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        transfer_id = params.get("transfer_id", [""])[0]
+        status = _GLOBAL_TRANSFER_SERVICE.get_transfer_status(transfer_id)
+        if not status:
+            self._send_error_json("Transfer not found", 404)
+            return
+        self._send_json({"success": True, "manifest": status.to_dict()})
+
+    def _handle_api_edge_transfer_history(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        limit = int(params.get("limit", [20])[0])
+        history = _GLOBAL_TRANSFER_SERVICE.list_transfers(limit=limit)
+        self._send_json({
+            "success": True,
+            "transfers": [m.to_dict() for m in history],
+        })
+
+    def _handle_api_edge_release_create(self, body: dict) -> None:
+        try:
+            version = str(body.get("version", "1.1.0")).strip()
+            notes = str(body.get("notes", "Automated release")).strip()
+            manifest = _GLOBAL_RELEASE_MANAGER.create_release(version=version, release_notes=notes)
+            self._send_json({"success": True, "release": manifest.to_dict()})
+        except Exception as exc:
+            self._send_error_json(str(exc), 400)
+
+    def _handle_api_edge_release_stage(self, body: dict) -> None:
+        try:
+            release_id = str(body.get("release_id", "")).strip()
+            success, msg = _GLOBAL_RELEASE_MANAGER.stage_release(release_id)
+            self._send_json({"success": success, "message": msg})
+        except Exception as exc:
+            self._send_error_json(str(exc), 400)
+
+    def _handle_api_edge_release_activate(self, body: dict) -> None:
+        try:
+            release_id = str(body.get("release_id", "")).strip()
+            success, msg = _GLOBAL_RELEASE_MANAGER.activate_release(release_id)
+            self._send_json({"success": success, "message": msg})
+        except Exception as exc:
+            self._send_error_json(str(exc), 400)
+
+    def _handle_api_edge_release_rollback(self, body: dict) -> None:
+        try:
+            target_release_id = body.get("target_release_id")
+            success, msg = _GLOBAL_RELEASE_MANAGER.rollback_to(target_release_id)
+            self._send_json({"success": success, "message": msg})
+        except Exception as exc:
+            self._send_error_json(str(exc), 400)
+
+    def _handle_api_edge_release_list(self) -> None:
+        releases = _GLOBAL_RELEASE_MANAGER.list_releases()
+        self._send_json({
+            "success": True,
+            "active_version": _GLOBAL_RELEASE_MANAGER.active_version,
+            "releases": [r.to_dict() for r in releases],
+        })
+
+    def _handle_api_supervisor_state(self) -> None:
+        try:
+            sup = _get_global_supervisor()
+            task = sup.current_task
+            self._send_json({
+                "success": True,
+                "state": sup.state.value,
+                "current_task": task.to_dict() if task else None,
+                "cycle_history": sup.cycle_history[-10:],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Error fetching supervisor state: {exc}", 500)
+
+    def _handle_api_supervisor_tick(self, body: dict) -> None:
+        try:
+            sup = _get_global_supervisor()
+            max_duration_sec = float(body.get("max_duration_sec", 10.0))
+            max_steps = int(body.get("max_steps", 5))
+            dry_run = bool(body.get("dry_run", True))
+            result = sup.run_background_tick(
+                max_duration_sec=max_duration_sec,
+                max_steps=max_steps,
+                dry_run=dry_run,
+                autonomic_system=GLOBAL_AUTONOMIC_SYSTEM,
+            )
+            task = sup.current_task
+            self._send_json({
+                "success": True,
+                "tick_result": result,
+                "supervisor_state": sup.state.value,
+                "current_task": task.to_dict() if task else None,
+            })
+        except Exception as exc:
+            self._send_error_json(f"Error executing supervisor tick: {exc}", 500)
+
+
+class ThreadedHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+def is_port_in_use(port: int, host: str = "127.0.0.1") -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex((host, port)) == 0
+
+
+def run_web_server(port: int = 8765, open_browser: bool = True) -> None:
+    host = "127.0.0.1"
+    actual_port = port
+    while is_port_in_use(actual_port, host):
+        actual_port += 1
+        if actual_port > port + 50:
+            raise RuntimeError(f"Could not find an available port between {port} and {actual_port}")
+
+    server = ThreadedHTTPServer((host, actual_port), BrainAPIHandler)
+    url = f"http://{host}:{actual_port}"
+
+    print(f"\n======================================================================")
+    print(f"        QUAN AI BRAIN — LOCAL WEB UI DASHBOARD (ONLINE)")
+    print(f"======================================================================")
+    print(f"  URL Giao Dien:   {url}")
+    print(f"  Trang thai mang: Localhost (127.0.0.1) — An toan tuyet doi")
+    print(f"  Nhan Ctrl+C de dung server bat cu luc nao.")
+    print(f"======================================================================\n")
+
+    if open_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[Dung Server] Dang dong QUAN AI BRAIN Web UI...")
+        server.server_close()
+def run_executive_server(port: int = 8766, open_browser: bool = True, host: str = "0.0.0.0") -> None:
+    actual_port = port
+    while is_port_in_use(actual_port, "127.0.0.1"):
+        actual_port += 1
+        if actual_port > port + 50:
+            raise RuntimeError(f"Could not find an available port between {port} and {actual_port}")
+
+    server = ThreadedHTTPServer((host, actual_port), BrainAPIHandler)
+    lan_ip = get_local_lan_ip()
+    local_url = f"http://127.0.0.1:{actual_port}/"
+    lan_url = f"http://{lan_ip}:{actual_port}/"
+
+    print(f"\n======================================================================")
+    print(f"   QUAN AI BRAIN -- PHONG DIEU HANH & THAM VAN CHU NHAN (ONLINE)")
+    print(f"======================================================================")
+    print(f"  URL Cuc Bo (PC):       {local_url}")
+    print(f"  URL Mang Wi-Fi (Pi 5): {lan_url}")
+    print(f"  Ma PIN Ghep Cap Edge:  {_GLOBAL_EDGE_PAIRING_PIN}")
+    print(f"  Ban sao so:            Quanpt1 Digital Replica & Executive Desk")
+    print(f"  Trang thai mang:       LAN / Localhost (Bao ve boi HMAC-SHA256)")
+    print(f"  Nhan Ctrl+C de dung server bat cu luc nao.")
+    print(f"======================================================================\n")
+
+    _GLOBAL_EDGE_MONITOR.start_watchdog(interval_sec=0.5)
+
+    if open_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(local_url)).start()
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[Dung Server] Dang dong Phong Dieu Hanh...")
+        _GLOBAL_EDGE_MONITOR.stop_watchdog()
+        server.server_close()
+        print("[Hoan tat] Da tat server an toan.")
+
+
+if __name__ == "__main__":
+    run_web_server()

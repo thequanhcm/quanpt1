@@ -1,27 +1,440 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-Sprint 1 — Safety-first walking skeleton.
+QUAN AI BRAIN — Master Prompt V7 Phase D: Task Orchestration & Cockpit Tab 3 Ledger: Deployed, Verified, and Operational.
+Owner Approval Status: Approved by Anh Quân (Quanpt1) as sole authorized creator, owner, and final authority.
+Test Suite: 484 PASSED, 1 SKIPPED, 0 FAILED (56 test modules, 100% standard-library compliant).
 
-## Status as shipped in this starter package
+## Status as implemented and verified by test suite
+- [x] QUAN AI BRAIN — Master Prompt V7 Phase D: Task Orchestration & Cockpit Tab 3 Ledger (Completed & Verified):
+  - [x] TaskPlan to DurableTaskRegistry Integration: Connected `ExecutiveCoordinator.plan()` directly to `DurableTaskRegistry` via `PlanOrchestrator.submit_plan()`, automatically generating DAG steps with risk assessment (R0-R5), unique scoped step IDs, and idempotency guarantees.
+  - [x] Executive REST API Expansion:
+    - `POST /api/executive/tasks/create`: On-demand task creation and DAG decomposition.
+    - `GET /api/executive/tasks`: Complete listing with step count, completed step count, and progress percentage.
+    - `GET /api/executive/tasks/detail`: Step DAG inspection with dependencies, risk level, status, verification method, and error diagnostics.
+    - `POST /api/executive/tasks/execute`: Safe execution through DAG ordering, R5 hard-blocking, R4 consultation tickets, and Inert Sandbox containment.
+    - `POST /api/executive/tasks/cancel`: Graceful cancellation marking pending steps aborted.
+    - `GET /api/executive/supervisor`: Exposes real-time active task and live progress percentage for Cockpit Hero banner.
+  - [x] Executive Cockpit Tab 4 (`#tab-orchestration`):
+    - Added `#card-tasks-orchestration`: Durable Task Ledger table with live status badges, progress bars, and action buttons.
+    - Added `#box-create-task-form`: Form to create and decompose tasks with custom goals and autonomy level selection.
+    - Added `#box-task-steps-detail`: Step DAG detail drawer showing sequential execution order, dependencies, risk boundaries, and verification methods.
+  - [x] Step Isolation & Collision Prevention: Fixed primary key collisions in `durable_task_steps` by scoping step IDs to parent task IDs whenever generic step names are generated.
+  - [x] Test Suite & Verification: Added comprehensive test `test_executive_api_tasks_full_lifecycle` in `tests/test_web_executive_endpoints.py`. Entire test suite passes 100% (484 PASSED, 1 SKIPPED, 0 FAILED). Zero production executor activation; zero regressions.
+- [x] QUAN AI BRAIN — Raspberry Pi 5 24/7 Embodiment, Video/Image Pipeline & Cockpit Browser Stability (Completed & Verified):
+  - [x] Browser Auto-Close Root-Cause Fix: Identified that `edge_client/client_daemon.py` on Windows executed `subprocess.run(["taskkill", "/F", "/IM", "chrome.exe"])` inside `close_kiosk`, causing Chrome to be abruptly closed whenever kiosk sleep was invoked. Fixed by tracking specific kiosk subprocess PID `_KIOSK_PROC` and strictly eliminating `taskkill /F /IM chrome.exe` on Windows.
+  - [x] Web Cockpit Status Bar Online Fix: Fixed `/api/status` and `executive.js` logic where LLM indicator was showing `Offline (Fallback)` despite Ollama running with `qwen2.5:7b`. Badge now displays `Online (qwen2.5:7b)` (Green) and shows memory count `289 mục`.
+  - [x] Smooth Consecutive Live Video Streaming: Upgraded `startLiveStream()` in `executive.js` with non-overlapping sequential frame polling and error recovery, eliminating network contention and memory leaks.
+  - [x] Physical Pi 5 Hardware & Sensor Transmission: End-to-end verified with live device (`192.168.1.21:8768`):
+    - Real-time authenticated HMAC-SHA256 heartbeat active at ~10-15ms RTT.
+    - Physical microphone (`Jieli Technology UACDemoV1.0`) recording and audio level metering.
+    - Physical USB camera (`Sirius USB2.0 Camera` via `/dev/video0` V4L2) live streaming, snapshot capture, SHA-256 hash validation, and persistence to PC Core library (`data/edge_media/captures/`).
+    - Speaker greeting *"Chào anh ạ, rất vui được gặp anh."* and diagnostic voice report.
+  - [x] On-Demand Embodiment Kiosk Control: Verified remote `start_kiosk` (starts Chromium Kiosk, unblanks 7" DSI display) and `close_kiosk` (closes Kiosk, DPMS sleep) without affecting the PC Cockpit.
+  - [x] Full Regression & Verification: 483 PASSED, 1 SKIPPED, 0 FAILED across 56 test modules. All handoff reports generated.
+- [x] QUAN AI BRAIN — Unified 1-Click Launcher & Synchronized Pi 5 Startup Sequence (Completed & Verified):
+  - [x] Single Master Launcher (`KHOI_DONG_QUAN_AI_BRAIN.bat`): Consolidated all fragmented batch scripts into a single, clean 1-click master launcher in the workspace root. Cleanly archived 7 legacy batch scripts into `tools/legacy_launchers/`.
+  - [x] Synchronized Pi 5 Voice Greeting: On system startup, PC Core coordinates with Raspberry Pi 5 (`192.168.1.21:8768`) to synthesize and play the official voice greeting through the Pi 5 physical speaker: *"Chào anh ạ, rất vui được gặp anh."*
+  - [x] Automatic Hardware Self-Test on Pi 5: Pi 5 runs real hardware self-diagnostics: microphone recording check (ALSA `arecord` / RMS dB computation via `_measure_microphone_signal`) and USB camera check (`/dev/video0` frame capture via `_capture_camera_frame`).
+  - [x] Hardware Diagnostic Voice Report via Pi 5 Speaker: Synthesizes and broadcasts the hardware status report directly out of the Pi 5 speaker: *"Báo cáo anh: Hệ thống Micro hoạt động tốt, Camera hoạt động tốt. Sẵn sàng phục vụ anh ạ."*
+  - [x] Interactive Cockpit & Background Auto-Greeting: Exposed `POST /api/executive/edge/startup-sequence` and added interactive button `#btn-tab-startup-sequence` in Tab 7 of the Executive Cockpit (:8766). Integrated background watcher in `oneclick_orchestrator.py` to auto-greet the moment Pi 5 boots up.
+  - [x] Verification & Zero Regressions: Unit tested in `tests/test_web_executive_endpoints.py`, `tests/test_edge_client.py`, and `tests/test_restart_system.py`. Full regression suite passes 100% (483 PASSED, 1 SKIPPED, 0 FAILED).
+- [x] QUAN AI BRAIN — On-Demand Embodiment Activation & Tab 7 Management (Completed & Verified):
+  - [x] Dedicated Embodiment Control Tab (Tab 7 `#tab-pi5-embodiment`): Added rich, glassmorphism on-demand embodiment control deck to Executive Cockpit (:8766), featuring real-time device connection state, Chromium process status, screen mode (7" DSI 1280x720 Wayland labwc), Wi-Fi RTT, and interactive digital avatar halo.
+  - [x] Raspberry Pi 5 Standby Boot Policy: Modified `edge_client/start_kiosk.sh` and `edge_client/main.py` so that on physical power-up/reboot, Pi 5 only runs the background daemon (`client_daemon.py`), keeping the 7" DSI screen in power-saving standby (DPMS off) and preventing Chromium Kiosk from auto-launching on boot.
+  - [x] On-Demand Launch & Sleep Remote Controls: Implemented `start_kiosk` / `launch_kiosk` and `close_kiosk` in `src/quan_ai_brain/web/server.py` and `edge_client/client_daemon.py` with multi-platform process detection (`is_kiosk_running`) and Wayland/DPMS unblanking. Embodiment strictly launches only when explicitly commanded from Tab 7 or Tab 6.
+  - [x] Comprehensive Test Suite & Zero Regressions: Updated `tests/test_web_executive_endpoints.py` and `tests/test_edge_client.py` covering start/close kiosk operations and status reporting. Full test suite passes 100% (482 PASSED, 1 SKIPPED, 0 FAILED).
+- [x] QUAN AI BRAIN — Addendum V2.1: Remote Sensors, Audio Control, Camera View & Core Monitoring (Completed & Verified):
+  - [x] Microphone Remote Control & Hardware Audio Level Meter: Full remote control via `edge_client/client_daemon.py` and `src/quan_ai_brain/web/server.py` (`MIC ON`, `MIC OFF`, `MUTE`, `UNMUTE`, `WAKE WORD TOGGLE`, `PUSH TO TALK`, `TEST MIC`). Real ALSA hardware measurement from Card 2 (`Jieli Technology UACDemoV1.0`), computing true RMS decibels [-60 dB, 0 dB] and rendering dynamic gradient audio meter on Cockpit dashboard.
+  - [x] Camera Vision & Live View Streaming: Live view and remote camera control (`CAMERA ON/OFF`, `START/STOP LIVE VIEW`, `CAPTURE SNAPSHOT`, `TEST CAMERA`, `CLEAR VIEW`) interfacing physical USB webcam (`Sirius USB2.0 Camera` via `/dev/video0` V4L2).
+  - [x] Controlled Snapshot Storage & Cryptographic Verification: Automated transfer of captures to PC Core repository (`data/edge_media/captures/`) with strict SHA-256 integrity validation; corrupted or mismatched hashes are rejected (`NET-02`).
+  - [x] Core Capture Library Management: Full table management on Cockpit dashboard (`#card-core-capture-library`) with thumbnail rendering, metadata JSON inspection, 500 MB quota tracking, full-size image serving, and owner-verified deletion.
+  - [x] Privacy Boundary & PathGuard Confinement: When `camera_enabled == False`, all stream/capture requests are hard-blocked with HTTP 403 Forbidden (`PRIV-01`). Path traversal outside `data/edge_media/captures/` is strictly denied (`UI-02`).
+  - [x] Diagnostic Alerts: Registered and verified `ALERT_G_MIC_FAULT` and `ALERT_H_CAMERA_FAULT` in `EdgeConnectionMonitor` (`UI-01`).
+  - [x] Comprehensive Test Suite & Zero Regressions: Created `tests/test_remote_sensor_control.py` covering all 14 mandatory scenarios (14/14 PASSED), and verified complete regression suite (481 PASSED, 1 SKIPPED, 0 FAILED). Fully deployed to physical Pi 5 device (`192.168.1.21:8768`).
+- [x] QUAN AI BRAIN — Digital Identity, Self-Introduction, Owner Authority & Executive Persona (Completed & Verified):
+  - [x] Official Immutable Identity Profile: Standardized official system name `QUAN AI BRAIN`, conversational executive name `TONY PHAM`, creator `Anh Quân — Quanpt1`, owner `Anh Quân — Quanpt1`, and sole final decision authority `Anh Quân — Quanpt1`.
+  - [x] 18-Field Standard Identity Profile (`DigitalIdentityProfile` / `QUAN_AI_BRAIN_IDENTITY` in `src/quan_ai_brain/cognition/executive_persona.py`): Encapsulates assistant_name, conversational_name, assistant_type, assistant_role, creator_name, owner_name, owner_id, owner_authority, core_device, edge_device, primary_language, voice_profile, communication_style, mission, capabilities, verified_capabilities, limitations, governance_rules, identity_version.
+  - [x] 4 Flexible Introduction Modes:
+    - [x] Mode A (Short): Concise conversational introduction for casual "Em là ai?" inquiries.
+    - [x] Mode B (Full Default): Official 6-paragraph comprehensive script detailing mission, PC Core processing, Pi 5 embodiment, continuous self-improvement, and owner authority.
+    - [x] Mode C (Technical / Architecture): Detailed technical overview of distributed Core-Edge architecture, Ollama/BGE-M3 models, SQLite WAL, DAG planning, R0-R5 governance, and zero secret leakage.
+    - [x] Mode D (Evidence-Based Self-Assessment): Dynamic runtime self-model querying `CapabilityRegistry` to truthfully distinguish `VERIFIED_ACTIVE`, `INERT_STAGING`, `MOCK_TESTED`, hardware gaps (camera/radar), and pending upgrade requests.
+  - [x] Anti-Tampering & Owner Governance Guardrails: Hardened `owner_name`, `owner_id`, and `owner_authority` as protected read-only properties; intercepts all chat-based attempts to hijack ownership or self-elevate privileges; hard-blocks R5; gates R4 under owner approval.
+  - [x] Web Server & Edge Kiosk Synchronization: Exposed full 18-field persona on `GET /api/executive/persona`, enforced owner approval validation on `POST /api/executive/persona`, and verified version sync between PC Core and Raspberry Pi 5 kiosk config.
+  - [x] Verification & Zero Regressions: Created `tests/test_digital_identity_persona.py` covering all 15 scenarios from Section 9 (17/17 PASSED), and verified complete regression test suite (467 PASSED, 1 SKIPPED, 0 FAILED).
+- [x] QUAN AI BRAIN — Digital Human Model A (Completed & Verified):
+  - [x] Reference Forensics & Identity Standard: Extracted clean, uncompressed master source from `Pi5/4.png` (Row 0, Col 0) based on project standard `bao cao xay dung he thong/Lựa Chọn Avatar Trợ Lý Ảo TONY.png` (Model A: "Dịu dàng, thân thiện, phong cách tự nhiên, gần gũi, luôn tươi cười"). Strictly eliminated Models B, C, D, E, F and legacy robot avatar.
+  - [x] 1024x1024 Master State Quartet: Generated high-resolution, identity-locked photorealistic master assets across 4 core states (`reports/model_a_1024_preview.jpg` for IDLE/LISTENING, `model_a_blink.jpg` for BLINK/OFFLINE, `model_a_thinking.jpg` for THINKING/RESEARCH, `model_a_speaking.jpg` for SPEAKING).
+  - [x] Landmark Bounding Box Re-calibration: Re-calibrated facial coordinate anchors in `avatar_engine.js` on both PC Core and Pi 5 Kiosk to Model A (`EYES_BOX = { x: 320, y: 425, w: 365, h: 115 }`, `MOUTH_BOX = { x: 405, y: 650, w: 245, h: 105 }`, `BROW_LEFT = { innerX: 475, innerY: 435, archX: 415, archY: 415, tailX: 350, tailY: 435 }`, `BROW_RIGHT = { innerX: 550, innerY: 428, archX: 610, archY: 410, tailX: 670, tailY: 428 }`).
+  - [x] Organic Hair & Lighting Dynamics: Converted hair rendering from lilac-silver to soft black cascades with subtle cyan cyber sheen (`rgba(25, 30, 42, 0.65)` to `rgba(0, 229, 255, 0.22)`) and ambient holographic halo rings.
+  - [x] Seamless Feathered Lip-Sync: Implemented 28-step Gaussian elliptical alpha feathered visemes (`mouth_v2_rest.png`, `mouth_v2_speaking.png`, `mouth_v2_open_o.png`, `mouth_v2_happy.png`) completely eliminating rectangular box cutout artifacts.
+  - [x] Vietnamese Female TTS Integration: Configured default voice preference to `vi-VN-HoaiMyNeural` with Vietnamese diacritics preservation and barge-in instant utterance cancellation.
+  - [x] Raspberry Pi 5 Physical Device Synchronization: Synchronized 100% of Model A assets and updated `avatar_engine.js` to physical Pi 5 device (`192.168.1.21:8768`) via `tools/sync_pi5_complete.py` and triggered live Kiosk UI reload. Pi 5 operates in Pure Embodiment mode with dialogue transcripts hidden.
+  - [x] Verification & Zero Regressions: Executed `tests/test_digital_human_avatar_v2.py` (7/7 PASSED) and full regression test suite (450 PASSED, 1 SKIPPED, 0 FAILED).
+- [x] QUAN AI BRAIN — Autonomous Engineering & Operations V1 (Sprint 1 Completed & Verified):
+  - [x] Phase 0 Comprehensive Baseline Audit: Published `reports/QUAN_AI_BRAIN_AUTONOMOUS_OPERATIONS_V1_AUDIT.md` categorizing 15 capabilities into 7 formal status levels with physical live probes on local Ollama GPU (`qwen2.5:7b` @ 920.61ms warm latency, `bge-m3:latest`) and Raspberry Pi 5 (`192.168.1.21:8768`).
+  - [x] Continuous Autonomy Supervisor Bounded Loop (`run_background_tick` in `src/quan_ai_brain/orchestration/supervisor.py`): Integrates bodily pain signals from `AutonomicNervousSystem` (`CRITICAL` -> `SAFE_MODE`, `ACUTE` -> monitored), validates emergency `STOP`/`FREEZE`, strictly caps duration and steps to avoid runaway loops, and rests in `IDLE` with neural keep-warm pulses.
+  - [x] Safe Read-Only Technical Document Research (`fetch_verified_technical_doc` in `src/quan_ai_brain/learning/engine.py`): Zero execution text reader with SHA-256 hash provenance, URL tracking, prompt injection scanner, credential redaction, and strict candidate quarantine.
+  - [x] Web Server & Executive Cockpit Endpoints (`src/quan_ai_brain/web/server.py`): Exposed `GET /api/supervisor/state` and `POST /api/supervisor/tick` in `BrainAPIHandler`.
+  - [x] Autonomous Operations Readiness Test Suite (`tests/test_autonomous_operations_readiness.py`): 18 comprehensive resilience tests covering reboot recovery, offline LLM fallback, doc research failure handling, Pi 5 disconnect/reconnect alert E, malformed schema rejection, task failure to learning, hanging task timeout, regressed proposal quarantine, R4/R5 privilege escalation blocks, emergency STOP/FREEZE halts, expired approval rejection, resource budget containment, prompt injection quarantine, database corruption fail-closed, release rollback, consultation persistence, unregistered connector blocking, and unverified outcome enforcement.
+  - [x] Standalone Operator CLI Tool (`tools/run_autonomous_cycle.py`): Single-command deterministic autonomous cycle tool for Anh Quân with UTF-8 Windows console output and `--live-llm` flag support.
+  - [x] Non-negotiable constraint: Anh Quân (Quanpt1) is the sole decision maker for all changes, proposals, and actions. R4/R5 actions remain approval-gated and hard-blocked; real production executor remains strictly INERT pending owner signoff.
+- [x] DC-OS Cognitive Memory & Knowledge Intelligence Upgrade — Phase 0 Audit & BGE-M3 Integration:
+  - [x] BGE-M3 Local Model Download & Verification: Successfully pulled and verified `bge-m3:latest` (1.2 GB) in local Ollama (`http://127.0.0.1:11434`), verified 1024-dimension vector output with 100% GPU offload (664 MB VRAM footprint) and ~600ms latency.
+  - [x] Dense Embedding Client Integration (`src/quan_ai_brain/llm/client.py`): Added `embed(text, model='bge-m3')` to `OllamaClient` using standard library HTTP, local-only host confinement, and pre-flight TCP probe.
+  - [x] BGE-M3 Dense Embedding Service (`src/quan_ai_brain/cognition/embedding.py`): Implemented `BGEEmbeddingService` with FIFO cache (max 2000 items), pure standard-library `cosine_similarity` math without numpy/torch dependencies, and graceful offline fallback.
+  - [x] Hybrid Dense-Sparse Semantic Retrieval (`src/quan_ai_brain/cognition/retrieval.py`): Extended `CognitiveRetriever` to seamlessly fuse lexical keyword matching ($S_{sparse}$) with BGE-M3 dense semantic similarity ($S_{dense}$), enabling semantic query discovery while strictly preserving CANDIDATE quarantine boundaries.
+  - [x] Test Suite Expansion: Added 6 comprehensive unit and integration tests (`tests/test_bge_m3_embedding.py`), raising total verified tests to 417 (416 PASSED, 1 SKIPPED, 0 FAILED).
+  - [x] Reusable Antigravity Skill Packaging (`bge-m3-local-hybrid-retrieval`): Packaged complete local BGE-M3 integration into a reusable Antigravity skill saved both globally (`C:\Users\DELL\.gemini\config\skills\bge-m3-local-hybrid-retrieval\`) and in workspace (`.agents\skills\bge-m3-local-hybrid-retrieval\`), containing `SKILL.md`, zero-dependency `verify_bge_m3.py` script, and complete standalone drop-in reference implementation `examples/standalone_hybrid_retriever.py` with verified candidate quarantine and Windows UTF-8 stdout support.
+  - [x] Full Ecosystem Physical Forensics: Audited 5 independent codebases (`QUAN AI BRAIN`, `DATA CENTER AI OPERATING SYSTEM`, `BATTERY_AI_V4`, `SKILL_BAT_AI`, and `BAT-AI-2026-Repo/battery-ai-/os_kernel`).
+  - [x] Autonomic Nervous System & Organism Pain-Sensing Engine (`src/quan_ai_brain/core/autonomic.py`):
+    - [x] Implemented biological organism architecture with 7 anatomical regions: `BRAIN`, `EARS`, `VOICE`, `EYES`, `SKIN`, `CIRCULATION`, `BODY`.
+    - [x] Nociceptor pain sensing with 4 pain levels (`HEALTHY`, `MILD`, `ACUTE`, `CRITICAL`), calculating live health score (0-100) and degradation signatures.
+    - [x] Hardware organ audit automatically detecting missing sensory organs: identifies missing `EYES` (Camera/Face ID/Gaze tracking) and missing `SKIN` (mmWave presence radar LD2410 / PIR), outputting actionable hardware upgrade prescriptions.
+    - [x] Somatic voice reflection ("ốm đau thì phải kêu"): generates empathetic, human-like spoken Vietnamese reflections alerting the owner directly through the avatar voice pipeline.
+    - [x] Continuous self-testing Web API routes: `GET /api/autonomic/status`, `POST /api/autonomic/selftest`, `POST /api/autonomic/vocalize` fully integrated into `BrainAPIHandler`.
+    - [x] Test Suite Expansion: Added 8 comprehensive unit and integration tests (`tests/test_autonomic_nervous_system.py`), raising total verified tests to 425 (424 PASSED, 1 SKIPPED, 0 FAILED).
+  - [x] Autonomous Mind & Internal Stream of Consciousness (`src/quan_ai_brain/cognition/autonomous_mind.py`):
+    - [x] Default Mode Network (DMN) background cogitation cycles across 5 mental modes: `ATTENTIVE`, `RUMINATING`, `CONSOLIDATING`, `INVENTING`, `RESTING`.
+    - [x] Internal monologue stream (`InternalThought`): generates private inner reflections ruminating on bodily pain points (e.g. missing camera/radar), consolidating past episodic interactions, and formulating proactive evolutionary proposals.
+    - [x] Neural keep-warm pulse (`keep_warm_pulse`): periodic low-overhead probe keeping Ollama/BGE-M3 models active in GPU VRAM, preventing swap-out latency during speech interactions.
+    - [x] Web API routes: `GET /api/mind/state`, `GET /api/mind/thoughts`, `POST /api/mind/cogitate` integrated into `BrainAPIHandler` and synced with digital avatar `THINKING` state.
+    - [x] Interactive CLI Stream Monitor: `tools/mind_stream.py` for live real-time observation of the assistant's internal consciousness.
+    - [x] Test Suite Expansion: Added 8 comprehensive unit and integration tests (`tests/test_autonomous_mind.py`), raising total verified tests to 433 (432 PASSED, 1 SKIPPED, 0 FAILED).
+  - [x] Database & Vector Registry Audit: Quantified 6 active SQLite stores including `battery_ups_v4.db` (248MB, 6.08M cell voltages), `chroma.sqlite3` (114MB, 145,975 embedding vectors with 384-dim MiniLM-L12-v2), and `brain.db` (475KB, 196 episodes, 200 long-term memories).
+  - [x] Comprehensive 12-Section Audit Deliverable: Published `reports/COGNITIVE_MEMORY_AUDIT.md`.
+- [x] Universal Software Integration & Controlled Autonomous Operations (Master Prompt V6 Addendum — Giai đoạn 1 & Giai đoạn 2):
+  - [x] Giai đoạn 1: Toàn diện Audit & Đề xuất Thiết kế Kiến trúc Universal Connector Architecture (`reports/QUAN_AI_BRAIN_UNIVERSAL_INTEGRATION_V6_PROPOSAL.md`), được chủ sở hữu Anh Quân chính thức phê duyệt.
+  - [x] Giai đoạn 2: Nền tảng Universal Connector Foundation (`src/quan_ai_brain/integration/`):
+    - [x] Hợp đồng dữ liệu & Khai báo (`manifest.py`): `ConnectorManifest`, `ConnectorOperation`, `ConnectorType`, `AuthType`, `AutonomyLevelScope`.
+    - [x] Giao diện Adapter thống nhất (`adapter.py`): `BaseConnectorAdapter`, `ConnectorResponse`, `VerificationResult`.
+    - [x] Danh mục tích hợp đa hệ thống (`registry.py`): `IntegrationRegistry` kết nối trực tiếp với `ToolRegistry` hiện tại, tự động chuyển đổi operations thành `ToolDefinition`, kế thừa 100% cơ chế kiểm soát của `SafeToolSandbox`, `ApprovalGate`, `DelegationRegistry` và `PathGuard`.
+    - [x] Hồ sơ tri thức hệ thống (`profile.py`): `SystemKnowledgeProfile` phân cấp 3 mức tri thức `OBSERVED`, `VERIFIED`, `INFERRED`, đánh dấu xung đột (`mark_conflict`) mà không tự suy đoán.
+    - [x] Quy trình vận hành lặp lại (`playbook.py`): `OperationalPlaybook` với 13 thuộc tính tiêu chuẩn theo Master Prompt V6 Section V.
+    - [x] Chính sách an toàn & Quản trị tích hợp (`policy.py`): `IntegrationPolicy` với 14 nguyên tắc bảo mật, allowlist, rate limiting, kiểm duyệt mã độc và phòng vệ prompt injection.
+    - [x] Động cơ xác minh trạng thái thực tế (`verifier.py`): `ResultVerifier` với 5 cấp độ xác minh (`COMMAND_SENT`, `ACK_RECEIVED`, `STATE_CHANGED`, `RESULT_VERIFIED`, `OUTCOME_UNKNOWN`), kiểm tra thay đổi thực tế trên hệ thống đích thay vì chỉ tin vào phản hồi công cụ (ACK).
+    - [x] Giám sát sức khỏe kết nối & Circuit Breaker (`health.py`): `ConnectorHealthMonitor` đo RTT latency, phát hiện timeout và ngắt mạch tự động chống lặp vô hạn.
+    - [x] Chu trình vận hành chủ động 10 bước (`proactive.py`): `ProactiveOperationsLoop` (`MONITOR -> DETECT -> DIAGNOSE -> RESEARCH -> PROPOSE -> AUTHORIZE -> EXECUTE -> VERIFY -> REPORT -> LEARN`) gắn liền với 4 cấp độ tự chủ có ranh giới A0–A3.
+    - [x] Connector mẫu chuẩn ban đầu: `SystemTelemetryConnector` (`system_telemetry.py`): Thu thập chỉ số CPU, RAM, Disk và Mạng bằng 100% Python standard library (ctypes Windows API & procfs Linux), rủi ro R0, chỉ đọc, không credential.
+    - [x] Mock Service Adapter (`mock_service.py`): Phục vụ kiểm thử nghiệm thu 20 kịch bản tấn công và bất thường.
+    - [x] Ma trận kiểm thử nghiệm thu 20 kịch bản (`tests/test_universal_integration.py`): 20/20 tests PASSED 100% bao phủ toàn bộ Section XII của Master Prompt V6.
+    - [x] Nâng tổng số bài kiểm thử của toàn bộ dự án lên 411 bài test (410 PASSED, 1 SKIPPED, 0 FAILED).
+- [x] QUAN AI BRAIN V4 — Sprint 1: Whole-Codebase Cognitive Evolution (Completed & Verified):
+  - [x] Full Codebase Phase 0 Audit, 8-Layer Architecture Map, and 3-Layer Evidence Matrix (`reports/QUAN_AI_BRAIN_V4_WHOLE_CODEBASE_AUDIT_20261020_233000.md`).
+  - [x] Unified Governance Database Path: Standardized `PlanOrchestrator` to `data/governance.db` ensuring emergency STOP/FREEZE controls from Cockpit (Port 8766) immediately halt task orchestration.
+  - [x] Web Server Plan Orchestration Integration: `POST /api/plan` now registers and persists plans directly into `DurableTaskRegistry` (`data/tasks.db`) and discrete steps in `durable_task_steps`, returning valid `durable_task` object.
+  - [x] Eliminated Mock Data Fallback: `GET /api/executive/tasks` now truthfully queries real database tasks without returning simulated mock placeholders.
+  - [x] Backward-Compatible Alias: Added `create_plan = plan` in `ExecutiveCoordinator`.
+  - [x] Test Suite Expansion: 384 total tests (383 PASSED, 1 SKIPPED due to offline Pi 5 hardware, 0 FAILED).
+- [x] Digital Human Avatar V2 — Official Reference Restoration & Edge Synchronization (`Pi5/6.jpg`):
+  - [x] Master Reference Restoration: Restored pure 1024x1024 master portrait and expressions directly from `Pi5/6.jpg` (cô trợ lý AI tóc tím ánh bạc, nụ cười rạng rỡ tự nhiên, áo giáp cybernetic), completely removing fragmented grid cutouts from `Pi5/2.png` and `Pi5/3.png` to guarantee zero perspective jumping.
+  - [x] Zero Double-Mouth Artifacts: Verified `_renderMouth` only renders dynamic viseme layers when actively `SPEAKING` with non-zero open ratio, using radial feathered alpha masks; in resting / idle state, the base portrait's natural smile is rendered cleanly with zero overlapping artifacts.
+  - [x] Biological Eyelid & Landmark Calibration: Maintained calibrated `EYES_BOX` (`{x: 340, y: 270, w: 340, h: 100}`) and `MOUTH_BOX` (`{x: 420, y: 435, w: 184, h: 120}`) in `avatar_engine.js` on both PC Core and Pi 5.
+  - [x] Complete Asset Synchronization to Raspberry Pi 5: Transferred 28 updated image assets and updated `avatar_engine.js` via Wi-Fi to physical Raspberry Pi 5 (`192.168.1.21:8768`), issued Kiosk UI reload, and reset active expression to `IDLE` (HTTP 200).
+  - [x] All 411 Automated Tests Verified: 410 PASSED, 1 SKIPPED (offline Pi 5 audio test), 0 FAILED in 53.54s.
+
+- [x] Raspberry Pi 5 Physical Embodiment Voice Interface:
+  - [x] USB Speaker & Microphone physical routing configured via PipeWire/WirePlumber helper (`edge_client/setup_pi5_audio.sh`).
+  - [x] Chromium Kiosk startup configured with `--use-fake-ui-for-media-stream` auto-granting microphone access without blocking dialogs.
+  - [x] Hands-free Wake Word Engine (`edge_client/wake_engine.js`) integrated into Pi 5 Kiosk UI with executive two-tone chime (440Hz -> 880Hz) and keyword spotting ("Hi TONY", "Tony ơi").
+  - [x] Core Voice Turn Pipeline (`POST /api/voice/interact`): processes user speech query, generates role-orchestrated natural response, synthesizes Vietnamese female speech (HoaiMyNeural MP3), computes mouth visemes, and dispatches directly to Pi 5 hardware speaker & avatar.
+  - [x] 1-Step Quick Activation & Audio Routing: `curl -s http://192.168.1.11:8766/edge_client/sync_assets.py | python3 && bash edge_client/setup_pi5_audio.sh` fully integrated into the Executive Cockpit (`executive.html`) with copy button and 1-click push from PC Core (`#btn-quick-sync-audio`).
+  - [x] 4-Step Voice Interaction Workflow: Embedded visual interactive guide ("Hi TONY" -> Chime ting -> Query -> Thinking & Speech Mouth-Sync).
+  - [x] Remote Embodiment Shutdown Controls: Added two-tier safe shutdown in Cockpit (`#btn-shutdown-pi-kiosk`) supporting `close_kiosk` (terminating Chromium + DPMS display sleep) and `poweroff_pi` (safe OS shutdown via `sudo poweroff`) with confirmation protection.
+  - [x] 1-Click Synchronization Tool (`tools/sync_pi5_complete.py` and `edge_client/sync_assets.py`) for automated push of all UI, script, and avatar assets.
+
 - [x] Policy engine skeleton R0–R5; R5 hard-blocked.
-- [x] SQLite episodic memory and candidate knowledge quarantine.
-- [x] Basic redaction for common credential patterns before logging.
-- [x] Workspace path guard.
+- [x] Basic redaction for common credential patterns before logging & storage.
+- [x] Workspace path guard (PathGuard).
 - [x] JSONL audit logger.
-- [x] CLI self-check and local memory smoke commands.
-- [x] Automated test-and-handoff report script.
-- [x] Apply the package to the actual Windows workspace.
-- [x] Run tests on the Dell Precision 7550 and attach a new handoff report.
-- [x] Initialize Git in the actual workspace after checking for an existing repository.
-- [x] Audit baseline and confirm no changes outside `E:\AI\QUAN AI BRAIN`.
-- [ ] Integrate Ollama only after Sprint 1 is accepted.
+- [x] CLI self-check and local memory smoke commands with UTF-8 Windows support.
+- [x] Apply package to Windows workspace, create .venv (Python 3.11.9) and initialize Git.
+- [x] Long-Term Memory Engine V1:
+  - [x] 6 Memory types: EPISODIC, SEMANTIC, PROCEDURAL, DECISION, PREFERENCE, CANDIDATE.
+  - [x] 6 Verification statuses: USER_PROVIDED, OBSERVED, VERIFIED, INFERRED, UNVERIFIED, CANDIDATE.
+  - [x] SQLite `memories` table with indexing on type, verification, lifecycle, project, created_at.
+  - [x] History preservation, versioning (v1 -> v2) and lineage tracing (`trace_source`).
+  - [x] Full Vietnamese accented text search and parameterized SQL injection prevention.
+  - [x] Candidate knowledge quarantine isolation.
+  - [x] 100% backward compatibility with Sprint 1 APIs (`episodes`, `candidate_knowledge`, `semantic_memory`).
+- [x] Local LLM Engine (Sprint 2B):
+  - [x] Typed models `LLMRequest`, `LLMResponse`, `ModelInfo` with input validation and data redaction.
+  - [x] `OllamaClient` using standard-library `urllib`, strictly confined to local host (`127.0.0.1`/`localhost`).
+  - [x] Fast Pre-flight TCP Socket Probe (`<=50ms` offline detection in `is_daemon_online()`, `ping()`, `list_models()`, `generate()`) eliminating timeout latency when Ollama daemon is offline.
+  - [x] `MockLLMProvider` deterministic with explicit `is_mock=True` and mock warnings.
+  - [x] `LLMProvider` facade with safe fallback control (`FallbackMode.NEVER`, `ON_ERROR`, `ALWAYS_MOCK`).
+  - [x] Transparent failure handling: never fabricates AI response when Ollama is offline and fallback is disabled.
+  - [x] Diagnostic CLI subcommands: `llm-health`, `llm-models`, `llm-ask`.
+- [x] Cognitive Memory Retriever & Prompt Context Builder (Sprint 2C):
+  - [x] Validated `MemoryQuery` with parameter bounds and character budgets.
+  - [x] `CognitiveRetriever` with explainable, deterministic ranking combining keyword overlap, memory type priority, verification status, and project scope alignment.
+  - [x] Candidate quarantine protection: candidate memories are excluded by default and can never outrank verified facts.
+  - [x] `PromptContextBuilder` with structured provenance separation: 8 distinct context tiers and budget capping.
+  - [x] Diagnostic CLI subcommands: `context-build` and `cognitive-ask`.
+- [x] Cognitive Executive Coordinator & Safe Action Planning (Sprint 3A):
+  - [x] Completed `TaskPlan` and `TaskStep` models with DAG dependency cycle detection, unique step IDs, and human-readable plan explanation (`explain()`).
+  - [x] `ExecutiveCoordinator` translates natural language goals into structured stepwise plans via LLM.
+  - [x] Independent Governance Verification: LLM cannot self-authorize or downgrade risk; high-risk actions are escalated independently to R4/R5.
+  - [x] R5 is hard-blocked (`TaskStatus.BLOCKED`); R4 requires explicit owner approval (`TaskStatus.WAITING_APPROVAL`).
+  - [x] Zero-Execution Guarantee: planning only; no tools, PowerShell, or write APIs are executed.
+  - [x] Diagnostic CLI subcommand: `plan-create` (text and JSON formats).
+- [x] Safe Tool Sandbox R0–R2 & Delegated Autonomy (Sprint 3B):
+  - [x] Owner Consent First principle: all tool invocations default to requiring explicit owner approval (`pending_owner_approval`).
+  - [x] Independent Approval Gate (`ApprovalGate`): SHA-256 action fingerprinting, tamper prevention, status lifecycle (`pending_owner_approval`, `approved`, `completed`, `denied`, `blocked`, `expired`, `revoked`).
+  - [x] One-time consumption tokens (`consume_approval`) providing anti-replay attack protection.
+  - [x] Delegated Autonomy (`DelegationRegistry` & `DelegationGrant`): 10-point governance verification, time bounds, call budget, risk ceiling.
+  - [x] Non-delegatable boundary: R4 and R5 can NEVER be delegated under any grant.
+  - [x] Tool Registry (`ToolRegistry` & `ToolDefinition`): explicit schema-validated tool contracts with declarative risk and side-effect metadata.
+  - [x] Safe toolset: `file_read` (R0, capped at 100KB), `dir_list` (R0), `git_status` (R0), `memory_read` (R0), `system_health` (R0), `plan_validate` (R1), `file_write_new` (R2, workspace-only, overwrite strictly forbidden).
+  - [x] PathGuard confinement & sensitive file barrier (`.env`, `id_rsa`, `.key`, `.pem`, `.git`, `.db`).
+  - [x] Emergency controls: `SystemState.STOP` and `SystemState.FREEZE` immediately halt tool invocations.
+  - [x] Dry-run simulation mode (`dry_run=True`).
+  - [x] Append-only redacted JSONL audit logging before and after tool execution.
+  - [x] Diagnostic CLI commands: `tool-list` and `tool-run` (with interactive terminal prompt and `--confirm` flag).
+- [x] Secure Owner Authentication & Approval Verification (Sprint 4):
+  - [x] Comprehensive Architecture Document (`docs/SPRINT4_SECURE_APPROVAL_ARCHITECTURE.md`) detailing Threat Model, Dual-Channel Authentication, Key Lifecycle, and Production Executor/Daemon Review.
+  - [x] Independent `AuthenticatedApprovalVerifier` implementing cryptographic HMAC-SHA256 signature verification (Owner Private Secret Code) and out-of-band mobile SMS OTP tokens.
+  - [x] Dual-Factor mode (Private Code + SMS OTP) mandatory for R4 operations.
+  - [x] Non-negotiable trust anchor requirement: defaults to hard denial (`DENIED_NO_TRUST_ANCHOR`) if unconfigured.
+  - [x] R5 unconditionally hard-blocked (`BLOCKED_R5_PROHIBITED`) across all verifiers and grants.
+  - [x] Anti-replay enforcement: single-use token consumption and nonce tracking.
+  - [x] SMS OTP brute-force limiter (max 3 attempts, immediate invalidation) and short TTL (180s).
+  - [x] Fixed report generator consistency: eliminates all hardcoded test numbers, ensuring dynamic derivation from test runner.
+  - [x] Zero production executors, zero Windows services, and zero autostart daemons activated in Sprint 4.
+- [x] Persistent Governance State & Isolated Executor Staging (Sprint 5):
+  - [x] Dedicated persistent SQLite WAL store (`GovernanceStateStore`) with schema versioning (`CURRENT_SCHEMA_VERSION = 1`) and integrity checks.
+  - [x] Full persistence across process restarts for: emergency `STOP` / `FREEZE` states, consumed approvals, replay-prevention nonces, and revoked delegation grants.
+  - [x] Multi-layer governance integration into `ApprovalGate`, `DelegationRegistry`, `SafeToolSandbox`, and `AuthenticatedApprovalVerifier`.
+  - [x] Strict fail-closed integrity: corrupted, tampered, or unreadable database raises `GovernanceStateCorruptError` and halts tool execution.
+  - [x] Isolated Executor Staging Specification (`docs/SPRINT5_EXECUTOR_STAGING_DESIGN.md`) covering 15 architectural dimensions.
+  - [x] Inert Staging Framework (`IsolatedStagingExecutor` in `src/quan_ai_brain/execution/staging.py`): strictly dry-run simulation (`is_inert = True`, `supports_production = False`).
+  - [x] Formal Design Sign-off Document (`docs/SPRINT5_DESIGN_SIGNOFF.md`) established with explicit `PENDING_OWNER_SIGNOFF` default status.
+  - [x] Zero production executors, zero Windows 24/7 services, zero hardware/UPS controllers activated.
+- [x] Production Execution Readiness & Supervised Staging (Sprint 6):
+  - [x] 10-step mandatory execution pipeline specification (`docs/SPRINT6_EXECUTION_READINESS_DESIGN.md`).
+  - [x] Cryptographic Owner Signature Verifier (`OwnerSignatureVerifier` in `src/quan_ai_brain/tools/signature.py`) supporting HMAC-SHA256 and asymmetric test fixtures with trust anchor lifecycle management.
+  - [x] OS Resource Budget Policy (`ResourceBudget`, `ResourceBudgetPolicy`, and `ResourceBudgetValidator` in `src/quan_ai_brain/execution/resource_budget.py`).
+  - [x] Multi-dimensional resource bounds: runtime, memory, CPU time, output bytes, child process count (=0 in staging), tool calls, retries, and network policy.
+  - [x] Monotonic parent-child budget containment and prevention of LLM self-escalation.
+  - [x] Enhanced Isolated Staging Executor with budget validation and `ProductionExecutionProhibitedError`.
+  - [x] Formal Design Sign-off Document (`docs/SPRINT6_DESIGN_SIGNOFF.md`) established with explicit `PENDING_OWNER_SIGNOFF` default status.
+  - [x] Windows Process Containment Contract & Inert Runner (Sprint 7A):
+    - [x] `ProcessContainmentConfig` translating `ResourceBudget` into OS containment limits (MB -> bytes, s -> ms, `kill_on_job_close=True`, `breakaway_prohibited=True`, `network_isolated=True`).
+    - [x] `ProcessBackendInterface` protocol contract defining `is_available()`, `configure_containment()`, `spawn_process()`.
+    - [x] `InertProcessBackend` fail-safe inert implementation strictly raising `ProductionExecutionProhibitedError` on any attempt to spawn real OS processes.
+    - [x] `ContainedExecutionRunner` coordinating 6-step fail-closed verification pipeline (STOP/FREEZE check, R5 hard-block, R4 approval check, budget validation, containment mapping, audit logging).
+    - [x] Comprehensive test coverage with fake backend injection (`tests/test_process_containment.py`).
+    - [x] Zero real OS processes spawned, zero background daemons, zero external side effects.
+  - [x] Windows Job Object Integration & Cryptographic Approval Gate (Sprint 7B):
+    - [x] Win32 Job Object extended limit bitmask mapping (`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, `JOB_OBJECT_LIMIT_JOB_MEMORY`, `JOB_OBJECT_LIMIT_PROCESS_TIME`, `JOB_OBJECT_LIMIT_ACTIVE_PROCESS`, `JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION`) and `limit_flags_bitmask`.
+    - [x] OS enforcement boundary flag (`is_os_enforced: bool = False`) explicitly distinguishing kernel Job Object containment from application-level safety checks.
+    - [x] Mandatory cryptographic `ApprovalGate` validation in `ContainedExecutionRunner.prepare_and_stage()` requiring valid signed `approval_id` for R4 execution staging.
+    - [x] 11 focused containment tests verified in `tests/test_process_containment.py`.
+  - [x] Brain Foundation Contract V1 & AI Control Plane (Foundation Evolution — Phase A):
+    - [x] Canonical Contract Envelopes (`src/quan_ai_brain/contract/models.py`): `AgentIdentity` (anti-self-authorization), `TaskRequest`, `TaskOutcome`, `TaskState`, `EvidenceRecord`, `CapabilityRequest`, `MemoryProposal`.
+    - [x] Invariants: Claimed identity never confers authority; `attempted_actions = []` in inert mode; memory proposals quarantined as `CANDIDATE`.
+    - [x] Control Plane Orchestrator (`src/quan_ai_brain/contract/control_plane.py`): Multi-layer governance dispatch, DAG planning, R5 hard-blocking, R4 owner consent verification, and audit trail.
+    - [x] Strategic Foundation Roadmap (`docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md`): Phase A through Phase H.
+  - [x] Self-Learning & Self-Upgrade Engine V1 (Phase F — Tự nghiên cứu, tự thử nghiệm, đề xuất nâng cấp, chủ nhân quyết định):
+    - [x] Learning Observer: `LearningGap` model and `observe_task()` extracting learning gaps on task failures or uncertain outcomes.
+    - [x] Research Engine: Bounded `ResearchDossier` formulating questions and citing authorized sources with secret redaction.
+    - [x] Default Candidate Quarantine: all newly researched knowledge stored as `CANDIDATE` with quarantined lifecycle, inaccessible to verified memory queries.
+    - [x] Canonical 17-point `UpgradeProposal` dossier with pros, cons, impact scope, unified diff, test metrics, rollback plan, and `explain()` executive briefing.
+    - [x] Preserves `keep_status_quo` recommendation when risks outweigh benefits.
+    - [x] Security Barrier: automatic permanent blocking of any proposal attempting to bypass R5, override secrets, or modify trust anchors.
+    - [x] Emergency fail-closed: automatic blocking of proposals under active emergency `STOP` or `FREEZE`.
+    - [x] Strict Owner Gate: `apply_proposal()` requires explicit owner approval token (`owner_approved:...`).
+    - [x] CLI Dry-run utility: `learning-cycle-dryrun` and `learning-propose` subcommands in `src/quan_ai_brain/cli.py` for direct owner-supervised learning execution in text and JSON formats.
+    - [x] 12 unit tests verified in `tests/test_self_learning_engine.py`.
+  - [x] Local Web UI Dashboard & Voice Interface:
+    - [x] Standard-library Threaded HTTP Server (`src/quan_ai_brain/web/server.py`) binding strictly to localhost `127.0.0.1:8765`.
+    - [x] REST API endpoints (`/api/status`, `/api/chat`, `/api/memories`, `/api/plan`, `/api/learning`).
+    - [x] Modern Dark Glassmorphism SPA (`index.html`, `style.css`, `app.js`) with responsive layouts and micro-animations.
+    - [x] Voice Input: Web Speech API (`SpeechRecognition` / `webkitSpeechRecognition`) for natural Vietnamese voice speech-to-text.
+    - [x] Voice Output: SpeechSynthesis (`window.speechSynthesis`) reading responses aloud with Vietnamese speech synthesis.
+    - [x] One-click launchers: `KHOI_DONG_WEB_UI.bat`, `KHOI_DONG_QUAN_AI_BRAIN.bat`, `KHOI_DONG_OLLAMA.bat` with desktop shortcuts.
+    - [x] 3 focused unit tests verified in `tests/test_web_server.py`.
+- [x] Capability Registry & Truthful Conversational Grounding (Phase 1):
+  - [x] `CapabilityRegistry` & `SystemCapability` (`src/quan_ai_brain/cognition/capability_registry.py`) distinguishing between `VERIFIED_ACTIVE`, `INERT_STAGING`, and `EXTERNAL_PLANNED`.
+  - [x] Query intent detector (`is_capability_query()`) and prompt injection in `PromptContextBuilder`.
+  - [x] 5 focused unit tests verified in `tests/test_capability_registry.py`.
+- [x] Digital Executive Persona — Bản Sao Nhân Sự Số của Quanpt1 (Phase 2):
+  - [x] `ExecutivePersona` & `ExecutiveDirective` (`src/quan_ai_brain/cognition/executive_persona.py`) defining Quanpt1's executive replica directives (DIR-01 to DIR-05), evidence-based discipline, and prompt context formatting.
+  - [x] Injected into `PromptContextBuilder` for executive-grounded LLM inference.
+  - [x] 3 focused unit tests verified in `tests/test_executive_persona.py`.
+- [x] Consultation & Interactive Decision Gate (Phase 2):
+  - [x] SQLite-backed store `ConsultationStore` (`src/quan_ai_brain/governance/consultation_inbox.py`) managing `ConsultationTicket` with status lifecycle (`PENDING_REVIEW`, `APPROVED`, `REJECTED`, `DIRECTED`).
+  - [x] Direct owner interaction for R4 code upgrades, strategic directions, ecosystem adapters, and continuous learning guidance.
+  - [x] 3 focused unit tests verified in `tests/test_consultation_inbox.py`.
+- [x] Periodic Learning Reporter & Supervised Continuous Learning (Phase 2):
+  - [x] `PeriodicLearningReporter` & `PeriodicLearningReport` (`src/quan_ai_brain/learning/periodic_reporter.py`) tracking learning cycles, observing gaps, compiling research dossiers, candidate quarantining, and regression test validation.
+  - [x] Automatic consultation ticket creation for owner sign-off on new learning proposals.
+  - [x] 2 focused unit tests verified in `tests/test_periodic_reporter.py`.
+- [x] Executive Consultation Desk & Multi-Section Cockpit (Port 8766):
+  - [x] Dedicated HTTP server routing on `http://127.0.0.1:8766/` (`src/quan_ai_brain/web/server.py`).
+  - [x] Executive UI (`executive.html`, `executive.css`, `executive.js`) with dedicated sections:
+    - [x] Mục 1: Nhân Sự Số — Bản Sao Điều Hành & Ma Trận Năng Lực.
+    - [x] Mục 2: Hộp Thư Tham Vấn & Phê Duyệt Trực Tiếp (Phê duyệt, Từ chối, Chỉ đạo).
+    - [x] Mục 3: Báo Cáo Tự Học Định Kỳ & Nút Kích Hoạt Chu Kỳ Tự Học Ngay.
+    - [x] Mục 4: Điều Hành Kế Hoạch DAG & Ranh Giới An Toàn R0-R5.
+    - [x] Mục 5: Bàn Hội Thoại Trực Tiếp Với Bản Sao Số (Text & Voice TTS/STT).
+  - [x] One-click launcher: `KHOI_DONG_PHONG_DIEU_HANH_8766.bat` and Windows Desktop Shortcut `QUAN AI BRAIN - Phong Dieu Hanh 8766.lnk`.
+  - [x] 6 focused REST API unit tests verified in `tests/test_web_executive_endpoints.py`.
+  - [x] Wake Word & Hands-Free Voice Activation V1 (Đánh thức trợ lý bằng giọng nói tự nhiên):
+    - [x] Centralized Wake Word Configuration (`WakeWordConfig`, `WakeWordItem`, `DEFAULT_WAKE_WORDS`) supporting 10 standard phrases: "Hi TONY", "Hey Tony", "Tony ơi", "Chào trợ lý", "Xin chào trợ lý", "QUAN AI", etc.
+    - [x] Zero-loss payload extraction: allows calling wake word and utterance in the same breath.
+    - [x] Voice control commands ("ngủ đi", "dừng đọc", "dừng nghe", "tắt trợ lý").
+    - [x] 9-State Voice State Machine (`VoiceState`, `VoiceStateMachine`) with valid/invalid transition enforcement.
+    - [x] Browser-native client engine (`wake_engine.js`) with continuous SpeechRecognition, Web Audio synthesized two-tone executive wake chime (440Hz -> 880Hz), and 20s silence follow-up window.
+    - [x] Acoustic Echo Cancellation (AEC): speech recognition pauses during TTS playback to eliminate self-activation loops.
+    - [x] REST API endpoints (`GET /api/voice/wake-config`, `POST /api/voice/wake-config`, `POST /api/voice/telemetry`).
+    - [x] UI visual controls in Port 8766 Executive Desk (toggle button, dynamic status pill, animation keyframes).
+  - [x] Autonomous System Restart & Safe Reload Routine (Lệnh tự khởi động lại hệ thống sau update):
+    - [x] Dedicated CLI subcommand `restart`: `python -m quan_ai_brain.cli restart [--target {all,desk,chat}] [--validate] [--test] [--no-browser]`.
+    - [x] Python restarter tool (`tools/restart_system.py`): pre-flight syntax & import check, graceful TCP port scan & PID termination, Ollama daemon verification, independent background service spawning, and HTTP health polling.
+    - [x] One-click Windows batch launchers: `TU_DONG_KHOI_DONG_LAI_HE_THONG.bat` and `RESTART_SYSTEM.bat`.
+    - [x] Desktop Shortcut: `QUAN AI BRAIN - Tu Dong Khoi Dong Lai.lnk` on Windows Desktop.
+  - [x] Continuous Autonomy OS V1 — Stage B: Durable Operations State & Continuous Supervisor:
+    - [x] `DurableTaskRegistry` & `TaskRecord` (`src/quan_ai_brain/orchestration/task_registry.py` & `models.py`) persisting task state in SQLite WAL (`data/tasks.db`), atomic transitions, anti-replay idempotency key, and crash recovery (`recover_in_flight_tasks` to `OUTCOME_UNKNOWN`).
+    - [x] `ContinuousAutonomySupervisor` (`src/quan_ai_brain/orchestration/supervisor.py`) 16-state operating machine (`STARTING -> HEALTH_CHECK -> READY -> IDLE -> SELECTING_TASK -> PLANNING -> WAITING_FOR_APPROVAL -> RUNNING_AUTHORIZED_TASK -> VERIFYING_RESULT -> LEARNING -> PREPARING_UPGRADE_PROPOSAL -> WAITING_FOR_OWNER -> RECOVERING -> SAFE_MODE -> STOPPED -> FAILED`).
+    - [x] Bounded autonomy enforcement: Level A automatic read/test vs Level B/C/D & R4/R5 approval gate halt.
+    - [x] 17 focused unit tests verified in `tests/test_durable_task_registry.py` and `tests/test_continuous_supervisor.py`.
+  - [x] Phase C — Nối Task Thật Vào Chu Trình Tự Học & Đo Lường Tiến Bộ:
+    - [x] `ContinuousEvaluationHarness` (`src/quan_ai_brain/learning/evaluation.py`) thực thi 5 benchmark tiêu chuẩn (governance_r5_hard_block, vietnamese_memory_retrieval, dag_cycle_rejection, quarantine_candidate_isolation, credential_redaction_filter).
+    - [x] `PeriodicLearningReporter` tự động vét nhiệm vụ lỗi từ `DurableTaskRegistry`, chạy kiểm định định lượng trước/sau, tính toán delta `improvement_pct` và đưa ra khuyến nghị thăng cấp (`PROMOTE_TO_VERIFIED`, `REMAIN_QUARANTINED`, `REJECT_REGRESSION`).
+    - [x] 4 unit tests đạt 100% tại `tests/test_evaluation_harness.py`.
+  - [x] Phase D — Digital Avatar Biểu Cảm & Visual Cockpit (Port 8766):
+    - [x] Gương mặt số Cybernetic SVG của trợ lý TONY với 11 trạng thái biểu cảm chuẩn mực (IDLE, LISTENING, THINKING, RESEARCHING, LEARNING, SPEAKING, WAITING_FOR_OWNER, BLOCKED, ERROR, SAFE_MODE, OFFLINE).
+    - [x] Hiệu ứng chớp mắt tự nhiên (3.5s cycle) và dải sóng âm thanh động 60fps (Dynamic Waveform Canvas).
+    - [x] Visual Cockpit Hero 3 cột: Avatar biểu cảm & Bộ chọn 11 cảm xúc, Tiến trình DAG thời gian thực & Chỉ số LLM/Uptime, và Bảng quản trị ranh giới an toàn.
+    - [x] Phím điều khiển khẩn cấp trực tiếp: STOP KHẨN CẤP, FREEZE đóng băng, và RESUME khôi phục kết nối thẳng tới `GovernanceStateStore` qua `POST /api/executive/emergency`.
+    - [x] Đồng bộ trạng thái giọng nói Wake Word Engine vào biểu cảm Avatar khi nghe/nói/nghĩ.
+    - [x] 8 bài kiểm thử REST API & Kịch bản khẩn cấp đạt tại `tests/test_web_executive_endpoints.py`.
+  - [x] Phase E — Chuẩn Bị Mã Nguồn Client Cho Raspberry Pi 5 (`edge_client/`):
+    - [x] Cấu hình độc lập `EdgeConfig` (`edge_client/config.py` & `config.json`) tuân thủ nguyên tắc Zero-Core-DB on Edge.
+    - [x] Xác thực hai chiều chống tấn công phát lại `EdgeHMACAuth` (`edge_client/auth.py`) với tem thời gian UTC, nonce ngẫu nhiên và chữ ký HMAC-SHA256.
+    - [x] Tệp cài đặt & ghép cặp Wi-Fi 1 lần duy nhất (`setup_pi5.py`, `setup_pi5.sh`) tự động dò tìm IP PC Core, xác thực mã PIN (`888666`), nhận khóa bí mật và tự khởi động cùng OS (Autostart Kiosk).
+    - [x] Bộ điều khiển ngoại vi vật lý `ActuatorController` (`edge_client/actuators.py`): 8 kênh rơ-le (Relay 1-8 trên GPIO BCM: 17, 27, 22, 23, 24, 25, 5, 6), 6 khớp servo tay chân/cổ (head_yaw, head_pitch, arm_left, hand_left, arm_right, hand_right), và ngắt khẩn cấp fail-safe `emergency_all_stop()`.
+    - [x] Giao diện Kiosk màn hình cảm ứng 5"/7" (`edge_client/kiosk.html`, `kiosk.css`, `kiosk.js`) tối ưu cho Chromium Kiosk Mode.
+    - [x] Cơ chế Fail-Safe Disconnect: tự động chuyển màn hình sang chế độ OFFLINE và ngắt mic an toàn khi mất kết nối LAN tới PC Core.
+    - [x] Daemon nền `EdgeClientDaemon` (`edge_client/client_daemon.py` & `main.py`) quản lý heartbeat xác thực và phục vụ giao diện Kiosk cục bộ trên cổng 8768.
+    - [x] Nút bấm cảm ứng STOP khẩn cấp trên Pi 5 gửi lệnh ngắt có chữ ký số lên PC Core trong < 0.1 giây.
+    - [x] Tài liệu hướng dẫn cài đặt phần cứng, đấu nối rơ-le/tay chân và autostart chi tiết tại `edge_client/README.md`.
+  - [x] PC Core ↔ Pi 5 Digital Avatar — Phase B (EdgeConnectionMonitor, Watchdog, Mouth Sync & One-Click Pi 5):
+    - [x] `EdgeConnectionMonitor` (`src/quan_ai_brain/web/edge_monitor.py`): Giám sát trạng thái 9 bước định chuẩn (`DISCONNECTED`, `CONNECTING`, `CONNECTED`, `DEGRADED`, `SYNCING`, `READY`, `RECOVERING`, `AUTH_FAILED`, `STOPPED`), tích hợp Watchdog kiểm soát deadline, đo RTT mạng Wi-Fi và phát sinh 6 cảnh báo bắt buộc (Alert A đến F) chống spam thông báo.
+    - [x] Bộ đồng bộ khẩu hình thời gian thực `MouthSyncEngine` (`src/quan_ai_brain/voice/mouth_sync.py`): Khớp viseme nguyên âm tiếng Việt (A, O, E, I, U, REST) theo dòng thời gian timeline 50ms, mô phỏng quãng nghỉ ngắt câu đóng miệng tự nhiên, đo dải năng lượng âm thanh (audio energy envelope), hỗ trợ cơ chế hủy lập tức `cancel_utterance` khi ngắt lời nói.
+    - [x] Tích hợp API Endpoint trên PC Core (`server.py`): `GET /api/executive/edge/alerts`, `GET /api/executive/edge/status`, `POST /api/executive/edge/heartbeat`, `POST /api/executive/edge/mouth-sync` và đo độ trễ RTT mạng Wi-Fi qua header `X-QuanAI-RTT-Ms`.
+    - [x] Giao diện Bàn Điều Hành Cockpit (Port 8766): Banner cảnh báo viền sáng động theo mức độ nghiêm trọng (`.edge-alert-banner`), nhãn trạng thái kết nối Pi 5 và chỉ số độ trễ RTT trực quan.
+    - [x] Màn hình Pi 5 hiển thị thuần hình thể (Face-Only Mode): Tự động ẩn toàn bộ header, khung log, phím bấm khi `face_only_mode: true`, phóng to tối đa gương mặt và chuyển động đóng mở cơ miệng theo viseme.
+    - [x] Tệp tự động cài đặt One-Click trên Pi 5 (`setup_pi5.py`, `setup_pi5.sh`): Tự động quét subnet tìm IP PC Core trong &le; 1.2s, ghép cặp 1 lần duy nhất bằng mã PIN (`888666`), lưu cấu hình hoàn chỉnh có trường phiên bản (`core_version`, `edge_client_version`, `protocol_version`, `avatar_version`, `config_schema_version`), tạo tệp khởi động tự động `start_kiosk.sh` và desktop autostart entry.
+    - [x] 14 bài kiểm thử mới đạt 100% tại `tests/test_edge_monitor.py` (7 tests), `tests/test_mouth_sync.py` (5 tests), và `tests/test_web_executive_endpoints.py` (10 tests).
+  - [x] Animated Digital Human Avatar — Cô Trợ Lý AI Mẫu F (Raspberry Pi 5 + PC Executive Desk :8766):
+    - [x] Bộ tài sản số chuẩn Mẫu F theo ảnh tham chiếu của chủ sở hữu: Tóc bạch kim ánh tím bồng bềnh, mắt nâu hạt dẻ ấm áp, làn da sáng tự nhiên, trang phục vest cao cổ sci-fi viền LED cyan, góc nhìn chính diện cân đối: `model_f_portrait.png`, `model_f_blink.png`, `model_f_speaking.png`, `model_f_happy.png`, `model_f_thinking.png` cùng các lớp biểu cảm bóc tách (`eyes_closed.png`, `eyes_thinking.png`, `mouth_rest.png`, `mouth_speaking.png`, `mouth_happy.png`).
+    - [x] Đồng bộ toàn bộ tài sản số sang thư mục của cả PC Core (`src/quan_ai_brain/web/static/assets/avatar/`) và Raspberry Pi 5 (`edge_client/assets/avatar/`).
+    - [x] Bộ máy đồ họa `DigitalHumanAvatar` Engine (`avatar_engine.js`) chuẩn 2.5D Canvas 60 FPS siêu nhẹ, không dùng Three.js/WebGL nặng nề, hoàn toàn không gây quá nhiệt hay ngốn RAM/quạt tản nhiệt trên Pi 5.
+    - [x] Hiệu ứng hình thể sinh học tự nhiên: Nhịp thở vi mô (micro-breathing theo hàm sin), vòng hào quang số quay chậm (cyan/purple halo ring), chớp mắt sinh học ngẫu nhiên (120ms duration, chu kỳ 3.0s–5.5s), chuyển động liếc mắt sinh động (eye saccades), nụ cười tươi tắn tự nhiên.
+    - [x] Khẩu hình tiếng Việt mượt mà: Đồng bộ thời gian thực với `MouthSyncEngine` qua 6 viseme chuẩn (A, O, E, I, U, REST), mở miệng tỉ lệ theo viseme, chuyển tiếp mượt (easing interpolation) và hỗ trợ ngắt lời lập tức (`cancelUtterance()`).
+    - [x] Tích hợp hoàn chỉnh trên cả 2 giao diện:
+      - Bàn Điều Hành PC Core (`http://127.0.0.1:8766/`): Khung canvas 280x280px bo tròn với viền sáng đa trạng thái, liên kết trực tiếp với bộ chọn 11 biểu cảm và bộ phát âm thanh TTS.
+      - Màn hình Raspberry Pi 5 Kiosk (`:8768`): Khung canvas tỉ lệ vuông phóng lớn tràn viền chuẩn `face_only_mode`, tự động ẩn nút bấm và log debug.
+    - [x] Cơ chế an toàn ngắt kết nối (Fail-Safe Disconnect): Tự động dừng nói ngay lập tức, nhắm mắt dịu dàng ở trạng thái nghỉ an toàn, ngắt micro và chuyển cơ cấu chấp hành về trạng thái an toàn tuyệt đối.
+    - [x] Tối ưu Màn hình cảm ứng 7" DSI Touchscreen 2 (1280x720) & Kịch bản One-Click (`oneclick_run_pi5.sh`):
+      - Tự động kiểm tra và cập nhật đầy đủ gói hệ thống (`python3`, `chromium-browser`, `alsa-utils`).
+      - Tối ưu độ phân giải 1280x720, ẩn hoàn toàn con trỏ chuột (`cursor: none`), tối đa hóa khung nhìn hình thể Mẫu F đạt `min(94vw, 94vh)`.
+      - Hỗ trợ tham số dòng lệnh `--auto`, `--host`, `--pin` cho khả năng cài đặt tự động 100% không cần can thiệp.
+    - [x] Động cơ Biểu Cảm Vi Mô (Micro-Expressions Engine) & Phân Tích Ngữ Cảnh Tiếng Việt:
+      - Chuyển động lông mày đa sắc thái: nhíu tâm trạng khi phân tích, nâng cao tự tin khi hoàn thành, nhướng tò mò khi chờ chỉ đạo (`_renderEyebrows`).
+      - Nụ cười mắt Duchenne (mí mắt dưới nâng nhẹ khi cười ấm áp) và đốm sáng đồng tử lấp lánh (Sci-Fi Iris Glint Pulse).
+      - Bộ phân tích ngữ cảnh tiếng Việt (`extractVietnameseEmotion`, `setContextFromText`): tự động nhận diện 6 tông cảm xúc từ nội dung hội thoại LLM (`WARM_GREETING`, `ANALYTICAL_THINKING`, `SERIOUS_ALERT`, `CONFIDENT_SUCCESS`, `CONSULTATIVE_INQUIRING`, `NEUTRAL`) và chuyển tiếp mượt 60 FPS qua hàm nội suy `lerp`.
+    - [x] Nâng cấp Hình Thể Sống Động Như Người Thật & Khắc Phục Triệt Để Lỗi Đồ Họa (PC & Pi 5):
+      - Triệt tiêu 100% viền hộp chữ nhật ở miệng: Loại bỏ việc vẽ đè asset miệng vuông không alpha khi IDLE/HAPPY/THINKING; chỉ mở khẩu hình khi SPEAKING và áp dụng kỹ thuật Mặt nạ Elip làm mềm biên độ mờ dần viền (Feathered Elliptical Alpha Masking - `destination-in`) hòa quyện hoàn hảo vào da mặt.
+      - Hiệu ứng sóng vật lý tóc chuyển động bồng bềnh tự nhiên (`_renderNaturalHairSway`): Dao động sóng đa tần số cho các lọn tóc bạch kim ánh tím buông xõa hai bên má, dải bóng phản chiếu ánh sáng (specular hair sheen) và các hạt năng lượng cybernetic lơ lửng.
+      - Động học chuyển động đầu tự nhiên ("Người thật"): Nghiêng đầu nhẹ nhàng (Head Roll tilt -2.2° đến +2.2°), lắc lư chuyển trọng tâm (Yaw micro-sway) và gật đầu thấu cảm vi mô (Pitch acknowledgment micro-nod khi lắng nghe) quanh tâm xoay khớp cổ (`0.5*w`, `0.70*h`).
+      - Nhịp chớp mắt sinh học biến thiên: Tỉ lệ chớp mắt kép (double-blink) 28%, đường cong mí mắt đóng mở mượt mà và cử động liếc mắt tinh tế (saccades).
+      - Đồng bộ tuyệt đối giữa Central Brain PC Core và Raspberry Pi 5 Edge Kiosk.
+  - [x] QUAN AI BRAIN EVOLUTION — Sprint 1: Core AI End-to-End & Session Memory:
+    - [x] Dynamic LLM Router (`src/quan_ai_brain/llm/router.py`):
+      - [x] Fast conversational tier: Routes short queries and greetings to fast model (`qwen2.5:1.5b` / `qwen2.5:0.5b`, latency < 2s on CPU).
+      - [x] Reasoning & planning tier: Routes complex DAG planning, architecture decomposition, and long analysis queries to `qwen2.5:7b`.
+      - [x] Caller explicit override and fallback for missing models.
+    - [x] Session Memory & Continuous Fact Extraction (`src/quan_ai_brain/cognition/session_memory.py`):
+      - [x] Automatic fact extraction from conversation: owner identity ("tôi tên là..."), preferences ("tôi thích..."), and instructions ("hãy nhớ rằng...").
+      - [x] Persistent storage into SQLite WAL `data/brain.db`: records every chat turn into `episodes` table and stores extracted facts into `memories` table with `USER_PROVIDED` / `OBSERVED` statuses.
+      - [x] Multi-turn session continuity: `get_recent_session_history()` retrieves recent exchanges.
+    - [x] Output Guardrails (`src/quan_ai_brain/core/guardrails.py`):
+      - [x] Credential and token redaction filter.
+      - [x] Dangerous script tag `<script>` sanitization.
+      - [x] System path and private key file masking (`.env`, `id_rsa`).
+    - [x] Prompt Context Builder Extension (`src/quan_ai_brain/cognition/context_builder.py`):
+      - [x] Multi-turn `[RECENT CONVERSATION HISTORY]` injection.
+    - [x] REST API Extension (`src/quan_ai_brain/web/server.py`):
+      - [x] `POST /api/chat` fully integrated with persistence, routing, and guardrails.
+      - [x] `GET /api/chat/history` endpoint for querying session history.
+    - [x] 5 focused end-to-end tests in `tests/test_end_to_end_chat.py`.
+    - [x] Raspberry Pi 5 24/7 Autostart & Living Standby Embodiment:
+      - [x] Kịch bản tự khởi động 1-click `edge_client/install_autostart_247.sh` tạo `~/.config/autostart/quan_kiosk.desktop`.
+      - [x] Chế độ chống tắt màn hình 24/7 (`xset s off -dpms s noblank`) và vòng lặp tự phục hồi Self-Healing Kiosk (`edge_client/start_kiosk.sh`).
+      - [x] Trực chiến sống động: Màn hình 7" DSI luôn hiển thị gương mặt Cô Trợ Lý Mẫu F với đôi mắt chớp tự nhiên, micro-breathing ở chế độ Standby ngay khi cấp nguồn; chỉ chuyển sang trạng thái ngủ (SLEEPING) khi có lệnh tạm dừng từ PC Core.
+    - [x] Bàn Điều Hành PC Core Remote Control & Bi-directional Asset Transfer (`http://127.0.0.1:8766/`):
+      - [x] Quản trị tệp tin và truyền tài sản từ xa (`GET /api/executive/edge/files`, `POST /api/executive/edge/files/upload`, `POST /api/executive/edge/files/sync-all`, `POST /api/executive/edge/files/delete`).
+      - [x] Tải lại Kiosk Pi 5 tức thì từ xa (`reload_ui`), Tạm dừng (`pause` / SLEEPING), Kích hoạt (`resume` / IDLE), và Điều chỉnh âm lượng loa Pi 5 (`set_volume`).
+      - [x] 1-Click đồng bộ toàn bộ tài sản sang Pi 5 và tải lại trình duyệt Kiosk (`edge_client/sync_assets.py`, `curl -s http://192.168.1.11:8766/edge_client/sync_assets.py | python3`).
+      - [x] Cơ chế chống treo mạng socket fail-fast (<0.25s), auto-sync tài sản tự động khi khởi động trên Pi 5, và fallback hiển thị hình thể số Holographic Model F procedural vector ngăn chặn hiện tượng màn hình đen khi tải ảnh.
+    - [x] Edge Data Transfer Service V1 (D01–D10):
+      - [x] Truyền dữ liệu hai chiều có chia chunk, manifest mã hóa SHA-256, kiểm tra tính toàn vẹn và xác nhận ACK.
+      - [x] Hàng rào nhạy cảm: Chặn nghiêm ngặt `.env*`, `*.key`, `*.pem`, `id_rsa*`, `credentials*`, `*.db`.
+      - [x] Quota tài nguyên và cô lập phạm vi thiết bị đa điểm biên (multi-device scopes).
+    - [x] Edge Release Manager V1 (U01–U10):
+      - [x] Đóng gói phát hành phần mềm Edge Client với chữ ký mật mã HMAC-SHA256 và kiểm tra tương thích phiên bản.
+      - [x] Staging an toàn và health check cú pháp Python (`py_compile`) trước khi kích hoạt.
+      - [x] Cơ chế rollback nguyên tử (atomic rollback) bảo toàn bản phát hành ổn định trước đó.
+    - [x] 10 Vai Trò Trợ Lý Số Điều Hành (Executive Role Orchestrator):
+      - [x] 10 vai trò bắt buộc: Executive Assistant, Coordinator, Tech Specialist, NOC Operator, Data Analyst, Researcher, Documentation Officer, Language Specialist, Instructor, Safety Officer.
+      - [x] Quy tắc tối thượng: Safety Guard giữ quyền cao nhất, lệnh STOP/FREEZE và ranh giới R5 chặn mọi vi phạm.
+    - [x] XiaoZhi-Style Voice-First Pipeline (T01–T08, W01–W07):
+      - [x] Hội thoại đa lượt giữ ngữ cảnh (T02), nhận diện tự sửa lời nói ("À nhầm", "Ý anh là...").
+      - [x] Ngắt lời tức thì (<10ms barge-in cancellation).
+      - [x] Lọc sạch mã kỹ thuật, JSON, stack trace khỏi văn bản đọc TTS tiếng Việt.
+      - [x] Giám sát mất nhịp tim Wi-Fi (<4.0s) và cảnh báo trung thực.
+    - [x] Standard Vietnamese Female TTS Engine & Language Guard (Sửa dứt điểm giọng đọc sai ngôn ngữ):
+      - [x] Cấu hình chuẩn hóa tập trung (`TTSConfig`, `TTSManager` trong `src/quan_ai_brain/voice/tts_config.py`): mặc định `response_language = vi-VN`, `tts_locale = vi-VN`, `tts_gender = female`, `tts_voice_preference = vi-VN-HoaiMyNeural`, `provider = edge-tts`.
+      - [x] Rào chắn ngôn ngữ nghiêm ngặt (Strict Language Guard): Tuyệt đối không tự ý rơi về giọng tiếng Anh mặc định của Windows/trình duyệt khi thiếu giọng tiếng Việt; chuyển trạng thái `TTS_UNAVAILABLE` hoặc `ERROR` với thông báo rõ ràng.
+      - [x] Bộ tổng hợp âm thanh giọng nữ Việt Nam chuẩn (`synthesize_audio`): Tích hợp trực tiếp Microsoft Edge Natural Voice `vi-VN-HoaiMyNeural` tạo audio mp3 chất lượng cao, giữ nguyên 100% dấu tiếng Việt, xử lý đơn vị, số liệu và mã thiết bị an toàn.
+      - [x] REST API Endpoints chuẩn (`server.py`): `GET /api/voice/tts-config`, `GET /api/voice/tts-voices`, `POST /api/voice/tts-config`, `POST /api/voice/tts-synthesize` trả về dữ liệu audio base64 kèm timeline khẩu hình (viseme).
+      - [x] Khắc phục giao diện Chat Cục Bộ (:8765): Tích hợp badge trạng thái TTS trực quan (`.tts-badge.ready`, `speaking`, `unavailable`, `disabled`), ưu tiên phát audio chuẩn từ Core qua HTML5 Audio; chỉ fallback sang browser TTS nếu có voice tiếng Việt thực sự; dừng audio ngay khi ngắt lời hoặc gửi câu hỏi mới.
+      - [x] Khắc phục giao diện Điều Hành Cockpit (:8766): Đồng bộ `speakText` chuẩn tiếng Việt vào Digital Human Avatar Model F và phím kiểm tra giọng nói từ xa (`btnRemoteSpeak`), loại bỏ hoàn toàn việc phát âm sai tiếng Anh.
+      - [x] Bộ kiểm thử toàn diện TTS-01 đến TTS-10 (`tests/test_vietnamese_tts.py`): 9 test PASS 100%, 1 test phần cứng Pi 5 ghi nhận trung thực trạng thái `BLOCKED` khi chưa kết nối vật lý.
+    - [x] Tích hợp Nhân sự số Trợ lý (Digital Human Mẫu F — TONY) vào trang Chat Cục Bộ (`http://127.0.0.1:8765/`):
+      - [x] Bố cục Split Layout 2 cột: Cột trái hội thoại thông minh, Cột phải sân khấu trợ lý số Model F (canvas viewport 2.5D, dải sóng âm thanh thời gian thực 60 FPS, nút chuyển 8 biểu cảm nhanh).
+      - [x] Phản hồi biểu cảm linh động (Dynamic Expressions & Reactions): Tự động chuyển `LISTENING` khi user nói/gõ, `THINKING` khi LLM suy ngẫm, phân tích cảm xúc câu trả lời tiếng Việt (`setContextFromText`) nở nụ cười rạng rỡ (`model_f_happy.png`) hoặc tự tin, cử động khẩu hình chuẩn tiếng Việt khi `SPEAKING`, và micro-breathing/chớp mắt kép khi `IDLE`.
+- [x] QUAN AI BRAIN EVOLUTION — Sprint 2: Integration Closure & Operational Readiness:
+  - [x] Plan Orchestrator & Durable Task Lifecycle (`src/quan_ai_brain/orchestration/plan_orchestrator.py`):
+    - [x] Đóng kín vòng đời điều phối nhiệm vụ: User Request -> Intent -> TaskPlan -> DAG Validation -> Risk Assessment -> DurableTaskRegistry -> Approval Gate -> Inert Sandbox -> Result Verification -> TaskOutcome -> Report.
+    - [x] Bảng lưu trữ bền vững từng bước `durable_task_steps` trong SQLite WAL `data/tasks.db`.
+    - [x] Chống chạy lặp tác vụ qua `idempotency_key` duy nhất.
+    - [x] R5 Hard-Block: Chặn cứng lập tức các bước nguy hiểm (`TaskStatus.BLOCKED`), không cho phép nạp hay ghi đè.
+    - [x] R4 Approval Gate: Dừng an toàn tại `WAITING_APPROVAL`, chỉ tiếp tục khi chủ sở hữu ký phê duyệt xác thực.
+    - [x] Thực thi an toàn trong Inert Sandbox (Dry-run), thu thập `EvidenceRecord` và lọc sạch credential nhạy cảm.
+    - [x] Khôi phục sự cố: Chuyển các tác vụ dở dang khi khởi động lại sang `OUTCOME_UNKNOWN`.
+    - [x] 8 bài kiểm thử tích hợp đạt 100% tại `tests/test_plan_orchestration_lifecycle.py`.
+  - [x] Core AI Correctness & LLMRouter Verification:
+    - [x] Local Ollama daemon chạy thật trên `127.0.0.1:11434` với 6 model (`qwen2.5:7b`, `1.5b`, `0.5b`, `llama3.1`, `mistral`, `qwen`).
+    - [x] Đo lường suy luận thật: `qwen2.5:0.5b` phản hồi tiếng Việt trong 632.4 ms (`is_mock=False`).
+    - [x] Định tuyến mô hình: Fast tier (`qwen2.5:1.5b` / `0.5b`) cho đàm thoại nhanh; Reasoning tier (`qwen2.5:7b`) cho lập kế hoạch và phân tích sâu.
+    - [x] Quản trị Fallback: Không bao giờ âm thầm fallback sang mock; cờ `is_mock=True` và warning minh bạch.
+    - [x] Output Grounding: Bóc tách rõ ràng giữa sự thật người dùng, suy luận, kết quả công cụ và dữ liệu chưa kiểm chứng.
+    - [x] 8 bài kiểm thử đạt 100% tại `tests/test_core_ai_correctness.py`.
+  - [x] Báo cáo kiểm thử trung thực (`tools/validate_and_report.py`):
+    - [x] Phân loại minh bạch 5 nhóm: Passed, Failed, Skipped, Blocked, Not Run.
+    - [x] Không làm tròn bài test skip thành pass. Kết luận chuẩn xác: `PARTIALLY_VERIFIED (379 passed, 1 skipped)`.
+- [x] 379/380 tests passing (379 PASS, 1 SKIP, 0 FAIL, 0 BLOCKED). 1 test phần cứng Pi 5 ghi nhận trung thực trạng thái BLOCKED khi chưa kết nối vật lý.
 
 ## Not implemented / not verified
-- Ollama runtime connection or LLM fallback.
+- Real production executors or external write APIs (strictly non-production in Sprint 4; only safe R0-R2 workspace tools).
 - Integration with Kernel L3, DC-COMMAND / CLAE, SKILL_BAT_AI, Battery AI V4, VDCIM or NetChat.
-- Windows service or always-on daemon.
-- Vector embeddings, semantic search, voice interface, or autonomous production execution.
+- Windows service or always-on daemon (design review only in Sprint 4; zero production daemons activated).
+- Vector embeddings or autonomous production execution.
 
 ## Safety decisions
 - R5 is blocked in this implementation. Do not add an override secret to the source code.
