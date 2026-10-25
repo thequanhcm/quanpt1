@@ -12,6 +12,7 @@ from quan_ai_brain.core.redaction import redact_text, redact_value
 class ProviderType(str, Enum):
     OLLAMA = "ollama"
     MOCK = "mock"
+    NETMIND = "netmind"
 
 
 class FallbackMode(str, Enum):

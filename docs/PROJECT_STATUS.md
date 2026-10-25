@@ -1,11 +1,22 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-QUAN AI BRAIN — Master Prompt V7 Phase D: Task Orchestration & Cockpit Tab 3 Ledger: Deployed, Verified, and Operational.
+QUAN AI BRAIN — Sprint 1: GLM-5.3 NetMind Provider Integration (Completed & Verified 2026-10-25, approved D1–D7 by Anh Quân).
 Owner Approval Status: Approved by Anh Quân (Quanpt1) as sole authorized creator, owner, and final authority.
-Test Suite: 484 PASSED, 1 SKIPPED, 0 FAILED (56 test modules, 100% standard-library compliant).
+Test Suite: 502 PASSED, 1 SKIPPED, 0 FAILED (503 tests; skip = Pi 5 hardware offline, truthful BLOCKED).
 
 ## Status as implemented and verified by test suite
+- [x] QUAN AI BRAIN — Sprint 1: GLM-5.3 NetMind Provider Integration (Completed & Verified 2026-10-25):
+  - [x] Catalog Verification (Sprint 0 evidence, `reports/SPRINT0_NETMIND_CATALOG.json`): live GET /models HTTP 200 — 6 models served; `zai-org/GLM-5.3-Flash` present; `zai-org/GLM-5.3` and `zai-org/GLM-5.3-FlashX` NOT in account catalog. Both tiers map to GLM-5.3-Flash by owner decision (D2).
+  - [x] `NetMindProvider` (`src/quan_ai_brain/llm/netmind_provider.py`): standard-library chat adapter, fail-closed by default (`NETMIND_EXTERNAL_DATA_ALLOWED=false` → `NETMIND_DISABLED`), model allow-list (exact catalog IDs only), API key read from env at call time (never stored/printed/logged), redacted error paths, bounded retry with capped exponential backoff, TIMEOUT/CONNECTION_ERROR/HTTP_* structured error codes, optional metadata-only audit via `AuditLogger`.
+  - [x] Reasoning-token control verified on live gateway: default burns 60/60 completion tokens silently; `reasoning_effort="low"` → 0 reasoning tokens, correct Vietnamese answers (~0.2–1.4s). Other params (`thinking`, `enable_thinking`, `reasoning_effort="minimal"`) are ineffective on this gateway (probe evidence `tools/sprint1_reasoning_param_probe.py`).
+  - [x] `LLMProvider` facade extension: optional `netmind` provider; exact-match NetMind model IDs route to cloud first, transparent structured failure (never fabricated answers); `health()` reports combined Ollama + NetMind status.
+  - [x] CLI diagnostics: `netmind-health` (no key ever printed) and `netmind-ask` (fail-closed until env opt-in). Live E2E verified 2026-10-25: DISABLED_BY_POLICY by default; with env opt-in, real GLM-5.3-Flash Vietnamese answer in 1.06s, reasoning_tokens=0.
+  - [x] Vietnamese Benchmark D3 (`reports/SPRINT1_VIETNAMESE_BENCHMARK.json`, 28 prompts / 14 categories, same scorer): GLM-5.3-Flash — clean pass 28/28, keyword accuracy 88.5%, latency avg 1.33s / p95 1.99s, 0 forbidden violations; Qwen2.5:1.5b local — clean pass 28/28, keyword accuracy 69.2%, latency avg 1.76s / p95 3.48s. GLM-5.3-Flash wins accuracy & latency; local Qwen retained for offline/privacy.
+  - [x] GPU budget policy D5 (`src/quan_ai_brain/cognition/autonomous_mind.py::keep_warm_pulse`): physical keep-warm now probes qwen2.5:0.5b + bge-m3 generation/embed each pulse; 7B deliberately NOT pinned (5.1GB > 4GB VRAM, would evict fast tier + embedder); failures recorded as CONCERNED InternalThought.
+  - [x] Truthful reporting D4: handoff generator now emits `test_suite_identity`, `report_freshness`, `verification_status` fields; stale matrix rows corrected (Ollama daemon status dynamic, Voice Interface → `IMPLEMENTED (PC) / NOT_VERIFIED_ON_PI`).
+  - [x] Docs correction D1: architecture report §8.2 annotated — 9.64s BGE-M3 is cold-start (warm 0.39–0.47s); 7B warm is 6.0 tok/s / cold 35.6s on 4GB GPU (partial offload 2.3/5.1GB).
+  - [x] Full regression: 502 passed, 1 skipped, 0 failed in 72.47s (18 new NetMind tests in `tests/test_netmind_provider.py`, zero regressions).
 - [x] QUAN AI BRAIN — Master Prompt V7 Phase D: Task Orchestration & Cockpit Tab 3 Ledger (Completed & Verified):
   - [x] TaskPlan to DurableTaskRegistry Integration: Connected `ExecutiveCoordinator.plan()` directly to `DurableTaskRegistry` via `PlanOrchestrator.submit_plan()`, automatically generating DAG steps with risk assessment (R0-R5), unique scoped step IDs, and idempotency guarantees.
   - [x] Executive REST API Expansion:

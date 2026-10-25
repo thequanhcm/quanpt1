@@ -358,6 +358,12 @@ Exit code: 0
 3. `qwen2.5:7b` (Reasoning Tier - Lập kế hoạch chuyên sâu): **20.6s** (Tốc độ sinh token: 7.7 tok/s).
 4. `bge-m3:latest` (Dense Embedding - Trí nhớ ngữ nghĩa): **9.64s** (Vector chuẩn 1024 chiều).
 
+> **⚠️ CHÚ THÍCH HIỆU CHỈNH (Sprint 0 Audit 2026-10-25, approved D1):** Các số đo trên là phép đo
+> **cold-start** (bao gồm thời gian nạp model vào VRAM), không phải warm inference. Phép đo độc lập
+> ngày 2026-10-25 (`reports/SPRINT0_RUNTIME_PROBE.json`) xác minh: **BGE-M3 warm = 0.39–0.47s** (9.64s là cold-start);
+> `qwen2.5:7b` trên GPU Quadro T1000 4GB chỉ nạp được 2.3/5.1GB → **warm 6.0 tok/s, cold 35.6s** (chậm hơn số 20.6s ghi trên);
+> 0.5B/1.5B warm đúng khoảng 0.5–0.8s. Nguyên nhân: VRAM 4GB không đủ chứa model 5.1GB (partial offload).
+
 ---
 
 ## 9. KẾ HOẠCH HÀNH ĐỘNG VÀ LỘ TRÌNH PHÁT TRIỂN TIẾP THEO

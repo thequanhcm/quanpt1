@@ -21,6 +21,11 @@ from pathlib import Path
 from typing import Any
 
 from quan_ai_brain.core.autonomic import GLOBAL_AUTONOMIC_SYSTEM, AutonomicNervousSystem, PainLevel
+from quan_ai_brain.llm import FallbackMode, LLMProvider, LLMRequest
+
+# Shared provider instance for physical keep-warm probes. Local Ollama only;
+# no NetMind routing (cloud never used for background pulses), never mock.
+GLOBAL_LLM_PROVIDER = LLMProvider(fallback_mode=FallbackMode.NEVER)
 
 
 class CogitationMode(str, Enum):
@@ -173,17 +178,57 @@ class AutonomousMind:
 
     def keep_warm_pulse(self) -> bool:
         """
-        Send a lightweight ping to keep LLM/BGE-M3 loaded in GPU VRAM,
-        preventing cold-start latency when the owner initiates speech.
+        Physically keep the ALWAYS-RESIDENT models warm in GPU VRAM (GPU budget
+        policy approved D5, Sprint 1): the fast tier (qwen2.5:0.5b) and the BGE-M3
+        embedder (~0.6GB combined) stay loaded so conversational latency stays
+        sub-2s and semantic retrieval stays sub-0.5s. The 7B reasoning model is
+        deliberately NOT pinned — at 5.1GB it cannot co-reside with fast tier +
+        BGE-M3 in the 4GB VRAM (Quadro T1000) and would evict both.
         """
         self._keep_warm_count += 1
-        # Test availability via autonomic system probe
+        kept_warm = 0
+        probes = (("llm_fast", "generate", "qwen2.5:0.5b"), ("embed", "embed", "bge-m3"))
+        for probe_name, mode, model in probes:
+            try:
+                if mode == "generate":
+                    req = LLMRequest(
+                        prompt="warm",
+                        model=model,
+                        timeout_seconds=10.0,
+                        metadata={"max_tokens": 4},
+                    )
+                    resp = GLOBAL_LLM_PROVIDER.generate(req, allow_fallback=False)
+                    ok = bool(resp.success)
+                else:
+                    vec = GLOBAL_LLM_PROVIDER.client.embed(text="warm", model=model)
+                    ok = len(vec) > 0
+                if ok:
+                    kept_warm += 1
+            except Exception:
+                ok = False
+            if not ok:
+                failure_thought = InternalThought(
+                    thought_id=f"keepwarm_{uuid.uuid4().hex[:8]}",
+                    topic=f"Keep-warm probe '{probe_name}' ({model}) thất bại",
+                    trigger="KEEP_WARM",
+                    inner_monologue=(
+                        f"Mình không giữ ấm được mô hình {model}; rất có thể nó đã bị swap khỏi VRAM "
+                        "do GPU chỉ có 4GB. Cần kiểm tra lại chính sách GPU budget trước khi anh Quân cần dùng."
+                    ),
+                    actionable_idea="Chạy lại keep-warm pulse hoặc giảm số model resident.",
+                    sentiment="CONCERNED",
+                )
+                if len(self._thought_stream) >= self.max_thought_history:
+                    self._thought_stream.pop(0)
+                self._thought_stream.append(failure_thought)
+                self._total_thoughts += 1
+        # Port probe remains a coarse liveness fallback
         is_up, _ = self.autonomic_system.probe_port(
             self.autonomic_system.ollama_host,
             self.autonomic_system.ollama_port,
             timeout=0.5,
         )
-        return is_up
+        return is_up and kept_warm >= 1
 
     def get_recent_thoughts(self, limit: int = 10) -> list[dict[str, Any]]:
         """Return the most recent thoughts in chronological order."""

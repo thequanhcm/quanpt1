@@ -41,6 +41,14 @@ def main(argv: list[str] | None = None) -> int:
     ask_cmd.add_argument("--fallback", action="store_true", help="Allow synthetic mock fallback if Ollama is offline")
     ask_cmd.add_argument("--timeout", type=float, default=120.0, help="Timeout in seconds (default: 120.0)")
 
+    # NetMind (GLM-5.3) cloud provider commands (Sprint 1)
+    sub.add_parser("netmind-health", help="Check NetMind GLM-5.3-Flash gateway status (no key is ever printed)")
+    nm_ask_cmd = sub.add_parser("netmind-ask", help="Send a prompt to GLM-5.3-Flash via NetMind (requires owner-approved env config)")
+    nm_ask_cmd.add_argument("--prompt", required=True, help="Prompt text")
+    nm_ask_cmd.add_argument("--system", default="", help="Optional system prompt")
+    nm_ask_cmd.add_argument("--max-tokens", type=int, default=512, help="Max completion tokens (default: 512)")
+    nm_ask_cmd.add_argument("--timeout", type=float, default=60.0, help="Timeout in seconds (default: 60.0)")
+
     # Cognition & Context Building commands (Sprint 2C)
     ctx_cmd = sub.add_parser("context-build", help="Retrieve memories and build structured prompt context")
     ctx_cmd.add_argument("--query", required=True, help="User query text")
@@ -117,6 +125,37 @@ def main(argv: list[str] | None = None) -> int:
         provider = LLMProvider()
         print(json.dumps(provider.health(), ensure_ascii=False, indent=2))
         return 0
+
+    if args.command == "netmind-health":
+        from quan_ai_brain.llm.netmind_provider import NetMindProvider
+        provider = NetMindProvider()
+        print(json.dumps(provider.health(), ensure_ascii=False, indent=2))
+        return 0
+
+    if args.command == "netmind-ask":
+        from quan_ai_brain.llm import LLMRequest
+        from quan_ai_brain.llm.netmind_provider import NETMIND_CHAT_MODEL, NetMindProvider
+        provider = NetMindProvider()
+        req = LLMRequest(
+            prompt=args.prompt,
+            model=NETMIND_CHAT_MODEL,
+            system_prompt=args.system,
+            timeout_seconds=args.timeout,
+            metadata={"max_tokens": args.max_tokens, "tier": "manual_cli"},
+        )
+        resp = provider.generate(req)
+        out = {
+            "success": resp.success,
+            "provider": resp.provider,
+            "model": resp.model,
+            "is_mock": resp.is_mock,
+            "elapsed_ms": resp.elapsed_ms,
+            "error_code": resp.error_code,
+            "text": resp.text,
+            "raw_metadata": resp.raw_metadata,
+        }
+        print(json.dumps(out, ensure_ascii=False, indent=2))
+        return 0 if resp.success else 1
 
     if args.command == "llm-models":
         from quan_ai_brain.llm import LLMProvider

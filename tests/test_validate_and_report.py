@@ -82,6 +82,10 @@ def test_build_report_structure_and_sections():
     assert "Memory Engine V1" in report
     assert "CONTINUATION CONTEXT FOR CHATGPT" in report
     assert "PROTECTED_EXTERNAL_PROJECTS" in report
+    # Sprint 1 truthfulness fields (approved D4): test suite identity, freshness, verification status
+    assert "`test_suite_identity`" in report
+    assert "`report_freshness`" in report
+    assert "`verification_status`" in report
 
 
 def test_report_on_test_failure():

@@ -6,10 +6,13 @@ from typing import Any
 from quan_ai_brain.llm.client import OllamaClient
 from quan_ai_brain.llm.mock_provider import MockLLMProvider
 from quan_ai_brain.llm.models import FallbackMode, LLMRequest, LLMResponse, ModelInfo
+from quan_ai_brain.llm.netmind_provider import NETMIND_CHAT_MODEL, NetMindProvider
+
+NETMIND_CHAT_MODELS = (NETMIND_CHAT_MODEL,)
 
 
 class LLMProvider:
-    """Facade for LLM inference. Mediates between local Ollama and offline Mock provider."""
+    """Facade for LLM inference. Mediates between local Ollama, NetMind cloud, and offline Mock provider."""
 
     def __init__(
         self,
@@ -17,9 +20,11 @@ class LLMProvider:
         mock: MockLLMProvider | None = None,
         fallback_mode: FallbackMode | str = FallbackMode.NEVER,
         default_model: str = "qwen2.5:7b",
+        netmind: NetMindProvider | None = None,
     ) -> None:
         self.client = client or OllamaClient()
         self.mock = mock or MockLLMProvider()
+        self.netmind = netmind  # optional cloud provider (GLM-5.3-Flash); disabled when None
         if isinstance(fallback_mode, FallbackMode):
             self.fallback_mode = fallback_mode
         else:
@@ -47,7 +52,7 @@ class LLMProvider:
             except Exception:
                 online = False
 
-        return {
+        health = {
             "ollama_online": online,
             "endpoint": self.client.base_url,
             "default_model": self.default_model,
@@ -56,6 +61,12 @@ class LLMProvider:
             "fallback_mode": self.fallback_mode.value,
             "active_provider": "ollama" if online else ("mock" if self.fallback_mode != FallbackMode.NEVER else "none"),
         }
+        if self.netmind is not None:
+            try:
+                health["netmind"] = self.netmind.health()
+            except Exception as exc:  # noqa: BLE001 — diagnostics must not raise
+                health["netmind"] = {"status": "HEALTH_CHECK_ERROR", "error": type(exc).__name__}
+        return health
 
     def list_models(self, allow_fallback: bool | None = None) -> list[ModelInfo]:
         """List models from real Ollama if online; optionally fallback to mock."""
@@ -86,6 +97,20 @@ class LLMProvider:
 
         if self.fallback_mode == FallbackMode.ALWAYS_MOCK or request.model == "mock":
             return self.mock.generate(request)
+
+        # 0. NetMind cloud routing — only for exact verified catalog model IDs.
+        if self.netmind is not None and request.model in NETMIND_CHAT_MODELS:
+            nm_resp = self.netmind.generate(request)
+            if nm_resp.success:
+                return nm_resp
+            if fallback:
+                mock_resp = self.mock.generate(request)
+                mock_resp.warning = (
+                    f"MOCK FALLBACK — NetMind request failed with [{nm_resp.error_code}], "
+                    "mock provider used instead. NO REAL LLM INFERENCE."
+                )
+                return mock_resp
+            return nm_resp
 
         # 1. Try real Ollama first
         if self.is_online(timeout=2.0):

@@ -5,13 +5,13 @@
 > bảo đảm tính minh bạch, độc lập và khả năng phục hồi phiên làm việc cho ChatGPT.
 
 ## 1. Thông tin phiên làm việc (Session Metadata)
-- **Mã phiên (UTC):** `2026-10-25T02:48:10.416247+00:00`
-- **Thời gian máy chủ:** `2026-10-25 09:48:10` (Local Time)
+- **Mã phiên (UTC):** `2026-10-25T03:29:43.184784+00:00`
+- **Thời gian máy chủ:** `2026-10-25 10:29:43` (Local Time)
 - **Workspace root:** `E:/AI/QUAN AI BRAIN`
 - **Python Runtime:** `3.11.9` (64bit)
 - **Hệ điều hành:** `Windows-10-10.0.19045-SP0`
 - **Phiên bản ứng dụng:** `0.2.0` (Foundation Evolution — Phase A)
-- **Git Branch:** `master` | **Commit:** `9243d12`
+- **Git Branch:** `master` | **Commit:** `4d90465`
 - **Trạng thái Working Tree:** Có thay đổi chưa commit
 
 ## 2. Tóm tắt điều hành (Executive Summary)
@@ -21,7 +21,7 @@
   2. Hiện thực `SessionMemoryManager` (`src/quan_ai_brain/cognition/session_memory.py`) trích xuất sự thật người dùng và lưu trữ phiên hội thoại bền vững vào `data/brain.db`.
   3. Cài đặt `OutputGuardrails` (`src/quan_ai_brain/core/guardrails.py`) lọc rò rỉ credential, script tag injection và che giấu đường dẫn tệp nhạy cảm.
   4. Mở rộng `PromptContextBuilder` và API `/api/chat`, `/api/chat/history` trên Web Server phục vụ hội thoại đa lượt liên tục có trí nhớ.
-  5. Kết quả kiểm thử tự động phiên hiện tại: 484 PASSED, 0 FAILED, 1 SKIPPED (Tổng: 485 bài test, PARTIALLY_VERIFIED (484 passed, 1 skipped)).
+  5. Kết quả kiểm thử tự động phiên hiện tại: 502 PASSED, 0 FAILED, 1 SKIPPED (Tổng: 503 bài test, PARTIALLY_VERIFIED (502 passed, 1 skipped)).
 - **Các hạng mục đã hoàn thành:**
   - [x] Bộ định tuyến mô hình động `LLMRouter` với phân tầng fast / reasoning và fallback tin cậy.
   - [x] Quản lý bộ nhớ phiên `SessionMemoryManager` và trích xuất tự động danh tính, sở thích, chỉ thị của chủ sở hữu.
@@ -30,7 +30,7 @@
   - [x] Tích hợp lịch sử hội thoại gần nhất `[RECENT CONVERSATION HISTORY]` vào ngữ cảnh suy luận của LLM.
   - [x] Endpoint `GET /api/chat/history` và nâng cấp toàn diện `POST /api/chat` trên `BrainAPIHandler`.
   - [x] 5 bài kiểm thử E2E đầu cuối (`tests/test_end_to_end_chat.py`) xác minh đa lượt đàm thoại và trí nhớ dài hạn.
-  - [x] Kiểm thử tự động: 484 bài PASS, 1 bài SKIP (Phần cứng Pi 5 offline), 0 bài FAIL (PARTIALLY_VERIFIED (484 passed, 1 skipped)).
+  - [x] Kiểm thử tự động: 502 bài PASS, 1 bài SKIP (Phần cứng Pi 5 offline), 0 bài FAIL (PARTIALLY_VERIFIED (502 passed, 1 skipped)).
 - **Các hạng mục tiếp theo (Sprint 2):**
   - Kết nối TaskPlan vào `DurableTaskRegistry` (`data/tasks.db`) và xây dựng vòng lặp thực thi có kiểm soát an toàn (Inert Sandbox).
 - **Lưu ý kỹ thuật quan trọng cho kỹ sư tiếp theo:**
@@ -41,92 +41,20 @@
 ## 3. Thay đổi mã nguồn (Code Changes & Working Tree)
 - **Git Status:**
 ```text
-vernance/consultation_inbox.py
-?? src/quan_ai_brain/governance/state_store.py
-?? src/quan_ai_brain/integration/
-?? src/quan_ai_brain/learning/
-?? src/quan_ai_brain/llm/
-?? src/quan_ai_brain/memory/models.py
-?? src/quan_ai_brain/orchestration/
-?? src/quan_ai_brain/planning/coordinator.py
-?? src/quan_ai_brain/tools/approval.py
-?? src/quan_ai_brain/tools/delegation.py
-?? src/quan_ai_brain/tools/registry.py
-?? src/quan_ai_brain/tools/sandbox.py
-?? src/quan_ai_brain/tools/signature.py
-?? src/quan_ai_brain/tools/verifier.py
-?? src/quan_ai_brain/voice/
-?? src/quan_ai_brain/web/
-?? tests/test_approval_gate.py
-?? tests/test_authenticated_verifier.py
-?? tests/test_autonomic_nervous_system.py
-?? tests/test_autonomous_mind.py
-?? tests/test_autonomous_operations_readiness.py
-?? tests/test_bge_m3_embedding.py
-?? tests/test_capability_registry.py
-?? tests/test_consultation_inbox.py
-?? tests/test_context_builder.py
-?? tests/test_continuous_supervisor.py
-?? tests/test_core_ai_correctness.py
-?? tests/test_delegation.py
-?? tests/test_digital_human_avatar_v2.py
-?? tests/test_digital_identity_persona.py
-?? tests/test_durable_task_registry.py
-?? tests/test_edge_client.py
-?? tests/test_edge_monitor.py
-?? tests/test_edge_release_manager.py
-?? tests/test_edge_transfer_service.py
-?? tests/test_end_to_end_chat.py
-?? tests/test_evaluation_harness.py
-?? tests/test_executive_persona.py
-?? tests/test_executive_roles.py
-?? tests/test_executor_staging.py
-?? tests/test_foundation_contract.py
-?? tests/test_governance_state_store.py
-?? tests/test_llm_provider.py
-?? tests/test_long_term_memory.py
-?? tests/test_memory_retrieval.py
-?? tests/test_mouth_sync.py
-?? tests/test_owner_signature_verifier.py
-?? tests/test_periodic_reporter.py
-?? tests/test_persistent_governance.py
-?? tests/test_plan_orchestration_lifecycle.py
-?? tests/test_planning.py
-?? tests/test_process_containment.py
-?? tests/test_remote_sensor_control.py
-?? tests/test_resource_budget.py
-?? tests/test_restart_system.py
-?? tests/test_self_learning_engine.py
-?? tests/test_tool_sandbox.py
-?? tests/test_universal_integration.py
-?? tests/test_validate_and_report.py
-?? tests/test_vietnamese_tts.py
-?? tests/test_voice_api_endpoints.py
-?? tests/test_voice_first_pipeline.py
-?? tests/test_wake_word_config.py
-?? tests/test_web_executive_endpoints.py
-?? tests/test_web_server.py
-?? tests/test_wifi_protocol.py
-?? tools/deploy_audio_fix_pi5.py
-?? tools/diagnose_autonomic.py
-?? tools/generate_avatar_model_a_assets.py
-?? tools/generate_avatar_v2_assets.py
-?? tools/get_pi5_diagnostics.py
-?? tools/legacy_launchers/
-?? tools/mind_stream.py
-?? tools/oneclick_orchestrator.py
-?? tools/probe_pi5_hardware.py
-?? tools/read_pi5_daemon_log.py
-?? tools/reload_pi5_kiosk.py
-?? tools/restart_pi5_proper.py
-?? tools/restart_system.py
-?? tools/run_autonomous_cycle.py
-?? tools/setup_desktop_shortcut.py
-?? tools/sync_pi5_complete.py
-?? tools/sync_pi5_daemon.py
-?? tools/test_pi5_audio.py
-?? tools/test_pi5_mic_speaker.py
-?? tools/verify_all_av_communication.py
+M "bao cao xay dung he thong/BAO_CAO_KIEN_TRUC_VAN_HANH_VA_KE_HOACH_PHAT_TRIEN_QUAN_AI_BRAIN.md"
+M src/quan_ai_brain/cli.py
+M src/quan_ai_brain/cognition/autonomous_mind.py
+M src/quan_ai_brain/llm/__init__.py
+M src/quan_ai_brain/llm/models.py
+M src/quan_ai_brain/llm/provider.py
+M tests/test_validate_and_report.py
+M tools/validate_and_report.py
+?? reports/SPRINT1_VIETNAMESE_BENCHMARK.json
+?? src/quan_ai_brain/llm/netmind_provider.py
+?? tests/test_netmind_provider.py
+?? tools/sprint1_benchmark_dataset.py
+?? tools/sprint1_benchmark_runner.py
+?? tools/sprint1_reasoning_param_probe.py
 ```
 - **Tệp mã nguồn cốt lõi trong Sprint 7A:**
   - `src/quan_ai_brain/execution/process_containment.py`: Hợp đồng `ProcessBackendInterface`, `ProcessContainmentConfig`, `InertProcessBackend`, `ContainedExecutionRunner`.
@@ -153,22 +81,27 @@ vernance/consultation_inbox.py
   - `tests/test_edge_client.py`: 6 bài test xác thực HMAC, nonce anti-replay, kiosk HTTP endpoints, fail-safe disconnect.
 
 ## 4. Kết quả kiểm thử (Test Verification)
-- **Kết luận kiểm thử:** **PARTIALLY_VERIFIED (484 passed, 1 skipped)**
+- **Kết luận kiểm thử:** **PARTIALLY_VERIFIED (502 passed, 1 skipped)**
 - **Lệnh thực thi:** `E:\AI\QUAN AI BRAIN\.venv\Scripts\python.exe -m pytest -q tests`
-- **Tổng số bài test:** `485` | **Passed:** `484` | **Failed:** `0` | **Skipped:** `1`
-- **Thời gian chạy:** `81.77s`
+- **Tổng số bài test:** `503` | **Passed:** `502` | **Failed:** `0` | **Skipped:** `1`
+- **Thời gian chạy:** `73.89s`
 - **Exit Code:** `0`
+
+- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `503` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
+- **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.
+- **Trạng thái xác minh (`verification_status`):** `PARTIALLY_VERIFIED (502 passed, 1 skipped)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
+
 ```text
 ........................................................................ [ 14%]
-........................................................................ [ 29%]
-........................................................................ [ 44%]
-........................................................................ [ 59%]
-........................................................................ [ 74%]
-........................................................................ [ 89%]
-s....................................................                    [100%]
+........................................................................ [ 28%]
+........................................................................ [ 42%]
+........................................................................ [ 57%]
+........................................................................ [ 71%]
+........................................................................ [ 85%]
+..................s....................................................  [100%]
 =========================== short test summary info ===========================
-SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Raspberry Pi 5 th\u1ef1c t\u1ebf ch\u01b0a k\u1ebft n\u1ed1i m\u1ea1ng trong phi\xean ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng n\xe0y. PC Core \u0111\xe3 \u0111\u01b0\u1ee3c x\xe1c th\u1ef1c ho\xe0n ch\u1ec9nh.
-484 passed, 1 skipped in 81.77s (0:01:21)
+SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+502 passed, 1 skipped in 73.89s (0:01:13)
 ```
 
 ## 5. Danh mục module & Trạng thái hiện tại
@@ -217,14 +150,15 @@ SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Rasp
 | **Safe Tool Sandbox & Verifier** | `src/quan_ai_brain/tools` | `TESTED / IMPLEMENTED` | 49 bài test sandbox, approval, delegation & verifier đạt |
 | **Isolated Staging Executor** | `src/quan_ai_brain/execution` | `TESTED / IMPLEMENTED` | 11 bài test inert staging & sign-off pending đạt |
 | **Windows Process Containment Adapter** | `src/quan_ai_brain/execution/process_containment.py` | `TESTED / IMPLEMENTED` | 9 bài test process containment & inert backend đạt |
-| **Ollama / Qwen2.5:7b** | `E:\AI\Ollama` | `PARTIALLY_IMPLEMENTED` | Client & Mock provider tested (18 tests); daemon offline |
+| **Ollama / Qwen2.5:7b** | `E:\AI\Ollama` | `IMPLEMENTED (local-only)` | Client + Mock tested; daemon runtime status: xem `llm-health` tại thời điểm chạy (đã xác minh online 2026-10-25) |
+| **NetMind GLM-5.3-Flash (cloud)** | `src/quan_ai_brain/llm/netmind_provider.py` | `IMPLEMENTED (fail-closed)` | 18 test đạt; E2E xác minh 2026-10-25; mặc định DISABLED_BY_POLICY đến khi chủ sở hữu bật |
 | **Kernel L3** | `BAT-AI-2026-Repo\...\os_kernel` | `NOT_IMPLEMENTED` | Đọc tài liệu; không sửa trực tiếp |
 | **DC-COMMAND / CLAE** | `DATA CENTER AI OPERATING SYSTEM` | `PARTIALLY_IMPLEMENTED` | Cơ chế Quarantine tuân thủ nguyên tắc CLAE |
 | **SKILL_BAT_AI** | `E:\AI\Skill\SKILL_BAT_AI` | `NOT_IMPLEMENTED` | Tham khảo ma trận rủi ro R0-R5 |
 | **BATTERY_AI_V4** | `E:\AI\battery-ai-\BATTERY_AI_V4` | `NOT_IMPLEMENTED` | Giữ nguyên trạng; không can thiệp |
 | **VDCIM / NetChat** | Sibling projects | `NOT_IMPLEMENTED` | Chưa tích hợp |
 | **Background Daemon** | N/A | `NOT_IMPLEMENTED` | Chỉ có health skeleton cục bộ |
-| **Voice Interface** | N/A | `NOT_IMPLEMENTED` | Chưa triển khai |
+| **Voice Interface** | `src/quan_ai_brain/voice/` + `edge_client/` | `IMPLEMENTED (PC) / NOT_VERIFIED_ON_PI` | TTS vi-VN, mouth-sync, wake-word có code + test trên PC; E2E phần cứng Pi 5 chờ thiết bị online |
 
 ## 7. An toàn và phục hồi (Safety & Recovery Guardrails)
 - **Chặn rủi ro R5:** R5 luôn bị chặn cứng (`DecisionStatus.BLOCKED`). Không có cơ chế override bí mật trong mã nguồn.
@@ -241,7 +175,7 @@ SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Rasp
 - **Bảo vệ bí mật:** Tự động che giấu token, mật khẩu, api_key trước khi ghi vào log hoặc CSDL.
 
 ## 8. Danh mục tài liệu ngữ cảnh an toàn
-- `docs/PROJECT_STATUS.md` (68535 bytes) â *QUAN AI BRAIN — Project Status*
+- `docs/PROJECT_STATUS.md` (70552 bytes) â *QUAN AI BRAIN — Project Status*
 - `docs/SYSTEM_BASELINE.md` (8796 bytes) â *SYSTEM BASELINE: QUAN AI BRAIN*
 - `docs/ARCHITECTURE_GAP_ANALYSIS.md` (11037 bytes) â *ARCHITECTURE GAP ANALYSIS: QUAN AI BRAIN*
 - `docs/NEXT_STEPS.md` (8247 bytes) â *NEXT STEPS ROADMAP: QUAN AI BRAIN*
@@ -275,9 +209,9 @@ WORKSPACE: E:\AI\QUAN AI BRAIN
 CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object
 PYTHON_VERSION: 3.11.9 x64
 TEST_SUMMARY:
-  verdict: PARTIALLY_VERIFIED (484 passed, 1 skipped)
-  total_tests: 485
-  passed: 484
+  verdict: PARTIALLY_VERIFIED (502 passed, 1 skipped)
+  total_tests: 503
+  passed: 502
   failed: 0
   skipped: 1
 CORE_CAPABILITIES_IMPLEMENTED:
@@ -340,5 +274,5 @@ PROTECTED_EXTERNAL_PROJECTS:
   - E:\AI\battery-ai-\BATTERY_AI_V4 (Battery Intelligence Brain)
   - E:\AI\BOT (Active production bots)
 INSTRUCTION_FOR_NEXT_SESSION:
-  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (485 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
+  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (503 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
 ```

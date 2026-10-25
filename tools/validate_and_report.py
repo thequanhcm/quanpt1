@@ -318,6 +318,17 @@ def build_report(exit_code: int, command: str, test_output: str) -> str:
         f"- **Tổng số bài test:** `{test_stats['total']}` | **Passed:** `{test_stats['passed']}` | **Failed:** `{test_stats['failed']}` | **Skipped:** `{test_stats['skipped']}`",
         f"- **Thời gian chạy:** `{test_stats['duration']}s`",
         f"- **Exit Code:** `{exit_code}`",
+        "",
+        f"- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `{test_stats['total']}` bài trong thư mục `tests/`. "
+        f"Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.",
+        "- **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái "
+        "workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), "
+        "bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.",
+        f"- **Trạng thái xác minh (`verification_status`):** `{test_stats['verdict']}`. "
+        "Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi "
+        "sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. "
+        "Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.",
+        "",
         "```text",
         test_output[-8000:],
         "```",
@@ -368,14 +379,15 @@ def build_report(exit_code: int, command: str, test_output: str) -> str:
         "| **Safe Tool Sandbox & Verifier** | `src/quan_ai_brain/tools` | `TESTED / IMPLEMENTED` | 49 bài test sandbox, approval, delegation & verifier đạt |",
         "| **Isolated Staging Executor** | `src/quan_ai_brain/execution` | `TESTED / IMPLEMENTED` | 11 bài test inert staging & sign-off pending đạt |",
         "| **Windows Process Containment Adapter** | `src/quan_ai_brain/execution/process_containment.py` | `TESTED / IMPLEMENTED` | 9 bài test process containment & inert backend đạt |",
-        "| **Ollama / Qwen2.5:7b** | `E:\\AI\\Ollama` | `PARTIALLY_IMPLEMENTED` | Client & Mock provider tested (18 tests); daemon offline |",
+        "| **Ollama / Qwen2.5:7b** | `E:\\AI\\Ollama` | `IMPLEMENTED (local-only)` | Client + Mock tested; daemon runtime status: xem `llm-health` tại thời điểm chạy (đã xác minh online 2026-10-25) |",
+        "| **NetMind GLM-5.3-Flash (cloud)** | `src/quan_ai_brain/llm/netmind_provider.py` | `IMPLEMENTED (fail-closed)` | 18 test đạt; E2E xác minh 2026-10-25; mặc định DISABLED_BY_POLICY đến khi chủ sở hữu bật |",
         "| **Kernel L3** | `BAT-AI-2026-Repo\\...\\os_kernel` | `NOT_IMPLEMENTED` | Đọc tài liệu; không sửa trực tiếp |",
         "| **DC-COMMAND / CLAE** | `DATA CENTER AI OPERATING SYSTEM` | `PARTIALLY_IMPLEMENTED` | Cơ chế Quarantine tuân thủ nguyên tắc CLAE |",
         "| **SKILL_BAT_AI** | `E:\\AI\\Skill\\SKILL_BAT_AI` | `NOT_IMPLEMENTED` | Tham khảo ma trận rủi ro R0-R5 |",
         "| **BATTERY_AI_V4** | `E:\\AI\\battery-ai-\\BATTERY_AI_V4` | `NOT_IMPLEMENTED` | Giữ nguyên trạng; không can thiệp |",
         "| **VDCIM / NetChat** | Sibling projects | `NOT_IMPLEMENTED` | Chưa tích hợp |",
         "| **Background Daemon** | N/A | `NOT_IMPLEMENTED` | Chỉ có health skeleton cục bộ |",
-        "| **Voice Interface** | N/A | `NOT_IMPLEMENTED` | Chưa triển khai |",
+        "| **Voice Interface** | `src/quan_ai_brain/voice/` + `edge_client/` | `IMPLEMENTED (PC) / NOT_VERIFIED_ON_PI` | TTS vi-VN, mouth-sync, wake-word có code + test trên PC; E2E phần cứng Pi 5 chờ thiết bị online |",
         "",
         "## 7. An toàn và phục hồi (Safety & Recovery Guardrails)",
         "- **Chặn rủi ro R5:** R5 luôn bị chặn cứng (`DecisionStatus.BLOCKED`). Không có cơ chế override bí mật trong mã nguồn.",
