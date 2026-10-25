@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // State
     const state = {
         activeTab: 'chat',
-        selectedModel: 'qwen2.5:7b',
+        selectedModel: 'zai-org/GLM-5.3-Flash',
         ttsEnabled: true,
         isListening: false,
         recognition: null,
@@ -336,6 +336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         state.recognition.interimResults = false;
 
         state.recognition.onstart = () => {
+            console.log('🎤 Started listening');
             stopAudio(); // Cancel speech when user starts talking
             state.isListening = true;
             btnMic.classList.add('recording');
@@ -345,21 +346,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         state.recognition.onresult = (event) => {
             const transcript = event.results[0][0].transcript;
+            console.log('🗣️ Transcript:', transcript);
             chatInput.value = transcript;
             chatInput.focus();
             stopVoiceListening();
         };
 
         state.recognition.onerror = (event) => {
-            console.warn('Speech recognition error:', event.error);
+            console.error('🚫 SpeechRecognition error:', event.error);
             stopVoiceListening();
+            alert(`Lỗi nhận diện giọng nói: ${event.error}. Hãy kiểm tra quyền Micro trong trình duyệt.`);
         };
 
         state.recognition.onend = () => {
+            console.log('🔇 Stopped listening');
             stopVoiceListening();
         };
     } else {
-        btnMic.title = 'Trình duyệt không hỗ trợ Web Speech API (Hãy dùng Chrome hoặc Edge)';
+        console.warn('⚠️ SpeechRecognition NOT supported. Use Chrome/Edge.');
+        btnMic.disabled = true;
+        btnMic.title = 'Voice input not supported. Use Chrome or Edge.';
+        btnMic.style.opacity = '0.5';
     }
 
     function startVoiceListening() {
