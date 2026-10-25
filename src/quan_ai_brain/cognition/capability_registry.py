@@ -12,6 +12,7 @@ from typing import Any
 
 class CapabilityStatus(str, Enum):
     VERIFIED_ACTIVE = "VERIFIED_ACTIVE"          # Implemented, tested, and actively functioning
+    IMPLEMENTED_UNTESTED = "IMPLEMENTED_UNTESTED"  # Code exists but not E2E tested
     INERT_STAGING = "INERT_STAGING"              # Implemented in inert mode, pending owner sign-off
     EXTERNAL_PLANNED = "EXTERNAL_PLANNED"        # Sibling ecosystem project, preserved, not integrated
     NOT_IMPLEMENTED = "NOT_IMPLEMENTED"          # Planned future feature, not yet in codebase
@@ -47,10 +48,10 @@ SYSTEM_CAPABILITIES: list[SystemCapability] = [
         name="Trí Nhớ Dài Hạn (Long-Term Memory)",
         description="Lưu trữ và truy xuất bền vững các sự kiện, sở thích, quy trình và tri thức vào SQLite WAL.",
         domain="Memory & Knowledge",
-        status=CapabilityStatus.VERIFIED_ACTIVE,
+        status=CapabilityStatus.IMPLEMENTED_UNTESTED,
         risk_level=0,
         dependencies=("data/brain.db", "MemoryStore"),
-        evidence_notes="Verified by 214 tests; active in brain.db",
+        evidence_notes="Code implemented (sqlite_store.py 523 lines); DB tables exist but 0 episodes/memories/candidates — E2E test pending Sprint 3",
     ),
     SystemCapability(
         capability_id="local_llm_inference",
@@ -87,10 +88,10 @@ SYSTEM_CAPABILITIES: list[SystemCapability] = [
         name="Động Cơ Tự Học & Nâng Cấp (Self-Learning Engine V1)",
         description="Tự quan sát lỗi, tự nghiên cứu tài liệu, tự sinh bản vá (diff) và cách ly tri thức ứng viên chờ Chủ nhân duyệt.",
         domain="Evolution & Learning",
-        status=CapabilityStatus.VERIFIED_ACTIVE,
+        status=CapabilityStatus.IMPLEMENTED_UNTESTED,
         risk_level=2,
         dependencies=("SelfLearningEngine", "data/learning_sandbox.db"),
-        evidence_notes="Quarantine isolation enforced; owner approval gate active",
+        evidence_notes="Code implemented (autonomous_mind.py 250 lines); learning_reports.db minimal (28KB) — full learning pipeline pending Sprint 5",
     ),
     SystemCapability(
         capability_id="web_ui_voice",
