@@ -1,12 +1,19 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-QUAN AI BRAIN — Sprint 1: GLM-5.3 NetMind Provider Integration (Completed & Verified 2026-10-25, approved D1–D7 by Anh Quân).
+QUAN AI BRAIN — Sprint 2: GLM Streaming + Deep Reasoning + Pi Barge-in + Avatar V3 Phase B (Completed & Verified 2026-10-25, owner-approved).
 Owner Approval Status: Approved by Anh Quân (Quanpt1) as sole authorized creator, owner, and final authority.
-Test Suite: 502 PASSED, 1 SKIPPED, 0 FAILED (503 tests; skip = Pi 5 hardware offline, truthful BLOCKED).
+Test Suite: 512 PASSED, 1 SKIPPED, 0 FAILED (513 tests; skip = Pi 5 hardware voice E2E not run in automated session, truthful BLOCKED).
 
 ## Status as implemented and verified by test suite
-- [x] QUAN AI BRAIN — Sprint 1: GLM-5.3 NetMind Provider Integration (Completed & Verified 2026-10-25):
+- [x] QUAN AI BRAIN — Sprint 2: GLM Streaming + Deep Reasoning + Pi Barge-in + Avatar V3 Phase B (Completed & Verified 2026-10-25, owner-approved):
+  - [x] Streaming SSE (`src/quan_ai_brain/llm/netmind_provider.py::stream_chat()`): Live delta generator (no buffering), `_iter_chat_stream_events()` parse SSE on-the-fly, delta never replayed on transport error, first-delta latency 1.5–1.8s (down from 7.4s via 60s catalog cache).
+  - [x] Deep Reasoning Tier: `Qwen/Qwen3.5-122B-A10B-FP8` added to allowlist with `max_tokens=2500` default; router recognizes "phân tích chuyên sâu/nghiên cứu sâu/deep dive" + queries >1200 chars → deep tier; probe verified 22.01s total, 2255 reasoning + 72 content tokens, finish=stop.
+  - [x] Barge-in on Pi 5: `edge_client/kiosk.js::window.bargeInStopSpeaking()` pauses audio + cancels utterance + avatar→LISTENING; `edge_client/wake_engine.js` triggers barge-in when voice detected during SPEAKING; both files deployed to Pi 5 root daemon (192.168.1.21:8768), reload_ui success, kiosk_running=True.
+  - [x] Avatar V3 Phase B (Mouth Sync Timeline-Only + Exact Duration): Removed random-viseme fallback (`Math.random() * 0.55` → bell-curve `0.35 * sin(π*phase)`), added `MouthSyncEngine.measure_mp3_duration_ms()` for ID3v2+MPEG header parsing, timeline scaling to exact audio duration; 6/6 tests passed in `tools/avatar_v3_giai_doan_b_tests.py`; `avatar_engine.js` deployed to Pi 5 (42,005 bytes match).
+  - [x] Full Regression: 512 passed, 1 skipped, 0 failed in 74.69s (10 new streaming/router tests + 18 NetMind tests, zero regressions).
+  - [x] E2E Verification: PC streaming curl + script PASS; Pi 5 speak E2E PASS (41KB audio → kiosk SPEAKING→IDLE); barge-in & Avatar Phase B deployed, awaiting owner live test.
+- [x] QUAN AI BRAIN — Sprint 1: GLM-5.3 NetMind Provider Integration (Completed & Verified 2026-10-25, approved D1–D7 by Anh Quân):
   - [x] Catalog Verification (Sprint 0 evidence, `reports/SPRINT0_NETMIND_CATALOG.json`): live GET /models HTTP 200 — 6 models served; `zai-org/GLM-5.3-Flash` present; `zai-org/GLM-5.3` and `zai-org/GLM-5.3-FlashX` NOT in account catalog. Both tiers map to GLM-5.3-Flash by owner decision (D2).
   - [x] `NetMindProvider` (`src/quan_ai_brain/llm/netmind_provider.py`): standard-library chat adapter, fail-closed by default (`NETMIND_EXTERNAL_DATA_ALLOWED=false` → `NETMIND_DISABLED`), model allow-list (exact catalog IDs only), API key read from env at call time (never stored/printed/logged), redacted error paths, bounded retry with capped exponential backoff, TIMEOUT/CONNECTION_ERROR/HTTP_* structured error codes, optional metadata-only audit via `AuditLogger`.
   - [x] Reasoning-token control verified on live gateway: default burns 60/60 completion tokens silently; `reasoning_effort="low"` → 0 reasoning tokens, correct Vietnamese answers (~0.2–1.4s). Other params (`thinking`, `enable_thinking`, `reasoning_effort="minimal"`) are ineffective on this gateway (probe evidence `tools/sprint1_reasoning_param_probe.py`).
