@@ -1,4 +1,5 @@
 """Daily database backup for QUAN AI BRAIN."""
+import os
 import shutil
 import sqlite3
 from datetime import datetime, timezone
