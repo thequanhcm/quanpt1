@@ -344,8 +344,12 @@ class DigitalHumanAvatar {
         return;
       }
       cycle++;
-      this.activeViseme = visemes[cycle % visemes.length];
-      this.currentOpenRatio = this.activeViseme === "REST" ? 0.0 : 0.4 + Math.random() * 0.55;
+      // Fallback: use smooth bell-curve envelope instead of random viseme
+      // This prevents the "chewing" artifact when timeline is missing
+      const phase = (cycle % 6) / 6.0;
+      const envelope = Math.sin(Math.PI * phase); // Bell curve: 0→1→0
+      this.activeViseme = visemes[cycle % 5]; // Cycle through A/O/E/I/U
+      this.currentOpenRatio = 0.35 * envelope; // Smooth opening/closing, no random
     }, 90);
   }
 
