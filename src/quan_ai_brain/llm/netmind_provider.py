@@ -92,7 +92,7 @@ class NetMindProvider:
     def __init__(
         self,
         base_url: str | None = None,
-        timeout: float = 30.0,
+        timeout: float = 15.0,  # Reduced from 30.0 for faster fail (chat timeout)
         max_retries: int = 1,
         reasoning_effort: str | None = "low",
         external_data_allowed: bool | None = None,

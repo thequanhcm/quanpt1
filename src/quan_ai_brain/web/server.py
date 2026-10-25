@@ -49,11 +49,10 @@ def _build_llm_provider(fallback_mode: FallbackMode = FallbackMode.NEVER) -> LLM
     return LLMProvider(fallback_mode=fallback_mode, netmind=NetMindProvider())
 
 
-# Sprint 2: NetMind availability TTL cache (60s) — avoids GET /models round-trips
-# per chat request. Readiness failures fall through to generate()-level error
-# events, so a stale READY cache degrades gracefully, never silently.
+# Sprint 2: NetMind availability TTL cache (120s — increased from 60s for better performance)
+# Optimized 2026-10-25: longer cache reduces GET /models round-trips per chat request.
 _NETMIND_AVAIL_CACHE: dict[str, Any] = {"models": None, "expires": 0.0}
-_NETMIND_AVAIL_TTL_SECONDS = 60.0
+_NETMIND_AVAIL_TTL_SECONDS = 120.0
 
 
 def _netmind_available_models(netmind: NetMindProvider) -> list[str]:
