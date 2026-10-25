@@ -6,9 +6,14 @@ from typing import Any
 from quan_ai_brain.llm.client import OllamaClient
 from quan_ai_brain.llm.mock_provider import MockLLMProvider
 from quan_ai_brain.llm.models import FallbackMode, LLMRequest, LLMResponse, ModelInfo
-from quan_ai_brain.llm.netmind_provider import NETMIND_CHAT_MODEL, NetMindProvider
+from quan_ai_brain.llm.netmind_provider import (
+    NETMIND_CHAT_MODEL,
+    NETMIND_DEEP_REASONING_MODEL,
+    NetMindProvider,
+)
+from typing import Any, Iterator
 
-NETMIND_CHAT_MODELS = (NETMIND_CHAT_MODEL,)
+NETMIND_CHAT_MODELS = (NETMIND_CHAT_MODEL, NETMIND_DEEP_REASONING_MODEL)
 
 
 class LLMProvider:
@@ -82,6 +87,38 @@ class LLMProvider:
         if allow_fallback is not None:
             return allow_fallback
         return self.fallback_mode in (FallbackMode.ON_ERROR, FallbackMode.ALWAYS_MOCK)
+
+    def stream(
+        self,
+        request: LLMRequest | str,
+        allow_fallback: bool | None = None,
+        **kwargs: Any,
+    ) -> Iterator[dict[str, Any]]:
+        """Stream events via NetMind for cloud models; local models are not streamed.
+
+        Event contract mirrors NetMindProvider.stream_chat(): meta / delta / final /
+        error dicts. Mock fallback (caller-approved) is emitted as a single delta +
+        final pair with an explicit MOCK provenance warning — never as real GLM.
+        """
+        if isinstance(request, str):
+            request = LLMRequest(prompt=request, model=self.default_model, **kwargs)
+        if self.netmind is not None and request.model in NETMIND_CHAT_MODELS:
+            yield from self.netmind.stream_chat(request)
+            return
+        # Non-cloud models: single-shot generate, re-emitted as one delta event.
+        resp = self.generate(request, allow_fallback=allow_fallback)
+        if resp.text:
+            yield {"type": "delta", "text": resp.text}
+        yield {
+            "type": "final",
+            "model": resp.model,
+            "elapsed_ms": resp.elapsed_ms,
+            "completion_tokens": None,
+            "finish_reason": "stop" if resp.success else "error",
+            "provider": resp.provider,
+            "is_mock": resp.is_mock,
+            **({"warning": resp.warning} if getattr(resp, "warning", None) else {}),
+        }
 
     def generate(
         self,

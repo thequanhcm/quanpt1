@@ -222,8 +222,20 @@ class WakeWordEngine {
   }
 
   handleSpeechResult(event) {
+    // Sprint 2 barge-in: human voice interrupts the assistant's TTS playback.
+    // Guards: the engine must be running, a wake word engine exists, and the
+    // audio must actually be playing (not just any SpeechRecognition noise).
     if (this.isTtsSpeaking || this.state === "SPEAKING") {
-      return;
+      const interrupted = (typeof window !== "undefined" && typeof window.bargeInStopSpeaking === "function")
+        ? window.bargeInStopSpeaking()
+        : false;
+      if (interrupted) {
+        console.log("[Pi5 Barge-in] Human voice detected — TTS cancelled.");
+        this.isTtsSpeaking = false;
+        this.startFollowUpWindow();
+        return;
+      }
+      return; // spurious result while blocked — ignore
     }
 
     let transcript = "";
@@ -247,7 +259,10 @@ class WakeWordEngine {
       return;
     }
     if (clean.includes("dừng đọc") || clean.includes("dừng nói") || clean.includes("stop speaking")) {
-      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      const stopped = (typeof window !== "undefined" && typeof window.bargeInStopSpeaking === "function")
+        ? window.bargeInStopSpeaking()
+        : false;
+      if (!stopped && window.speechSynthesis) window.speechSynthesis.cancel();
       this.isTtsSpeaking = false;
       this.startFollowUpWindow();
       return;

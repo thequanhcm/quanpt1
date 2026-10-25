@@ -276,6 +276,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Sprint 2 barge-in: hàm toàn cục — wake_engine gọi khi mic nghe thấy giọng
+  // người trong lúc TTS đang phát. Dừng audio kiosk + avatar về LISTENING.
+  // Trả về true nếu thực sự có audio bị dừng.
+  window.bargeInStopSpeaking = function () {
+    let stopped = false;
+    if (currentKioskAudio) {
+      try {
+        currentKioskAudio.pause();
+        currentKioskAudio.currentTime = 0;
+        stopped = true;
+      } catch (err) {
+        console.warn("[Kiosk] Barge-in stop error:", err);
+      }
+      currentKioskAudio = null;
+    }
+    if (window.digitalHuman && typeof window.digitalHuman.cancelUtterance === "function") {
+      try { window.digitalHuman.cancelUtterance(); stopped = true; } catch (_) {}
+    }
+    if (stopped) {
+      setAvatarState("LISTENING");
+      if (transcriptEl) transcriptEl.textContent = `"Dạ, em dừng lại nghe Anh ạ."`;
+      if (wakeEngine && wakeEngine.notifySpeakingEnd) wakeEngine.notifySpeakingEnd();
+    }
+    return stopped;
+  };
+
   // Phát một lần duy nhất — dùng trong vòng lặp poll để chống phát đôi
   function playSpeechOnce(audioBase64, timeline) {
     if (!audioBase64) return;

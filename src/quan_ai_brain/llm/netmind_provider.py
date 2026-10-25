@@ -33,15 +33,26 @@ import ssl
 import time
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import Any, Iterator
 
 from quan_ai_brain.core.redaction import redact_text
 from quan_ai_brain.llm.models import LLMRequest, LLMResponse, ModelInfo
 
 DEFAULT_NETMIND_BASE_URL = "https://stream-netmind.viettel.vn/aigw/ai/v1"
 NETMIND_CHAT_MODEL = "zai-org/GLM-5.3-Flash"
+NETMIND_DEEP_REASONING_MODEL = "Qwen/Qwen3.5-122B-A10B-FP8"
 
-CHAT_MODELS = (NETMIND_CHAT_MODEL,)
+# Sprint 2 (approved by owner 2026-10-25): deep reasoning tier.
+# Probe evidence: Qwen3.5-122B ALWAYS reasons (reasoning_effort param has no
+# effect); with max_tokens=2500 it completed in 22.0s (2255 reasoning + 72
+# content tokens, finish_reason=stop) vs empty answers at 200/900 budgets.
+DEEP_REASONING_DEFAULT_MAX_TOKENS = 2500
+DEEP_REASONING_EFFORT_NONE = None  # param is ignored by this model; send nothing
+
+CHAT_MODELS = (NETMIND_CHAT_MODEL, NETMIND_DEEP_REASONING_MODEL)
+
+# Model IDs excluded from the reasoning_effort parameter (verified no-effect).
+_MODELS_IGNORE_REASONING_EFFORT = frozenset({NETMIND_DEEP_REASONING_MODEL})
 
 _CATALOG_MODELS = [
     ModelInfo(
@@ -54,6 +65,21 @@ _CATALOG_MODELS = [
             "provider": "netmind",
             "kind": "chat",
             "serves_tiers": ["fast", "reasoning"],
+            "catalog_verified": "2026-10-25",
+        },
+    ),
+    ModelInfo(
+        name=NETMIND_DEEP_REASONING_MODEL,
+        tag=NETMIND_DEEP_REASONING_MODEL,
+        size_bytes=0,
+        modified_at="",
+        digest="",
+        details={
+            "provider": "netmind",
+            "kind": "deep_reasoning",
+            "serves_tiers": ["deep"],
+            "always_reasons": True,
+            "default_max_tokens": DEEP_REASONING_DEFAULT_MAX_TOKENS,
             "catalog_verified": "2026-10-25",
         },
     ),
@@ -72,6 +98,10 @@ class NetMindProvider:
         external_data_allowed: bool | None = None,
         audit_logger: Any = None,
     ) -> None:
+        # NOTE: Sprint 2 verified (E2E 2026-10-25): the DEFAULT gateway serves the
+        # verified model IDs. NETMIND_DESKTOP_LLM_BASE_URL points at a different
+        # LiteLLM endpoint that returns 404 for zai-org/GLM-5.3-Flash — it must
+        # NOT override the verified default. Only NETMIND_BASE_URL may override.
         self.base_url = (base_url or os.environ.get("NETMIND_BASE_URL") or DEFAULT_NETMIND_BASE_URL).rstrip("/")
         self.default_timeout = max(1.0, min(float(timeout), 300.0))
         self.max_retries = max(0, min(int(max_retries), 3))
@@ -147,6 +177,116 @@ class NetMindProvider:
         return infos or list(_CATALOG_MODELS)
 
     # ------------------------------------------------------------------ chat
+    def stream_chat(
+        self,
+        request: LLMRequest | str,
+        **kwargs: Any,
+    ) -> Iterator[dict[str, Any]]:
+        """Stream a chat completion from NetMind as an iterator of structured events.
+
+        Event shapes (dicts, JSON-serializable, prompt-content-free except delta):
+          {"type": "meta",    "model": str}                     — first, after gates pass
+          {"type": "delta",   "text": str}                      — incremental content
+          {"type": "final",   "model": str, "elapsed_ms": float,
+           "completion_tokens": int|None, "finish_reason": str|None}
+          {"type": "error",   "code": str, "message": str}      — gates or transport failed
+
+        Fail-closed contract (mirrors generate()): owner consent first, then key,
+        then model allow-list. Errors are yielded as events — this method never
+        raises for network/HTTP/gate failures. A mock fallback is the CALLER's
+        decision (never automatic) so a mock can never masquerade as GLM-5.3.
+        """
+        if isinstance(request, str):
+            request = LLMRequest(prompt=request, **kwargs)
+
+        started = time.perf_counter()
+
+        # 1. Owner consent gate — fail-closed.
+        if not self.external_data_allowed:
+            yield {"type": "error", "code": "NETMIND_DISABLED", "message": (
+                "NetMind external data policy flag is disabled (NETMIND_EXTERNAL_DATA_ALLOWED=false). "
+                "Set NETMIND_EXTERNAL_DATA_ALLOWED=true only with owner approval."
+            )}
+            return
+
+        # 2. Key gate.
+        key = self._get_api_key()
+        if not key:
+            yield {"type": "error", "code": "NO_API_KEY", "message": (
+                "NETMIND_API_KEY (or HERMES_CUSTOM_NETMIND_API_KEY) is not set in the environment."
+            )}
+            return
+
+        # 3. Model allow-list.
+        model = (request.model or NETMIND_CHAT_MODEL).strip()
+        if model not in CHAT_MODELS:
+            yield {"type": "error", "code": "MODEL_NOT_IN_NETMIND_CATALOG", "message": (
+                f"Model '{model}' is not in the verified NetMind catalog. "
+                f"Allowed: {', '.join(CHAT_MODELS)}."
+            )}
+            return
+
+        # 4. Minimal payload.
+        messages: list[dict[str, str]] = []
+        if request.system_prompt:
+            messages.append({"role": "system", "content": request.system_prompt})
+        messages.append({"role": "user", "content": request.prompt})
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": messages,
+            "temperature": request.temperature,
+            "stream": True,
+        }
+        if self.reasoning_effort and model not in _MODELS_IGNORE_REASONING_EFFORT:
+            payload["reasoning_effort"] = self.reasoning_effort
+        max_tokens = request.metadata.get("max_tokens") if isinstance(request.metadata, dict) else None
+        if max_tokens is None and model == NETMIND_DEEP_REASONING_MODEL:
+            max_tokens = DEEP_REASONING_DEFAULT_MAX_TOKENS
+        if isinstance(max_tokens, int) and 1 <= max_tokens <= 32768:
+            payload["max_tokens"] = max_tokens
+
+        yield {"type": "meta", "model": model}
+
+        # 5. Single live-streaming attempt (bounded retries would replay deltas).
+        # Deltas are yielded AS THEY ARRIVE (true streaming); partial chunks are
+        # discarded only on mid-stream transport failure (truncation must never
+        # be presented as a complete answer — caller receives a structured error).
+        final_event: dict[str, Any] | None = None
+        error_event: dict[str, Any] | None = None
+        for event in self._iter_chat_stream_events(
+            payload,
+            timeout=request.timeout_seconds or self.default_timeout,
+        ):
+            if event["type"] == "delta":
+                yield event
+            elif event["type"] == "final":
+                final_event = event
+            elif event["type"] == "error":
+                error_event = event
+
+        if error_event is not None:
+            yield error_event
+            return
+
+        if final_event is None:
+            yield {"type": "error", "code": "STREAM_ENDED_WITHOUT_FINAL", "message": (
+                "Gateway closed the stream before a final event arrived."
+            )}
+            return
+
+        elapsed_ms = round((time.perf_counter() - started) * 1000, 2)
+        final_event["elapsed_ms"] = elapsed_ms
+        self.last_routing = {
+            "provider": "netmind",
+            "model": model,
+            "reason": "stream",
+            "elapsed_ms": elapsed_ms,
+            "success": bool(final_event.get("completion_tokens")),
+        }
+        self._audit_record("llm_routing", self.last_routing)
+        yield final_event
+
+    # ------------------------------------------------------------------ chat
     def generate(self, request: LLMRequest | str, **kwargs: Any) -> LLMResponse:
         """Send a chat completion to NetMind. Returns structured LLMResponse.
 
@@ -194,9 +334,13 @@ class NetMindProvider:
             "temperature": request.temperature,
             "stream": False,
         }
-        if self.reasoning_effort:
+        if self.reasoning_effort and model not in _MODELS_IGNORE_REASONING_EFFORT:
             payload["reasoning_effort"] = self.reasoning_effort
         max_tokens = request.metadata.get("max_tokens") if isinstance(request.metadata, dict) else None
+        if max_tokens is None and model == NETMIND_DEEP_REASONING_MODEL:
+            # Verified (Sprint 2 probe): Qwen3.5-122B always reasons (~2255 tokens)
+            # before answering; a default budget is REQUIRED or it returns empty.
+            max_tokens = DEEP_REASONING_DEFAULT_MAX_TOKENS
         if isinstance(max_tokens, int) and 1 <= max_tokens <= 32768:
             payload["max_tokens"] = max_tokens
 
@@ -308,6 +452,94 @@ class NetMindProvider:
         )
         with urllib.request.urlopen(req, timeout=timeout, context=self._ssl_context()) as resp:
             return json.loads(resp.read().decode("utf-8", errors="replace"))
+
+    def _iter_chat_stream_events(
+        self,
+        payload: dict[str, Any],
+        timeout: float,
+    ) -> Iterator[dict[str, Any]]:
+        """POST /chat/completions with stream=True. Yields live SSE events.
+
+        Yields {"type":"delta","text":...} as each chunk arrives, then exactly one
+        {"type":"final", ...} (with completion_tokens and finish_reason) or one
+        {"type":"error", ...}. Deltas already yielded are NOT re-yielded on error;
+        the caller decides whether to discard partial text.
+        """
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(
+            self.base_url + "/chat/completions",
+            data=body,
+            headers={
+                "Authorization": f"Bearer {self._get_api_key()}",
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream",
+            },
+            method="POST",
+        )
+        completion_tokens: int | None = None
+        finish_reason: str | None = None
+        saw_content = False
+        try:
+            with urllib.request.urlopen(req, timeout=max(1.0, float(timeout)), context=self._ssl_context()) as resp:
+                ctype = resp.headers.get("Content-Type", "") if hasattr(resp, "headers") else ""
+                if "text/event-stream" not in ctype:
+                    yield {"type": "error", "code": "NOT_EVENT_STREAM", "message": redact_text(
+                        f"Gateway did not return an SSE stream (Content-Type: {ctype})"
+                    )}
+                    return
+                for raw_line in resp:
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[len("data:"):].strip()
+                    if data_str == "":
+                        continue
+                    if data_str == "":
+                        break
+                    try:
+                        event = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+                    if not isinstance(event, dict):
+                        continue
+                    choices = event.get("choices") or []
+                    if not choices or not isinstance(choices[0], dict):
+                        continue
+                    choice = choices[0]
+                    if choice.get("finish_reason"):
+                        finish_reason = str(choice["finish_reason"])
+                    delta = choice.get("delta") or {}
+                    text = delta.get("content")
+                    if isinstance(text, str) and text:
+                        saw_content = True
+                        completion_tokens = (completion_tokens or 0) + 1
+                        yield {"type": "delta", "text": text}
+            yield {
+                "type": "final",
+                "model": payload.get("model", ""),
+                "completion_tokens": completion_tokens,
+                "finish_reason": finish_reason or ("stop" if saw_content else "empty"),
+            }
+        except urllib.error.HTTPError as exc:
+            try:
+                snippet = exc.read().decode("utf-8", errors="replace")[:200]
+            except Exception:  # noqa: BLE001
+                snippet = ""
+            yield {"type": "error", "code": f"HTTP_{exc.code}", "message": redact_text(
+                f"Gateway HTTP {exc.code}: {exc.reason} {snippet}"
+            )}
+        except TimeoutError as exc:
+            yield {"type": "error", "code": "TIMEOUT", "message": redact_text(
+                f"NetMind gateway stream timed out: {exc}"
+            )}
+        except (urllib.error.URLError, OSError) as exc:
+            yield {"type": "error", "code": "CONNECTION_ERROR", "message": redact_text(
+                f"NetMind gateway unreachable: {exc}"
+            )}
+        except json.JSONDecodeError as exc:
+            yield {"type": "error", "code": "JSON_DECODE_ERROR", "message": redact_text(
+                f"Failed to decode gateway stream: {exc}"
+            )}
 
     @staticmethod
     def _error_response(request: LLMRequest, code: str, started: float, message: str) -> LLMResponse:

@@ -20,6 +20,7 @@ from quan_ai_brain.llm.models import LLMRequest
 from quan_ai_brain.llm.netmind_provider import (
     CHAT_MODELS,
     NETMIND_CHAT_MODEL,
+    NETMIND_DEEP_REASONING_MODEL,
     NetMindProvider,
 )
 
@@ -104,8 +105,10 @@ def test_empty_model_rejected_by_request_validation():
 
 
 def test_chat_models_constant_matches_catalog():
-    assert CHAT_MODELS == ("zai-org/GLM-5.3-Flash",)
+    # Sprint 2: deep reasoning tier Qwen/Qwen3.5-122B-A10B-FP8 approved by owner.
+    assert CHAT_MODELS == ("zai-org/GLM-5.3-Flash", "Qwen/Qwen3.5-122B-A10B-FP8")
     assert NETMIND_CHAT_MODEL == "zai-org/GLM-5.3-Flash"
+    assert NETMIND_DEEP_REASONING_MODEL == "Qwen/Qwen3.5-122B-A10B-FP8"
 
 
 # ---------------------------------------------------------------- happy paths

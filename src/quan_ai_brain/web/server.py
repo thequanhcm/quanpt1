@@ -38,8 +38,40 @@ from quan_ai_brain.governance.consultation_inbox import (
 )
 from quan_ai_brain.learning.periodic_reporter import PeriodicLearningReporter
 from quan_ai_brain.llm import FallbackMode, LLMProvider, LLMRequest
+from quan_ai_brain.llm.netmind_provider import NetMindProvider
 from quan_ai_brain.llm.router import LLMRouter
 from quan_ai_brain.memory.sqlite_store import MemoryStore
+
+
+def _build_llm_provider(fallback_mode: FallbackMode = FallbackMode.NEVER) -> LLMProvider:
+    """LLMProvider with NetMind cloud attached (policy/key gates stay fail-closed
+    inside the provider itself — attaching costs nothing when disabled)."""
+    return LLMProvider(fallback_mode=fallback_mode, netmind=NetMindProvider())
+
+
+# Sprint 2: NetMind availability TTL cache (60s) — avoids GET /models round-trips
+# per chat request. Readiness failures fall through to generate()-level error
+# events, so a stale READY cache degrades gracefully, never silently.
+_NETMIND_AVAIL_CACHE: dict[str, Any] = {"models": None, "expires": 0.0}
+_NETMIND_AVAIL_TTL_SECONDS = 60.0
+
+
+def _netmind_available_models(netmind: NetMindProvider) -> list[str]:
+    """Cached catalog read for routing (readiness check included in the TTL)."""
+    now = time.time()
+    if _NETMIND_AVAIL_CACHE["models"] is not None and now < _NETMIND_AVAIL_CACHE["expires"]:
+        return list(_NETMIND_AVAIL_CACHE["models"])
+    try:
+        if netmind.health(timeout=2.0).get("status") != "READY":
+            return []
+        names = [m.name for m in netmind.list_models(timeout=3.0)]
+    except Exception:
+        return []
+    _NETMIND_AVAIL_CACHE["models"] = names
+    _NETMIND_AVAIL_CACHE["expires"] = now + _NETMIND_AVAIL_TTL_SECONDS
+    return names
+
+
 from quan_ai_brain.cognition.role_orchestrator import (
     ExecutiveRole,
     ExecutiveRoleOrchestrator,
@@ -403,6 +435,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_chat(body)
             return
 
+        if path == "/api/chat/stream":
+            self._handle_api_chat_stream(body)
+            return
+
         if path == "/api/memories":
             self._handle_api_add_memory(body)
             return
@@ -761,14 +797,21 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         start_time = time.perf_counter()
         try:
-            # 1. Routing Model
+            # 1. Routing Model — include NetMind cloud models when the gateway is READY
+            # (policy allowed + key present + catalog reachable); router then prefers
+            # GLM-5.3-Flash and falls back to local models only if the cloud is absent.
             router = LLMRouter()
             mode = FallbackMode.ON_ERROR if allow_fallback else FallbackMode.NEVER
-            provider = LLMProvider(fallback_mode=mode)
+            provider = _build_llm_provider(mode)
             avail_models: list[str] = []
+            if provider.netmind is not None:
+                try:
+                    avail_models.extend(_netmind_available_models(provider.netmind))
+                except Exception:
+                    pass
             if provider.is_online(timeout=1.0):
                 try:
-                    avail_models = [m.name for m in provider.list_models(allow_fallback=True)]
+                    avail_models = [m.name for m in provider.list_models(allow_fallback=True)] + avail_models
                 except Exception:
                     avail_models = []
 
@@ -910,6 +953,155 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
+
+    def _handle_api_chat_stream(self, body: dict) -> None:
+        """SSE streaming chat endpoint (Sprint 2, owner-approved 2026-10-25).
+
+        POST /api/chat/stream  body: same fields as /api/chat.
+        Emits text/event-stream frames of JSON dicts:
+          {"type":"meta","model":...} — model chosen after routing + gates
+          {"type":"delta","text":...} — incremental GLM tokens
+          {"type":"final", ...}       — full reply persisted AFTER completion
+          {"type":"error","code":...} — fail-closed; never a mock masquerade
+        Mock fallback is emitted ONLY when the caller explicitly passes
+        fallback=true, tagged with an explicit is_mock/warning provenance.
+        """
+        query = str(body.get("query") or body.get("message", "")).strip()
+        session_id = str(body.get("session_id", "default_executive_session")).strip() or "default_executive_session"
+        allow_fallback = bool(body.get("fallback", False))
+        scope = body.get("scope") or None
+        timeout = float(body.get("timeout", 120.0))
+        explicit_model = str(body.get("model", "")).strip() or None
+
+        def _sse(event: dict) -> bytes:
+            return f"data: {json.dumps(event, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        # Header validation errors must still be SSE-shaped for the client.
+        if not query:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(_sse({"type": "error", "code": "EMPTY_QUERY", "message": "Query cannot be empty"}))
+            return
+
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+
+        try:
+            # 1. Routing (same heuristics as /api/chat; deep tier included).
+            # Include NetMind cloud models when READY (same logic as /api/chat).
+            router = LLMRouter()
+            mode = FallbackMode.ON_ERROR if allow_fallback else FallbackMode.NEVER
+            provider = _build_llm_provider(mode)
+            avail_models: list[str] = []
+            if provider.netmind is not None:
+                try:
+                    avail_models.extend(_netmind_available_models(provider.netmind))
+                except Exception:
+                    pass
+            if provider.is_online(timeout=1.0):
+                try:
+                    avail_models = [m.name for m in provider.list_models(allow_fallback=True)] + avail_models
+                except Exception:
+                    avail_models = []
+            decision = router.route(
+                query,
+                task_hint="chat",
+                explicit_model=explicit_model,
+                available_models=avail_models,
+            )
+            selected_model = decision.model
+            self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
+
+            # 2. Memory retrieval & session history.
+            with MemoryStore(db_path, workspace=workspace) as store:
+                session_mgr = SessionMemoryManager(store)
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
+                retriever = CognitiveRetriever(store)
+                m_query = MemoryQuery(query=query, project_scope=scope, top_k=5, max_chars=4000)
+                retrieval = retriever.retrieve(m_query)
+                builder = PromptContextBuilder(default_max_chars=4000)
+                context = builder.build(
+                    user_query=query,
+                    retrieval=retrieval,
+                    max_chars=4000,
+                    project_scope=scope,
+                    conversation_history=recent_history,
+                )
+
+            # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
+            req = LLMRequest(
+                prompt=context.rendered_context,
+                system_prompt=context.system_instructions,
+                model=selected_model,
+                timeout_seconds=timeout,
+            )
+            parts: list[str] = []
+            final_event: dict = {}
+            for event in provider.stream(req):
+                if event["type"] == "delta":
+                    parts.append(event["text"])
+                    self.wfile.write(_sse(event))
+                    self.wfile.flush()
+                elif event["type"] == "final":
+                    final_event = event
+                elif event["type"] == "error":
+                    # Fail-closed: no mock masquerade unless caller opted in.
+                    if allow_fallback:
+                        mock_resp = provider.mock.generate(req)
+                        warning = (
+                            f"MOCK FALLBACK — [{event.get('code')}] {event.get('message', '')} "
+                            "Mock provider used. NO REAL LLM INFERENCE."
+                        )
+                        self.wfile.write(_sse({"type": "delta", "text": mock_resp.text}))
+                        self.wfile.write(_sse({"type": "final", "model": "mock", "elapsed_ms": 0.0,
+                                               "completion_tokens": None, "finish_reason": "stop",
+                                               "is_mock": True, "warning": warning}))
+                    else:
+                        self.wfile.write(_sse(event))
+                    self.wfile.flush()
+                    return
+
+            full_text = OutputGuardrails.sanitize("".join(parts))[0]
+            grounding_analysis = OutputGuardrails.analyze_grounding(full_text, context=context)
+
+            # 4. Persist the COMPLETE answer only after stream completion.
+            persistence_info: dict[str, Any] = {}
+            if full_text:
+                with MemoryStore(db_path, workspace=workspace) as store:
+                    session_mgr = SessionMemoryManager(store)
+                    persistence_info = session_mgr.persist_chat_turn(
+                        session_id=session_id,
+                        user_query=query,
+                        assistant_reply=full_text,
+                        model_used=final_event.get("model", selected_model),
+                        used_memory_ids=[m.memory_id for m in context.used_memories],
+                        project_scope=scope or "general",
+                    )
+
+            final_event.setdefault("type", "final")
+            final_event.update({
+                "reply": full_text,
+                "grounding": grounding_analysis.to_dict(),
+                "session_id": session_id,
+                "routing": {"tier": decision.tier, "model": decision.model, "is_fallback": decision.is_fallback},
+                "persistence": persistence_info,
+            })
+            self.wfile.write(_sse(final_event))
+            self.wfile.flush()
+        except (BrokenPipeError, ConnectionResetError):
+            return  # client disconnected mid-stream — nothing to write
+        except Exception as exc:  # noqa: BLE001 — endpoint must not crash the server
+            try:
+                self.wfile.write(_sse({"type": "error", "code": "STREAM_HANDLER_ERROR", "message": str(exc)}))
+            except Exception:  # noqa: BLE001
+                pass
 
     def _handle_api_plan(self, body: dict) -> None:
         goal = str(body.get("goal", "")).strip()

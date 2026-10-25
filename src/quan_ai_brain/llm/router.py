@@ -21,16 +21,31 @@ class RoutingDecision:
 
 
 class LLMRouter:
-    """Selects the most suitable LLM based on task characteristics."""
+    """Selects the most suitable LLM based on task characteristics.
 
-    DEFAULT_FAST_MODEL = "qwen2.5:1.5b"
+    Sprint 2 routing (owner-approved, evidence: Sprint 1 Vietnamese benchmark —
+    GLM-5.3-Flash 88.5% keyword accuracy / 1.33s avg vs Qwen2.5:1.5b 69.2% / 1.76s):
+    - fast + reasoning tiers -> NetMind GLM-5.3-Flash (cloud, streamed).
+    - deep tier -> NetMind Qwen3.5-122B (always-reasons planner, ~22s) for
+      research-grade analysis only.
+    - Local Qwen models remain the offline/privacy fallback path (never removed).
+    """
+
+    DEFAULT_FAST_MODEL = "zai-org/GLM-5.3-Flash"
     FALLBACK_FAST_MODEL = "qwen2.5:0.5b"
-    DEFAULT_REASONING_MODEL = "qwen2.5:7b"
+    DEFAULT_REASONING_MODEL = "zai-org/GLM-5.3-Flash"
+    DEFAULT_DEEP_MODEL = "Qwen/Qwen3.5-122B-A10B-FP8"
+    LOCAL_REASONING_FALLBACK_MODEL = "qwen2.5:7b"
 
     _COMPLEX_PATTERNS = [
         re.compile(r"(?i)\b(?:plan|planning|architecture|decompose|dag|algorithm|refactor|benchmark)\b"),
         re.compile(r"(?i)\b(?:lập kế hoạch|kế hoạch|phân tích|kiến trúc|chia nhỏ|thuật toán|đánh giá|suy luận sâu)\b"),
         re.compile(r"(?i)\b(?:governance|security audit|containment|sandbox|policy engine)\b"),
+    ]
+
+    _DEEP_PATTERNS = [
+        re.compile(r"(?i)(phân tích chuyên sâu|nghiên cứu sâu|đọc và phân tích tài liệu|tổng hợp báo cáo dài)"),
+        re.compile(r"(?i)(deep dive|comprehensive analysis|exhaustive research|research-grade)"),
     ]
 
     def __init__(
@@ -40,6 +55,17 @@ class LLMRouter:
     ) -> None:
         self.default_fast = default_fast
         self.default_reasoning = default_reasoning
+
+    def is_deep_query(self, query: str, task_hint: str = "chat") -> bool:
+        """Evaluate if query requires the deep reasoning tier (research-grade)."""
+        if task_hint in ("deep_research", "document_analysis"):
+            return True
+        if len(query.strip()) > 1200:
+            return True
+        for pattern in self._DEEP_PATTERNS:
+            if pattern.search(query):
+                return True
+        return False
 
     def is_complex_query(self, query: str, task_hint: str = "chat") -> bool:
         """Evaluate if query requires heavy reasoning tier."""
@@ -83,8 +109,12 @@ class LLMRouter:
                 is_fallback=False,
             )
 
-        # 2. Heuristic tier classification
-        if self.is_complex_query(query, task_hint=task_hint):
+        # 2. Heuristic tier classification (deep first — strictest match wins).
+        if self.is_deep_query(query, task_hint=task_hint):
+            target = self.DEFAULT_DEEP_MODEL
+            tier = "deep"
+            reason = "Research-grade analysis requested; deep reasoning tier selected"
+        elif self.is_complex_query(query, task_hint=task_hint):
             target = self.default_reasoning
             tier = "reasoning"
             reason = "Complex reasoning, planning, or long query detected"
@@ -102,6 +132,15 @@ class LLMRouter:
                         model=self.FALLBACK_FAST_MODEL,
                         tier="fast",
                         reason=f"Preferred {target} not available, using fallback fast model {self.FALLBACK_FAST_MODEL}",
+                        is_fallback=True,
+                    )
+                # Cloud reasoning target missing (offline/no key): keep the tier,
+                # swap to the local reasoning model — tier semantics preserved.
+                if self._is_model_present(self.LOCAL_REASONING_FALLBACK_MODEL, available_models):
+                    return RoutingDecision(
+                        model=self.LOCAL_REASONING_FALLBACK_MODEL,
+                        tier=tier,
+                        reason=f"Preferred {target} not available, using local reasoning model {self.LOCAL_REASONING_FALLBACK_MODEL}",
                         is_fallback=True,
                     )
                 if self._is_model_present(self.default_reasoning, available_models):

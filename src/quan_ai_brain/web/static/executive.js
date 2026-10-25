@@ -440,6 +440,23 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Parse one SSE frame chunk into event objects (handles split frames).
+  function parseSSEBuffer(buffer, onEvent) {
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, idx);
+      const lines = frame.split("\n");
+      let dataStr = "";
+      for (const line of lines) {
+        if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+      }
+      if (dataStr) {
+        try { onEvent(JSON.parse(dataStr)); } catch (_) { /* skip malformed frame */ }
+      }
+    }
+    return "";
+  }
+
   async function sendDialogueMessage() {
     const input = document.getElementById("dialogue-input");
     if (!input) return;
@@ -450,39 +467,121 @@ document.addEventListener("DOMContentLoaded", () => {
     input.value = "";
 
     const list = document.getElementById("dialogue-messages-list");
-    const typingId = "typing-" + Date.now();
-    const typingEl = document.createElement("div");
-    typingEl.id = typingId;
-    typingEl.className = "msg-bubble msg-assistant";
-    typingEl.innerHTML = `<div class="msg-author">QUAN AI BRAIN</div><div class="msg-text"><em>Bản sao đang suy luận dựa trên bằng chứng...</em></div>`;
-    list.appendChild(typingEl);
+    const streamId = "stream-" + Date.now();
+    const streamEl = document.createElement("div");
+    streamEl.id = streamId;
+    streamEl.className = "msg-bubble msg-assistant";
+    streamEl.innerHTML = `<div class="msg-author">QUAN AI BRAIN</div><div class="msg-text"><em>Bản sao đang suy luận dựa trên bằng chứng...</em></div>`;
+    list.appendChild(streamEl);
     list.scrollTop = list.scrollHeight;
+
+    const textEl = streamEl.querySelector(".msg-text");
 
     try {
       if (typeof setAvatarState === "function") setAvatarState("THINKING");
       if (wakeEngine) wakeEngine.notifyThinking();
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/chat/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: jsonBody({ message: text, model: "qwen2.5:7b" })
+        body: jsonBody({ message: text })
       });
-      const data = await res.json();
-      const removed = document.getElementById(typingId);
-      if (removed) removed.remove();
+      if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
 
-      if (data.reply) {
-        appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", data.reply, "assistant");
-        if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
-          window.digitalHuman.setContextFromText(data.reply);
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buf = "";
+      let finalText = "";
+      let gotDelta = false;
+
+      const handleEvent = (ev) => {
+        if (ev.type === "delta") {
+          if (!gotDelta) {
+            gotDelta = true;
+            if (typeof setAvatarState === "function") setAvatarState("SPEAKING");
+          }
+          finalText += ev.text || "";
+          if (textEl) textEl.textContent = finalText;
+          list.scrollTop = list.scrollHeight;
+        } else if (ev.type === "final") {
+          if (ev.reply) finalText = ev.reply;   // authoritative sanitized text
+          if (textEl) textEl.textContent = finalText || "(Không có nội dung phản hồi)";
+        } else if (ev.type === "error") {
+          finalText = "⚠️ Lỗi luồng phản hồi [" + (ev.code || "UNKNOWN") + "]: " + (ev.message || "");
+          if (textEl) textEl.textContent = finalText;
         }
-        speakText(data.reply);
+      };
+
+      // Read the SSE stream until the server closes it.
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        const piece = decoder.decode(chunk.value, { stream: true });
+        const remainder = buf + piece;
+        let consumed = "";
+        let work = remainder;
+        // Consume complete frames; keep the partial tail in buf.
+        for (;;) {
+          const idx = work.indexOf("\n\n");
+          if (idx === -1) break;
+          const frame = work.slice(0, idx);
+          work = work.slice(idx + 2);
+          let dataStr = "";
+          for (const line of frame.split("\n")) {
+            if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+          }
+          if (dataStr) {
+            try { handleEvent(JSON.parse(dataStr)); } catch (_) {}
+          }
+          consumed = work;
+        }
+        buf = work;
+        void consumed;
+      }
+      // Flush any trailing frame without a final newline.
+      if (buf.trim()) {
+        let dataStr = "";
+        for (const line of buf.split("\n")) {
+          if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+        }
+        if (dataStr) { try { handleEvent(JSON.parse(dataStr)); } catch (_) {} }
+      }
+      void parseSSEBuffer; // retained helper for future reuse
+
+      streamEl.removeAttribute("id");
+
+      if (finalText) {
+        if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
+          window.digitalHuman.setContextFromText(finalText);
+        }
+        speakText(finalText);   // TTS only AFTER the complete answer arrives
       } else {
-        appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI cục bộ.", "assistant");
+        appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI.", "assistant");
       }
     } catch (err) {
-      const removed = document.getElementById(typingId);
-      if (removed) removed.remove();
-      appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Lỗi kết nối với hệ điều hành: " + err.message, "assistant");
+      // Streaming path failed — fall back to the legacy non-streaming endpoint.
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: jsonBody({ message: text, fallback: false })
+        });
+        const data = await res.json();
+        const removed = document.getElementById(streamId);
+        if (removed) removed.remove();
+        if (data.reply) {
+          appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", data.reply, "assistant");
+          if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
+            window.digitalHuman.setContextFromText(data.reply);
+          }
+          speakText(data.reply);
+        } else {
+          appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI cục bộ.", "assistant");
+        }
+      } catch (err2) {
+        const removed = document.getElementById(streamId);
+        if (removed) removed.remove();
+        appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Lỗi kết nối với hệ điều hành: " + (err2.message || err.message), "assistant");
+      }
     }
   }
 
