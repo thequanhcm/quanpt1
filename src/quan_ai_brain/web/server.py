@@ -197,6 +197,73 @@ def get_local_lan_ip() -> str:
         return "127.0.0.1"
 
 
+def push_avatar_expression(state: str, transcript: str = "", timeout: float = 1.5) -> bool:
+    """Đẩy biểu cảm xuống avatar Pi 5 (kiosk daemon) — đồng bộ biểu cảm khi giao tiếp.
+
+    Owner requirement 27/10: "thay đổi trạng thái biểu cảm khi anh chat, hỏi đáp,
+    tùy theo các câu hỏi, hoặc trạng thái trợ lý suy nghĩ... đồng bộ cùng hiển thị
+    trên giao diện Pi5".
+    Gọi POST /api/kiosk/control {action:"set_expression", state, transcript} trên
+    Pi 5 daemon. Fire-and-forget an toàn: mọi lỗi → False, không bao giờ làm chết
+    luồng chat. Trạng thái hợp lệ khớp kiosk.js: IDLE/LISTENING/THINKING/SPEAKING/
+    RESEARCHING/LEARNING/WAITING/BLOCKED/SAFE/OFFLINE.
+    QUAN TRỌNG: cũng cập nhật _GLOBAL_EDGE_TELEMETRY — heartbeat loop của Pi 5
+    định kỳ pull target_avatar_state+transcript từ PC; nếu không cập nhật,
+    heartbeat sẽ ĐÈ state/transcript cũ ngược lại Pi 5.
+    """
+    try:
+        _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = state
+        if transcript:
+            _GLOBAL_EDGE_TELEMETRY["transcript"] = transcript[:300]
+        resp = _send_edge_request(
+            "/api/kiosk/control",
+            method="POST",
+            data={"action": "set_expression", "state": state,
+                  "transcript": transcript[:300]},
+            timeout=timeout,
+        )
+        return bool(resp.get("success"))
+    except Exception:
+        return False
+
+
+def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0) -> bool:
+    """Đẩy lời thoại hiển thị + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
+
+    Cập nhật cả telemetry transcript/state để heartbeat không đè bằng giá trị cũ.
+    Sau duration_ms, PC tự đặt IDLE vào telemetry (daemon tự reset phía Pi).
+    """
+    try:
+        _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
+        _GLOBAL_EDGE_TELEMETRY["transcript"] = text[:300]
+
+        def _reset_after_speech() -> None:
+            import time as _time
+
+            _time.sleep(max(1.0, (duration_ms or 3000) / 1000.0))
+            if _GLOBAL_EDGE_TELEMETRY.get("target_avatar_state") == "SPEAKING":
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "IDLE"
+
+        import threading as _threading
+
+        _threading.Thread(target=_reset_after_speech, daemon=True).start()
+
+        data: dict[str, Any] = {"action": "speak", "text": text[:600], "state": "SPEAKING"}
+        if duration_ms:
+            data["duration_ms"] = int(duration_ms)
+        resp = _send_edge_request(
+            "/api/kiosk/control", method="POST", data=data, timeout=timeout,
+        )
+        return bool(resp.get("success"))
+    except Exception:
+        return False
+
+
+def push_avatar_thinking(context_note: str = "") -> None:
+    """Đặt THINKING ngay khi nhận câu hỏi; kèm transcript ngắn gọn ngữ cảnh."""
+    push_avatar_expression("THINKING", transcript=context_note or "Đang suy nghĩ...")
+
+
 def _find_workspace_root() -> Path:
     current = Path.cwd().resolve()
     if (current / "src" / "quan_ai_brain").exists():
@@ -1001,6 +1068,13 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as ground_exc:
                 _audit("grounding_facts.error", {"error": str(ground_exc)[:200]})
 
+            # 2.55 Avatar: THINKING ngay khi nhận câu hỏi (trước tra cứu — owner thấy
+            # phản ứng tức thì), rồi RESEARCHING nếu có tra cứu ngoài.
+            try:
+                push_avatar_thinking()
+            except Exception:
+                pass
+
             # 2.6 External lookup evidence — câu hỏi tin tức/tra cứu ngoài → tự tra cứu
             # (Gemini search → Google News RSS + Gemini tổng hợp). Fail-closed, chỉ
             # kích hoạt với câu hỏi thời sự (should_lookup_external); key chỉ đọc env.
@@ -1013,6 +1087,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
                 if should_lookup_external(query):
                     ext_lookup_info["attempted"] = True
+                    _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "RESEARCHING"
+                    push_avatar_expression("RESEARCHING",
+                                           transcript="Đang tra cứu thông tin ngoài...")
                     _ev = collect_external_evidence(query, timeout=20.0)
                     _ev_block = _ev.render_block()
                     ext_lookup_info.update({
@@ -1099,6 +1176,19 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
+
+            # 4.5 Avatar expression sync — SPEAKING + lời thoại hiển thị trên Pi 5.
+            # Daemon phía Pi tự reset về IDLE sau duration_ms (đọc xong) — PC không cần dọn.
+            try:
+                if resp.success and sanitized_reply:
+                    speak_ms = max(2500, min(15000, len(sanitized_reply) * 90))
+                    push_avatar_speech(sanitized_reply, duration_ms=speak_ms)
+                    _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
+                elif not resp.success:
+                    push_avatar_expression("BLOCKED", transcript="Có lỗi khi xử lý câu hỏi")
+                    _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "BLOCKED"
+            except Exception:
+                pass
 
             # Owner teach confirmation — hiển thị ngay trong reply
             if teach_note:
@@ -1221,8 +1311,15 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     conversation_history=recent_history,
                 )
 
+            # 2.55 Avatar: THINKING ngay khi nhận câu hỏi (stream path).
+            try:
+                push_avatar_thinking()
+            except Exception:
+                pass
+
             # 2.6 External lookup evidence — như /api/chat (câu hỏi thời sự mới tra;
             # fail-closed, không bao giờ làm chết stream).
+            _stream_researching = False
             try:
                 from quan_ai_brain.tools.external_lookup import collect_external_evidence
 
@@ -1230,6 +1327,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _ev_block = _ev.render_block()
                 if _ev_block:
                     context.system_instructions = context.system_instructions + "\n" + _ev_block
+                    _stream_researching = True
+                    _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "RESEARCHING"
+                    push_avatar_expression("RESEARCHING", transcript="Đang tra cứu thông tin ngoài...")
             except Exception:
                 pass
 
@@ -1293,6 +1393,15 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             })
             self.wfile.write(_sse(final_event))
             self.wfile.flush()
+
+            # 4.5 Avatar expression sync — SPEAKING sau khi stream xong (Pi tự về IDLE).
+            try:
+                if full_text:
+                    speak_ms = max(2500, min(15000, len(full_text) * 90))
+                    push_avatar_speech(full_text, duration_ms=speak_ms)
+                    _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
+            except Exception:
+                pass
         except (BrokenPipeError, ConnectionResetError):
             return  # client disconnected mid-stream — nothing to write
         except Exception as exc:  # noqa: BLE001 — endpoint must not crash the server
