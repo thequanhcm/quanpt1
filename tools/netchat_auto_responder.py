@@ -15,6 +15,20 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+# 24/7 reboot-proof (27/10/2026): watchdog giám sát responder qua "heartbeat"
+# — file log được touch mỗi vòng poll. Không có heartbeat => responder chết/stuck
+# và watchdog (check_netchat_bot) sẽ cảnh báo. Đây là file duy nhất responder ghi.
+HEARTBEAT_PATH = Path(__file__).resolve().parent.parent / "logs" / "netchat_responder_heartbeat.log"
+
+
+def touch_heartbeat() -> None:
+    """Update heartbeat file mtime (watchdog reads freshness from this)."""
+    try:
+        HEARTBEAT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        HEARTBEAT_PATH.touch()
+    except Exception:
+        pass
+
 CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
 CHANNEL_NAME = "Trợ lý Tony Pham"
 BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
@@ -146,6 +160,7 @@ def main():
 
     while True:
         iteration += 1
+        touch_heartbeat()
         try:
             messages = read_channel_messages(count=10)
 

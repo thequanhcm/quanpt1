@@ -27,10 +27,15 @@ from typing import Optional
 # Configuration - use raw strings for Windows paths
 BASE_DIR = r"E:\AI\QUAN AI BRAIN"
 CONFIG = {
-    "server_script": os.path.join(BASE_DIR, "src", "quan_ai_brain", "web", "server.py"),
-    "venv_python": r"C:\Users\DELL\.venv\Scripts\python.exe",
+    # 24/7 reboot-proof (27/10/2026): watchdog now supervises BOTH servers via
+    # start_dual_servers.py (8765 UI + 8766 Executive) using the project venv.
+    # The previous venv_python pointed to C:\Users\DELL\.venv which does NOT
+    # exist — auto-restart would have failed silently forever.
+    "server_script": os.path.join(BASE_DIR, "start_dual_servers.py"),
+    "venv_python": os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe"),
     "workdir": BASE_DIR,
     "port": 8765,
+    "second_port": 8766,
     "health_check_interval": 60,
     "max_restart_per_hour": 5,
     "log_dir": os.path.join(BASE_DIR, "logs"),
@@ -77,12 +82,17 @@ def is_server_running(port: int = CONFIG["port"]) -> bool:
         return False
 
 
+def both_servers_healthy() -> bool:
+    """24/7 reboot-proof: dual server is healthy only when BOTH ports answer."""
+    return is_server_running(CONFIG["port"]) and is_server_running(CONFIG["second_port"])
+
+
 # ---------------------------------------------------------------------------
 # Sprint A-fix (GAP-R3): extended component monitoring with circuit breaker
 # ---------------------------------------------------------------------------
 
 CONFIG.setdefault("ollama_port", 11434)
-CONFIG.setdefault("netchat_responder_log", os.path.join(BASE_DIR, "logs", "netchat_responder.log"))
+CONFIG.setdefault("netchat_responder_log", os.path.join(BASE_DIR, "logs", "netchat_responder_heartbeat.log"))
 CONFIG.setdefault("disk_free_min_percent", 10.0)
 CONFIG.setdefault("max_component_fail_streak", 3)  # circuit breaker threshold
 
@@ -168,37 +178,53 @@ def check_disk_space() -> bool:
 
 
 def start_server() -> Optional[subprocess.Popen]:
-    """Start the web server."""
+    """Start the web server (dual 8765+8766).
+
+    24/7 fix (27/10/2026): stdout/stderr were subprocess.PIPE and never read —
+    the pipe buffer (~64KB) fills with request logs and the child then BLOCKS
+    on write, looking exactly like a hang. Redirect to an append log instead.
+    """
     try:
-        logger.info(f"Starting server on port {CONFIG['port']}...")
+        logger.info(f"Starting servers via {os.path.basename(CONFIG['server_script'])} on ports {CONFIG['port']}+{CONFIG['second_port']}...")
+        out_path = Path(CONFIG["log_dir"]) / "dual_servers_watchdog.log"
+        out_handle = open(out_path, "a", encoding="utf-8", buffering=1)
         process = subprocess.Popen(
             [CONFIG["venv_python"], CONFIG["server_script"]],
             cwd=CONFIG["workdir"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=out_handle,
+            stderr=subprocess.STDOUT,
             text=True,
         )
-        logger.info(f"Server started (PID: {process.pid})")
+        _server_log_handles.append(out_handle)  # closed on stop_server
+        logger.info(f"Servers started (PID: {process.pid})")
         return process
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
         return None
 
 
+_server_log_handles: list = []
+
+
 def stop_server(process: Optional[subprocess.Popen]) -> None:
     """Stop the server process."""
     if process:
         try:
-            logger.info(f"Stopping server (PID: {process.pid})...")
+            logger.info(f"Stopping servers (PID: {process.pid})...")
             process.terminate()
             process.wait(timeout=10)
-            logger.info("Server stopped")
+            logger.info("Servers stopped")
         except Exception as e:
             logger.error(f"Failed to stop server: {e}")
             try:
                 process.kill()
             except:
                 pass
+    while _server_log_handles:
+        try:
+            _server_log_handles.pop().close()
+        except Exception:
+            pass
 
 
 def main() -> int:
@@ -223,8 +249,8 @@ def main() -> int:
             check_disk_space()
 
             # Check if server is running
-            if is_server_running():
-                logger.debug("Server is healthy")
+            if both_servers_healthy():
+                logger.debug("Servers healthy (8765 + 8766)")
             else:
                 # Server is down, check restart limit
                 now = datetime.now(timezone.utc)
