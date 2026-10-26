@@ -104,17 +104,18 @@ def process_message_with_ai(message_text):
         return f"⚠️ Lỗi xử lý: {str(e)}"
 
 
-def process_message(message_text):
+def process_message(message_text, sender_user_id=""):
     """Route: system commands FIRST (real logic), AI conversation fallback.
 
     The channel is a dedicated owner<->assistant command center — no @bot
     needed. Commands like 'phê duyệt' execute real system actions; other
-    messages fall through to the conversational AI.
+    messages fall through to the conversational AI. sender_user_id enables
+    owner-identity verification in the approval adapter (V3 Section 5.2).
     """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from tools.netchat_command_center import route_message
-        intent, response = route_message(message_text)
+        intent, response = route_message(message_text, sender_user_id=sender_user_id)
         if intent is not None:
             print(f"   ⚡ System command: {intent}")
             return response
@@ -189,7 +190,7 @@ def main():
                     print(f"   {message_text[:100]}")
 
                     print("   🤖 Processing...")
-                    response = process_message(message_text)
+                    response = process_message(message_text, sender_user_id=msg.get("user_id", ""))
 
                     print("   📤 Sending response...")
                     result = send_message(response)

@@ -288,12 +288,30 @@ HANDLERS = {
 }
 
 
-def route_message(text: str) -> tuple[str | None, str]:
+def route_message(text: str, *, sender_user_id: str = "") -> tuple[str | None, str]:
     """Route an incoming channel message.
 
     Returns (intent, response). intent=None + response='' means: fall back
     to AI conversational processing in the responder.
+
+    Sprint 2 (V3): approval intents go through NetChatApprovalAdapter —
+    persistent Approval Cards + formal ApprovalGate + SPECIFIC explanations
+    (duyệt gì, vì sao, trạng thái, bước tiếp theo). The old consultation-FIFO
+    handler stays as a fallback for legacy tickets not bound to task codes.
     """
+    # 1) Approval-card commands (DUYỆT/TỪ CHỐI/SỬA/CHI TIẾT TASK-xxxx,
+    #    or a plain 'Duyệt'/'Từ chối'/'Chi tiết') — checked FIRST.
+    try:
+        from quan_ai_brain.governance.netchat_approval_adapter import NetChatApprovalAdapter
+
+        adapter = NetChatApprovalAdapter()
+        reply = adapter.handle_owner_message(text, sender_user_id=sender_user_id, post=False)
+        if reply:
+            _audit("netchat_command.approval_card", {"matched": True, "sender": sender_user_id})
+            return "approval_card", reply
+    except Exception as exc:  # adapter failure must not break other commands
+        _audit("netchat_command.approval_adapter_error", {"error": str(exc)[:200]})
+
     intent = detect_intent(text)
     if intent is None:
         return None, ""
