@@ -298,12 +298,28 @@ class SelfModelEngine:
                 "verified_at": now_iso,
             }
             (online if alive else offline).append(entry)
-        pi_alive = _probe_tcp(8768, timeout=1.0)
-        offline.append({
+        # Pi 5 — nguồn sự thật: EdgeConnectionMonitor (heartbeat HMAC qua LAN).
+        # TCP 127.0.0.1:8768 SAI BẢN CHẤT: 8768 là kiosk port trên Pi 5 (LAN),
+        # không bao giờ lắng nghe trên PC → luôn "UNREACHABLE" dù Pi 5 online.
+        try:
+            import json as _json
+            import urllib.request as _ur
+
+            with _ur.urlopen("http://127.0.0.1:8766/api/executive/edge/status", timeout=2.5) as _r:
+                _edge = _json.loads(_r.read().decode("utf-8")).get("edge", {})
+            _state = str(_edge.get("state", "UNKNOWN"))
+            _pi_connected = _state in ("READY", "CONNECTED", "SYNCING", "RECOVERING")
+            _pi_source = f"edge_monitor_heartbeat:{_state}"
+        except Exception:
+            _pi_connected = False
+            _pi_source = "edge_status_unavailable"
+        (
+            online if _pi_connected else offline
+        ).append({
             "component_id": "pi5_edge",
-            "status": "HEALTHY" if pi_alive else "UNREACHABLE",
-            "source": "tcp_probe:127.0.0.1:8768",
-            "evidence_ref": f"tcp_probe_result:{pi_alive}",
+            "status": "HEALTHY" if _pi_connected else "UNREACHABLE",
+            "source": _pi_source,
+            "evidence_ref": f"edge_heartbeat_connected:{_pi_connected}",
             "verified_at": now_iso,
         })
         answers["q2_components_online"] = online

@@ -120,9 +120,11 @@ def test_handle_approve_drains_fifo(consultations_db):
 
 def test_handle_status_reports_live_probes(consultations_db):
     reply = handle_status()
-    assert "HIỆN TRẠNG" in reply
+    # Format ngắn gọn (27/10): 🟢 ONLINE / 🔴 OFFLINE / 📋 Nhiệm vụ
+    assert "ONLINE" in reply and "OFFLINE" in reply
     assert "core_server" in reply
     assert "ollama_daemon" in reply  # honesty: offline is reported
+    assert "Nhiệm vụ" in reply
 
 
 def test_handle_tasks_counts_by_status(consultations_db):

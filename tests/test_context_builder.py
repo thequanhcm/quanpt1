@@ -37,7 +37,9 @@ def _make_dummy_memory(
 
 
 def test_context_builder_sections_and_provenance():
-    builder = PromptContextBuilder(default_max_chars=4000)
+    # Prompt chuẩn giờ dài hơn (quy tắc 10-11, 27/10) → budget phải đủ chứa
+    # system prompt + persona + 3 memories mà không truncate.
+    builder = PromptContextBuilder(default_max_chars=6000)
 
     m1 = _make_dummy_memory("m-1", "Hạ tải tủ Rack A01 khi quá nhiệt 40C", mem_type=MemoryType.PROCEDURAL.value)
     m2 = _make_dummy_memory("m-2", "DC-COMMAND sử dụng chuẩn truyền thông Modbus RTU", mem_type=MemoryType.SEMANTIC.value)

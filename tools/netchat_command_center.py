@@ -120,27 +120,62 @@ def _probe_port(port: int, timeout: float = 2.0) -> bool:
         return False
 
 
+def _pi5_status() -> dict[str, Any]:
+    """Nguồn sự thật DUY NHẤT cho trạng thái Pi 5: EdgeConnectionMonitor —
+    heartbeat thực do Pi 5 gửi qua LAN lên Executive server (8766), có HMAC
+    auth + RTT đo thật. TCP probe 127.0.0.1:8768 là SAI BẢN CHẤT: 8768 là
+    kiosk port chạy TRÊN Pi 5 (mạng LAN), không bao giờ lắng nghe trên PC."""
+    try:
+        import urllib.request
+
+        with urllib.request.urlopen(
+            "http://127.0.0.1:8766/api/executive/edge/status", timeout=3
+        ) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        edge = data.get("edge", {})
+        state = str(edge.get("state", "UNKNOWN"))
+        connected = state in ("READY", "CONNECTED", "SYNCING", "RECOVERING")
+        return {
+            "connected": connected,
+            "state": state,
+            "rtt_ms": edge.get("rtt_ms"),
+            "seconds_since_heartbeat": edge.get("seconds_since_heartbeat"),
+            "source": "edge_monitor_heartbeat:8766",
+        }
+    except Exception:
+        return {
+            "connected": False,
+            "state": "UNKNOWN",
+            "rtt_ms": None,
+            "seconds_since_heartbeat": None,
+            "source": "edge_status_unavailable",
+        }
+
+
 def _reprobe_pi5(label: str) -> str:
-    """Probe lại Pi 5 (8768) + các thành phần liên quan — một lần, báo thật."""
-    pi5 = _probe_port(8768)
+    """Probe lại Pi 5 qua edge heartbeat + các thành phần local — một lần, báo thật."""
+    edge = _pi5_status()
     core = _probe_port(8765)
     ollama = _probe_port(11434)
     now = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
-    if pi5:
-        result = f"🟢 Pi 5 (port 8768): ONLINE — xác nhận được rồi ạ."
+    if edge["connected"]:
+        rtt = f", RTT {edge['rtt_ms']:.0f}ms" if edge.get("rtt_ms") else ""
+        result = f"🟢 Pi 5: ONLINE ({edge['state']}{rtt}, heartbeat {edge.get('seconds_since_heartbeat', 0):.0f}s trước) — xác nhận được rồi ạ."
     else:
-        result = f"🔴 Pi 5 (port 8768): vẫn OFFLINE lúc {now}."
-    _audit("netchat_command.ok_confirm_reprobe", {"pi5": pi5, "core": core, "ollama": ollama})
+        result = f"🔴 Pi 5: chưa xác minh được kết nối lúc {now} (trạng thái edge: {edge['state']})."
+    _audit(
+        "netchat_command.ok_confirm_reprobe",
+        {"pi5_connected": edge["connected"], "edge_state": edge["state"], "core": core, "ollama": ollama},
+    )
     return (
-        f"✅ Đã xác nhận — em probe lại ngay (không hỏi lại nữa ạ):\n"
+        f"✅ Đã kiểm tra ngay ạ:\n"
         f"• {result}\n"
         f"• Core server (8765): {'🟢 ONLINE' if core else '🔴 OFFLINE'} | "
         f"Ollama: {'🟢 ONLINE' if ollama else '🔴 OFFLINE'}\n"
         + (
-            "Kết luận: hình thể Pi 5 đã hoạt động ạ."
-            if pi5
-            else "Kết luận: Pi 5 chưa lắng nghe trên mạng — em sẽ không khẳng định nó đang chạy. "
-            "Anh kiểm tra đèn LAN/dịch vụ trên Pi giúp em, hoặc gõ 'trạng thái' bất cứ lúc nào."
+            ""
+            if edge["connected"]
+            else "Kết luận: Pi 5 chưa gửi heartbeat về PC — em sẽ không khẳng định nó đang chạy. Anh kiểm tra nguồn/WiFi trên Pi giúp em nhé."
         )
     )
 
@@ -246,38 +281,24 @@ def handle_approve(payload: dict[str, Any] | None = None) -> str:
 
 
 def handle_status(payload: dict[str, Any] | None = None) -> str:
-    """'trạng thái': live self-model probes — evidence-based, honest OFFLINE."""
+    """'trạng thái': live self-model probes — NGẮN GỌN, đúng yêu cầu chủ sở hữu
+    27/10 ('trả lời ngắn gọn, tránh dài dòng'). Chỉ 5-6 dòng, không bảng dài."""
     try:
         from quan_ai_brain.cognition.self_model_engine import SelfModelEngine
 
         engine = SelfModelEngine(str(WORKSPACE))
         qa = engine.answer_state_questions()
-        online = qa.get("q2_components_online", [])
-        offline = qa.get("q3_components_offline_unverified", [])
-        approved = (qa.get("q7_approved_knowledge") or {}).get("count", "?")
-        quarantined = (qa.get("q8_quarantined_knowledge") or {}).get("count", "?")
+        online = [c["component_id"] for c in qa.get("q2_components_online", [])]
+        offline = [c["component_id"] for c in qa.get("q3_components_offline_unverified", [])]
         tasks = qa.get("q6_running_waiting_failed_tasks") or {}
-        owner_decisions = (qa.get("q9_pending_owner_decisions") or {}).get("count", "?")
-
-        lines = ["📊 HIỆN TRẠNG HỆ THỐNG (probe thật):", ""]
-        lines.append("🟢 Đang hoạt động:")
-        for comp in online:
-            lines.append(f"   • {comp['component_id']}: {comp['status']}")
-        lines.append("🔴 Không khả dụng / không xác minh được:")
-        for comp in offline:
-            lines.append(f"   • {comp['component_id']}: {comp['status']}")
-        lines += [
-            "",
-            f"🧠 Tri thức đã duyệt: {approved} | Cách ly: {quarantined}",
-            f"📋 Nhiệm vụ: PENDING {tasks.get('pending', '?')} / IN_PROGRESS {tasks.get('in_progress', '?')} / FAILED {tasks.get('failed', '?')}",
-            f"⏳ Chờ anh quyết định: {owner_decisions} hồ sơ",
+        owner_decisions = (qa.get("q9_pending_owner_decisions") or {}).get("count", 0)
+        lines = [
+            f"🟢 ONLINE: {', '.join(online) if online else '(không)'}",
+            f"🔴 OFFLINE: {', '.join(offline) if offline else '(không)'}",
+            f"📋 Nhiệm vụ: {tasks.get('pending', 0)} chờ / {tasks.get('in_progress', 0)} chạy / {tasks.get('failed', 0)} lỗi",
         ]
-        changes = (qa.get("changed_since_last_check") or {}).get("changes", [])
-        if changes:
-            lines.append("🔄 Thay đổi từ lần kiểm tra trước:")
-            for ch in changes[:4]:
-                lines.append(f"   • {ch['field']}: {ch.get('previous')} → {ch.get('current')}")
-        lines.append(f"🕐 {qa.get('generated_at', '')}")
+        if owner_decisions:
+            lines.append(f"⏳ Chờ anh quyết định: {owner_decisions}")
         return "\n".join(lines)
     except Exception as exc:
         return f"⚠️ Không đọc được trạng thái: {type(exc).__name__}: {exc}"

@@ -45,7 +45,7 @@ def test_ok_executes_staged_reprobe_pi5() -> None:
     intent, reply = cc.route_message("ok", chat_session_id="ch1")
     assert intent == "ok_confirm"
     assert "Pi 5" in reply
-    assert "probe lại ngay" in reply
+    assert "kiểm tra ngay" in reply
     # consumed once — second 'ok' must be silent
     intent2, reply2 = cc.route_message("ok", chat_session_id="ch1")
     assert intent2 == "ok_silent" and reply2 == ""
@@ -80,12 +80,13 @@ def test_ok_does_not_reach_approval_adapter() -> None:
 
 
 def test_reprobe_reports_honest_offline() -> None:
-    """E2E honesty: Pi 5 offline in this test env → reply must say OFFLINE,
-    never claim it runs."""
+    """E2E honesty: reply must reflect edge monitor truth — either honest
+    'chưa xác minh' (offline) or honest ONLINE (heartbeat-connected)."""
     cc.stage_pending_action("ch5", "probe", "reprobe_pi5")
     _, reply = cc.route_message("ok", chat_session_id="ch5")
-    # Either honest offline or honest online — but never a fabricated claim.
-    assert ("vẫn OFFLINE" in reply) or ("ONLINE — xác nhận" in reply)
+    assert ("chưa xác minh được" in reply) or ("ONLINE" in reply)
+    # Không bao giờ nói sai bản chất "port 8768 trên PC"
+    assert "port 8768" not in reply
 
 
 # ---------------------------------------------------------------------------
