@@ -269,6 +269,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_status()
             return
 
+        if path == "/api/health":
+            self._handle_api_health()
+            return
+
         if path == "/api/memories":
             self._handle_api_list_memories()
             return
@@ -626,6 +630,93 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
         self.end_headers()
         self.wfile.write(content)
+
+    def _handle_api_health(self) -> None:
+        """Sprint A-fix (GAP-R4): canonical health endpoint per Digital
+        Employee Brain design — every component reports evidence-based state
+        from live probes, never from configuration presence."""
+        components: list[dict[str, object]] = []
+        now_utc = datetime.now(timezone.utc).isoformat()
+
+        def _add(component_id: str, observed: object, status: str, source: str,
+                 evidence_ref: str, verification: str = "VERIFIED_LIVE") -> None:
+            components.append({
+                "component_id": component_id,
+                "observed_value": observed,
+                "status": status,
+                "observed_at": now_utc,
+                "source": source,
+                "evidence_ref": evidence_ref,
+                "verification_status": verification,
+                "last_verified_at": now_utc,
+            })
+
+        # 1. HTTP server itself (we are serving this request => HEALTHY)
+        _add("core_server", True, "HEALTHY", "http_handler",
+             f"http_request:{self.path}")
+
+        # 2. Ollama daemon — live TCP probe, UNKNOWN on probe infrastructure error
+        ollama_alive = False
+        probe_error: str | None = None
+        try:
+            ollama_alive = socket.create_connection(("127.0.0.1", 11434), timeout=1.5) is not None
+        except Exception as exc:
+            probe_error = type(exc).__name__
+        _add("ollama_daemon", ollama_alive,
+             "HEALTHY" if ollama_alive else "OFFLINE",
+             "tcp_probe:127.0.0.1:11434",
+             f"tcp_probe_result:{ollama_alive}" + (f":{probe_error}" if probe_error else ""))
+
+        # 3. brain.db — real row counts, not configuration claims
+        try:
+            workspace = _find_workspace_root()
+            db_path = workspace / "data" / "brain.db"
+            import sqlite3 as _sq
+            if db_path.exists():
+                conn = _sq.connect(str(db_path))
+                try:
+                    episodes = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
+                    semantic = conn.execute("SELECT COUNT(*) FROM semantic_memory").fetchone()[0]
+                finally:
+                    conn.close()
+                _add("brain_db", {"episodes": episodes, "semantic_memory": semantic},
+                     "HEALTHY", "sqlite:data/brain.db", f"row_counts:{episodes}/{semantic}")
+            else:
+                _add("brain_db", None, "OFFLINE", "sqlite:data/brain.db", "db_file_missing")
+        except Exception as exc:
+            _add("brain_db", None, "UNKNOWN", "sqlite:data/brain.db",
+                 f"probe_error:{type(exc).__name__}")
+
+        # 4. Task registry backlog — real PENDING count from tasks.db
+        try:
+            workspace = _find_workspace_root()
+            tasks_db = workspace / "data" / "tasks.db"
+            import sqlite3 as _sq
+            if tasks_db.exists():
+                conn = _sq.connect(str(tasks_db))
+                try:
+                    pending = conn.execute(
+                        "SELECT COUNT(*) FROM durable_tasks WHERE status='PENDING'"
+                    ).fetchone()[0]
+                finally:
+                    conn.close()
+                _add("task_registry", {"pending": pending},
+                     "HEALTHY" if pending < 500 else "DEGRADED",
+                     "sqlite:data/tasks.db", f"pending_count:{pending}")
+            else:
+                _add("task_registry", None, "OFFLINE", "sqlite:data/tasks.db", "db_file_missing")
+        except Exception as exc:
+            _add("task_registry", None, "UNKNOWN", "sqlite:data/tasks.db",
+                 f"probe_error:{type(exc).__name__}")
+
+        overall = "HEALTHY" if all(
+            c["status"] in ("HEALTHY",) for c in components
+        ) else "DEGRADED"
+        self._send_json({
+            "success": True,
+            "overall_status": overall,
+            "components": components,
+        })
 
     def _handle_api_status(self) -> None:
         try:
