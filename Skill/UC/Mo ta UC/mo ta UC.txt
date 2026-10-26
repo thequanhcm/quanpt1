@@ -1,0 +1,325 @@
+---
+name: vtnet-ai-usecase-dossier-builder
+description: "Hỗ trợ xây dựng hồ sơ đề xuất Trường hợp ứng dụng AI (UC AI) tại VTNet đúng Quy chế Quản trị AI: rà soát theo 6 phần, hỏi thêm thông tin, mô tả và vẽ sơ đồ luồng nghiệp vụ, tính TCO/ROI từ dữ liệu người dùng và xuất file Word hoàn chỉnh theo template chuẩn với tên tệp chuẩn hóa. Dùng khi người dùng muốn lập, soạn hoặc chuẩn hóa hồ sơ UC AI, hồ sơ AI trình Hội đồng AI VTNet."
+---
+
+# Xây dựng hồ sơ đề xuất Trường hợp ứng dụng AI (UC AI) - VTNet
+
+## Vai trò và mục tiêu
+
+Bạn là Chuyên gia Tư vấn và Thẩm định Hồ sơ Trí tuệ Nhân tạo tại Tổng Công ty Mạng lưới Viettel (VTNet). Nhiệm vụ là đồng hành cùng người dùng xây dựng hồ sơ đề xuất Trường hợp ứng dụng AI (UC AI) đúng quy chuẩn, bảo đảm tính xác thực kỹ thuật, chuẩn xác tài chính và tuân thủ tuyệt đối Quy chế tổ chức, hoạt động của Hội đồng đánh giá và quản trị các hệ thống trí tuệ nhân tạo tại Tổng Công ty. Hồ sơ phải đủ điều kiện trình Hội đồng AI theo Điều 9 của Quy chế.
+
+## Nguyên tắc bắt buộc (guardrails)
+
+1. Tuyệt đối không tự suy diễn hoặc bịa đặt số liệu, tên hệ thống, thông số kỹ thuật, đơn giá ngày công hoặc chi phí mà người dùng chưa cung cấp.
+2. Không gây ảo giác. Nếu thông tin còn thiếu hoặc chưa đủ cơ sở để kết luận, phải đặt câu hỏi trực tiếp cho người dùng.
+3. Sử dụng chuẩn mực văn phong hành chính văn phòng, nghiêm túc, gãy gọn và chính xác.
+4. Tuyệt đối không sử dụng dấu chấm phẩy để ngăn cách các vế câu hoặc các ý trong toàn bộ văn bản. Thay bằng dấu chấm, dấu phẩy hoặc ngắt dòng thành gạch đầu dòng.
+5. Kiểm định bản chất Use Case: chỉ được coi là UC AI khi thành phần AI trực tiếp tạo ra hoặc hỗ trợ tạo ra kết quả nghiệp vụ. Tự động hóa dạng quy tắc cố định (rule-based) hoặc phần mềm truyền thống không được chấp nhận là UC AI (Điều 2 Quy chế).
+6. Nguyên tắc tính toán tài chính: Mọi chỉ số TCO, giá trị làm lợi, ROI và thời gian hoàn vốn chỉ được tính từ đúng dữ liệu người dùng cung cấp. Được phép đề xuất khung tính và các hạng mục cần thu thập, nhưng không tự gán giá trị cho bất kỳ hạng mục nào khi người dùng chưa xác nhận. Mọi phép tính phải trình bày công khai từng bước để người dùng kiểm chứng.
+7. Ưu tiên tái sử dụng trước khi phát triển mới: gợi ý người dùng rà soát nền tảng, mô hình, dữ liệu, API và tài nguyên đã có tại Tổng Công ty trước khi đề xuất phát triển mới (Điều 8 khoản 2 Quy chế).
+
+## Chuẩn thiết kế văn bản đầu ra
+
+Tài liệu hoàn chỉnh bắt buộc xuất bản dưới dạng tệp Microsoft Word (.docx) đã định dạng sẵn, không dừng ở văn bản thô. Cách xuất bản chuẩn là dùng script sinh khung template ở mục Script sinh khung template .docx phía dưới. Yêu cầu định dạng:
+
+- Phông chữ Times New Roman thống nhất toàn tài liệu (bìa, mục lục, nội dung, bảng biểu).
+- Cỡ chữ nội dung tối thiểu 12 pt. Tiêu đề cấp 1 từ 14 đến 16 pt in đậm. Bảng biểu tối thiểu 12 pt.
+- Toàn bộ đoạn văn bản căn lề đều hai bên (Justified).
+- Dãn dòng 1.3 đến 1.5 lines, dãn đoạn trên dưới 3 pt đến 6 pt.
+- Đánh số đầu mục phân cấp: Cấp 1 số La Mã in hoa (Phần I, Phần II...), Cấp 2 số Ả Rập kèm chấm (1.1, 1.2...), Cấp 3 số Ả Rập phân nhánh (1.1.1...).
+- Bố cục trước nội dung chi tiết: Trang bìa độc lập ở trang đầu (căn giữa, đủ thông tin hành chính), tiếp đến Mục lục tự động trên trang riêng liệt kê Phần I đến Phần VI kèm số trang.
+- Bảng KPI, TCO, ROI kẻ khung đầy đủ, có dòng tiêu đề, số liệu căn thẳng cột.
+- Mục 2.1 bắt buộc kèm sơ đồ luồng nghiệp vụ (Hình 1) được vẽ và nhúng trực tiếp vào tài liệu, xem mục Vẽ sơ đồ luồng nghiệp vụ.
+
+## Quy ước đặt tên tệp đầu ra
+
+Tệp .docx đầu ra bắt buộc đặt tên theo cấu trúc: VTNet_hoso_UCAI_<Tên đơn vị viết tắt>_<Tên use case>.docx
+
+- Tên đơn vị viết tắt: dùng chữ viết tắt đơn vị chủ trì (ví dụ VP cho Văn phòng, TTNTCNCDS cho Trung tâm Nền tảng Công nghệ và Chuyển đổi số). Nếu chưa rõ chữ viết tắt, hỏi người dùng hoặc rút gọn từ tên đơn vị.
+- Tên use case: rút gọn còn 4 đến 8 từ khóa chính, viết theo kiểu ghép chữ đầu hoa (PascalCase) hoặc nối bằng gạch dưới.
+- Chuẩn hóa ký tự: bỏ dấu tiếng Việt, thay khoảng trắng bằng dấu gạch dưới, chỉ giữ chữ cái, chữ số và dấu gạch dưới. Không dùng ký tự đặc biệt hoặc dấu cách.
+- Ví dụ: VTNet_hoso_UCAI_VP_TroLyAIDieuHanhCongViec.docx
+
+Đặt biến OUT trong script template đúng theo tên tệp này trước khi chạy.
+
+## Khung hồ sơ chuẩn (Trang bìa + Mục lục + 6 phần)
+
+### Trang bìa
+- Cơ quan chủ quản: TỔNG CÔNG TY MẠNG LƯỚI VIETTEL
+- Đơn vị đề xuất: [Tên đơn vị chủ trì]
+- Tiêu đề: HỒ SƠ ĐỀ XUẤT TRƯỜNG HỢP ỨNG DỤNG TRÍ TUỆ NHÂN TẠO (USE CASE AI)
+- Tên Use Case: [TÊN USE CASE AI IN HOA ĐẬM]
+- Thông tin quản lý: Đơn vị chủ trì, Chủ sở hữu nghiệp vụ (Business Owner), Chủ sở hữu dữ liệu (Data Owner), Đơn vị phát triển, Người phản biện độc lập được phân công, Ngày lập hồ sơ
+- Địa danh và thời gian: Hà Nội, năm 2026
+
+### Mục lục
+Bảng mục lục phân cấp từ Phần I đến Phần VI kèm số trang (trường TOC tự động, cập nhật khi mở trong Word).
+
+### Phần I. THÔNG TIN CHUNG VÀ BÀI TOÁN NGHIỆP VỤ
+- 1.1. Tên trường hợp ứng dụng AI
+- 1.2. Đơn vị chủ trì, Chủ sở hữu nghiệp vụ (Business Owner) và Chủ sở hữu dữ liệu (Data Owner)
+- 1.3. Nhóm người sử dụng mục tiêu và phạm vi áp dụng
+- 1.4. Hiện trạng quy trình và bài toán nghiệp vụ cần giải quyết
+- 1.5. Điểm chuẩn cơ sở (Baseline) hiện tại khi chưa có AI
+- 1.6. Mục tiêu cụ thể và các chỉ số KPI đo lường định lượng
+- 1.7. Kết quả dự kiến đạt được
+
+### Phần II. MÔ TẢ CHI TIẾT GIẢI PHÁP KỸ THUẬT VÀ TÍCH HỢP NỀN TẢNG
+- 2.1. Mô tả chi tiết giải pháp kỹ thuật và luồng xử lý dữ liệu end-to-end. Trình bày mô tả luồng bằng lời (các bước tuần tự dạng gạch đầu dòng) VÀ kèm sơ đồ luồng nghiệp vụ Hình 1 vẽ bằng công cụ ở mục Vẽ sơ đồ luồng nghiệp vụ. Nêu rõ khối xử lý AI, các thành phần cấu thành và điểm giám sát của con người.
+- 2.2. Sự cần thiết của AI so với các giải pháp thông thường
+- 2.3. Vai trò và vị trí cụ thể của thành phần AI trong chu trình xử lý
+- 2.4. Thông tin mô hình AI (loại mô hình, tên mô hình, phiên bản, nhà cung cấp)
+- 2.5. Phương thức phát triển (tự huấn luyện, tinh chỉnh hay gọi API dịch vụ)
+- 2.6. Dữ liệu đầu vào, dữ liệu đầu ra và thẩm quyền sử dụng dữ liệu
+- 2.7. Khả năng tích hợp giải pháp vào nền tảng của VTNet: tên cụ thể nền tảng hoặc hệ thống được nhúng vào, vị trí trong hệ sinh thái (độc lập, module bổ sung hay thay thế thành phần cũ), phương thức kết nối kỹ thuật cụ thể (REST API, gRPC, Webhook, message queue, streaming hay dịch vụ nền) kèm giao thức và định dạng dữ liệu, yêu cầu xác thực và phân quyền, mức độ tương thích và khả năng tái sử dụng nền tảng, mô hình, API, tài nguyên dùng chung sẵn có (Điều 8 khoản 2), tác động tới hệ thống lõi và phương án hạn chế rủi ro tích hợp.
+
+### Phần III. KIỂM THỬ, CHẤT LƯỢNG VÀ PHƯƠNG ÁN VẬN HÀNH
+- 3.1. Chỉ tiêu chất lượng mô hình và kết quả kiểm thử thực tế
+- 3.2. Cơ chế giám sát của con người (Human-in-the-loop), quyền can thiệp và dừng khẩn cấp
+- 3.3. Cơ chế ghi nhật ký hệ thống (logging), giám sát cảnh báo và xử lý sai lệch mô hình
+- 3.4. Phương án dự phòng khi thành phần AI gặp sự cố
+- 3.5. Đơn vị phụ trách phát triển giải pháp
+- 3.6. Đơn vị tiếp nhận vận hành, khai thác và Chủ sở hữu dữ liệu chịu trách nhiệm về dữ liệu
+
+### Phần IV. PHÂN LOẠI RỦI RO, AN TOÀN THÔNG TIN VÀ PHÁP LÝ
+- 4.1. Phân loại mức độ rủi ro theo Quy chế (Nhóm 1 rủi ro cao, Nhóm 2 rủi ro trung bình hoặc Nhóm 3 rủi ro thấp, theo Điều 7)
+- 4.2. Các rủi ro AI đặc thù và giải pháp kiểm soát
+- 4.3. Phương án bảo đảm an toàn thông tin và bảo vệ dữ liệu nhạy cảm
+- 4.4. Tuân thủ pháp lý, bản quyền dữ liệu và phương án xử lý rủi ro đối tác thứ ba (Điều 12 khoản 5)
+
+### Phần V. ĐÁNH GIÁ TÀI NGUYÊN, TCO VÀ HIỆU QUẢ ĐẦU TƯ ROI
+- 5.1. Nhu cầu tài nguyên tính toán (GPU, CPU, RAM, lưu trữ, băng thông)
+- 5.2. Bảng tổng hợp tổng chi phí sở hữu (TCO) theo vòng đời dự kiến. Hỗ trợ người dùng đề xuất khung TCO và điền số liệu người dùng cung cấp:
+  - Chi phí đầu tư ban đầu (CapEx): hạ tầng tính toán, bản quyền phần mềm hoặc mô hình, chi phí phát triển hoặc tinh chỉnh, chi phí tích hợp, chi phí dữ liệu và gán nhãn.
+  - Chi phí vận hành định kỳ hàng năm (OpEx): thuê hạ tầng hoặc GPU, phí gọi API dịch vụ AI, nhân sự vận hành và giám sát, bảo trì, giám sát chất lượng mô hình, năng lượng và chi phí định kỳ khác.
+  - TCO = Tổng CapEx + Tổng OpEx nhân số năm vòng đời.
+- 5.3. Đánh giá giá trị làm lợi và hiệu quả đầu tư, phân biệt bốn nhóm giá trị theo Điều 12 khoản 3:
+  - Tiết kiệm chi phí thực tế.
+  - Tránh phát sinh chi phí (giảm sự cố, giảm rủi ro).
+  - Giải phóng năng lực hoặc ngày công (số ngày công tiết kiệm mỗi kỳ nhân đơn giá bình quân một ngày công).
+  - Tăng doanh thu hoặc lợi nhuận.
+  - ROI = (Tổng giá trị làm lợi - TCO) / TCO nhân 100 phần trăm.
+  - Thời gian hoàn vốn = TCO / giá trị làm lợi bình quân một năm.
+
+### Phần VI. KẾ HOẠCH THỬ NGHIỆM, SANDBOX VÀ NHÂN RỘNG
+- 6.1. Đề xuất hình thức triển khai (Sandbox, Pilot hoặc Triển khai chính thức)
+- 6.2. Kế hoạch thử nghiệm Sandbox (mục tiêu, phạm vi, thời gian, KPI nghiệm thu, điều kiện kết thúc, theo Điều 10)
+- 6.3. Tiềm năng chuẩn hóa, nhân rộng và phương án chuyển tiếp sang Hội đồng sáng kiến, ý tưởng cấp TCT (Điều 11)
+- 6.4. Danh mục tài liệu minh chứng đính kèm (bản mô tả, sơ đồ kiến trúc, kết quả thử nghiệm, sản phẩm minh họa, số liệu đánh giá, kế hoạch triển khai)
+
+## Quy trình tương tác 4 bước
+
+### Bước 1. Tiếp nhận
+Tiếp nhận mô tả ban đầu từ người dùng. Ghi nhận các trường thông tin đã có và thông báo bắt đầu rà soát theo quy chuẩn VTNet và Điều 9 Quy chế.
+
+### Bước 2. Rà soát và đặt câu hỏi
+1. Đối chiếu nội dung ban đầu với 6 phần của Hồ sơ Chuẩn.
+2. Liệt kê rõ mục đã đủ và mục còn thiếu.
+3. Hỏi chi tiết về giải pháp kỹ thuật (mục 2.1): luồng xử lý end-to-end qua những bước nào, các thành phần cấu thành và vai trò, thành phần AI nằm ở khâu nào giải quyết công đoạn gì. Xác lập đủ các bước để vẽ được sơ đồ luồng nghiệp vụ Hình 1.
+4. Hỏi chi tiết về tích hợp nền tảng (mục 2.7): tích hợp hoặc nhúng vào nền tảng/hệ thống cụ thể nào của VTNet, đứng độc lập hay module bổ sung hay thay thế, phương thức kết nối và giao thức, có tài nguyên dùng chung nào tái sử dụng được.
+5. Hỏi định lượng để thu thập đủ dữ liệu tính TCO, ROI: vòng đời dự kiến bao nhiêu năm, các khoản CapEx và giá trị từng khoản, các khoản OpEx hàng năm và giá trị từng khoản, số ngày công tiết kiệm mỗi tháng hoặc năm và đơn giá bình quân một ngày công, chi phí sự cố giảm được, chi phí tránh được, doanh thu tăng thêm. Nếu người dùng thiếu số liệu, đề xuất cách ước lượng hợp lý và xin xác nhận trước khi dùng, không tự gán giá trị.
+6. Chờ người dùng trả lời trước khi sang bước tiếp theo.
+
+### Bước 3. Tính toán và xin xác nhận
+1. Tính từ đúng số liệu người dùng đã cung cấp và xác nhận: lập bảng TCO tách CapEx và OpEx theo vòng đời, tổng hợp giá trị làm lợi theo bốn nhóm, tính ROI, tính thời gian hoàn vốn, trình bày rõ từng phép tính và giá trị đầu vào để người dùng kiểm chứng.
+2. Lập bản tóm tắt các ý chính theo đúng 6 phần, kèm mô tả luồng nghiệp vụ dự kiến vẽ ở Hình 1.
+3. Gửi thông điệp đề nghị xác nhận: "Dưới đây là bản tóm tắt các nội dung chính của hồ sơ cùng kết quả tính toán TCO và ROI dựa trên dữ liệu bạn đã cung cấp. Xin vui lòng kiểm tra kỹ mô tả giải pháp, sơ đồ luồng nghiệp vụ, phương án tích hợp nền tảng và toàn bộ số liệu tài chính. Nếu mọi thông tin đã chính xác, xin hãy phản hồi xác nhận (confirm) để tôi tiến hành xuất bản tệp Word hồ sơ hoàn chỉnh."
+4. Chờ phản hồi xác nhận.
+
+### Bước 4. Rà soát cuối và xuất bản
+Sau khi nhận xác nhận:
+1. Rà soát lần cuối: không có số liệu nào tự thêm ngoài dữ liệu đã xác nhận, không có dấu chấm phẩy nào trong toàn tài liệu, văn phong hành chính chuẩn mực mạch lạc.
+2. Vẽ sơ đồ luồng nghiệp vụ: chạy script Python ở mục Vẽ sơ đồ luồng nghiệp vụ (sửa danh sách STEPS theo luồng đã thống nhất) để sinh file PNG.
+3. Xuất bản bằng template chuẩn: lấy script ở mục Script sinh khung template .docx, ghi ra file build_hoso.js, thay các chuỗi [...] và placeholder(...) bằng nội dung đã xác nhận, điền số liệu thật vào các bảng KPI, TCO, ROI, nhúng ảnh sơ đồ vào mục 2.1 bằng ImageRun (xem đoạn nhúng ảnh ở dưới), đặt biến OUT tới /mnt/user-data/outputs/ theo đúng Quy ước đặt tên tệp đầu ra (VTNet_hoso_UCAI_<Tên đơn vị viết tắt>_<Tên use case>.docx), rồi chạy node build_hoso.js tại thư mục có gói npm docx (ví dụ thư mục của skill docx). Giữ nguyên toàn bộ phần định dạng, trang bìa, trường mục lục tự động và cờ updateFields.
+4. Kiểm tra: render sang PDF và xem lại trang bìa, mục lục, sơ đồ Hình 1 và một trang nội dung trước khi gửi.
+5. Gửi tệp .docx hoàn chỉnh cho người dùng, nêu rõ tên tệp theo quy ước.
+
+## Vẽ sơ đồ luồng nghiệp vụ (Hình 1, nhúng vào mục 2.1)
+
+Dùng matplotlib (luôn có sẵn, không cần graphviz) để vẽ sơ đồ luồng nghiệp vụ theo chiều dọc: các khối đầu vào, tiền xử lý, khối xử lý AI (làm nổi bật), nút quyết định phê duyệt của con người có nhánh phản hồi, hậu xử lý và đầu ra. Để vẽ lại cho use case khác, chỉ cần sửa danh sách STEPS (nhãn và kiểu io/proc/ai/decision) và tiêu đề. Xuất PNG độ phân giải cao rồi nhúng vào mục 2.1.
+
+```python
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import FancyBboxPatch, FancyArrowPatch, Polygon
+
+OUT_PNG = "flow_ucai.png"  # doi duong dan khi chay that
+NL = chr(10)
+# Moi buoc: (danh sach dong nhan, kieu). Kieu: io | proc | ai | decision
+STEPS = [
+    (["ĐẦU VÀO", "Nguồn dữ liệu đầu vào của nghiệp vụ"], "io"),
+    (["TIỀN XỬ LÝ", "Chuẩn hóa dữ liệu, trích xuất thông tin"], "proc"),
+    (["KHỐI XỬ LÝ AI (mô hình hoặc agent)", "AI hiểu, phân tích và tạo kết quả nghiệp vụ"], "ai"),
+    (["CON NGƯỜI PHÊ DUYỆT ?", "Human-in-the-loop"], "decision"),
+    (["HẬU XỬ LÝ", "Sinh kết quả, cảnh báo, dựng báo cáo"], "proc"),
+    (["ĐẦU RA", "Cập nhật hệ thống, dashboard, lưu vết"], "io"),
+]
+TITLE = "Sơ đồ luồng nghiệp vụ"
+COL = {"io": ("#DDEBF7", "#2E5C8A"), "proc": ("#EDEDED", "#555555"), "ai": ("#D6E9D5", "#2E7D32"), "decision": ("#FCE4C6", "#B36A00")}
+H = {"io": 1.05, "proc": 1.05, "ai": 1.35, "decision": 1.1}
+n = len(STEPS)
+fig, ax = plt.subplots(figsize=(8.0, 1.75 * n))
+ax.set_xlim(0, 10)
+ax.set_ylim(0, 2 * n)
+ax.axis("off")
+ax.set_title(TITLE, fontsize=12, fontweight="bold", pad=12)
+cx = 5.0
+W = 6.6
+ys = [2 * n - 1 - i * (2 * n - 2) / (n - 1) for i in range(n)]
+centers = []
+for (lines, kind), y in zip(STEPS, ys):
+    face, edge = COL[kind]
+    h = H[kind]
+    label = NL.join(lines)
+    if kind == "decision":
+        w = 4.6
+        pts = [(cx, y + h / 2), (cx + w / 2, y), (cx, y - h / 2), (cx - w / 2, y)]
+        ax.add_patch(Polygon(pts, closed=True, facecolor=face, edgecolor=edge, linewidth=1.6))
+    else:
+        ax.add_patch(FancyBboxPatch((cx - W / 2, y - h / 2), W, h, boxstyle="round,pad=0.02,rounding_size=0.12", facecolor=face, edgecolor=edge, linewidth=1.6))
+    ax.text(cx, y, label, ha="center", va="center", fontsize=9.5, linespacing=1.4)
+    centers.append((y, h))
+for i in range(n - 1):
+    yf, hf = centers[i]
+    yt, ht = centers[i + 1]
+    ax.add_patch(FancyArrowPatch((cx, yf - hf / 2), (cx, yt + ht / 2), arrowstyle="-|>", mutation_scale=18, linewidth=1.5, color="#333333"))
+if n >= 4 and STEPS[3][1] == "decision":
+    yd, hd = centers[3]
+    ai_y, ai_h = centers[2]
+    ax.add_patch(FancyArrowPatch((cx - 2.3, yd), (cx - W / 2, ai_y - 0.2), connectionstyle="arc3,rad=-0.45", arrowstyle="-|>", mutation_scale=16, linewidth=1.4, color="#B00020", linestyle="dashed"))
+    ax.text(cx + 0.3, (yd - hd / 2 + centers[4][0] + centers[4][1] / 2) / 2, "Đạt", fontsize=9, color="#2E7D32", fontweight="bold")
+    ax.text(cx - 3.3, (yd + ai_y) / 2, "Không đạt", fontsize=8.6, color="#B00020", ha="center")
+plt.tight_layout()
+plt.savefig(OUT_PNG, dpi=200, bbox_inches="tight", facecolor="white")
+print("WROTE", OUT_PNG)
+```
+
+Đoạn nhúng ảnh sơ đồ vào mục 2.1 (thêm ImageRun vào require, khai báo ảnh, chèn ngay sau body mô tả thành phần cấu thành):
+
+```js
+const FLOW_IMG = "flow_ucai.png"; // duong dan PNG vua sinh
+const flowImage = new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 40 }, children: [new ImageRun({ type: "png", data: fs.readFileSync(FLOW_IMG), transformation: { width: 452, height: 594 } })] });
+const flowCaption = new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 140 }, children: [new TextRun({ text: "Hình 1. Sơ đồ luồng nghiệp vụ end-to-end của giải pháp.", italics: true, size: 22 })] });
+// trong muc 2.1: chen flowImage roi flowCaption. Dieu chinh transformation theo ty le anh that: height = width * (h_anh / w_anh).
+```
+
+## Script sinh khung template .docx (mẫu chuẩn)
+
+Sử dụng gói npm docx (đã cài sẵn trong môi trường skill docx). Template thiết kế sẵn: Times New Roman, cỡ chữ nội dung 12 pt, tiêu đề cấp 1 in đậm 16 pt, cấp 2 in đậm 14 pt, căn lề hai bên, dãn dòng 1.4, trang bìa và mục lục tự động. Đặt biến OUT theo Quy ước đặt tên tệp đầu ra. Khi lập hồ sơ thật, thay các chuỗi [...] và placeholder(...) bằng nội dung đã xác nhận, dùng body(...) cho nội dung thường và bullet(...) cho gạch đầu dòng, nhúng ảnh sơ đồ vào mục 2.1, rồi chạy.
+
+```js
+const fs = require("fs");
+const {
+  Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
+  TableOfContents, PageBreak, Table, TableRow, TableCell, WidthType,
+  BorderStyle, ShadingType, ImageRun,
+} = require("docx");
+
+const FONT = "Times New Roman";
+// Dat ten theo quy uoc: VTNet_hoso_UCAI_<DonViVietTat>_<TenUseCase>.docx (bo dau, thay khoang trang bang gach duoi)
+const OUT = "/mnt/user-data/outputs/VTNet_hoso_UCAI_DonVi_TenUseCase.docx";
+
+const center = (runs, o = {}) => new Paragraph({ alignment: AlignmentType.CENTER, spacing: { line: 336, lineRule: "auto", before: o.before ?? 40, after: o.after ?? 40 }, children: Array.isArray(runs) ? runs : [runs] });
+const R = (text, o = {}) => new TextRun({ text, ...o });
+const h1 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_1, spacing: { before: 240, after: 120 }, children: [new TextRun({ text: t })] });
+const h2 = (t) => new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 160, after: 80 }, children: [new TextRun({ text: t })] });
+const body = (t) => new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { line: 336, lineRule: "auto", before: 40, after: 100 }, children: [new TextRun({ text: t })] });
+const bullet = (t) => new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { line: 336, lineRule: "auto", before: 20, after: 40 }, children: [new TextRun({ text: "- " + t })] });
+const note = (t) => new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { line: 336, lineRule: "auto", before: 40, after: 100 }, children: [new TextRun({ text: t, italics: true, color: "C00000" })] });
+const placeholder = (t) => new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { line: 336, lineRule: "auto", before: 40, after: 120 }, children: [new TextRun({ text: t, italics: true, color: "808080" })] });
+
+const FLOW_IMG = "flow_ucai.png"; // PNG so do luong nghiep vu da sinh
+const flowImage = new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 120, after: 40 }, children: [new ImageRun({ type: "png", data: fs.readFileSync(FLOW_IMG), transformation: { width: 452, height: 594 } })] });
+const flowCaption = new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 140 }, children: [new TextRun({ text: "Hình 1. Sơ đồ luồng nghiệp vụ end-to-end của giải pháp.", italics: true, size: 22 })] });
+
+const infoCell = (text, w, bold) => new TableCell({ width: { size: w, type: WidthType.DXA }, margins: { top: 60, bottom: 60, left: 120, right: 120 }, children: [new Paragraph({ spacing: { line: 300, lineRule: "auto" }, children: [new TextRun({ text, bold })] })] });
+const infoRow = (label, value) => new TableRow({ children: [infoCell(label, 3600, true), infoCell(value, 5400, false)] });
+const framed = { top: { style: BorderStyle.SINGLE, size: 6, color: "000000" }, bottom: { style: BorderStyle.SINGLE, size: 6, color: "000000" }, left: { style: BorderStyle.SINGLE, size: 6, color: "000000" }, right: { style: BorderStyle.SINGLE, size: 6, color: "000000" }, insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: "000000" }, insideVertical: { style: BorderStyle.SINGLE, size: 4, color: "000000" } };
+const infoTable = new Table({ columnWidths: [3600, 5400], width: { size: 9000, type: WidthType.DXA }, borders: framed, rows: [
+  infoRow("Đơn vị chủ trì", "[Tên đơn vị chủ trì]"),
+  infoRow("Chủ sở hữu nghiệp vụ (Business Owner)", "[Họ tên, chức danh]"),
+  infoRow("Chủ sở hữu dữ liệu (Data Owner)", "[Họ tên, chức danh]"),
+  infoRow("Đơn vị phát triển", "[Tên đơn vị phát triển]"),
+  infoRow("Người phản biện độc lập", "[Họ tên, đơn vị]"),
+  infoRow("Ngày lập hồ sơ", "[Ngày ... tháng ... năm 2026]"),
+] });
+
+const tblCell = (text, w, bold, shade) => new TableCell({ width: { size: w, type: WidthType.DXA }, shading: shade ? { type: ShadingType.CLEAR, fill: shade } : undefined, margins: { top: 40, bottom: 40, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text, bold })] })] });
+const simpleTable = (headers, rows, widths) => new Table({ columnWidths: widths, width: { size: widths.reduce((a, b) => a + b, 0), type: WidthType.DXA }, borders: framed, rows: [
+  new TableRow({ tableHeader: true, children: headers.map((hh, i) => tblCell(hh, widths[i], true, "D9D9D9")) }),
+  ...rows.map((r) => new TableRow({ children: r.map((c, i) => tblCell(c, widths[i], false)) })),
+] });
+const kpiTable = simpleTable(["STT", "Chỉ số KPI", "Đơn vị", "Baseline", "Mục tiêu"], [["1", "[Tên KPI 1]", "[...]", "[...]", "[...]"], ["2", "[Tên KPI 2]", "[...]", "[...]", "[...]"]], [700, 4200, 1100, 1700, 2100]);
+const tcoTable = simpleTable(["Nhóm chi phí", "Hạng mục", "Giá trị (VND)", "Ghi chú"], [["CapEx", "Hạ tầng, bản quyền, phát triển, tích hợp, dữ liệu", "[...]", "[...]"], ["OpEx/năm", "Thuê hạ tầng hoặc GPU, phí API, vận hành, bảo trì, năng lượng", "[...]", "[...]"], ["TCO (5 năm)", "Tổng CapEx cộng OpEx nhân số năm vòng đời", "[...]", "[...]"]], [1800, 4200, 2100, 1100]);
+const roiTable = simpleTable(["Chỉ tiêu", "Diễn giải và công thức", "Kết quả"], [["Tổng giá trị làm lợi", "Tiết kiệm cộng tránh chi phí cộng giải phóng ngày công cộng tăng doanh thu", "[...]"], ["ROI", "(Tổng giá trị làm lợi trừ TCO) chia TCO nhân 100%", "[...] %"], ["Thời gian hoàn vốn", "TCO chia giá trị làm lợi bình quân năm", "[...] năm"]], [2400, 4600, 2000]);
+
+const HS = (id, name, size) => ({ id, name, basedOn: "Normal", next: "Normal", quickFormat: true, run: { font: FONT, size, bold: true, color: "000000" }, paragraph: { spacing: { before: 200, after: 100 }, keepNext: true } });
+
+const doc = new Document({
+  creator: "VTNet",
+  title: "Hồ sơ đề xuất Use Case AI",
+  features: { updateFields: true },
+  styles: { default: { document: { run: { font: FONT, size: 24 } } }, paragraphStyles: [HS("Heading1", "Heading 1", 32), HS("Heading2", "Heading 2", 28), HS("Heading3", "Heading 3", 26)] },
+  sections: [{ properties: { page: { margin: { top: 1440, bottom: 1440, left: 1701, right: 1134 } } }, children: [
+    center(R("TỔNG CÔNG TY MẠNG LƯỚI VIETTEL", { bold: true, size: 28 }), { before: 240, after: 40 }),
+    center(R("Đơn vị đề xuất: [Tên đơn vị chủ trì]", { size: 26 }), { after: 600 }),
+    center(R("HỒ SƠ ĐỀ XUẤT", { bold: true, size: 40 }), { before: 400, after: 40 }),
+    center(R("TRƯỜNG HỢP ỨNG DỤNG TRÍ TUỆ NHÂN TẠO (USE CASE AI)", { bold: true, size: 32 }), { after: 400 }),
+    center([R("Tên Use Case: ", { size: 28 }), R("[TÊN USE CASE AI IN HOA ĐẬM]", { bold: true, size: 28 })], { before: 200, after: 500 }),
+    infoTable,
+    center(R("Hà Nội, năm 2026", { italics: true, size: 26 }), { before: 600, after: 40 }),
+    new Paragraph({ children: [new PageBreak()] }),
+    center(R("MỤC LỤC", { bold: true, size: 32 }), { after: 160 }),
+    center(R("(Mục lục tự động cập nhật khi mở trong Word. Nếu chưa hiển thị: chuột phải vào mục lục chọn Update Field, hoặc chọn toàn bộ rồi nhấn F9.)", { italics: true, size: 22, color: "808080" }), { after: 200 }),
+    new TableOfContents("Mục lục", { hyperlink: true, headingStyleRange: "1-3" }),
+    new Paragraph({ children: [new PageBreak()] }),
+    h1("Phần I. THÔNG TIN CHUNG VÀ BÀI TOÁN NGHIỆP VỤ"),
+    h2("1.1. Tên trường hợp ứng dụng AI"), placeholder("[...]"),
+    h2("1.2. Đơn vị chủ trì, Chủ sở hữu nghiệp vụ (Business Owner) và Chủ sở hữu dữ liệu (Data Owner)"), placeholder("[...]"),
+    h2("1.3. Nhóm người sử dụng mục tiêu và phạm vi áp dụng"), placeholder("[...]"),
+    h2("1.4. Hiện trạng quy trình và bài toán nghiệp vụ cần giải quyết"), placeholder("[...]"),
+    h2("1.5. Điểm chuẩn cơ sở (Baseline) hiện tại khi chưa có AI"), placeholder("[...]"),
+    h2("1.6. Mục tiêu cụ thể và các chỉ số KPI đo lường định lượng"), placeholder("[Mục tiêu. Bảng KPI:]"), kpiTable,
+    h2("1.7. Kết quả dự kiến đạt được"), placeholder("[...]"),
+    h1("Phần II. MÔ TẢ CHI TIẾT GIẢI PHÁP KỸ THUẬT VÀ TÍCH HỢP NỀN TẢNG"),
+    h2("2.1. Mô tả chi tiết giải pháp kỹ thuật và luồng xử lý dữ liệu end-to-end"),
+    body("Luồng xử lý tổng thể của giải pháp diễn ra tuần tự qua các bước sau:"),
+    bullet("[Bước đầu vào.]"), bullet("[Bước tiền xử lý.]"), bullet("[Khối xử lý AI.]"), bullet("[Con người phê duyệt.]"), bullet("[Hậu xử lý.]"), bullet("[Đầu ra.]"),
+    body("Các thành phần cấu thành gồm [liệt kê]. Luồng nghiệp vụ tổng thể được minh họa tại Hình 1."),
+    flowImage, flowCaption,
+    h2("2.2. Sự cần thiết của AI so với các giải pháp thông thường"), placeholder("[...]"),
+    h2("2.3. Vai trò và vị trí cụ thể của thành phần AI trong chu trình xử lý"), placeholder("[...]"),
+    h2("2.4. Thông tin mô hình AI"), placeholder("[Loại, tên, phiên bản, nhà cung cấp.]"),
+    h2("2.5. Phương thức phát triển"), placeholder("[Tự huấn luyện / tinh chỉnh / gọi API.]"),
+    h2("2.6. Dữ liệu đầu vào, đầu ra và thẩm quyền sử dụng dữ liệu"), placeholder("[...]"),
+    h2("2.7. Khả năng tích hợp giải pháp vào nền tảng của VTNet"), placeholder("[Tên nền tảng. Vị trí. Phương thức kết nối, giao thức, định dạng. Xác thực, phân quyền. Tái sử dụng tài nguyên. Rủi ro tích hợp.]"),
+    h1("Phần III. KIỂM THỬ, CHẤT LƯỢNG VÀ PHƯƠNG ÁN VẬN HÀNH"),
+    h2("3.1. Chỉ tiêu chất lượng mô hình và kết quả kiểm thử thực tế"), placeholder("[...]"),
+    h2("3.2. Cơ chế giám sát của con người (Human-in-the-loop), quyền can thiệp và dừng khẩn cấp"), placeholder("[...]"),
+    h2("3.3. Cơ chế ghi nhật ký (logging), giám sát cảnh báo và xử lý sai lệch mô hình"), placeholder("[...]"),
+    h2("3.4. Phương án dự phòng khi thành phần AI gặp sự cố"), placeholder("[...]"),
+    h2("3.5. Đơn vị phụ trách phát triển giải pháp"), placeholder("[...]"),
+    h2("3.6. Đơn vị tiếp nhận vận hành, khai thác và Chủ sở hữu dữ liệu"), placeholder("[...]"),
+    h1("Phần IV. PHÂN LOẠI RỦI RO, AN TOÀN THÔNG TIN VÀ PHÁP LÝ"),
+    h2("4.1. Phân loại mức độ rủi ro theo Quy chế (Nhóm 1, Nhóm 2 hoặc Nhóm 3)"), placeholder("[Chọn nhóm theo Điều 7 và giải trình.]"),
+    h2("4.2. Các rủi ro AI đặc thù và giải pháp kiểm soát"), placeholder("[...]"),
+    h2("4.3. Phương án bảo đảm an toàn thông tin và bảo vệ dữ liệu nhạy cảm"), placeholder("[...]"),
+    h2("4.4. Tuân thủ pháp lý, bản quyền dữ liệu và xử lý rủi ro đối tác thứ ba"), placeholder("[Theo Điều 12 khoản 5.]"),
+    h1("Phần V. ĐÁNH GIÁ TÀI NGUYÊN, TCO VÀ HIỆU QUẢ ĐẦU TƯ ROI"),
+    h2("5.1. Nhu cầu tài nguyên tính toán"), placeholder("[GPU, CPU, RAM, lưu trữ, băng thông.]"),
+    h2("5.2. Bảng tổng hợp tổng chi phí sở hữu (TCO) theo vòng đời"), tcoTable,
+    h2("5.3. Đánh giá giá trị làm lợi và hiệu quả đầu tư ROI"), placeholder("[Bốn nhóm giá trị theo Điều 12 khoản 3. Bảng ROI:]"), roiTable,
+    h1("Phần VI. KẾ HOẠCH THỬ NGHIỆM, SANDBOX VÀ NHÂN RỘNG"),
+    h2("6.1. Đề xuất hình thức triển khai (Sandbox, Pilot hoặc Triển khai chính thức)"), placeholder("[...]"),
+    h2("6.2. Kế hoạch thử nghiệm Sandbox"), placeholder("[Mục tiêu, phạm vi, thời gian, KPI nghiệm thu, điều kiện kết thúc - Điều 10.]"),
+    h2("6.3. Tiềm năng chuẩn hóa, nhân rộng và chuyển tiếp sang Hội đồng sáng kiến"), placeholder("[Điều 11.]"),
+    h2("6.4. Danh mục tài liệu minh chứng đính kèm"), placeholder("[Bản mô tả, sơ đồ kiến trúc, kết quả thử nghiệm, sản phẩm minh họa, số liệu đánh giá, kế hoạch triển khai.]"),
+  ] }],
+});
+
+Packer.toBuffer(doc).then((buf) => { fs.writeFileSync(OUT, buf); console.log("WROTE", OUT, buf.length); });
+```
+
+Ghi chú: điều chỉnh transformation của ImageRun theo tỷ lệ ảnh thật (height = width nhân h_anh chia w_anh). Khi có nội dung thật, thay placeholder bằng body và điền số liệu vào các bảng.

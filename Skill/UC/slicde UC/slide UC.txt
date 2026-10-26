@@ -1,0 +1,290 @@
+---
+name: viettel-slide-layout
+description: >
+  Dàn trang nội dung slide theo nhận dạng thương hiệu Viettel Networks (VTNet), xuất file Word (.docx)
+  phục vụ đưa vào NotebookLM, Gemini Canvas, Gamma, Canva, PowerPoint AI. Mỗi slide gồm: tiêu đề,
+  nội dung chính, hướng dẫn thiết kế chi tiết (bố cục, màu #EE0033, font FS Magistral/Roboto, hình ảnh).
+  Nền sáng bắt buộc — TUYỆT ĐỐI không nền đen/tối. Giữ nguyên 100% bảng dữ liệu gốc từ Excel.
+  Trigger: "dàn trang slide", "dàn slide Viettel", "dàn trang cho NotebookLM", "kịch bản slide VTNet",
+  "layout slide Viettel Networks", "dàn nội dung slide cho AI", "slide Viettel Networks",
+  "thiết kế slide VTNet", "dàn slide cho Gamma/Canva", "xuất dàn trang slide ra Word", hoặc khi
+  người dùng cung cấp tài liệu và yêu cầu dàn slide phong cách Viettel/VTNet.
+  Luôn đọc references/brand-spec.md VÀ references/design-rules.md trước khi bắt đầu.
+---
+
+# Dàn trang Slide thương hiệu Viettel Networks
+
+Skill dàn trang nội dung slide theo chuẩn nhận dạng thương hiệu Viettel Networks, xuất file Word (.docx) có hướng dẫn thiết kế chi tiết cho từng slide — để bất kỳ công cụ AI nào (NotebookLM, Gemini Canvas, Gamma, Canva, PowerPoint AI) đều có thể triển khai trực tiếp thành slide hoàn chỉnh.
+
+## Khi nào dùng skill này
+
+- Người dùng cung cấp tài liệu nguồn (Word, Excel, PDF, text) và yêu cầu dàn thành slide
+- Cần xuất dàn trang slide ra file Word để upload vào NotebookLM hoặc AI khác
+- Yêu cầu slide theo phong cách / nhận dạng thương hiệu Viettel Networks
+- Cần hướng dẫn thiết kế chi tiết cho từng slide (bố cục, màu, font, hình ảnh)
+- Tài liệu đào tạo, báo cáo, kịch bản demo cần chuyển thành dàn slide
+
+## Quy trình BẮT BUỘC
+
+### Bước 1: Đọc reference files
+
+**Luôn đọc 2 file reference TRƯỚC KHI viết code:**
+
+```
+view /path/to/skill/references/brand-spec.md
+view /path/to/skill/references/design-rules.md
+```
+
+- `references/brand-spec.md`: Bảng màu, font, logo rules, visual language Viettel Networks
+- `references/design-rules.md`: Quy tắc thiết kế slide, layout patterns, anti-patterns
+
+### Bước 2: Phân tích tài liệu nguồn
+
+Đọc tài liệu nguồn do người dùng cung cấp:
+1. Xác định cấu trúc heading (H1/H2/H3) → mapping thành các slide
+2. Xác định bảng dữ liệu → giữ nguyên 100% nội dung gốc
+3. Xác định nội dung dài → chắt lọc thành bullet súc tích
+4. Đếm tổng số slide cần thiết
+
+### Bước 3: Xác định cấu trúc slide
+
+Tuân thủ nguyên tắc:
+
+| Loại slide | Khi nào dùng | Đặc điểm |
+|---|---|---|
+| **Trang tiêu đề** | Slide đầu tiên | Full-screen, tiêu đề lớn căn giữa, accent bar đỏ |
+| **Slide Outline** | Trước mỗi phần lớn (H1) | Liệt kê nội dung sẽ trình bày trong phần đó |
+| **Slide nội dung** | Trình bày chi tiết | Bullet súc tích, bảng, so sánh, quy trình |
+| **Slide bảng dữ liệu** | Có bảng từ Excel/nguồn | Giữ nguyên 100% cấu trúc + nội dung bảng gốc |
+| **Trang kết** | Slide cuối cùng | "TRÂN TRỌNG CẢM ƠN!", mirror trang tiêu đề |
+
+**Quy tắc Outline:** Trước khi trình bày nội dung các phần lớn (heading 1), phải có 1 slide riêng liệt kê outline nội dung của phần đó — giúp người xem hình dung tổng quan.
+
+### Bước 4: Viết code docx-js
+
+Sử dụng thư viện `docx` (npm) để tạo file Word. Cấu trúc mỗi slide trong file Word:
+
+```
+SLIDE [N]: [TIÊU ĐỀ]
+├── 1. NỘI DUNG CHÍNH
+│   └── Bullet points súc tích
+└── 2. HƯỚNG DẪN THIẾT KẾ
+    ├── Bố cục (Layout)
+    ├── Màu sắc
+    ├── Font chữ
+    ├── Hình ảnh / Icon / Biểu đồ
+    └── Ghi chú trình bày
+```
+
+**Bảng hướng dẫn thiết kế** cho mỗi slide phải là Table 2 cột:
+- Cột 1: Thuộc tính (đỏ bold) — width ~28%
+- Cột 2: Chi tiết hướng dẫn — width ~72%
+- Header: nền đỏ #EE0033, chữ trắng
+- Rows: xen kẽ trắng / xám nhạt #F5F5F5
+
+### Bước 5: Xử lý bảng dữ liệu gốc
+
+Khi tài liệu nguồn có bảng (Excel, Word table):
+
+1. **Giữ nguyên 100%** nội dung, cấu trúc, merge cell
+2. Header bảng: nền đỏ #EE0033, chữ trắng, bold
+3. Sub-header (nếu có): nền đỏ đậm hơn #CC0029
+4. Nội dung dài trong ô: tách thành bullet với label bold đỏ
+5. Số liệu nổi bật (%, con số quan trọng): đỏ #EE0033 bold, cỡ lớn hơn
+
+### Bước 6: Validate và xuất file
+
+```bash
+python scripts/office/validate.py output.docx
+cp output.docx /mnt/user-data/outputs/[tên_file].docx
+```
+
+## Cấu trúc file Word đầu ra
+
+```
+┌─────────────────────────────────────────┐
+│ TRANG BÌA                              │
+│ - Tên đơn vị (VTNet)                   │
+│ - Tiêu đề dàn trang                    │
+│ - Bảng thông tin (đối tượng, phiên bản) │
+│ - Ngày tháng                            │
+├─────────────────────────────────────────┤
+│ TỔNG QUAN DÀN TRANG                    │
+│ - Danh sách tất cả slides              │
+├─────────────────────────────────────────┤
+│ SLIDE 1: [Tiêu đề]                     │
+│ ├── 1. Nội dung chính                   │
+│ └── 2. Hướng dẫn thiết kế (bảng)       │
+├─────────────────────────────────────────┤
+│ SLIDE 2: [Tiêu đề]                     │
+│ ├── 1. Nội dung chính                   │
+│ └── 2. Hướng dẫn thiết kế (bảng)       │
+├─────────────────────────────────────────┤
+│ ...                                     │
+├─────────────────────────────────────────┤
+│ SLIDE N: TRÂN TRỌNG CẢM ƠN!           │
+│ ├── 1. Nội dung chính                   │
+│ └── 2. Hướng dẫn thiết kế (bảng)       │
+└─────────────────────────────────────────┘
+```
+
+## Hướng dẫn thiết kế — Mỗi slide PHẢI có đủ 5 thuộc tính
+
+| # | Thuộc tính | Nội dung cần ghi |
+|---|---|---|
+| 1 | **Bố cục (Layout)** | Vị trí tiêu đề, nội dung, hình ảnh, bảng. Kiểu layout (1 cột, 2 cột, grid, timeline, so sánh, wireframe). Tỉ lệ phần trăm các vùng. |
+| 2 | **Màu sắc** | Nền slide, nền bảng/card, màu chữ, màu accent, viền. Luôn tham chiếu mã HEX cụ thể. **TUYỆT ĐỐI không nền đen/tối cho slide hay card.** |
+| 3 | **Font chữ** | Font + size + weight + color cho tiêu đề, nội dung, label, dữ liệu. In hoa hay không. Căn lề. |
+| 4 | **Hình ảnh / Icon / Biểu đồ** | Gợi ý cụ thể icon, hình minh họa, biểu đồ phù hợp nội dung. Placeholder cho screenshot nếu cần. |
+| 5 | **Ghi chú trình bày** | Điểm nhấn khi trình bày, key message, cách highlight cho người thuyết trình. |
+
+## Brand Colors — Quick Reference
+
+| Tên | HEX | Dùng cho |
+|---|---|---|
+| Viettel Red | **#EE0033** | Tiêu đề slide, CTA, accent, header bảng, label quan trọng |
+| Red Dark | #B30000 | Hover state, tiêu đề đậm |
+| Black | #0A0A0A | Nền tối **CHỈ cho text**, không dùng làm nền slide/card |
+| Dark | #1A1A1A | Nội dung chính |
+| Gray 1 | #4A4A4A | Văn bản thân |
+| Gray 2 | #7F7F7F | Placeholder, label phụ |
+| Gray 3 | #CCCCCC | Đường kẻ, divider, viền bảng |
+| Gray 4 | #F5F5F5 | Nền card, nền xen kẽ bảng |
+| White | #FFFFFF | Nền slide chính |
+
+## Typography — Quick Reference
+
+| Cấp độ | Font | Cỡ | Weight | Ứng dụng |
+|---|---|---|---|---|
+| Display/Hero | FS Magistral | 56-72px | ExtraBold | Bìa, hero section |
+| Heading 1 | FS Magistral | 40px | Bold | Tiêu đề slide |
+| Heading 2 | FS Magistral | 32px | Bold | Tiêu đề section |
+| Body | PF BeauSans Pro | 16px | Regular | Nội dung đọc |
+| Caption | Roboto | 12px | Medium | Nhãn, metadata |
+| Fallback | Arial | — | — | Khi không có font Viettel |
+
+## Các anti-patterns cần tránh
+
+| ❌ Không làm | ✅ Thay bằng |
+|---|---|
+| Nền đen/tối cho slide | Nền trắng #FFFFFF |
+| Nền đen/tối cho card | Nền trắng hoặc xám nhạt #F5F5F5 |
+| Logo Viettel Networks trên slide | Bỏ logo — để user thêm qua slide master |
+| Tự bịa nội dung | Giữ nguyên 100% nội dung từ tài liệu nguồn |
+| Font nhỏ < 10pt | Font tối thiểu 11pt, ưu tiên 12pt+ |
+| Bullet dài > 2 dòng | Chắt lọc thành keyword + mô tả ngắn |
+| Tất cả slide cùng layout | Mỗi slide layout khác nhau |
+| Gradient phức tạp, shadow nặng | Clean, flat, khoảng trắng đủ |
+| Nhiều màu lộn xộn | Chỉ dùng bảng màu Viettel chính thức |
+| Tiêu đề khác font/cỡ/màu | Tất cả tiêu đề cùng font, cùng cỡ, cùng đỏ #EE0033 |
+
+## Code Template — Khung cơ bản docx-js
+
+```javascript
+const fs = require('fs');
+const {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  Header, Footer, AlignmentType, HeadingLevel, BorderStyle, WidthType,
+  ShadingType, PageBreak, PageNumber, LevelFormat, TabStopType,
+  TabStopPosition, VerticalAlign, PageOrientation
+} = require('docx');
+
+// Brand colors
+const C = {
+  RED: 'EE0033', RED_DARK: 'B30000', BLACK: '0A0A0A', DARK: '1A1A1A',
+  GRAY1: '4A4A4A', GRAY2: '7F7F7F', GRAY3: 'CCCCCC', GRAY4: 'F5F5F5',
+  WHITE: 'FFFFFF',
+};
+const FONT = 'Arial'; // Fallback — luôn dùng Arial cho docx-js
+
+// Table helpers
+const border = { style: BorderStyle.SINGLE, size: 1, color: C.GRAY3 };
+const borders = { top: border, bottom: border, left: border, right: border };
+const cellPad = { top: 80, bottom: 80, left: 120, right: 120 };
+
+// Hướng dẫn thiết kế table cho mỗi slide
+function designGuideTable(items, tableWidth) {
+  const COL1 = Math.round(tableWidth * 0.28);
+  const COL2 = tableWidth - COL1;
+  
+  const headerRow = new TableRow({
+    children: [
+      new TableCell({
+        borders, width: { size: COL1, type: WidthType.DXA },
+        shading: { fill: C.RED, type: ShadingType.CLEAR },
+        margins: cellPad,
+        children: [new Paragraph({ children: [
+          new TextRun({ text: 'THUỘC TÍNH', bold: true, font: FONT, size: 20, color: C.WHITE })
+        ]})],
+      }),
+      new TableCell({
+        borders, width: { size: COL2, type: WidthType.DXA },
+        shading: { fill: C.RED, type: ShadingType.CLEAR },
+        margins: cellPad,
+        children: [new Paragraph({ children: [
+          new TextRun({ text: 'CHI TIẾT HƯỚNG DẪN', bold: true, font: FONT, size: 20, color: C.WHITE })
+        ]})],
+      }),
+    ],
+  });
+
+  const dataRows = items.map(([label, value], i) => new TableRow({
+    children: [
+      new TableCell({
+        borders, width: { size: COL1, type: WidthType.DXA },
+        shading: { fill: i % 2 === 0 ? C.WHITE : C.GRAY4, type: ShadingType.CLEAR },
+        margins: cellPad,
+        children: [new Paragraph({ children: [
+          new TextRun({ text: label, bold: true, font: FONT, size: 20, color: C.RED })
+        ]})],
+      }),
+      new TableCell({
+        borders, width: { size: COL2, type: WidthType.DXA },
+        shading: { fill: i % 2 === 0 ? C.WHITE : C.GRAY4, type: ShadingType.CLEAR },
+        margins: cellPad,
+        children: [new Paragraph({ spacing: { after: 0 }, children: [
+          new TextRun({ text: value, font: FONT, size: 20, color: C.DARK })
+        ]})],
+      }),
+    ],
+  }));
+
+  return new Table({
+    width: { size: tableWidth, type: WidthType.DXA },
+    columnWidths: [COL1, COL2],
+    rows: [headerRow, ...dataRows],
+  });
+}
+```
+
+## Xử lý các loại tài liệu nguồn
+
+| Loại nguồn | Cách xử lý |
+|---|---|
+| **File Word (.docx)** | extract-text → phân tích heading → mapping slide |
+| **File Excel (.xlsx)** | openpyxl → đọc bảng → giữ nguyên merge cell + nội dung |
+| **File PDF** | extract-text hoặc rasterize → trích xuất nội dung |
+| **Text/Markdown** | Đọc trực tiếp → phân tích cấu trúc heading |
+| **Nhiều file** | Đọc tất cả → tổng hợp → phân chia slide theo chủ đề |
+
+## Landscape vs Portrait
+
+| Trường hợp | Orientation | Margin |
+|---|---|---|
+| Tài liệu nhiều slide, nội dung text | **Portrait A4** | 1440 DXA (1 inch) |
+| Bảng dữ liệu rộng (>6 cột) | **Landscape A4** | 720-1000 DXA |
+| Slide đơn lẻ, bảng phức tạp | **Landscape A4** | 720-1000 DXA |
+
+## Checklist QA trước khi xuất
+
+- [ ] Mỗi slide có đủ 3 phần: tiêu đề, nội dung, hướng dẫn thiết kế
+- [ ] Hướng dẫn thiết kế có đủ 5 thuộc tính (bố cục, màu, font, hình ảnh, ghi chú)
+- [ ] Tất cả tiêu đề slide cùng font, cùng cỡ, cùng màu đỏ #EE0033
+- [ ] Màu sắc tham chiếu HEX cụ thể, không mô tả chung chung
+- [ ] KHÔNG có nền đen/tối cho slide hay card
+- [ ] KHÔNG có logo Viettel Networks trên slide
+- [ ] Nội dung bảng dữ liệu giữ nguyên 100% gốc
+- [ ] Có slide Outline trước mỗi phần lớn
+- [ ] Slide đầu = tiêu đề, slide cuối = "TRÂN TRỌNG CẢM ƠN!"
+- [ ] File validate PASSED
+- [ ] Tiếng Việt có dấu đầy đủ, không lỗi chính tả
