@@ -234,25 +234,28 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch('/api/status');
             const data = await res.json();
+            // Hiển thị model THẬT đang xử lý (cloud hay local) — trung thực tuyệt đối
+            const activeModel = (data.llm && (data.llm.active_model || data.llm.default_model)) || '';
+            const isCloud = activeModel && !/qwen2\.5|llama|mistral/i.test(activeModel);
             if (data.llm && data.llm.ollama_online) {
                 ollamaIndicator.className = 'status-indicator online';
                 ollamaStatusText.textContent = 'Trực tuyến (127.0.0.1)';
-                if (data.llm.default_model) {
-                    activeModelName.textContent = data.llm.default_model;
-                }
-                if (Array.isArray(data.llm.available_models) && data.llm.available_models.length > 0) {
-                    modelSelector.innerHTML = '';
-                    data.llm.available_models.forEach(m => {
-                        const opt = document.createElement('option');
-                        opt.value = m;
-                        opt.textContent = m + (m === 'qwen2.5:7b' ? ' (Khuyến nghị)' : '');
-                        if (m === 'qwen2.5:7b') opt.selected = true;
-                        modelSelector.appendChild(opt);
-                    });
-                }
             } else {
                 ollamaIndicator.className = 'status-indicator offline';
-                ollamaStatusText.textContent = 'Chưa kết nối';
+                ollamaStatusText.textContent = 'Chưa kết nối (suy luận qua Cloud)';
+            }
+            if (activeModel) {
+                activeModelName.textContent = activeModel + (isCloud ? ' — Cloud' : ' — Local');
+            }
+            if (Array.isArray(data.llm?.available_models) && data.llm.available_models.length > 0) {
+                modelSelector.innerHTML = '';
+                data.llm.available_models.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m + (m === state.selectedModel ? ' (đang dùng)' : '');
+                    if (m === state.selectedModel) opt.selected = true;
+                    modelSelector.appendChild(opt);
+                });
             }
         } catch (err) {
             ollamaIndicator.className = 'status-indicator offline';

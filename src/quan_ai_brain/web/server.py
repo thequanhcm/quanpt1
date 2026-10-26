@@ -736,13 +736,25 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_api_status(self) -> None:
         try:
-            provider = LLMProvider()
+            provider = _build_llm_provider()  # gắn NetMind cloud — health phải phản ánh đúng
             health = provider.health()
         except Exception as exc:
             health = {"ollama_online": False, "error": str(exc)}
 
         health["reachable"] = bool(health.get("ollama_online"))
         health["model"] = health.get("default_model", "qwen2.5:7b")
+        # Model THẬT đang phục vụ chat: NetMind cloud nếu READY, không thì local/mock.
+        # UI dùng trường này để hiển thị trung thực (tránh claim "local" sai).
+        netmind_state = (health.get("netmind") or {}).get("status", "")
+        if netmind_state == "READY":
+            health["active_model"] = "zai-org/GLM-5.3-Flash"
+            health["active_provider_label"] = "NetMind Cloud (GLM-5.3-Flash)"
+        elif health.get("ollama_online"):
+            health["active_model"] = health.get("default_model", "qwen2.5:7b")
+            health["active_provider_label"] = f"Ollama local ({health['active_model']})"
+        else:
+            health["active_model"] = "mock"
+            health["active_provider_label"] = "MOCK (không có provider thật — trả lời mẫu)"
 
         mem_count = 0
         try:
@@ -929,6 +941,35 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             )
             selected_model = decision.model
 
+            # 2.0 Owner teach detection — "anh đào tạo, em nhớ" persists FIRST
+            teach_note: str | None = None
+            try:
+                from quan_ai_brain.core.audit import AuditLogger
+                from quan_ai_brain.cognition.teach_pipeline import detect_teaching, persist_taught_memory
+
+                def _audit(event: str, details: dict[str, Any]) -> None:
+                    try:
+                        AuditLogger(workspace).record(event, details)
+                    except Exception:
+                        pass
+
+                with MemoryStore(db_path, workspace=workspace) as t_store:
+                    teach = detect_teaching(query)
+                    if teach.is_teaching:
+                        saved = persist_taught_memory(
+                            t_store, teach.content, teach.memory_type, session_id=session_id,
+                        )
+                        teach_note = (
+                            f"✅ Em đã NHỚ vào trí nhớ dài hạn (ID {saved['id']}, loại {saved['memory_type']}, "
+                            f"nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"{teach.content[:200]}\""
+                        )
+                        _audit("owner_teach.persisted", {"memory_id": saved["id"], "type": saved["memory_type"], "chars": len(teach.content)})
+            except Exception as teach_exc:
+                try:
+                    AuditLogger(workspace).record("owner_teach.error", {"error": str(teach_exc)[:200]})
+                except Exception:
+                    pass
+
             # 2. Memory Retrieval & Session History
             with MemoryStore(db_path, workspace=workspace) as store:
                 session_mgr = SessionMemoryManager(store)
@@ -950,6 +991,15 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     project_scope=scope,
                     conversation_history=recent_history,
                 )
+
+            # 2.5 Living Grounding Facts — probe thật, ép bot nói đúng về bản thân
+            try:
+                from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
+
+                grounding_block = render_grounding_block(collect_grounding_facts(current_model=selected_model))
+                context.system_instructions = grounding_block + "\n\n" + context.system_instructions
+            except Exception as ground_exc:
+                _audit("grounding_facts.error", {"error": str(ground_exc)[:200]})
 
             # 3. LLM Generation
             req = LLMRequest(
@@ -1025,6 +1075,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
+
+            # Owner teach confirmation — hiển thị ngay trong reply
+            if teach_note:
+                sanitized_reply = teach_note + "\n\n" + sanitized_reply
 
             self._send_json({
                 "success": resp.success,
