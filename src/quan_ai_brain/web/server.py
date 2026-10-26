@@ -281,6 +281,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_executive_overview()
             return
 
+        if path == "/api/executive/netchat/status":
+            self._handle_api_executive_netchat_status()
+            return
+
+        if path == "/api/executive/netchat/messages":
+            self._handle_api_executive_netchat_messages(parsed.query)
+            return
+
         if path == "/api/executive/persona":
             self._handle_api_executive_persona()
             return
@@ -456,6 +464,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/persona":
             self._handle_api_executive_persona_update(body)
+            return
+
+        if path == "/api/executive/netchat/send":
+            self._handle_api_executive_netchat_send(body)
+            return
+
+        if path == "/api/executive/netchat/command":
+            self._handle_api_executive_netchat_command(body)
             return
 
         if path == "/api/executive/consultations/respond":
@@ -1353,6 +1369,49 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "pending_consultations": pending_count,
             "latest_report": latest_rep.to_dict() if latest_rep else None,
         })
+
+    def _handle_api_executive_netchat_status(self) -> None:
+        try:
+            from quan_ai_brain.integration.netchat_bridge import get_status
+
+            self._send_json(get_status())
+        except Exception as exc:
+            self._send_error_json(f"NetChat status error: {exc}", 502)
+
+    def _handle_api_executive_netchat_messages(self, query_str: str) -> None:
+        try:
+            from quan_ai_brain.integration.netchat_bridge import (
+                DEFAULT_CHANNEL_ID,
+                get_messages,
+            )
+
+            params = urllib.parse.parse_qs(query_str)
+            channel_id = params.get("channel_id", [DEFAULT_CHANNEL_ID])[0]
+            count = int(params.get("count", ["20"])[0])
+            self._send_json(get_messages(channel_id, count))
+        except Exception as exc:
+            self._send_error_json(f"NetChat messages error: {exc}", 502)
+
+    def _handle_api_executive_netchat_send(self, body: dict) -> None:
+        try:
+            from quan_ai_brain.integration.netchat_bridge import (
+                DEFAULT_CHANNEL_ID,
+                send_message,
+            )
+
+            text = str(body.get("message", "")).strip()
+            channel_id = str(body.get("channel_id", DEFAULT_CHANNEL_ID)).strip() or DEFAULT_CHANNEL_ID
+            self._send_json(send_message(channel_id, text))
+        except Exception as exc:
+            self._send_error_json(f"NetChat send error: {exc}", 502)
+
+    def _handle_api_executive_netchat_command(self, body: dict) -> None:
+        try:
+            from quan_ai_brain.integration.netchat_bridge import run_command
+
+            self._send_json(run_command(str(body.get("command", ""))))
+        except Exception as exc:
+            self._send_error_json(f"NetChat command error: {exc}", 502)
 
     def _handle_api_executive_persona(self) -> None:
         persona = ExecutivePersona()

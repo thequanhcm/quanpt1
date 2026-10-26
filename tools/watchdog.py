@@ -15,6 +15,7 @@ Features:
 """
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -149,7 +150,7 @@ def check_netchat_bot() -> bool:
 def check_disk_space() -> bool:
     """GAP-R3: workspace drive free-space guard (fail before DB corruption)."""
     try:
-        usage = os.disk_usage(BASE_DIR)
+        usage = shutil.disk_usage(BASE_DIR)
         free_percent = 100.0 * usage.free / usage.total
         ok = free_percent >= CONFIG["disk_free_min_percent"]
         if not ok:

@@ -275,6 +275,11 @@
         <span class="tab-icon">💬</span>
         <span class="tab-text">Hội Thoại Trực Tiếp Với Bản Sao</span>
       </button>
+      <button class="nav-tab" data-tab="tab-netchat" id="nav-btn-netchat">
+        <span class="tab-icon">📡</span>
+        <span class="tab-text">Quản Trị Kênh NetChat</span>
+        <span class="tab-badge badge-green" id="badge-netchat-status">—</span>
+      </button>
       <button class="nav-tab" data-tab="tab-edge-sync" id="nav-btn-edge-sync">
         <span class="tab-icon">📡</span>
         <span class="tab-text">Đồng Bộ &amp; Truyền Tin Pi 5</span>
@@ -617,6 +622,63 @@
               <button class="btn btn-voice" id="btn-dialogue-voice" title="Bật/Tắt Nhận diện giọng nói">🎙️</button>
               <button class="btn btn-primary" id="btn-dialogue-send">Gửi Chỉ Đạo ➤</button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB: NETCHAT CHANNEL COMMAND CENTER ================= -->
+      <section id="tab-netchat" class="tab-content">
+        <div class="section-intro">
+          <h2>Quản Trị Kênh NetChat "Trợ lý Tony Pham" (24/7)</h2>
+          <p>Kênh làm việc hai chiều giữa Anh và Trợ lý số: gõ lệnh hoặc hội thoại tự do (không cần @bot). Từ tab này Anh có thể đọc, gửi và chạy lệnh điều khiển trực tiếp.</p>
+        </div>
+
+        <div class="netchat-grid">
+          <div class="netchat-chat-card">
+            <div class="netchat-chat-header">
+              <div class="netchat-avatar-wrap">
+                <canvas id="netchat-avatar-canvas" width="240" height="240" class="netchat-avatar-canvas"></canvas>
+                <span class="netchat-avatar-ring" id="netchat-avatar-ring"></span>
+              </div>
+              <div>
+                <div class="netchat-channel-name">Trợ lý Tony Pham</div>
+                <div class="netchat-channel-sub" id="netchat-channel-sub">Đang kết nối…</div>
+              </div>
+              <div class="netchat-header-actions">
+                <button class="btn btn-sm btn-outline" id="btn-netchat-refresh">🔄 Tải lại</button>
+                <label class="netchat-auto-wrap"><input type="checkbox" id="netchat-auto-refresh" checked> Tự động 10s</label>
+              </div>
+            </div>
+            <div class="netchat-messages" id="netchat-messages-list">
+              <div class="netchat-loading">Đang tải tin nhắn…</div>
+            </div>
+            <div class="netchat-input-bar">
+              <textarea id="netchat-input" placeholder="Nhập tin nhắn gửi kênh NetChat… (Enter để gửi, Shift+Enter xuống dòng)" rows="2"></textarea>
+              <div class="netchat-actions">
+                <select id="netchat-command-select" title="Chọn lệnh nhanh">
+                  <option value="">⚡ Lệnh nhanh…</option>
+                  <option value="trạng thái">trạng thái</option>
+                  <option value="phê duyệt">phê duyệt</option>
+                  <option value="báo cáo">báo cáo</option>
+                  <option value="nhiệm vụ">nhiệm vụ</option>
+                  <option value="tri thức">tri thức</option>
+                  <option value="giúp">giúp</option>
+                </select>
+                <button class="btn btn-sm btn-outline" id="btn-netchat-run-cmd" title="Chạy lệnh hệ thống NGAY (không gửi vào kênh)">▶ Chạy lệnh</button>
+                <button class="btn btn-primary btn-sm" id="btn-netchat-send">Gửi ➤</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="netchat-side-card">
+            <h4>🤖 Trạng thái kênh &amp; bot</h4>
+            <div id="netchat-status-box" class="netchat-status-box">Đang tải…</div>
+            <h4>📌 Quy ước lệnh trong kênh</h4>
+            <ul class="netchat-rules">
+              <li>Tin <b>bắt đầu</b> bằng từ khóa → thực thi thật: <code>phê duyệt</code>, <code>trạng thái</code>, <code>báo cáo</code>, <code>nhiệm vụ</code>, <code>tri thức</code>, <code>giúp</code></li>
+              <li>Câu hỏi (có dấu "?"/"không") → hội thoại AI, <b>không</b> kích hoạt lệnh</li>
+              <li>Lệnh phê duyệt luôn hiển thị ID hồ sơ + ghi audit log</li>
+            </ul>
           </div>
         </div>
       </section>

@@ -30,6 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
   safeInit(initEdgeAddon, "initEdgeAddon");
   safeInit(initRemoteSensors, "initRemoteSensors");
   safeInit(initTasksOrchestration, "initTasksOrchestration");
+  safeInit(initNetChat, "initNetChat");
 
   // Tab navigation
   function initTabs() {
@@ -3150,4 +3151,191 @@ document.addEventListener("DOMContentLoaded", () => {
   window.loadCapabilities = loadCapabilities;
   window.loadEdgeTelemetry = loadEdgeTelemetry;
   window.loadPiFiles = loadPiFiles;
+
+  // ================= NETCHAT CHANNEL COMMAND CENTER =================
+  let netchatAvatar = null;
+  let netchatTimer = null;
+  let netchatLastPostId = null;
+
+  function initNetChat() {
+    const list = document.getElementById("netchat-messages-list");
+    if (!list) return;
+
+    // Digital Human avatar (same engine + assets as the cockpit persona)
+    try {
+      if (typeof DigitalHumanAvatar !== "undefined") {
+        netchatAvatar = new DigitalHumanAvatar("netchat-avatar-canvas", {
+          basePath: "/static/assets/avatar",
+          initialState: "IDLE",
+        });
+      }
+    } catch (e) {
+      console.warn("NetChat avatar init warning:", e);
+    }
+
+    document.getElementById("btn-netchat-refresh")?.addEventListener("click", refreshNetChat);
+    document.getElementById("btn-netchat-send")?.addEventListener("click", sendNetChatMessage);
+    document.getElementById("btn-netchat-run-cmd")?.addEventListener("click", runNetChatCommand);
+    document.getElementById("netchat-command-select")?.addEventListener("change", (e) => {
+      if (e.target.value) {
+        document.getElementById("netchat-input").value = e.target.value;
+        e.target.value = "";
+      }
+    });
+
+    const input = document.getElementById("netchat-input");
+    input?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendNetChatMessage();
+      }
+    });
+
+    const autoBox = document.getElementById("netchat-auto-refresh");
+    autoBox?.addEventListener("change", () => {
+      if (autoBox.checked) startNetChatAuto();
+      else stopNetChatAuto();
+    });
+
+    // Load when tab is opened
+    document.getElementById("nav-btn-netchat")?.addEventListener("click", () => {
+      refreshNetChat();
+      startNetChatAuto();
+    });
+
+    refreshNetChat();
+  }
+
+  function startNetChatAuto() {
+    stopNetChatAuto();
+    netchatTimer = setInterval(() => {
+      const autoBox = document.getElementById("netchat-auto-refresh");
+      const tab = document.getElementById("tab-netchat");
+      if (autoBox?.checked && tab?.classList.contains("active")) refreshNetChat(true);
+    }, 10000);
+  }
+
+  function stopNetChatAuto() {
+    if (netchatTimer) { clearInterval(netchatTimer); netchatTimer = null; }
+  }
+
+  async function refreshNetChat(silent) {
+    const list = document.getElementById("netchat-messages-list");
+    if (!list) return;
+    if (!silent) list.innerHTML = '<div class="netchat-loading">Đang tải tin nhắn…</div>';
+    try {
+      const [msgRes, statusRes] = await Promise.all([
+        fetch("/api/executive/netchat/messages?count=30"),
+        fetch("/api/executive/netchat/status"),
+      ]);
+      const msgData = await msgRes.json();
+      const statusData = statusRes.ok ? await statusRes.json() : null;
+
+      renderNetChatMessages(msgData.messages || []);
+
+      const badge = document.getElementById("badge-netchat-status");
+      const sub = document.getElementById("netchat-channel-sub");
+      const statusBox = document.getElementById("netchat-status-box");
+      if (msgData.success) {
+        if (badge) { badge.textContent = "LIVE"; badge.classList.add("badge-green"); }
+        if (sub) sub.textContent = `Kênh riêng tư • ${msgData.messages.length} tin gần nhất • Cập nhật ${new Date().toLocaleTimeString("vi-VN")}`;
+      } else {
+        if (badge) { badge.textContent = "LỖI"; badge.classList.remove("badge-green"); }
+      }
+      if (statusBox && statusData) {
+        const b = statusData.bot || {};
+        statusBox.innerHTML =
+          `Bot: <b>${b.username || "?"}</b> (ID ${b.id || "?"})<br>` +
+          `Kênh: <b>${statusData.channel?.name || "?"}</b><br>` +
+          `Responder: netchat_auto_responder.py (poll 5s)<br>` +
+          `Kiểm tra: ${statusData.checked_at_utc || "?"}`;
+      }
+    } catch (err) {
+      list.innerHTML = `<div class="netchat-loading">⚠️ Không tải được kênh: ${err.message}</div>`;
+      const badge = document.getElementById("badge-netchat-status");
+      if (badge) { badge.textContent = "OFF"; badge.classList.remove("badge-green"); }
+    }
+  }
+
+  function renderNetChatMessages(messages) {
+    const list = document.getElementById("netchat-messages-list");
+    if (!list) return;
+    if (!messages.length) {
+      list.innerHTML = '<div class="netchat-loading">Kênh chưa có tin nhắn.</div>';
+      return;
+    }
+    const cmds = ["phê duyệt", "phe duyet", "duyệt", "duyet", "trạng thái", "trang thai", "hiện trạng", "báo cáo", "bao cao", "nhiệm vụ", "nhiem vu", "tri thức", "tri thuc", "giúp", "giup"];
+    list.innerHTML = messages.map(m => {
+      const isBot = m.sender === "bot";
+      const t = m.create_at ? new Date(m.create_at).toLocaleTimeString("vi-VN") : "";
+      const lower = (m.message || "").trim().toLowerCase();
+      const isCmd = !isBot && cmds.some(c => lower.startsWith(c));
+      const avatarImg = isBot ? '<img class="netchat-msg-avatar" src="/static/assets/avatar/avatar_v2_portrait.jpg" alt="Tony">' : "";
+      const who = isBot ? "🤖 TRỢ LÝ" : "👑 ANH (quanpt1)";
+      const esc = (m.message || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      return `<div class="netchat-msg ${isBot ? "msg-bot" : "msg-owner"}">` +
+        `${avatarImg}` +
+        `<div class="msg-meta">${who}${isCmd ? '<span class="cmd-tag">LỆNH</span>' : ""} <span style="margin-left:auto">${t}</span></div>` +
+        `<div class="msg-text">${esc}</div>` +
+        `</div>`;
+    }).join("");
+    list.scrollTop = list.scrollHeight;
+  }
+
+  async function sendNetChatMessage() {
+    const input = document.getElementById("netchat-input");
+    const btn = document.getElementById("btn-netchat-send");
+    const text = (input?.value || "").trim();
+    if (!text) return;
+    if (btn) { btn.disabled = true; btn.textContent = "Đang gửi…"; }
+    try {
+      const res = await fetch("/api/executive/netchat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      input.value = "";
+      netchatAvatar?.setState("SPEAKING");
+      setTimeout(() => netchatAvatar?.setState("IDLE"), 2500);
+      await refreshNetChat(true);
+    } catch (err) {
+      alert("Không gửi được: " + err.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = "Gửi ➤"; }
+    }
+  }
+
+  async function runNetChatCommand() {
+    const input = document.getElementById("netchat-input");
+    const out = document.getElementById("netchat-status-box");
+    const text = (input?.value || "").trim();
+    if (!text) { alert("Nhập lệnh trước (ví dụ: trạng thái)"); return; }
+    if (out) out.textContent = "⏳ Đang thực thi lệnh…";
+    netchatAvatar?.setState("THINKING");
+    try {
+      const res = await fetch("/api/executive/netchat/command", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command: text }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.error || data.detail || `HTTP ${res.status}`);
+      }
+      netchatAvatar?.setState("SUCCESS");
+      setTimeout(() => netchatAvatar?.setState("IDLE"), 2500);
+      if (out) out.innerHTML =
+        `<b>⚡ Lệnh:</b> ${text}<br><b>Intent:</b> ${data.intent || "—"}` +
+        (data.note ? `<br><i>${data.note}</i>` : "") +
+        `<br><br><pre style="white-space:pre-wrap;font-family:var(--font-mono);font-size:11.5px;margin:0">${(data.response || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+    } catch (err) {
+      netchatAvatar?.setState("ERROR");
+      setTimeout(() => netchatAvatar?.setState("IDLE"), 2500);
+      if (out) out.textContent = "⚠️ Lỗi lệnh: " + err.message;
+    }
+  }
 });
