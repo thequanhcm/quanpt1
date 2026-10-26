@@ -89,7 +89,17 @@
 
 ---
 
-## 📊 TỔNG KẾT TÍNH NĂNG HIỆN TẠI (sau Giai đoạn 12)
+## 📍 GIAI ĐOẠN 13 — Sprint C+D: Self-Model probe thật + Quality Scanner + Promotion Policy
+**Mốc thời gian:** 2026-10-26 (đêm, sau duyệt "duyệt")
+**Nội dung:**
+1. **Self-Model 12 câu trả lời bằng probe thật (C1/C3):** `answer_state_questions()` trong self_model_engine.py — TCP probe 8765/11434/8768, đếm SQL thật (semantic/quarantined/pending tasks/consultations), audit line count; mỗi câu có {source, evidence_ref, verification_status}; snapshot JSON + diff "điều gì thay đổi từ lần kiểm tra trước".
+2. **Knowledge Quality Scanner (C2):** `memory/knowledge_quality.py` READ-ONLY — phát hiện dup/conflict/stale. Scan DB thật: 780 semantic (**673 exact dups**), 41,790 candidates (**40,304 internal dups, chỉ 533 unique — 99% trùng lặp từ learning daemon ingest lặp tài liệu**), 21 conflict suspects.
+3. **Promotion Policy phân lớp L0-L3 (D2):** `memory/promotion_policy.py` — chỉ L0 (confidence ≥0.8, không dup/conflict) được tự thăng cấp; L1 (DC/production) + L2 (SOP) + L3 (safety) LUÔN chờ owner. Dry-run 2,000 quarantined: 1,430 NEEDS_OWNER, 505 low-confidence, 41 dup, 24 conflict, DB không đổi.
+**Kết quả test:** **13/13 tests mới PASSED** (7.87s); full regression **576 passed, 1 failed (Ollama env), 2 skipped (176.30s)** — +13, 0 regression.
+**Bằng chứng:** files `self_model_engine.py` (mở rộng +231 dòng), `knowledge_quality.py` (mới), `promotion_policy.py` (mới), `tests/test_sprint_cd_quality_promotion.py`; Gap Register cập nhật GAP-C1→C4, GAP-M1, GAP-M2.
+**Trạng thái:** ✅ HOÀN THÀNH — chờ owner nghiệm thu + quyết định chiến lược dedup 40,304 dups.
+
+## 📊 TỔNG KẾT TÍNH NĂNG HIỆN TẠI (sau Giai đoạn 13)
 
 | Nhóm | Tính năng | Trạng thái |
 |---|---|---|

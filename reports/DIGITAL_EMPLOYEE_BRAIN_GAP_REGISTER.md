@@ -22,19 +22,19 @@
 
 | ID | Khoảng trống | Bằng chứng | Mức chặn | Sprint | Trạng thái |
 |---|---|---|---|---|---|
-| GAP-C1 | Không có CognitiveLoop (state machine 11 trạng thái) | import check — module missing | CAO (não điều phối chưa khép kín) | B1 | OPEN |
-| GAP-C2 | Không có ReflectionLoop 12 câu hỏi | import check — module missing | CAO (học từ sai lầm chưa cơ chế) | B2 | OPEN |
-| GAP-C3 | Self-model trả lời 12 câu hỏi 2.2 chưa nối probe thật | self_model_engine 242 dòng, cần verify evidence | CAO | C1 | OPEN |
-| GAP-C4 | Chưa có test khôi phục sau process restart giữa nhiệm vụ | test suite không có scenario | CAO | B1 | OPEN |
-| GAP-C5 | Chưa phát hiện tri thức mâu thuẫn/lỗi thời trong 720 semantic | không có module/benchmark | TRUNG | C2 | OPEN |
+| GAP-C1 | Không có CognitiveLoop (state machine 11 trạng thái) | import check — module missing | CAO (não điều phối chưa khép kín) | B1 | **RESOLVED 2026-10-26** — `cognition/cognitive_loop.py` + `reflection.py`, 17 tests, commit 9fbbf48 |
+| GAP-C2 | Không có ReflectionLoop 12 câu hỏi | import check — module missing | CAO (học từ sai lầm chưa cơ chế) | B2 | **RESOLVED 2026-10-26** — `cognition/reflection.py`, 17 tests, commit 9fbbf48 |
+| GAP-C3 | Self-model trả lời 12 câu hỏi 2.2 chưa nối probe thật | self_model_engine 242 dòng, cần verify evidence | CAO | C1 | **RESOLVED 2026-10-26** — `answer_state_questions()` probe thật (TCP + SQL + audit line count) + snapshot diff; 2 tests |
+| GAP-C4 | Chưa có test khôi phục sau process restart giữa nhiệm vụ | test suite không có scenario | CAO | B1 | **RESOLVED 2026-10-26** — `test_recovery_after_restart_marks_unknown_not_rerun` PASS |
+| GAP-C2 | Chưa phát hiện tri thức mâu thuẫn/lỗi thời trong 720 semantic | không có module/benchmark | TRUNG | C2 | **RESOLVED 2026-10-26** — `memory/knowledge_quality.py` + 5 tests; scan thật: 780 semantic (673 exact dups!), 41,790 candidates (40,304 internal dups, 533 unique), 21 conflict suspects |
 | GAP-C6 | Confidence chưa hiệu chuẩn (calibration) | không có benchmark nào đo | CAO (cấm auto-execute cho tới khi có) | E5 | OPEN |
 
 ## Nhóm 3 — Memory & Learning (Sprint C/D)
 
 | ID | Khoảng trống | Bằng chứng | Mức chặn | Sprint | Trạng thái |
 |---|---|---|---|---|---|
-| GAP-M1 | 37,716 candidates quarantined không có thẩm định theo lô | brain.db đo | TRUNG (noise chèn ép tri thức DC) | C3 | OPEN |
-| GAP-M2 | Promotion policy chưa phân lớp tri thức | continuous_learning_engine tự thăng cấp theo ngưỡng duy nhất | CAO | D2 | OPEN |
+| GAP-M1 | 37,716 candidates quarantined không có thẩm định theo lô | brain.db đo | TRUNG (noise chèn ép tri thức DC) | C3 | **IN_PROGRESS 2026-10-26** — PromotionPolicy dry-run 2,000 items: 1,430 NEEDS_OWNER (lớp L1/L2/L3), 505 low-confidence, 41 dup, 24 conflict; phát hiện 99% trùng lặp (40,304 internal dups) — chờ owner duyệt chiến lược dedup |
+| GAP-M2 | Promotion policy chưa phân lớp tri thức | continuous_learning_engine tự thăng cấp theo ngưỡng duy nhất | CAO | D2 | **RESOLVED 2026-10-26** — `memory/promotion_policy.py` lớp L0-L3: chỉ L0 (confidence ≥0.8, không dup/conflict) tự thăng cấp; L1/L2/L3 luôn NEEDS_OWNER; 8 tests |
 | GAP-M3 | Chưa đo learning effectiveness (tỷ lệ false promotion) | không có report | TRUNG | D3 | OPEN |
 | GAP-M4 | Memory benchmark chỉ precision@k/MRR cơ bản | memory/benchmark.py 349 dòng | TRUNG | C4 | OPEN |
 
