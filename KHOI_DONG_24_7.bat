@@ -16,10 +16,12 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-REM ---- Env cho GLM Cloud (key stored user-level via persist_netmind_env.ps1;
-REM ---- khoi lenh nay dam bao process con ke thừa env kể cả khi user env chua nap)
+REM ---- Env cho GLM Cloud + Gemini tra cứu ngoài (key stored user-level qua
+REM ---- persist_netmind_env.ps1 / persist_gemini_env.ps1; khoi lenh nay dam bao
+REM ---- process con ke thừa env kể cả khi user env chua nap)
 set "NETMIND_EXTERNAL_DATA_ALLOWED=true"
 if "%NETMIND_API_KEY%"=="" call :LoadUserEnv
+if "%GEMINI_API_KEY%"=="" call :LoadUserEnv
 
 REM [1/5] Dual Web Servers (8765 Local UI + 8766 Executive)
 echo [1/5] Khoi dong Dual Servers (8765 + 8766)...
@@ -65,4 +67,6 @@ exit /b 0
 REM Doc key tu user-level registry env (khong hien thi gia tri) vao process nay
 for /f "skip=2 tokens=2,*" %%A in ('reg query "HKCU\Environment" /v NETMIND_API_KEY 2^>nul') do set "NETMIND_API_KEY=%%B"
 for /f "skip=2 tokens=2,*" %%A in ('reg query "HKCU\Environment" /v NETMIND_DESKTOP_LLM_BASE_URL 2^>nul') do set "NETMIND_DESKTOP_LLM_BASE_URL=%%B"
+for /f "skip=2 tokens=2,*" %%A in ('reg query "HKCU\Environment" /v GEMINI_API_KEY 2^>nul') do set "GEMINI_API_KEY=%%B"
+for /f "skip=2 tokens=2,*" %%A in ('reg query "HKCU\Environment" /v GEMINI_MODEL 2^>nul') do set "GEMINI_MODEL=%%B"
 exit /b 0

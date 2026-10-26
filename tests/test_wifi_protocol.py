@@ -108,10 +108,14 @@ def test_w05_edge_restart_and_reconnection(monitor):
 
 def test_w06_core_offline_graceful_handling():
     """W06: Edge client detects Core unreachable and transitions to OFFLINE without crashing."""
-    from quan_ai_brain.web.server import _send_edge_request
+    from unittest.mock import patch
 
-    # Calling an unreachable endpoint returns offline dictionary gracefully
-    res = _send_edge_request("/unreachable", timeout=0.1)
+    from quan_ai_brain.web import server as web_server
+
+    # Mock socket pre-check → "mạng chết" deterministic (KHÔNG phụ thuộc server thật).
+    # Trước đây test này gọi edge thật: pass khi Pi5 offline, fail (404) khi online.
+    with patch.object(web_server.socket.socket, "connect_ex", return_value=1):
+        res = web_server._send_edge_request("/unreachable", timeout=0.1)
     assert res.get("offline") is True
     assert res.get("success") is False
 

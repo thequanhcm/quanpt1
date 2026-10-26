@@ -1001,6 +1001,30 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as ground_exc:
                 _audit("grounding_facts.error", {"error": str(ground_exc)[:200]})
 
+            # 2.6 External lookup evidence — câu hỏi tin tức/tra cứu ngoài → tự tra cứu
+            # (Gemini search → Google News RSS + Gemini tổng hợp). Fail-closed, chỉ
+            # kích hoạt với câu hỏi thời sự (should_lookup_external); key chỉ đọc env.
+            ext_lookup_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.tools.external_lookup import (
+                    collect_external_evidence,
+                    should_lookup_external,
+                )
+
+                if should_lookup_external(query):
+                    ext_lookup_info["attempted"] = True
+                    _ev = collect_external_evidence(query, timeout=20.0)
+                    _ev_block = _ev.render_block()
+                    ext_lookup_info.update({
+                        "layer": _ev.source_layer, "sources": len(_ev.sources),
+                        "summary": bool(_ev.summary), "block_len": len(_ev_block),
+                        "note": _ev.note[:120],
+                    })
+                    if _ev_block:
+                        context.system_instructions = context.system_instructions + "\n" + _ev_block
+            except Exception as _ev_exc:
+                ext_lookup_info["error"] = str(_ev_exc)[:160]
+
             # 3. LLM Generation
             req = LLMRequest(
                 prompt=context.rendered_context,
@@ -1111,6 +1135,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 },
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
+                "external_lookup": ext_lookup_info,
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
@@ -1195,6 +1220,18 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     project_scope=scope,
                     conversation_history=recent_history,
                 )
+
+            # 2.6 External lookup evidence — như /api/chat (câu hỏi thời sự mới tra;
+            # fail-closed, không bao giờ làm chết stream).
+            try:
+                from quan_ai_brain.tools.external_lookup import collect_external_evidence
+
+                _ev = collect_external_evidence(query, timeout=20.0)
+                _ev_block = _ev.render_block()
+                if _ev_block:
+                    context.system_instructions = context.system_instructions + "\n" + _ev_block
+            except Exception:
+                pass
 
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
             req = LLMRequest(
