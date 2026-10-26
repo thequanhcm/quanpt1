@@ -9,6 +9,7 @@ This script:
 Run continuously to enable 24/7 auto-response.
 """
 import json
+import re
 import subprocess
 import sys
 import time
@@ -28,6 +29,33 @@ def touch_heartbeat() -> None:
         HEARTBEAT_PATH.touch()
     except Exception:
         pass
+
+# 27/10/2026 (owner): "trợ lý không hỏi lòng vòng" — nếu câu trả lời AI đang
+# XIN PHÉP làm việc probe CHỈ ĐỌC (an toàn tuyệt đối), responder TỰ CHẠY probe
+# thật ngay và trả KẾT QUẢ thay vì câu hỏi. Không ai phải trả lời "ok" cho
+# việc bot tự làm được.
+_PERMISSION_ASK_RE = re.compile(
+    r"(cho phép em|cho em chạy|xác nhận cho em|em chờ lệnh|chờ anh xác nhận|"
+    r"anh xác nhận[^\n]*nhé\?|xin phép anh|anh cho phép)",
+    re.IGNORECASE,
+)
+_SAFE_PROBE_RE = re.compile(r"(probe|kiểm tra|trạng thái|xác minh)", re.IGNORECASE)
+
+
+def _maybe_autorun_probe(ai_response: str) -> str | None:
+    """AI vừa hỏi xin phép probe chỉ-đọc? → chạy thật, trả kết quả (không hỏi lại)."""
+    if not ai_response:
+        return None
+    if not (_PERMISSION_ASK_RE.search(ai_response) and _SAFE_PROBE_RE.search(ai_response)):
+        return None
+    try:
+        from tools.netchat_command_center import _reprobe_full
+        fresh = _reprobe_full("probe lại toàn hệ thống")
+    except Exception:
+        return None
+    # Giữ phần phân tích của AI (trước mục 'Đề xuất'), thay phần xin phép bằng kết quả thật
+    head = ai_response.split("Đề xuất")[0].strip()
+    return f"{head}\n\n{fresh}" if head else fresh
 
 CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
 CHANNEL_NAME = "Trợ lý Tony Pham"
@@ -118,24 +146,38 @@ def process_message_with_ai(message_text):
         return f"⚠️ Lỗi xử lý: {str(e)}"
 
 
-def process_message(message_text, sender_user_id=""):
-    """Route: system commands FIRST (real logic), AI conversation fallback.
+def process_message(message_text, sender_user_id="", chat_session_id="default"):
+    """Route: ok-confirm → system commands → approval cards → AI fallback.
 
     The channel is a dedicated owner<->assistant command center — no @bot
     needed. Commands like 'phê duyệt' execute real system actions; other
     messages fall through to the conversational AI. sender_user_id enables
     owner-identity verification in the approval adapter (V3 Section 5.2).
+
+    27/10/2026 (owner): intent 'ok_silent' = anh xác nhận nhưng không có việc
+    chờ → KHÔNG gửi gì cả (không lòng vòng). 'ok_confirm' = đã thực thi việc
+    chờ xác nhận.
     """
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from tools.netchat_command_center import route_message
-        intent, response = route_message(message_text, sender_user_id=sender_user_id)
+        intent, response = route_message(
+            message_text, sender_user_id=sender_user_id, chat_session_id=chat_session_id
+        )
+        if intent == "ok_silent":
+            print("   🔇 'ok' nhưng không có việc chờ xác nhận → im lặng (không spam).")
+            return None  # responder sẽ không gửi gì
         if intent is not None:
             print(f"   ⚡ System command: {intent}")
             return response
     except Exception as e:
         print(f"   ⚠️ Command router error: {e}")
-    return process_message_with_ai(message_text)
+    ai_reply = process_message_with_ai(message_text)
+    autorun = _maybe_autorun_probe(ai_reply)
+    if autorun is not None:
+        print("   🤖 AI hỏi xin phép probe chỉ-đọc → tự chạy probe thật, trả kết quả.")
+        return autorun
+    return ai_reply
 
 def main():
     """Main auto-responder loop.
@@ -205,7 +247,12 @@ def main():
                     print(f"   {message_text[:100]}")
 
                     print("   🤖 Processing...")
-                    response = process_message(message_text, sender_user_id=msg.get("user_id", ""))
+                    response = process_message(message_text, sender_user_id=msg.get("user_id", ""), chat_session_id=CHANNEL_ID)
+
+                    if response is None:
+                        # ok_silent: xác nhận không kèm việc nào → không gửi gì
+                        seen_ids.add(msg_id)
+                        continue
 
                     print("   📤 Sending response...")
                     result = send_message(response)

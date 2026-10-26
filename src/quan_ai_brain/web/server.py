@@ -1084,6 +1084,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "success": resp.success,
                 "answer": sanitized_reply,
                 "reply": sanitized_reply,
+                "teach_note": teach_note,
                 "model": resp.model,
                 "provider": resp.provider,
                 "is_mock": resp.is_mock,

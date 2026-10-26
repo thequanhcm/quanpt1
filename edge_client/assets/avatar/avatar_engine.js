@@ -344,8 +344,12 @@ class DigitalHumanAvatar {
         return;
       }
       cycle++;
-      this.activeViseme = visemes[cycle % visemes.length];
-      this.currentOpenRatio = this.activeViseme === "REST" ? 0.0 : 0.4 + Math.random() * 0.55;
+      // Fallback: use smooth bell-curve envelope instead of random viseme
+      // This prevents the "chewing" artifact when timeline is missing
+      const phase = (cycle % 6) / 6.0;
+      const envelope = Math.sin(Math.PI * phase); // Bell curve: 0→1→0
+      this.activeViseme = visemes[cycle % 5]; // Cycle through A/O/E/I/U
+      this.currentOpenRatio = 0.35 * envelope; // Smooth opening/closing, no random
     }, 90);
   }
 
@@ -547,24 +551,25 @@ class DigitalHumanAvatar {
 
     if (baseImg && baseImg.complete && baseImg.naturalWidth > 0) {
       ctx.drawImage(baseImg, 0, 0, w, h);
+
+      // 5. Natural Hair Sway & Dynamic Lilac Physics (Flowing strands, sheen, motes)
+      this._renderNaturalHairSway(ctx, scaleX, scaleY, now);
+
+      // 6. Dynamic Eye Rendering (Blink fallback, saccades, gaze, Duchenne squint, iris glint)
+      this._renderEyes(ctx, scaleX, scaleY, 0, usedFullBlink, usedFullThinking, isSpecialExpression);
+
+      // 7. Eyebrow Micro-Expressions
+      this._renderEyebrows(ctx, scaleX, scaleY, 0, isSpecialExpression);
+
+      // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER)
+      this._renderMouth(ctx, scaleX, scaleY, 0);
+
+      // 9. Cyber Lighting & High-Tech Vignette
+      this._renderCyberLighting(ctx, w, h, config.auraColor);
     } else {
+      // Clean cyber loading backdrop; no ghost silhouette or watermark
       this._renderProceduralAssistant(ctx, w, h, 0, config.auraColor);
     }
-
-    // 5. Natural Hair Sway & Dynamic Lilac Physics (Flowing strands, sheen, motes)
-    this._renderNaturalHairSway(ctx, scaleX, scaleY, now);
-
-    // 6. Dynamic Eye Rendering (Blink fallback, saccades, gaze, Duchenne squint, iris glint)
-    this._renderEyes(ctx, scaleX, scaleY, 0, usedFullBlink, usedFullThinking, isSpecialExpression);
-
-    // 7. Eyebrow Micro-Expressions
-    this._renderEyebrows(ctx, scaleX, scaleY, 0, isSpecialExpression);
-
-    // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER)
-    this._renderMouth(ctx, scaleX, scaleY, 0);
-
-    // 9. Cyber Lighting & High-Tech Vignette
-    this._renderCyberLighting(ctx, w, h, config.auraColor);
 
     ctx.restore(); // Restore head transform
 
@@ -927,78 +932,22 @@ class DigitalHumanAvatar {
     ctx.restore();
   }
 
-  // ================= PROCEDURAL SILHOUETTE FALLBACK =================
+  // ================= CLEAN CYBERNETIC BACKDROP (NO GHOST WATERMARK) =================
 
   _renderProceduralAssistant(ctx, w, h, breathOffset, auraColor) {
+    // Model A loading backdrop: Clean cybernetic radial gradient only.
+    // Legacy Model F ghost silhouette (face mask, lilac hair shroud, hazel eye dots, collar)
+    // is permanently removed to eliminate watermark / ghost artifacts on page reload.
     const cx = w * 0.5;
     const cy = h * 0.44 + breathOffset;
 
     ctx.save();
-
-    // Background Cybernetic Grid / Radial Horizon
     const bgGrad = ctx.createRadialGradient(cx, cy, 20, cx, cy, w * 0.5);
     bgGrad.addColorStop(0, "rgba(18, 30, 60, 0.85)");
     bgGrad.addColorStop(0.65, "rgba(8, 16, 36, 0.95)");
     bgGrad.addColorStop(1, "rgba(4, 8, 20, 1.0)");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
-
-    // Ethereal Model F Lilac-Silver Hair Silhouette
-    ctx.shadowBlur = 24;
-    ctx.shadowColor = auraColor;
-    ctx.fillStyle = "rgba(185, 170, 225, 0.28)";
-
-    ctx.beginPath();
-    ctx.arc(cx, cy - 25, 115 * (w / 720), 0, Math.PI * 2);
-    ctx.fill();
-
-    // Left hair cascade silhouette
-    ctx.beginPath();
-    ctx.moveTo(cx - 100 * (w / 720), cy - 40);
-    ctx.bezierCurveTo(cx - 150 * (w / 720), cy + 120, cx - 130 * (w / 720), cy + 260, cx - 70 * (w / 720), cy + 300);
-    ctx.lineTo(cx - 30 * (w / 720), cy + 300);
-    ctx.closePath();
-    ctx.fill();
-
-    // Right hair cascade silhouette
-    ctx.beginPath();
-    ctx.moveTo(cx + 100 * (w / 720), cy - 40);
-    ctx.bezierCurveTo(cx + 150 * (w / 720), cy + 120, cx + 130 * (w / 720), cy + 260, cx + 70 * (w / 720), cy + 300);
-    ctx.lineTo(cx + 30 * (w / 720), cy + 300);
-    ctx.closePath();
-    ctx.fill();
-
-    // Face / Jawline Contour
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = "rgba(240, 230, 245, 0.92)";
-    ctx.beginPath();
-    ctx.moveTo(cx - 65 * (w / 720), cy - 35);
-    ctx.bezierCurveTo(cx - 65 * (w / 720), cy + 50, cx - 45 * (w / 720), cy + 105, cx, cy + 120);
-    ctx.bezierCurveTo(cx + 45 * (w / 720), cy + 105, cx + 65 * (w / 720), cy + 50, cx + 65 * (w / 720), cy - 35);
-    ctx.closePath();
-    ctx.fill();
-
-    // Hazel Eyes
-    ctx.fillStyle = "#785848";
-    ctx.beginPath();
-    ctx.ellipse(cx - 28 * (w / 720), cy + 18, 10 * (w / 720), 7 * (w / 720), 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + 28 * (w / 720), cy + 18, 10 * (w / 720), 7 * (w / 720), 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Cybernetic Suit Collar
-    ctx.fillStyle = "rgba(15, 25, 48, 0.95)";
-    ctx.strokeStyle = auraColor;
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(cx - 75 * (w / 720), cy + 160);
-    ctx.lineTo(cx, cy + 130);
-    ctx.lineTo(cx + 75 * (w / 720), cy + 160);
-    ctx.lineTo(cx + 140 * (w / 720), cy + 320);
-    ctx.lineTo(cx - 140 * (w / 720), cy + 320);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
     ctx.restore();
   }
 }

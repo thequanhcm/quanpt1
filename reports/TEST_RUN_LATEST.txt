@@ -1,15 +1,16 @@
 Exit code: 1
 Command: C:\Python314\python.exe -m pytest -q tests
-Timestamp UTC: 2026-10-25T13:18:38.440283+00:00
+Timestamp UTC: 2026-10-26T17:36:41.774883+00:00
 
-....................................F........................s.......... [ 13%]
-........................................................................ [ 26%]
-........................................................................ [ 39%]
-........................................................................ [ 52%]
-........F............................................................... [ 65%]
+....................................F........................s.......... [ 11%]
+........................................................................ [ 22%]
+........................................................................ [ 33%]
+........................................................................ [ 44%]
+..........................................................F............. [ 55%]
+........................................................................ [ 66%]
 ........................................................................ [ 78%]
-................................................................s....... [ 91%]
-...........................................F.                            [100%]
+........................................................................ [ 89%]
+........s.............................................................   [100%]
 ================================== FAILURES ===================================
 ____________________________ test_keep_warm_pulse _____________________________
 
@@ -23,7 +24,7 @@ ____________________________ test_keep_warm_pulse _____________________________
 >       assert mind.keep_warm_pulse() is True
 E       assert False is True
 E        +  where False = keep_warm_pulse()
-E        +    where keep_warm_pulse = <quan_ai_brain.cognition.autonomous_mind.AutonomousMind object at 0x000002533B5BF9B0>.keep_warm_pulse
+E        +    where keep_warm_pulse = <quan_ai_brain.cognition.autonomous_mind.AutonomousMind object at 0x000002C9554A1D00>.keep_warm_pulse
 
 tests\test_autonomous_mind.py:145: AssertionError
 _________________ test_model_allowlist_rejects_unknown_model __________________
@@ -41,24 +42,9 @@ E             - MODEL_NOT_IN_NETMIND_CATALOG
 E             + NO_API_KEY
 
 tests\test_netmind_provider.py:96: AssertionError
-___________________ test_w06_core_offline_graceful_handling ___________________
-
-    def test_w06_core_offline_graceful_handling():
-        """W06: Edge client detects Core unreachable and transitions to OFFLINE without crashing."""
-        from quan_ai_brain.web.server import _send_edge_request
-    
-        # Calling an unreachable endpoint returns offline dictionary gracefully
-        res = _send_edge_request("/unreachable", timeout=0.1)
->       assert res.get("offline") is True
-E       AssertionError: assert False is True
-E        +  where False = <built-in method get of dict object at 0x000002533D24DDC0>('offline')
-E        +    where <built-in method get of dict object at 0x000002533D24DDC0> = {'success': False, 'error': 'HTTP 404: Not Found', 'offline': False}.get
-
-tests\test_wifi_protocol.py:115: AssertionError
 =========================== short test summary info ===========================
 SKIPPED [1] tests\test_bge_m3_embedding.py:172: Local Ollama daemon is offline; live test skipped.
 SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Raspberry Pi 5 th\u1ef1c t\u1ebf ch\u01b0a k\u1ebft n\u1ed1i m\u1ea1ng trong phi\xean ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng n\xe0y. PC Core \u0111\xe3 \u0111\u01b0\u1ee3c x\xe1c th\u1ef1c ho\xe0n ch\u1ec9nh.
 FAILED tests/test_autonomous_mind.py::test_keep_warm_pulse - assert False is ...
 FAILED tests/test_netmind_provider.py::test_model_allowlist_rejects_unknown_model
-FAILED tests/test_wifi_protocol.py::test_w06_core_offline_graceful_handling
-3 failed, 544 passed, 2 skipped in 148.37s (0:02:28)
+2 failed, 642 passed, 2 skipped in 116.18s (0:01:56)

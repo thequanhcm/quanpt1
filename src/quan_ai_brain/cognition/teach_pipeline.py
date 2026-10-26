@@ -34,6 +34,10 @@ _TEACH_PREFIXES = (
     "chuyển giao:",
     "từ giờ",
     "từ nay",
+    "thiết lập khi anh",  # 27/10: "thiết lập khi anh gõ ok..." = lời dạy cấu hình hành vi
+    "quy tắc:",
+    "quy tắc mới:",
+    "khi anh gõ",
 )
 
 _TEACH_PATTERN = re.compile(

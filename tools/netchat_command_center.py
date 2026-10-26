@@ -19,8 +19,10 @@ Lệnh hỗ trợ (tiếng Việt tự nhiên):
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -52,6 +54,110 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
 # Questions like "em có thể phê duyệt qua kênh này được không?" contain the
 # keyword but must NOT execute anything — they fall to conversational AI.
 STATE_CHANGING = {"approve"}
+
+# ---------------------------------------------------------------------------
+# "ok" = owner confirmation of the bot's LAST question/proposal (27/10/2026).
+# Yêu cầu chủ sở hữu: "khi anh gõ ok, OK có nghĩa là anh đã xác nhận; còn
+# không sẽ không phản hồi hoặc không có xác nhận" + "trợ lý không hỏi lòng vòng".
+# Khi bot hỏi xin phép/chờ lệnh (VD: "Anh xác nhận cho em chạy lại probe nhé?"),
+# câu "ok" của anh là lệnh THỰC THI luôn — không hỏi lại lần nữa.
+# ---------------------------------------------------------------------------
+
+_OK_RE = re.compile(r"^\s*(ok|okay|okie|ok anh|oke|uk|ừ|uh)\s*[.!]?\s*$", re.IGNORECASE)
+
+# Actions một lần chờ "ok" xác nhận. TTL 15 phút — quá hạn thì huỷ (an toàn:
+# "ok" muộn không kích hoạt hành động đã lỗi thời).
+_PENDING_ACTIONS: dict[str, dict[str, Any]] = {}
+_PENDING_TTL_S = 15 * 60
+
+
+def stage_pending_action(chat_session_id: str, label: str, action: Any) -> str:
+    """Bot vừa HỎI xin phép → ghi nhận việc chờ xác nhận. Trả lời CÂU HỎI đó
+    (bot không tự thực hiện trước, vì đây là việc có quyết định của anh)."""
+    _PENDING_ACTIONS[chat_session_id] = {
+        "label": label,
+        "action": action,
+        "staged_at": time.time(),
+    }
+    return label
+
+
+def _take_pending_action(chat_session_id: str) -> dict[str, Any] | None:
+    entry = _PENDING_ACTIONS.pop(chat_session_id, None)
+    if entry is None:
+        return None
+    if time.time() - entry["staged_at"] > _PENDING_TTL_S:
+        return None  # expired — stale confirmation must not fire old actions
+    return entry
+
+
+def run_pending_action(chat_session_id: str) -> str | None:
+    """Owner đã gõ 'ok' → thực thi hành động đang chờ xác nhận, TRẢ KẾT QUẢ
+    thật (không hỏi lại, không lòng vòng)."""
+    entry = _take_pending_action(chat_session_id)
+    if entry is None:
+        return None
+    label = entry["label"]
+    action = entry["action"]
+    try:
+        if action == "reprobe_pi5":
+            return _reprobe_pi5(label)
+        if action == "reprobe_full":
+            return _reprobe_full(label)
+    except Exception as exc:
+        return f"⚠️ Thực thi '{label}' lỗi: {type(exc).__name__}: {exc}"
+    return f"Đã xác nhận '{label}' nhưng chưa có runner tương ứng (lỗi cấu hình)."
+
+
+def _probe_port(port: int, timeout: float = 2.0) -> bool:
+    import socket
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            return s.connect_ex(("127.0.0.1", port)) == 0
+    except Exception:
+        return False
+
+
+def _reprobe_pi5(label: str) -> str:
+    """Probe lại Pi 5 (8768) + các thành phần liên quan — một lần, báo thật."""
+    pi5 = _probe_port(8768)
+    core = _probe_port(8765)
+    ollama = _probe_port(11434)
+    now = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    if pi5:
+        result = f"🟢 Pi 5 (port 8768): ONLINE — xác nhận được rồi ạ."
+    else:
+        result = f"🔴 Pi 5 (port 8768): vẫn OFFLINE lúc {now}."
+    _audit("netchat_command.ok_confirm_reprobe", {"pi5": pi5, "core": core, "ollama": ollama})
+    return (
+        f"✅ Đã xác nhận — em probe lại ngay (không hỏi lại nữa ạ):\n"
+        f"• {result}\n"
+        f"• Core server (8765): {'🟢 ONLINE' if core else '🔴 OFFLINE'} | "
+        f"Ollama: {'🟢 ONLINE' if ollama else '🔴 OFFLINE'}\n"
+        + (
+            "Kết luận: hình thể Pi 5 đã hoạt động ạ."
+            if pi5
+            else "Kết luận: Pi 5 chưa lắng nghe trên mạng — em sẽ không khẳng định nó đang chạy. "
+            "Anh kiểm tra đèn LAN/dịch vụ trên Pi giúp em, hoặc gõ 'trạng thái' bất cứ lúc nào."
+        )
+    )
+
+
+def _reprobe_full(label: str) -> str:
+    from quan_ai_brain.cognition.self_model_engine import SelfModelEngine
+
+    engine = SelfModelEngine(str(WORKSPACE))
+    qa = engine.answer_state_questions()
+    online = [c["component_id"] for c in qa.get("q2_components_online", [])]
+    offline = [c["component_id"] for c in qa.get("q3_components_offline_unverified", [])]
+    return (
+        f"✅ Đã xác nhận — probe lại toàn hệ thống:\n"
+        f"• 🟢 ONLINE: {', '.join(online) if online else '(không)'}\n"
+        f"• 🔴 OFFLINE: {', '.join(offline) if offline else '(không)'}\n"
+        f"🕐 {qa.get('generated_at', '')}"
+    )
 
 
 def _is_question(text: str) -> bool:
@@ -288,7 +394,7 @@ HANDLERS = {
 }
 
 
-def route_message(text: str, *, sender_user_id: str = "") -> tuple[str | None, str]:
+def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str = "default") -> tuple[str | None, str]:
     """Route an incoming channel message.
 
     Returns (intent, response). intent=None + response='' means: fall back
@@ -298,9 +404,24 @@ def route_message(text: str, *, sender_user_id: str = "") -> tuple[str | None, s
     persistent Approval Cards + formal ApprovalGate + SPECIFIC explanations
     (duyệt gì, vì sao, trạng thái, bước tiếp theo). The old consultation-FIFO
     handler stays as a fallback for legacy tickets not bound to task codes.
+
+    27/10/2026 (yêu cầu chủ sở hữu): "ok" = XÁC NHẬN việc bot vừa hỏi → thực
+    thi NGAY; nếu không có việc nào chờ xác nhận → KHÔNG PHẢN HỒI (im lặng).
     """
+    t = (text or "").strip()
+
+    # 0) "ok" — xác nhận nhanh, PHẢI đứng trước adapter (regex của adapter
+    #    bắt cả 'ok' thành lệnh duyệt hồ sơ → lòng vòng, sai ý).
+    if _OK_RE.match(t):
+        result = run_pending_action(chat_session_id)
+        if result is not None:
+            _audit("netchat_command.ok_confirmed", {"session": chat_session_id})
+            return "ok_confirm", result
+        # Không có việc nào chờ xác nhận → im lặng (không lòng vòng).
+        return "ok_silent", ""
+
     # 1) Approval-card commands (DUYỆT/TỪ CHỐI/SỬA/CHI TIẾT TASK-xxxx,
-    #    or a plain 'Duyệt'/'Từ chối'/'Chi tiết') — checked FIRST.
+    #    or a plain 'Duyệt'/'Từ chối'/'Chi tiết') — giữ priority như V3.
     try:
         from quan_ai_brain.governance.netchat_approval_adapter import NetChatApprovalAdapter
 
@@ -312,14 +433,16 @@ def route_message(text: str, *, sender_user_id: str = "") -> tuple[str | None, s
     except Exception as exc:  # adapter failure must not break other commands
         _audit("netchat_command.approval_adapter_error", {"error": str(exc)[:200]})
 
+    # 2) System commands (trạng thái/báo cáo/nhiệm vụ/tri thức/giúp/phê duyệt)
     intent = detect_intent(text)
-    if intent is None:
-        return None, ""
-    handler = HANDLERS[intent]
-    try:
-        return intent, handler()
-    except Exception as exc:
-        return intent, f"⚠️ Lỗi thực thi lệnh '{intent}': {type(exc).__name__}: {exc}"
+    if intent is not None:
+        handler = HANDLERS[intent]
+        try:
+            return intent, handler()
+        except Exception as exc:
+            return intent, f"⚠️ Lỗi thực thi lệnh '{intent}': {type(exc).__name__}: {exc}"
+
+    return None, ""
 
 
 def _audit(event_type: str, details: dict[str, Any]) -> None:
