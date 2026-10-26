@@ -5,13 +5,13 @@
 > bảo đảm tính minh bạch, độc lập và khả năng phục hồi phiên làm việc cho ChatGPT.
 
 ## 1. Thông tin phiên làm việc (Session Metadata)
-- **Mã phiên (UTC):** `2026-10-25T03:29:43.184784+00:00`
-- **Thời gian máy chủ:** `2026-10-25 10:29:43` (Local Time)
+- **Mã phiên (UTC):** `2026-10-25T13:18:37.457396+00:00`
+- **Thời gian máy chủ:** `2026-10-25 20:18:37` (Local Time)
 - **Workspace root:** `E:/AI/QUAN AI BRAIN`
-- **Python Runtime:** `3.11.9` (64bit)
+- **Python Runtime:** `3.14.7` (64bit)
 - **Hệ điều hành:** `Windows-10-10.0.19045-SP0`
 - **Phiên bản ứng dụng:** `0.2.0` (Foundation Evolution — Phase A)
-- **Git Branch:** `master` | **Commit:** `4d90465`
+- **Git Branch:** `master` | **Commit:** `3c03d3f`
 - **Trạng thái Working Tree:** Có thay đổi chưa commit
 
 ## 2. Tóm tắt điều hành (Executive Summary)
@@ -21,7 +21,7 @@
   2. Hiện thực `SessionMemoryManager` (`src/quan_ai_brain/cognition/session_memory.py`) trích xuất sự thật người dùng và lưu trữ phiên hội thoại bền vững vào `data/brain.db`.
   3. Cài đặt `OutputGuardrails` (`src/quan_ai_brain/core/guardrails.py`) lọc rò rỉ credential, script tag injection và che giấu đường dẫn tệp nhạy cảm.
   4. Mở rộng `PromptContextBuilder` và API `/api/chat`, `/api/chat/history` trên Web Server phục vụ hội thoại đa lượt liên tục có trí nhớ.
-  5. Kết quả kiểm thử tự động phiên hiện tại: 502 PASSED, 0 FAILED, 1 SKIPPED (Tổng: 503 bài test, PARTIALLY_VERIFIED (502 passed, 1 skipped)).
+  5. Kết quả kiểm thử tự động phiên hiện tại: 544 PASSED, 3 FAILED, 2 SKIPPED (Tổng: 549 bài test, FAIL (3 test(s) failed)).
 - **Các hạng mục đã hoàn thành:**
   - [x] Bộ định tuyến mô hình động `LLMRouter` với phân tầng fast / reasoning và fallback tin cậy.
   - [x] Quản lý bộ nhớ phiên `SessionMemoryManager` và trích xuất tự động danh tính, sở thích, chỉ thị của chủ sở hữu.
@@ -30,7 +30,7 @@
   - [x] Tích hợp lịch sử hội thoại gần nhất `[RECENT CONVERSATION HISTORY]` vào ngữ cảnh suy luận của LLM.
   - [x] Endpoint `GET /api/chat/history` và nâng cấp toàn diện `POST /api/chat` trên `BrainAPIHandler`.
   - [x] 5 bài kiểm thử E2E đầu cuối (`tests/test_end_to_end_chat.py`) xác minh đa lượt đàm thoại và trí nhớ dài hạn.
-  - [x] Kiểm thử tự động: 502 bài PASS, 1 bài SKIP (Phần cứng Pi 5 offline), 0 bài FAIL (PARTIALLY_VERIFIED (502 passed, 1 skipped)).
+  - [x] Kiểm thử tự động: 544 bài PASS, 2 bài SKIP (Phần cứng Pi 5 offline), 3 bài FAIL (FAIL (3 test(s) failed)).
 - **Các hạng mục tiếp theo (Sprint 2):**
   - Kết nối TaskPlan vào `DurableTaskRegistry` (`data/tasks.db`) và xây dựng vòng lặp thực thi có kiểm soát an toàn (Inert Sandbox).
 - **Lưu ý kỹ thuật quan trọng cho kỹ sư tiếp theo:**
@@ -41,20 +41,12 @@
 ## 3. Thay đổi mã nguồn (Code Changes & Working Tree)
 - **Git Status:**
 ```text
-M "bao cao xay dung he thong/BAO_CAO_KIEN_TRUC_VAN_HANH_VA_KE_HOACH_PHAT_TRIEN_QUAN_AI_BRAIN.md"
-M src/quan_ai_brain/cli.py
-M src/quan_ai_brain/cognition/autonomous_mind.py
-M src/quan_ai_brain/llm/__init__.py
-M src/quan_ai_brain/llm/models.py
-M src/quan_ai_brain/llm/provider.py
-M tests/test_validate_and_report.py
-M tools/validate_and_report.py
-?? reports/SPRINT1_VIETNAMESE_BENCHMARK.json
-?? src/quan_ai_brain/llm/netmind_provider.py
-?? tests/test_netmind_provider.py
-?? tools/sprint1_benchmark_dataset.py
-?? tools/sprint1_benchmark_runner.py
-?? tools/sprint1_reasoning_param_probe.py
+M tools/netchat_auto_responder.py
+?? "bao cao xay dung he thong/avatar.rar"
+?? "bao cao xay dung he thong/avatar/README.md"
+?? "bao cao xay dung he thong/avatar/avatar_backup.zip"
+?? "bao cao xay dung he thong/avatar/demo.html"
+?? "bao cao xay dung he thong/avatar/test_avatar.py"
 ```
 - **Tệp mã nguồn cốt lõi trong Sprint 7A:**
   - `src/quan_ai_brain/execution/process_containment.py`: Hợp đồng `ProcessBackendInterface`, `ProcessContainmentConfig`, `InertProcessBackend`, `ContainedExecutionRunner`.
@@ -81,27 +73,77 @@ M tools/validate_and_report.py
   - `tests/test_edge_client.py`: 6 bài test xác thực HMAC, nonce anti-replay, kiosk HTTP endpoints, fail-safe disconnect.
 
 ## 4. Kết quả kiểm thử (Test Verification)
-- **Kết luận kiểm thử:** **PARTIALLY_VERIFIED (502 passed, 1 skipped)**
-- **Lệnh thực thi:** `E:\AI\QUAN AI BRAIN\.venv\Scripts\python.exe -m pytest -q tests`
-- **Tổng số bài test:** `503` | **Passed:** `502` | **Failed:** `0` | **Skipped:** `1`
-- **Thời gian chạy:** `73.89s`
-- **Exit Code:** `0`
+- **Kết luận kiểm thử:** **FAIL (3 test(s) failed)**
+- **Lệnh thực thi:** `C:\Python314\python.exe -m pytest -q tests`
+- **Tổng số bài test:** `549` | **Passed:** `544` | **Failed:** `3` | **Skipped:** `2`
+- **Thời gian chạy:** `148.37s`
+- **Exit Code:** `1`
 
-- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `503` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
+- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `549` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
 - **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.
-- **Trạng thái xác minh (`verification_status`):** `PARTIALLY_VERIFIED (502 passed, 1 skipped)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
+- **Trạng thái xác minh (`verification_status`):** `FAIL (3 test(s) failed)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
 
 ```text
-........................................................................ [ 14%]
-........................................................................ [ 28%]
-........................................................................ [ 42%]
-........................................................................ [ 57%]
-........................................................................ [ 71%]
-........................................................................ [ 85%]
-..................s....................................................  [100%]
+....................................F........................s.......... [ 13%]
+........................................................................ [ 26%]
+........................................................................ [ 39%]
+........................................................................ [ 52%]
+........F............................................................... [ 65%]
+........................................................................ [ 78%]
+................................................................s....... [ 91%]
+...........................................F.                            [100%]
+================================== FAILURES ===================================
+____________________________ test_keep_warm_pulse _____________________________
+
+    def test_keep_warm_pulse():
+        mock_autonomic = MagicMock(spec=AutonomicNervousSystem)
+        mock_autonomic.ollama_host = "127.0.0.1"
+        mock_autonomic.ollama_port = 11434
+        mock_autonomic.probe_port.return_value = (True, 15.0)
+    
+        mind = AutonomousMind(autonomic_system=mock_autonomic)
+>       assert mind.keep_warm_pulse() is True
+E       assert False is True
+E        +  where False = keep_warm_pulse()
+E        +    where keep_warm_pulse = <quan_ai_brain.cognition.autonomous_mind.AutonomousMind object at 0x000002533B5BF9B0>.keep_warm_pulse
+
+tests\test_autonomous_mind.py:145: AssertionError
+_________________ test_model_allowlist_rejects_unknown_model __________________
+
+    def test_model_allowlist_rejects_unknown_model():
+        """Only exact catalog IDs pass. Unknown or unverified model IDs are rejected."""
+        provider = _make_provider()
+        for bad in ("zai-org/GLM-5.3", "zai-org/GLM-5.3-FlashX", "gpt-4o", "qwen2.5:7b"):
+            resp = provider.generate(LLMRequest(prompt="test", model=bad))
+            assert resp.success is False
+>           assert resp.error_code == "MODEL_NOT_IN_NETMIND_CATALOG"
+E           AssertionError: assert 'NO_API_KEY' == 'MODEL_NOT_IN_NETMIND_CATALOG'
+E             
+E             - MODEL_NOT_IN_NETMIND_CATALOG
+E             + NO_API_KEY
+
+tests\test_netmind_provider.py:96: AssertionError
+___________________ test_w06_core_offline_graceful_handling ___________________
+
+    def test_w06_core_offline_graceful_handling():
+        """W06: Edge client detects Core unreachable and transitions to OFFLINE without crashing."""
+        from quan_ai_brain.web.server import _send_edge_request
+    
+        # Calling an unreachable endpoint returns offline dictionary gracefully
+        res = _send_edge_request("/unreachable", timeout=0.1)
+>       assert res.get("offline") is True
+E       AssertionError: assert False is True
+E        +  where False = <built-in method get of dict object at 0x000002533D24DDC0>('offline')
+E        +    where <built-in method get of dict object at 0x000002533D24DDC0> = {'success': False, 'error': 'HTTP 404: Not Found', 'offline': False}.get
+
+tests\test_wifi_protocol.py:115: AssertionError
 =========================== short test summary info ===========================
-SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
-502 passed, 1 skipped in 73.89s (0:01:13)
+SKIPPED [1] tests\test_bge_m3_embedding.py:172: Local Ollama daemon is offline; live test skipped.
+SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Raspberry Pi 5 th\u1ef1c t\u1ebf ch\u01b0a k\u1ebft n\u1ed1i m\u1ea1ng trong phi\xean ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng n\xe0y. PC Core \u0111\xe3 \u0111\u01b0\u1ee3c x\xe1c th\u1ef1c ho\xe0n ch\u1ec9nh.
+FAILED tests/test_autonomous_mind.py::test_keep_warm_pulse - assert False is ...
+FAILED tests/test_netmind_provider.py::test_model_allowlist_rejects_unknown_model
+FAILED tests/test_wifi_protocol.py::test_w06_core_offline_graceful_handling
+3 failed, 544 passed, 2 skipped in 148.37s (0:02:28)
 ```
 
 ## 5. Danh mục module & Trạng thái hiện tại
@@ -175,7 +217,7 @@ SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry P
 - **Bảo vệ bí mật:** Tự động che giấu token, mật khẩu, api_key trước khi ghi vào log hoặc CSDL.
 
 ## 8. Danh mục tài liệu ngữ cảnh an toàn
-- `docs/PROJECT_STATUS.md` (70552 bytes) â *QUAN AI BRAIN — Project Status*
+- `docs/PROJECT_STATUS.md` (75456 bytes) â *QUAN AI BRAIN — Project Status*
 - `docs/SYSTEM_BASELINE.md` (8796 bytes) â *SYSTEM BASELINE: QUAN AI BRAIN*
 - `docs/ARCHITECTURE_GAP_ANALYSIS.md` (11037 bytes) â *ARCHITECTURE GAP ANALYSIS: QUAN AI BRAIN*
 - `docs/NEXT_STEPS.md` (8247 bytes) â *NEXT STEPS ROADMAP: QUAN AI BRAIN*
@@ -209,11 +251,11 @@ WORKSPACE: E:\AI\QUAN AI BRAIN
 CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object
 PYTHON_VERSION: 3.11.9 x64
 TEST_SUMMARY:
-  verdict: PARTIALLY_VERIFIED (502 passed, 1 skipped)
-  total_tests: 503
-  passed: 502
-  failed: 0
-  skipped: 1
+  verdict: FAIL (3 test(s) failed)
+  total_tests: 549
+  passed: 544
+  failed: 3
+  skipped: 2
 CORE_CAPABILITIES_IMPLEMENTED:
   - Self-Learning & Self-Upgrade Engine V1 (src/quan_ai_brain/learning)
   - Learning Observer (observe_task extracting LearningGap on failure/uncertainty)
@@ -274,5 +316,5 @@ PROTECTED_EXTERNAL_PROJECTS:
   - E:\AI\battery-ai-\BATTERY_AI_V4 (Battery Intelligence Brain)
   - E:\AI\BOT (Active production bots)
 INSTRUCTION_FOR_NEXT_SESSION:
-  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (503 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
+  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (549 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
 ```

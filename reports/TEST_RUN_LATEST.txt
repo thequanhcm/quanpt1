@@ -1,14 +1,64 @@
-Exit code: 0
-Command: E:\AI\QUAN AI BRAIN\.venv\Scripts\python.exe -m pytest -q tests
-Timestamp UTC: 2026-10-25T03:29:43.680497+00:00
+Exit code: 1
+Command: C:\Python314\python.exe -m pytest -q tests
+Timestamp UTC: 2026-10-25T13:18:38.440283+00:00
 
-........................................................................ [ 14%]
-........................................................................ [ 28%]
-........................................................................ [ 42%]
-........................................................................ [ 57%]
-........................................................................ [ 71%]
-........................................................................ [ 85%]
-..................s....................................................  [100%]
+....................................F........................s.......... [ 13%]
+........................................................................ [ 26%]
+........................................................................ [ 39%]
+........................................................................ [ 52%]
+........F............................................................... [ 65%]
+........................................................................ [ 78%]
+................................................................s....... [ 91%]
+...........................................F.                            [100%]
+================================== FAILURES ===================================
+____________________________ test_keep_warm_pulse _____________________________
+
+    def test_keep_warm_pulse():
+        mock_autonomic = MagicMock(spec=AutonomicNervousSystem)
+        mock_autonomic.ollama_host = "127.0.0.1"
+        mock_autonomic.ollama_port = 11434
+        mock_autonomic.probe_port.return_value = (True, 15.0)
+    
+        mind = AutonomousMind(autonomic_system=mock_autonomic)
+>       assert mind.keep_warm_pulse() is True
+E       assert False is True
+E        +  where False = keep_warm_pulse()
+E        +    where keep_warm_pulse = <quan_ai_brain.cognition.autonomous_mind.AutonomousMind object at 0x000002533B5BF9B0>.keep_warm_pulse
+
+tests\test_autonomous_mind.py:145: AssertionError
+_________________ test_model_allowlist_rejects_unknown_model __________________
+
+    def test_model_allowlist_rejects_unknown_model():
+        """Only exact catalog IDs pass. Unknown or unverified model IDs are rejected."""
+        provider = _make_provider()
+        for bad in ("zai-org/GLM-5.3", "zai-org/GLM-5.3-FlashX", "gpt-4o", "qwen2.5:7b"):
+            resp = provider.generate(LLMRequest(prompt="test", model=bad))
+            assert resp.success is False
+>           assert resp.error_code == "MODEL_NOT_IN_NETMIND_CATALOG"
+E           AssertionError: assert 'NO_API_KEY' == 'MODEL_NOT_IN_NETMIND_CATALOG'
+E             
+E             - MODEL_NOT_IN_NETMIND_CATALOG
+E             + NO_API_KEY
+
+tests\test_netmind_provider.py:96: AssertionError
+___________________ test_w06_core_offline_graceful_handling ___________________
+
+    def test_w06_core_offline_graceful_handling():
+        """W06: Edge client detects Core unreachable and transitions to OFFLINE without crashing."""
+        from quan_ai_brain.web.server import _send_edge_request
+    
+        # Calling an unreachable endpoint returns offline dictionary gracefully
+        res = _send_edge_request("/unreachable", timeout=0.1)
+>       assert res.get("offline") is True
+E       AssertionError: assert False is True
+E        +  where False = <built-in method get of dict object at 0x000002533D24DDC0>('offline')
+E        +    where <built-in method get of dict object at 0x000002533D24DDC0> = {'success': False, 'error': 'HTTP 404: Not Found', 'offline': False}.get
+
+tests\test_wifi_protocol.py:115: AssertionError
 =========================== short test summary info ===========================
-SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
-502 passed, 1 skipped in 73.89s (0:01:13)
+SKIPPED [1] tests\test_bge_m3_embedding.py:172: Local Ollama daemon is offline; live test skipped.
+SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Raspberry Pi 5 th\u1ef1c t\u1ebf ch\u01b0a k\u1ebft n\u1ed1i m\u1ea1ng trong phi\xean ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng n\xe0y. PC Core \u0111\xe3 \u0111\u01b0\u1ee3c x\xe1c th\u1ef1c ho\xe0n ch\u1ec9nh.
+FAILED tests/test_autonomous_mind.py::test_keep_warm_pulse - assert False is ...
+FAILED tests/test_netmind_provider.py::test_model_allowlist_rejects_unknown_model
+FAILED tests/test_wifi_protocol.py::test_w06_core_offline_graceful_handling
+3 failed, 544 passed, 2 skipped in 148.37s (0:02:28)

@@ -106,11 +106,17 @@ def main():
 
     global LAST_MESSAGE_ID
     skip_first = True
+    iteration = 0
 
     while True:
+        iteration += 1
         try:
             # Read messages
             messages = read_channel_messages(count=5)
+            
+            # Debug: print iteration count
+            if iteration % 10 == 0:
+                print(f"[DEBUG] Iteration {iteration}, {len(messages)} messages found")
             
             if messages:
                 # Sort by creation time (newest first)
@@ -121,14 +127,21 @@ def main():
                     user_id = msg.get("user_id")
                     message_text = msg.get("message", "")
                     
+                    # Debug: print all messages
+                    if iteration <= 3:
+                        print(f"[DEBUG] Checking msg {msg_id[:8]}... from {user_id[:12]}: {message_text[:40]}")
+                    
                     # Skip bot's own messages
                     if user_id == "edojmne9d7gcxx8axu1mzas3pr":
+                        if iteration <= 3:
+                            print(f"   → Skipping bot message")
                         continue
                     
                     # Skip first iteration (already seen messages)
                     if skip_first:
                         if LAST_MESSAGE_ID is None:
                             LAST_MESSAGE_ID = msg_id
+                            print(f"[DEBUG] Initialized LAST_MESSAGE_ID = {msg_id[:8]}")
                         continue
                     
                     # New message detected

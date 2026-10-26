@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QUAN AI BRAIN — Digital Human Avatar Model A Studio</title>
+  <link rel="stylesheet" href="./avatar.css">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    }
+    body {
+      background: #050811;
+      color: #f0f4fc;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+    header {
+      background: rgba(13, 20, 36, 0.95);
+      border-bottom: 1px solid rgba(0, 229, 255, 0.25);
+      padding: 16px 28px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .header-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      font-size: 26px;
+    }
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      background: linear-gradient(90deg, #00e5ff, #38bdf8, #818cf8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .header-tagline {
+      font-size: 0.8rem;
+      color: #718096;
+      margin-top: 2px;
+    }
+    .header-badges {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .badge-cyan {
+      background: rgba(0, 229, 255, 0.15);
+      color: #00e5ff;
+      border: 1px solid rgba(0, 229, 255, 0.4);
+    }
+    .badge-green {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 500px 1fr;
+      gap: 24px;
+      padding: 24px;
+      max-width: 1500px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Left Panel: Avatar Stage */
+    .avatar-panel {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: rgba(13, 20, 36, 0.8);
+      border: 1px solid rgba(0, 229, 255, 0.2);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+
+    .state-banner {
+      width: 100%;
+      text-align: center;
+      padding: 8px 16px;
+      border-radius: 10px;
+      background: rgba(0, 229, 255, 0.1);
+      border: 1px solid var(--avatar-accent, #00e5ff);
+      color: var(--avatar-accent, #00e5ff);
+      font-weight: 700;
+      font-size: 0.9rem;
+      margin-bottom: 18px;
+      letter-spacing: 0.05em;
+      transition: all 0.3s ease;
+    }
+
+    /* Telemetry HUD */
+    .telemetry-grid {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-top: 20px;
+    }
+    .telemetry-item {
+      background: rgba(6, 12, 24, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+    }
+    .telemetry-label {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .telemetry-value {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #00e5ff;
+      font-family: monospace;
+      margin-top: 3px;
+    }
+
+    /* Right Panel: Controls & Sandbox */
+    .controls-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .control-card {
+      background: rgba(13, 20, 36, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    .card-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #f0f4fc;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 8px;
+    }
+    .btn-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+    }
+    .btn {
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-align: center;
+      user-select: none;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+
+    /* State Buttons Colors */
+    .btn-state-idle         { background: rgba(0, 229, 255, 0.15); color: #00e5ff; border-color: rgba(0, 229, 255, 0.4); }
+    .btn-state-listening    { background: rgba(6, 182, 212, 0.15); color: #06b6d4; border-color: rgba(6, 182, 212, 0.4); }
+    .btn-state-thinking     { background: rgba(168, 85, 247, 0.15); color: #a855f7; border-color: rgba(168, 85, 247, 0.4); }
+    .btn-state-speaking     { background: rgba(59, 130, 246, 0.15); color: #3b82f6; border-color: rgba(59, 130, 246, 0.4); }
+    .btn-state-happy        { background: rgba(16, 185, 129, 0.15); color: #10b981; border-color: rgba(16, 185, 129, 0.4); }
+    .btn-state-empathic     { background: rgba(236, 72, 153, 0.15); color: #ec4899; border-color: rgba(236, 72, 153, 0.4); }
+    .btn-state-confused     { background: rgba(234, 179, 8, 0.15); color: #eab308; border-color: rgba(234, 179, 8, 0.4); }
+    .btn-state-success      { background: rgba(16, 185, 129, 0.25); color: #34d399; border-color: rgba(52, 211, 153, 0.5); }
+    .btn-state-warning      { background: rgba(249, 115, 22, 0.15); color: #f97316; border-color: rgba(249, 115, 22, 0.4); }
+    .btn-state-offline      { background: rgba(100, 116, 139, 0.15); color: #94a3b8; border-color: rgba(100, 116, 139, 0.4); }
+    .btn-state-error        { background: rgba(239, 68, 68, 0.15); color: #ef4444; border-color: rgba(239, 68, 68, 0.4); }
+    .btn-state-reconnecting { background: rgba(2, 132, 199, 0.15); color: #38bdf8; border-color: rgba(2, 132, 199, 0.4); }
+
+    .btn-gesture {
+      background: rgba(30, 41, 59, 0.8);
+      color: #e2e8f0;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .btn-gesture:hover {
+      background: rgba(51, 65, 85, 0.9);
+      border-color: #00e5ff;
+      color: #00e5ff;
+    }
+
+    .btn-action-primary {
+      background: #0284c7;
+      color: white;
+    }
+    .btn-action-primary:hover {
+      background: #0369a1;
+    }
+    .btn-action-stop {
+      background: #dc2626;
+      color: white;
+    }
+    .btn-action-stop:hover {
+      background: #b91c1c;
+    }
+
+    /* Speech Box */
+    .speech-input-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .speech-textarea {
+      width: 100%;
+      height: 70px;
+      background: rgba(6, 12, 24, 0.9);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 8px;
+      color: #f0f4fc;
+      padding: 10px;
+      font-size: 0.9rem;
+      resize: vertical;
+    }
+    .speech-textarea:focus {
+      outline: none;
+      border-color: #00e5ff;
+      box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+    }
+    .speech-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .btn-preset {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .btn-preset:hover {
+      color: #38bdf8;
+      border-color: #38bdf8;
+    }
+
+    /* Sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 10px;
+    }
+    .slider-label {
+      width: 140px;
+      font-size: 0.82rem;
+      color: #94a3b8;
+    }
+    .slider-input {
+      flex: 1;
+      accent-color: #00e5ff;
+    }
+    .slider-val {
+      width: 40px;
+      font-family: monospace;
+      font-size: 0.82rem;
+      color: #00e5ff;
+      text-align: right;
+    }
+
+    footer {
+      background: rgba(13, 20, 36, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 12px 28px;
+      font-size: 0.8rem;
+      color: #64748b;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-title">
+      <span class="header-logo">🤖</span>
+      <div>
+        <h1>QUAN AI BRAIN — DIGITAL HUMAN AVATAR (MODEL A)</h1>
+        <div class="header-tagline">Thư viện đồ họa cử chỉ 2.5D Canvas, Lip-Sync chính xác và 12 trạng thái điều hành số</div>
+      </div>
+    </div>
+    <div class="header-badges">
+      <span class="badge badge-cyan">Model A Master</span>
+      <span class="badge badge-green">Offline Backup Mode</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Column: Avatar Display & Telemetry -->
+    <section class="avatar-panel">
+      <div class="state-banner" id="state-banner">
+        TRẠNG THÁI: IDLE (SẴN SÀNG)
+      </div>
+
+      <div class="avatar-stage">
+        <div class="avatar-card">
+          <div class="avatar-viewport state-idle" id="avatar-viewport">
+            <canvas id="avatar-canvas" width="720" height="720" class="avatar-canvas"></canvas>
+          </div>
+          <div class="avatar-waveform-wrap">
+            <canvas id="waveform-canvas" width="260" height="24" class="avatar-waveform-canvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Telemetry Grid -->
+      <div class="telemetry-grid">
+        <div class="telemetry-item">
+          <span class="telemetry-label">Engine FPS</span>
+          <span class="telemetry-value" id="hud-fps">60 FPS</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Active Viseme / Khẩu hình</span>
+          <span class="telemetry-value" id="hud-viseme">REST (0.00)</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Góc Nghiêng Đầu (Roll / Yaw)</span>
+          <span class="telemetry-value" id="hud-head">0.0° / 0.0px</span>
+        </div>
+        <div class="telemetry-item">
+          <span class="telemetry-label">Mắt & Chớp Mắt</span>
+          <span class="telemetry-value" id="hud-eyes">Mở tự nhiên</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Interactive Controls -->
+    <section class="controls-panel">
+      <!-- 12 State Protocols -->
+      <div class="control-card">
+        <div class="card-title">🎭 1. Bộ 12 Trạng Thái Cảm Xúc (State Protocol)</div>
+        <div class="btn-grid">
+          <button class="btn btn-state-idle" onclick="setAvatarState('IDLE')">🟢 IDLE</button>
+          <button class="btn btn-state-listening" onclick="setAvatarState('LISTENING')">👂 LISTENING</button>
+          <button class="btn btn-state-thinking" onclick="setAvatarState('THINKING')">🧠 THINKING</button>
+          <button class="btn btn-state-speaking" onclick="setAvatarState('SPEAKING')">🗣️ SPEAKING</button>
+          <button class="btn btn-state-happy" onclick="setAvatarState('HAPPY')">😊 HAPPY</button>
+          <button class="btn btn-state-empathic" onclick="setAvatarState('EMPATHETIC')">💗 EMPATHIC</button>
+          <button class="btn btn-state-confused" onclick="setAvatarState('CONFUSED')">❓ CONFUSED</button>
+          <button class="btn btn-state-success" onclick="setAvatarState('SUCCESS')">✨ SUCCESS</button>
+          <button class="btn btn-state-warning" onclick="setAvatarState('WARNING')">⚠️ WARNING</button>
+          <button class="btn btn-state-error" onclick="setAvatarState('ERROR')">🚨 ERROR</button>
+          <button class="btn btn-state-reconnecting" onclick="setAvatarState('RECONNECTING')">🔄 RECONNECT</button>
+          <button class="btn btn-state-offline" onclick="setAvatarState('OFFLINE')">💤 OFFLINE</button>
+        </div>
+      </div>
+
+      <!-- Natural Gestures -->
+      <div class="control-card">
+        <div class="card-title">👤 2. Cử Chỉ Sinh Học & Vật Lý Chuyển Động (Gestures)</div>
+        <div class="btn-grid">
+          <button class="btn btn-gesture" onclick="triggerMicroNod()">🙏 Gật Đầu (Micro-Nod)</button>
+          <button class="btn btn-gesture" onclick="triggerHeadTilt()"> накло Nghiêng Đầu (-2°)</button>
+          <button class="btn btn-gesture" onclick="triggerHeadReset()">⚖️ Thẳng Đầu (0°)</button>
+          <button class="btn btn-gesture" onclick="triggerBlink()">👁️ Chớp Mắt Đơn</button>
+          <button class="btn btn-gesture" onclick="triggerDoubleBlink()">👀 Chớp Mắt Kép (28%)</button>
+          <button class="btn btn-gesture" onclick="triggerSaccade()">🎯 Đảo Ánh Nhìn (Saccade)</button>
+        </div>
+      </div>
+
+      <!-- Lip-Sync Simulator -->
+      <div class="control-card">
+        <div class="card-title">👄 3. Mô Phỏng Đồng Bộ Môi & Nói Tiếng Việt (Mouth Sync)</div>
+        <div class="speech-input-wrap">
+          <textarea class="speech-textarea" id="speech-text">Chào Anh Quân! Em là Tony, trợ lý điều hành số của Anh. Hệ thống đã sẵn sàng 100%.</textarea>
+          <div class="speech-presets">
+            <span style="font-size:0.75rem; color:#64748b; line-height:24px;">Mẫu nhanh:</span>
+            <button class="btn-preset" onclick="setSpeechPreset(0)">Chào mừng</button>
+            <button class="btn-preset" onclick="setSpeechPreset(1)">Báo cáo thành công</button>
+            <button class="btn-preset" onclick="setSpeechPreset(2)">Cảnh báo an toàn</button>
+            <button class="btn-preset" onclick="setSpeechPreset(3)">Suy luận phân tích</button>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:8px;">
+            <button class="btn btn-action-primary" style="flex:1;" onclick="simulateVietnameseSpeech()">
+              ▶️ Mô Phỏng Nói (Timeline Lip-sync)
+            </button>
+            <button class="btn btn-action-stop" onclick="stopSpeaking()">
+              🛑 Dừng Khẩn Cấp (Barge-in Stop)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Micro-Expressions Real-time Fine Tuning -->
+      <div class="control-card">
+        <div class="card-title">🎛️ 4. Vi Biểu Cảm Khuôn Mặt (Micro-Expressions Tuning)</div>
+        <div class="slider-row">
+          <span class="slider-label">Nhướng lông mày (Lift):</span>
+          <input type="range" min="-10" max="10" value="0" step="0.5" class="slider-input" id="sl-browLift" oninput="updateSliders()">
+          <span class="slider-val" id="val-browLift">0.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Góc nghiêng mày (Tilt):</span>
+          <input type="range" min="-10" max="10" value="0" step="0.5" class="slider-input" id="sl-browTilt" oninput="updateSliders()">
+          <span class="slider-val" id="val-browTilt">0.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Híp mắt cười (Squint):</span>
+          <input type="range" min="0" max="1" value="0" step="0.05" class="slider-input" id="sl-eyeSquint" oninput="updateSliders()">
+          <span class="slider-val" id="val-eyeSquint">0.0</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Độ cười mỉm (Smile):</span>
+          <input type="range" min="0" max="1" value="0" step="0.05" class="slider-input" id="sl-smileBoost" oninput="updateSliders()">
+          <span class="slider-val" id="val-smileBoost">0.0</span>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+          <button class="btn btn-gesture" onclick="resetSliders()">Khôi phục mặc định</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div>QUAN AI BRAIN — Thư viện Đóng Gói Avatar Model A dành riêng cho Anh Quân (Backup & Integration)</div>
+    <div>Phiên bản: Model A Final V3 (60 FPS, Feathered Visemes, Biological Dynamics)</div>
+  </footer>
+
+  <script src="./avatar_engine.js"></script>
+  <script>
+    // Initialize the Avatar Engine
+    let avatar = null;
+    const canvasId = "avatar-canvas";
+    const viewport = document.getElementById("avatar-viewport");
+    const banner = document.getElementById("state-banner");
+
+    // Initialize Waveform Canvas
+    const wfCanvas = document.getElementById("waveform-canvas");
+    const wfCtx = wfCanvas.getContext("2d");
+    let waveformActive = false;
+
+    window.addEventListener("DOMContentLoaded", () => {
+      avatar = new DigitalHumanAvatar(canvasId, {
+        basePath: "./assets",
+        initialState: "IDLE",
+        onStateChange: (state, config) => {
+          // Update Viewport CSS classes
+          viewport.className = `avatar-viewport state-${state.toLowerCase()}`;
+          if (config && config.name) {
+            banner.textContent = `TRẠNG THÁI: ${config.name}`;
+          }
+        }
+      });
+
+      // Start Telemetry HUD Loop
+      startTelemetryLoop();
+      // Start Waveform render
+      startWaveformLoop();
+    });
+
+    // 1. State Switcher
+    function setAvatarState(state) {
+      if (!avatar) return;
+      avatar.setState(state);
+      waveformActive = (state === "SPEAKING" || state === "LISTENING");
+    }
+
+    // 2. Physical Gestures
+    function triggerMicroNod() {
+      if (!avatar) return;
+      avatar.isNodding = true;
+      avatar.nodStartTime = performance.now();
+    }
+
+    function triggerHeadTilt() {
+      if (!avatar) return;
+      avatar.targetHeadTilt = -0.038; // ~ -2.2 degrees
+      avatar.nextHeadShiftTime = performance.now() + 4000;
+    }
+
+    function triggerHeadReset() {
+      if (!avatar) return;
+      avatar.targetHeadTilt = 0.0;
+      avatar.targetHeadSwayX = 0.0;
+      avatar.nextHeadShiftTime = performance.now() + 4000;
+    }
+
+    function triggerBlink() {
+      if (!avatar) return;
+      avatar.isBlinking = true;
+      avatar.isDoubleBlink = false;
+      avatar.blinkStartTime = performance.now();
+    }
+
+    function triggerDoubleBlink() {
+      if (!avatar) return;
+      avatar.isBlinking = true;
+      avatar.isDoubleBlink = true;
+      avatar.blinkStartTime = performance.now();
+    }
+
+    function triggerSaccade() {
+      if (!avatar) return;
+      avatar.saccadeX = (Math.random() - 0.5) * 3.0;
+      avatar.saccadeY = (Math.random() - 0.5) * 1.8;
+      avatar.nextSaccadeTime = performance.now() + 3000;
+    }
+
+    // 3. Speech & Timeline Simulation
+    const SAMPLE_PRESETS = [
+      "Chào Anh Quân! Em là Tony, trợ lý điều hành số của Anh. Hệ thống đã sẵn sàng 100%.",
+      "Báo cáo Anh Quân, toàn bộ 142 kiểm thử an toàn đều vượt qua xuất sắc! Dữ liệu đã đồng bộ hoàn hảo.",
+      "Cảnh báo an toàn! Thao tác này có thể ảnh hưởng hệ thống, em cần Anh phê duyệt trước khi tiếp tục.",
+      "Em đang phân tích dữ liệu và trích xuất chỉ số kiến trúc hệ thống, Anh vui lòng đợi trong giây lát."
+    ];
+
+    function setSpeechPreset(index) {
+      const ta = document.getElementById("speech-text");
+      if (ta && SAMPLE_PRESETS[index]) {
+        ta.value = SAMPLE_PRESETS[index];
+      }
+    }
+
+    function simulateVietnameseSpeech() {
+      if (!avatar) return;
+      const text = document.getElementById("speech-text").value;
+      avatar.setContextFromText(text);
+
+      // Generate a dynamic timeline based on text syllables
+      const words = text.split(/\s+/).filter(Boolean);
+      const totalDuration = Math.max(2000, words.length * 280); // approx 280ms per word
+      const frames = [];
+
+      let elapsed = 0;
+      const visemePool = ["A", "O", "E", "I", "U", "REST"];
+
+      words.forEach((w, idx) => {
+        const wordDuration = 280;
+        const subFrames = 5;
+        for (let s = 0; s < subFrames; s++) {
+          const progress = s / subFrames;
+          const openRatio = Math.sin(progress * Math.PI) * 0.75;
+          const viseme = (s === 0 || s === subFrames - 1) ? "REST" : visemePool[Math.floor(Math.random() * 5)];
+          frames.push({
+            offset_ms: Math.round(elapsed + progress * wordDuration),
+            viseme: viseme,
+            open_ratio: openRatio
+          });
+        }
+        elapsed += wordDuration;
+      });
+
+      // Final REST frame
+      frames.push({
+        offset_ms: totalDuration,
+        viseme: "REST",
+        open_ratio: 0.0
+      });
+
+      const timeline = {
+        utterance_id: "demo_speech_" + Date.now(),
+        total_duration_ms: totalDuration,
+        frames: frames
+      };
+
+      avatar.setTimeline(timeline);
+      waveformActive = true;
+    }
+
+    function stopSpeaking() {
+      if (!avatar) return;
+      avatar.cancelUtterance();
+      avatar.setState("IDLE");
+      waveformActive = false;
+    }
+
+    // 4. Micro-expression sliders
+    function updateSliders() {
+      if (!avatar) return;
+      const browLift = parseFloat(document.getElementById("sl-browLift").value);
+      const browTilt = parseFloat(document.getElementById("sl-browTilt").value);
+      const eyeSquint = parseFloat(document.getElementById("sl-eyeSquint").value);
+      const smileBoost = parseFloat(document.getElementById("sl-smileBoost").value);
+
+      document.getElementById("val-browLift").textContent = browLift.toFixed(1);
+      document.getElementById("val-browTilt").textContent = browTilt.toFixed(1);
+      document.getElementById("val-eyeSquint").textContent = eyeSquint.toFixed(2);
+      document.getElementById("val-smileBoost").textContent = smileBoost.toFixed(2);
+
+      avatar.setMicroExpression({
+        browLift: browLift,
+        browTilt: browTilt,
+        eyeSquint: eyeSquint,
+        smileBoost: smileBoost
+      });
+    }
+
+    function resetSliders() {
+      document.getElementById("sl-browLift").value = 0;
+      document.getElementById("sl-browTilt").value = 0;
+      document.getElementById("sl-eyeSquint").value = 0;
+      document.getElementById("sl-smileBoost").value = 0;
+      updateSliders();
+      if (avatar) avatar.resetMicroExpression();
+    }
+
+    // 5. Telemetry & Waveform Animation Loops
+    let lastFrame = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+
+    function startTelemetryLoop() {
+      function update() {
+        frameCount++;
+        const now = performance.now();
+        if (now - lastFrame >= 1000) {
+          fps = frameCount;
+          frameCount = 0;
+          lastFrame = now;
+          document.getElementById("hud-fps").textContent = `${fps} FPS`;
+        }
+
+        if (avatar) {
+          document.getElementById("hud-viseme").textContent = `${avatar.activeViseme || "REST"} (${(avatar.currentOpenRatio || 0).toFixed(2)})`;
+          const rollDeg = (avatar.headTilt * 180 / Math.PI).toFixed(1);
+          const swayPx = (avatar.headSwayX || 0).toFixed(1);
+          document.getElementById("hud-head").textContent = `${rollDeg}° / ${swayPx}px`;
+
+          let eyeState = "Mở tự nhiên";
+          if (avatar.isBlinking) {
+            eyeState = avatar.isDoubleBlink ? "Chớp kép..." : "Đang chớp...";
+          } else if (avatar.state === "OFFLINE" || avatar.state === "SLEEPING") {
+            eyeState = "Nhắm ngủ";
+          } else if (avatar.state === "THINKING") {
+            eyeState = "Tập trung suy nghĩ";
+          }
+          document.getElementById("hud-eyes").textContent = eyeState;
+        }
+
+        requestAnimationFrame(update);
+      }
+      requestAnimationFrame(update);
+    }
+
+    function startWaveformLoop() {
+      let t = 0;
+      function drawWaveform() {
+        t += 0.08;
+        wfCtx.clearRect(0, 0, wfCanvas.width, wfCanvas.height);
+
+        wfCtx.strokeStyle = "#00e5ff";
+        wfCtx.lineWidth = 2;
+        wfCtx.beginPath();
+
+        const midY = wfCanvas.height / 2;
+        const amp = waveformActive ? 8 : 1.5;
+
+        for (let x = 0; x < wfCanvas.width; x += 4) {
+          const y = midY + Math.sin(x * 0.06 + t) * Math.cos(x * 0.03 + t * 0.5) * amp;
+          if (x === 0) wfCtx.moveTo(x, y);
+          else wfCtx.lineTo(x, y);
+        }
+        wfCtx.stroke();
+
+        requestAnimationFrame(drawWaveform);
+      }
+      requestAnimationFrame(drawWaveform);
+    }
+  </script>
+</body>
+</html>
