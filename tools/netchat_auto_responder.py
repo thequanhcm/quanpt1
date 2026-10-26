@@ -13,10 +13,12 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
-CHANNEL_ID = "4phc9b1mx78qjq3grccw89u94a"
+CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
 CHANNEL_NAME = "Trợ lý Tony Pham"
-LAST_MESSAGE_ID = None
+BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
+CATCHUP_WINDOW_MIN = 60  # sau restart: chỉ trả lời tin trong N phút qua
 
 NETCHAT_SCRIPT = r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
 PYTHON_EXE = r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
@@ -38,27 +40,34 @@ def read_channel_messages(count=10):
 
 def send_message(text, confirmed_token=None):
     """Send message to the channel."""
+    def _parse(stdout):
+        try:
+            return json.loads(stdout)
+        except (ValueError, TypeError):
+            # success output may be plain text — don't crash after a real send
+            return {"ok": True, "raw": (stdout or "").strip()[:200]}
+
     try:
         cmd = [PYTHON_EXE, NETCHAT_SCRIPT, "send", CHANNEL_ID, text, "--to-channel"]
         if confirmed_token:
             cmd.extend(["--confirmed", confirmed_token])
-        
+
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-        
+
         if result.returncode == 0:
-            return json.loads(result.stdout)
+            return _parse(result.stdout)
         elif "CONFIRM-REQUIRED" in result.stdout:
             # Extract confirm token and auto-confirm
             for line in result.stdout.split("\n"):
                 if line.startswith("CONFIRM-REQUIRED:"):
-                    token = line.split(":")[1].strip()
+                    token = line.split(":", 1)[1].strip()
                     print(f"   🔄 Auto-confirming with token: {token}")
                     cmd_with_confirm = [PYTHON_EXE, NETCHAT_SCRIPT, "send", CHANNEL_ID, text, "--to-channel", "--confirmed", token]
                     result2 = subprocess.run(cmd_with_confirm, capture_output=True, text=True, timeout=30)
                     if result2.returncode == 0:
-                        return json.loads(result2.stdout)
+                        return _parse(result2.stdout)
                     else:
-                        return {"error": f"Confirm failed: {result2.stderr}"}
+                        return {"error": f"Confirm failed: {result2.stderr or result2.stdout}"}
         return {"error": result.stderr if result.stderr else result.stdout}
     except Exception as e:
         return {"error": str(e)}
@@ -94,88 +103,114 @@ def process_message_with_ai(message_text):
     except Exception as e:
         return f"⚠️ Lỗi xử lý: {str(e)}"
 
+
+def process_message(message_text):
+    """Route: system commands FIRST (real logic), AI conversation fallback.
+
+    The channel is a dedicated owner<->assistant command center — no @bot
+    needed. Commands like 'phê duyệt' execute real system actions; other
+    messages fall through to the conversational AI.
+    """
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from tools.netchat_command_center import route_message
+        intent, response = route_message(message_text)
+        if intent is not None:
+            print(f"   ⚡ System command: {intent}")
+            return response
+    except Exception as e:
+        print(f"   ⚠️ Command router error: {e}")
+    return process_message_with_ai(message_text)
+
 def main():
-    """Main auto-responder loop."""
+    """Main auto-responder loop.
+
+    Message tracking: a bounded set of seen message IDs. On startup, all
+    existing messages are marked seen EXCEPT the newest ones (within
+    CATCHUP_WINDOW_MIN) which are answered — so a restart never replays the
+    whole history but still responds to fresh unanswered owner messages.
+    """
     print("=" * 70)
-    print("QUAN AI BRAIN — NetChat Auto-Responder")
+    print("QUAN AI BRAIN — NetChat Auto-Responder (Command Center 2 chiều)")
     print("=" * 70)
     print(f"Channel: {CHANNEL_NAME} ({CHANNEL_ID})")
     print(f"Started: {datetime.now(timezone.utc).isoformat()}")
     print("=" * 70)
     print("\nMonitoring for new messages... (Ctrl+C to stop)\n")
 
-    global LAST_MESSAGE_ID
-    skip_first = True
+    seen_ids: set[str] = set()
+    first_poll = True
     iteration = 0
+    catchup_window_ms = CATCHUP_WINDOW_MIN * 60 * 1000
 
     while True:
         iteration += 1
         try:
-            # Read messages
-            messages = read_channel_messages(count=5)
-            
-            # Debug: print iteration count
-            if iteration % 10 == 0:
-                print(f"[DEBUG] Iteration {iteration}, {len(messages)} messages found")
-            
+            messages = read_channel_messages(count=10)
+
             if messages:
-                # Sort by creation time (newest first)
-                messages.sort(key=lambda x: x.get("create_at", 0), reverse=True)
-                
-                for msg in messages:
+                # oldest first so replies land in chronological order
+                messages.sort(key=lambda x: x.get("create_at", 0))
+
+                if first_poll:
+                    now_ms = time.time() * 1000
+                    fresh = [
+                        m for m in messages
+                        if m.get("user_id") != BOT_USER_ID
+                        and now_ms - m.get("create_at", 0) <= catchup_window_ms
+                    ]
+                    for m in messages:
+                        seen_ids.add(m.get("id"))
+                    first_poll = False
+                    # answer at most the 5 newest fresh messages after restart
+                    fresh = sorted(fresh, key=lambda x: x.get("create_at", 0))[-5:]
+                    if fresh:
+                        print(f"[STARTUP] {len(fresh)} tin nhắn mới trong {CATCHUP_WINDOW_MIN} phút qua — sẽ trả lời.")
+                        for m in fresh:
+                            seen_ids.discard(m.get("id"))
+                    else:
+                        print("[STARTUP] Không có tin mới nào cần trả lời.")
+                else:
+                    fresh = [
+                        m for m in messages
+                        if m.get("id") not in seen_ids and m.get("user_id") != BOT_USER_ID
+                    ]
+
+                for msg in fresh:
                     msg_id = msg.get("id")
-                    user_id = msg.get("user_id")
-                    message_text = msg.get("message", "")
-                    
-                    # Debug: print all messages
-                    if iteration <= 3:
-                        print(f"[DEBUG] Checking msg {msg_id[:8]}... from {user_id[:12]}: {message_text[:40]}")
-                    
-                    # Skip bot's own messages
-                    if user_id == "edojmne9d7gcxx8axu1mzas3pr":
-                        if iteration <= 3:
-                            print(f"   → Skipping bot message")
+                    message_text = (msg.get("message") or "").strip()
+                    if not message_text:
+                        seen_ids.add(msg_id)
                         continue
-                    
-                    # Skip first iteration (already seen messages)
-                    if skip_first:
-                        if LAST_MESSAGE_ID is None:
-                            LAST_MESSAGE_ID = msg_id
-                            print(f"[DEBUG] Initialized LAST_MESSAGE_ID = {msg_id[:8]}")
-                        continue
-                    
-                    # New message detected
-                    if msg_id != LAST_MESSAGE_ID:
-                        timestamp = datetime.fromtimestamp(
-                            msg.get("create_at", 0) / 1000, tz=timezone.utc
-                        )
-                        print(f"\n📩 New message at {timestamp.strftime('%H:%M:%S')}:")
-                        print(f"   {message_text[:100]}...")
-                        
-                        # Process with AI (NO "thinking" placeholder — direct response)
-                        print("   🤖 Processing...")
-                        response = process_message_with_ai(message_text)
-                        
-                        # Send response
-                        print("   📤 Sending response...")
-                        result = send_message(response)
-                        
-                        if "confirm_required" in result:
-                            print("   ⚠️  Confirm required. Auto-confirming...")
-                            # Extract command and re-run
-                            cmd_str = result["command"].replace("python3 ", "")
-                            subprocess.run(cmd_str, shell=True, timeout=30)
-                            print("   ✅ Response sent!")
-                        elif "error" in result:
-                            print(f"   ❌ Error: {result['error']}")
-                        else:
-                            print("   ✅ Response sent!")
-                        
-                        LAST_MESSAGE_ID = msg_id
-            
-            # Wait 5 seconds
+                    timestamp = datetime.fromtimestamp(
+                        msg.get("create_at", 0) / 1000, tz=timezone.utc
+                    )
+                    print(f"\n📩 New message at {timestamp.strftime('%H:%M:%S')}:")
+                    print(f"   {message_text[:100]}")
+
+                    print("   🤖 Processing...")
+                    response = process_message(message_text)
+
+                    print("   📤 Sending response...")
+                    result = send_message(response)
+                    if "error" in result:
+                        print(f"   ❌ Error: {result['error']}")
+                    else:
+                        print("   ✅ Response sent!")
+
+                    seen_ids.add(msg_id)
+                    # NetChat rate limit (HTTP 429) khi gửi dồn — nghỉ giữa các reply
+                    time.sleep(3)
+
+                # keep the seen set bounded
+                if len(seen_ids) > 500:
+                    seen_ids = set(sorted(seen_ids)[-200:])
+
+            if iteration % 12 == 0:
+                print(f"[DEBUG] Iteration {iteration}, seen={len(seen_ids)}")
+
             time.sleep(5)
-            
+
         except KeyboardInterrupt:
             print("\n\n🛑 Auto-responder stopped by user")
             break
