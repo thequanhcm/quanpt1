@@ -135,7 +135,8 @@ class ContinuousLearningEngine:
         
         # CLO V1: Session manager for continuous handoff
         self.workspace = workspace or Path(__file__).parent.parent.parent
-        self.session_db_path = self.workspace / "data" / "learning_checkpoints.db"
+        self.workspace = self.workspace.resolve()  # Ensure absolute path
+        self.session_db_path = (self.workspace / "data" / "learning_checkpoints.db").resolve()
         # Ensure data directory exists
         self.session_db_path.parent.mkdir(parents=True, exist_ok=True)
         self.session_manager = LearningSessionManager(self.session_db_path)
