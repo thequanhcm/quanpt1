@@ -1,13 +1,43 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-QUAN AI BRAIN — V3 Sprint 3: Information Gap Awareness Engine (27/10/2026, ĐÃ TEST — chờ duyệt TASK-V3-SPRINT3 trước khi commit).
-Owner Approval Status: hồ sơ TASK-V3-SPRINT3 đang PENDING_APPROVAL trên kênh NetChat (approval_cards + approval_requests, consume-once). Trước đó: Sprint 2 V3 Approval Orchestrator đã duyệt 27/10; Sprint 2 GLM Streaming đã duyệt 25/10.
-Test Suite: 717 PASSED, 2 SKIPPED, 1 FAILED (Ollama OFFLINE — fail môi trường cũ, không liên quan Sprint 3; đã verify fail cả khi gỡ code Sprint 3).
-Sprint 3 additions: information_gap_analyzer.py (Task Spec 15 trường, 9 nhóm thiếu A–I, READY/NEEDS_OWNER_INPUT/NEEDS_VERIFICATION), CognitiveLoop.submit_task gap_check (thiếu thông tin → NOT_SUBMITTED, 0 hành động), netchat_info_gap_adapter.py (tin [CẦN ANH QUANPT1 BỔ SUNG THÔNG TIN] V3 §7, trả lời ≠ phê duyệt), persistence information_gaps.db + phục hồi restart, nhắc ≤5 lần/12h; 33 test mới (23 info-gap + 10 routing); chỉ số §13: hành động khi thiếu điều kiện = 0, tự suy đoán = 0.
+QUAN AI BRAIN — Sprint 7B: Windows Job Object Kernel Integration & Hard OS Resource Containment (27/10/2026, VERIFIED).
+- **Test Suite Status**: **978 PASSED**, **0 FAILED**, **1 SKIPPED** (Physical Pi 5 hardware offline). Exit Code: 0. Total: 979 test items across 84 test files.
+- **Windows Job Object OS Backend (`src/quan_ai_brain/execution/windows_job_object.py`)**: Implemented `WindowsJobObjectBackend` implementing `ProcessBackendInterface` using standard-library `ctypes` bindings to Windows `kernel32.dll` (`CreateJobObjectW`, `SetInformationJobObject`, `AssignProcessToJobObject`, `QueryInformationJobObject`, `CloseHandle`).
+- **Hard Kernel Resource Quotas**: Configures and enforces OS-level constraints via `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` (memory byte ceiling `JOB_OBJECT_LIMIT_JOB_MEMORY`, CPU user time `JOB_OBJECT_LIMIT_PROCESS_TIME`, active process count `JOB_OBJECT_LIMIT_ACTIVE_PROCESS`, die-on-unhandled-exception, and auto-kill on close `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`).
+- **Accounting Telemetry Engine**: Live empirical querying of `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION` extracting `TotalProcesses`, `ActiveProcesses`, `TotalUserTime` (ms), and `TotalKernelTime` (ms) into `JobExecutionResult`.
+- **Fail-Closed Governance Invariants**:
+  - `allow_live_processes: bool = False` by default: All calls to `spawn_process()` strictly raise `ProductionExecutionProhibitedError` unless explicitly enabled in authorized test fixtures.
+  - R5 Hard-Block: Command screening immediately rejects destructive patterns (`rm -rf`, `format`, `del /s`, `diskpart`, etc.) before OS process creation.
+  - PathGuard Confinement: Validates process working directory (`cwd`) strictly within the workspace root.
+  - Zero Secret Leakage: Process output streams (`stdout`, `stderr`) and metadata dictionaries scrubbed via `redact_value()`.
+- **ContainedExecutionRunner Integration**: Added `execute_contained()` in `src/quan_ai_brain/execution/process_containment.py` providing complete end-to-end governance lifecycle (Emergency state check -> Risk Level R4/R5 check -> Budget validation -> Containment mapping -> Sandboxed dispatch).
+- **Comprehensive Verification Suite (`tests/test_windows_job_object.py`)**: 14/14 tests passing covering OS availability, Win32 handle creation, limit flags, fail-closed refusal, authorized live execution, accounting telemetry, R5 block, PathGuard check, context manager cleanup, and runner integration.
+- **Automated Engineering Report**: Generated and verified at `reports/HANDOFF_LATEST.md` and archived at `reports/HANDOFF_20261027_192018.md`.
 
 ## Status as implemented and verified by test suite
-- [x] QUAN AI BRAIN — V3 Sprint 3: Information Gap Awareness Engine (27/10/2026, tested, chờ owner duyệt commit):
+- [x] QUAN AI BRAIN — Sprint 7B: Windows Job Object Kernel Integration & Hard Resource Containment (27/10/2026, 978 passed, 0 failed, 1 skipped):
+  - [x] `WindowsJobObjectBackend` (`src/quan_ai_brain/execution/windows_job_object.py`): Pure ctypes Win32 Job Object adapter implementing `ProcessBackendInterface`.
+  - [x] Win32 Ctypes Layouts: `IO_COUNTERS`, `JOBOBJECT_BASIC_LIMIT_INFORMATION`, `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` (144 bytes), `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION`.
+  - [x] Kernel Resource Quotas: Memory ceiling, CPU user time, active process limits, auto-kill on close.
+  - [x] Accounting & Telemetry: Real-time query of process counts, user CPU time, and kernel CPU time.
+  - [x] Fail-Closed Staging Gate: `allow_live_processes=False` default refusing execution with `ProductionExecutionProhibitedError`.
+  - [x] Destructive Command Screening: R5 commands (`rm -rf`, `del /s`, etc.) permanently blocked.
+  - [x] ContainedExecutionRunner: `execute_contained()` verified with both inert staging and authorized live sandbox dispatch.
+  - [x] Verification Test Suite (`tests/test_windows_job_object.py`): 14/14 tests passing.
+- [x] QUAN AI BRAIN — Master Implementation V4: Evidence-Driven Cognitive State & Verification (27/10/2026, 960 passed, 0 failed, 1 skipped):
+  - [x] CognitiveClaim & BeliefItem (`src/quan_ai_brain/cognition/cognitive_state.py`): Triples, multi-source provenance, version lineage, and timestamp tracking.
+  - [x] Freshness Evaluation (`src/quan_ai_brain/cognition/cognitive_state.py`): Ephemeral, session, daily, long-term, and immutable policies.
+  - [x] Context-Aware Contradiction Engine: Auto-detection of context differences vs direct contradictions.
+  - [x] State Reconciliation Engine: Non-destructive updating, version bumping, and supporting/opposing source tracking.
+  - [x] Cognitive Self-Assessment Engine: 6-tier evidence evaluation, truthful reporting, and strict production gating.
+  - [x] V4 Verification Suite (`tests/test_cognitive_state_v4.py`): 20/20 tests passing covering all Section 9 requirements.
+- [x] QUAN AI BRAIN — Cognitive Operating Intelligence V3: Cognitive State, Metacognitive Abstention & Adversarial Testing (27/10/2026, 927 passed, 0 failed, 1 skipped):
+  - [x] CognitiveState Model (`src/quan_ai_brain/cognition/cognitive_state.py`): Segregation of knowledge into 8 `BeliefKind` categories, tracking hypotheses, uncertainties, alternatives, and contradictions.
+  - [x] TaskPlan Integration (`src/quan_ai_brain/planning/models.py`): Added `cognitive_state` field, serialize via `to_dict()`, and explainable markdown output via `explain()`.
+  - [x] ExecutiveCoordinator Integration (`src/quan_ai_brain/planning/coordinator.py`): Connects `CognitiveState`, maps user goal to `FACT_USER`, maps memories to `FACT_RETRIEVED`/`HYPOTHESIS`/`UNKNOWN`, detects contradictions and stale state, enforces approval on adversarial injection or contradictions.
+  - [x] Adversarial Cognition Test Suite (`tests/test_adversarial_cognition.py`): 12/12 tests passing covering all Master Prompt V3 Section X mandatory groups.
+  - [x] Unit Test Suites (`tests/test_cognitive_state.py`, `tests/test_planning.py`): 100% pass rate.
   - [x] InformationGapAnalyzer (`src/quan_ai_brain/cognition/information_gap_analyzer.py`): 18/18 tình huống bắt buộc V3 §12 đạt; im lặng ≠ đồng ý; nguồn mâu thuẫn → NEEDS_VERIFICATION không tự chọn; VERIFIED/OWNER_PROVIDED không hỏi lại (V3 §4).
   - [x] CognitiveLoop integration: submit_task gap_check ON — NOT_SUBMITTED khi thiếu thông tin thiết yếu; TaskSpec.validate fail-closed giữ nguyên.
   - [x] NetChat: route_message bước 0.5 (info_gap_reply) + approval adapter nhường tin info-gap; E2E TASK-E2E99 qua route_message thật.
