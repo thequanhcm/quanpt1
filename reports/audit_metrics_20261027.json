@@ -1,0 +1,170 @@
+{
+ "collected_at_utc": "2026-10-27T17:19:07.820276+00:00",
+ "health_latency_ms": 29.7,
+ "health_components": [
+  {
+   "component_id": "core_server",
+   "observed_value": true,
+   "status": "HEALTHY",
+   "observed_at": "2026-10-27T17:19:07.831294+00:00",
+   "source": "http_handler",
+   "evidence_ref": "http_request:/api/health",
+   "verification_status": "VERIFIED_LIVE",
+   "last_verified_at": "2026-10-27T17:19:07.831294+00:00"
+  },
+  {
+   "component_id": "ollama_daemon",
+   "observed_value": true,
+   "status": "HEALTHY",
+   "observed_at": "2026-10-27T17:19:07.831294+00:00",
+   "source": "tcp_probe:127.0.0.1:11434",
+   "evidence_ref": "tcp_probe_result:True",
+   "verification_status": "VERIFIED_LIVE",
+   "last_verified_at": "2026-10-27T17:19:07.831294+00:00"
+  },
+  {
+   "component_id": "brain_db",
+   "observed_value": {
+    "episodes": 1599,
+    "semantic_memory": 1841
+   },
+   "status": "HEALTHY",
+   "observed_at": "2026-10-27T17:19:07.831294+00:00",
+   "source": "sqlite:data/brain.db",
+   "evidence_ref": "row_counts:1599/1841",
+   "verification_status": "VERIFIED_LIVE",
+   "last_verified_at": "2026-10-27T17:19:07.831294+00:00"
+  },
+  {
+   "component_id": "task_registry",
+   "observed_value": {
+    "pending": 9
+   },
+   "status": "HEALTHY",
+   "observed_at": "2026-10-27T17:19:07.831294+00:00",
+   "source": "sqlite:data/tasks.db",
+   "evidence_ref": "pending_count:9",
+   "verification_status": "VERIFIED_LIVE",
+   "last_verified_at": "2026-10-27T17:19:07.831294+00:00"
+  }
+ ],
+ "health_ok": true,
+ "background_processes": [
+  {
+   "pid": "4088",
+   "what": "watchdog.py"
+  },
+  {
+   "pid": "92",
+   "what": "watchdog.py"
+  },
+  {
+   "pid": "7724",
+   "what": "learning_daemon.py\""
+  },
+  {
+   "pid": "15200",
+   "what": "learning_daemon.py\""
+  },
+  {
+   "pid": "20192",
+   "what": "python.exe\" start_dual_servers.py"
+  },
+  {
+   "pid": "12416",
+   "what": "python.exe\" start_dual_servers.py"
+  },
+  {
+   "pid": "21236",
+   "what": "python.exe\" -u start_dual_servers.py"
+  },
+  {
+   "pid": "8216",
+   "what": "python.exe\" -u start_dual_servers.py"
+  },
+  {
+   "pid": "18036",
+   "what": "python.exe\" -u tools/netchat_auto_responder.py"
+  },
+  {
+   "pid": "17184",
+   "what": "python.exe\" -u tools/netchat_auto_responder.py"
+  }
+ ],
+ "databases": [
+  {
+   "name": "brain.db",
+   "size_mb": 87.9,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "consultations.db",
+   "size_mb": 0.0,
+   "journal_mode": "wal"
+  },
+  {
+   "name": "document_index.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "email_intake.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "experience.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "gov_sandbox.db",
+   "size_mb": 0.1,
+   "journal_mode": "wal"
+  },
+  {
+   "name": "governance.db",
+   "size_mb": 0.5,
+   "journal_mode": "wal"
+  },
+  {
+   "name": "information_gaps.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "learning_checkpoints.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "learning_reports.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "learning_sandbox.db",
+   "size_mb": 0.1,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "memory.db",
+   "size_mb": 0.1,
+   "journal_mode": "delete"
+  },
+  {
+   "name": "tasks.db",
+   "size_mb": 11.9,
+   "journal_mode": "wal"
+  },
+  {
+   "name": "todos.db",
+   "size_mb": 0.0,
+   "journal_mode": "delete"
+  }
+ ],
+ "server_workingset_mb": 81.1,
+ "sensitive_files_in_git": [],
+ "git_tracked_files": 1497,
+ "audit_log_size_mb": 0.55
+}
