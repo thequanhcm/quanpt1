@@ -52,7 +52,15 @@ class PromptContextBuilder:
         system_instructions: str | None = None,
         project_scope: str | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        cognitive_state: dict[str, Any] | None = None,  # V5: optional evidence traceability
     ) -> BuiltContext:
+        """Build prompt context with evidence traceability (V5).
+        
+        Args:
+            cognitive_state: Optional dict with 'beliefs', 'contradictions' for evidence traceability.
+                            If provided, context will show verification_status + source_ref for each belief.
+                            CANDIDATE beliefs are marked as UNVERIFIED (not treated as facts).
+        """
         budget = max_chars if max_chars is not None else self.default_max_chars
         if budget < 100 or budget > 50_000:
             raise ValueError("max_chars budget must be between 100 and 50,000")
@@ -122,6 +130,44 @@ class PromptContextBuilder:
         # Build sections
         sections: list[str] = []
         section_stats: dict[str, int] = {}
+
+        # V5: Cognitive State Evidence Block (if provided)
+        if cognitive_state and isinstance(cognitive_state, dict):
+            beliefs = cognitive_state.get('beliefs', []) or []
+            contradictions = cognitive_state.get('contradictions', []) or []
+            
+            if beliefs:
+                cog_block = ["[COGNITIVE EVIDENCE — TRACES & VERIFICATION STATUS]"]
+                for belief in beliefs[:10]:  # Cap at 10 beliefs
+                    statement = belief.get('statement', '')
+                    kind = belief.get('kind', 'UNKNOWN')
+                    source = belief.get('source_ref', 'unknown')
+                    verif = belief.get('verification_status', 'UNVERIFIED')
+                    conf = belief.get('confidence', 0.0)
+                    
+                    # CANDIDATE → mark as UNVERIFIED
+                    if verif == 'candidate':
+                        verif_display = 'CANDIDATE (UNVERIFIED)'
+                    else:
+                        verif_display = verif
+                    
+                    cog_block.append(f"- [{verif_display}] ({kind}) {statement[:150]}... [source: {source}]")
+                
+                if len(beliefs) > 10:
+                    cog_block.append(f"... and {len(beliefs) - 10} more beliefs")
+                
+                if contradictions:
+                    cog_block.append("")
+                    cog_block.append(f"[CONTRADICTIONS — {len(contradictions)} UNRESOLVED]")
+                    for c in contradictions[:5]:
+                        claim1 = c.get('claim_a', '')[:80]
+                        claim2 = c.get('claim_b', '')[:80]
+                        cog_block.append(f"- Mâu thuẫn: '{claim1}...' vs '{claim2}...'")
+                    if len(contradictions) > 5:
+                        cog_block.append(f"... and {len(contradictions) - 5} more contradictions")
+                
+                sections.append("\n".join(cog_block))
+                section_stats['cognitive_evidence'] = len(beliefs)
 
         # 1. System Governance
         sec_governance = f"[SYSTEM INSTRUCTIONS & GOVERNANCE]\n{sys_prompt}"
