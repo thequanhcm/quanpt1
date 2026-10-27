@@ -92,7 +92,7 @@
       "group": "C",
       "name": "[live-stream-teach] dạy qua stream → episode persist",
       "pass": true,
-      "evidence": " Em đã NHỚ vào trí nhớ dài hạn (ID 4986e18a-d703-4eac-99be-ea42393a3327, loại SEMANTIC, nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"marker smoke V8 \nepisodes AFTER: 1\n\n✅ PASS: teach-via-stream persis"
+      "evidence": " Em đã NHỚ vào trí nhớ dài hạn (ID a73d2cb9-30dd-494f-8f6c-98bc0154abe0, loại SEMANTIC, nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"marker smoke V8 \nepisodes AFTER: 1\n\n✅ PASS: teach-via-stream persis"
     }
   ],
   "note": "Section C viết 1 episode teach thật vào brain.db (đúng chức năng owner teaching)."
