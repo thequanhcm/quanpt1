@@ -1481,6 +1481,31 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
 
+
+            # V7_CHAIN_WIRE: chain skill kiểm tra tiến độ — chạy khi query khớp
+            # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
+            # fail-honest, không chặn chat (lỗi chỉ append warning).
+            progress_check_block = None
+            try:
+                from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
+                from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
+
+                _v7_ws = _find_workspace_root()
+                _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
+                if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
+                    _v7_result = _v7_chain(query or "", _v7_ws)
+                    progress_check_block = {
+                        "chain": _v7_result["chain"],
+                        "conclusion": _v7_result["reconciliation"]["conclusion"],
+                        "records_matched": _v7_result["reconciliation"]["records_matched"],
+                        "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
+                        "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
+                        "risk_summary": _v7_result["risk_summary"],
+                        "report_md": _v7_result["report_md"],
+                    }
+            except Exception as v7_err:
+                all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
+
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
 
@@ -1533,6 +1558,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "progress_check": progress_check_block,
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
