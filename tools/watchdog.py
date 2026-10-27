@@ -162,15 +162,26 @@ def check_netchat_bot() -> bool:
 def check_learning_daemon() -> bool:
     """Sprint 7 (b): learning daemon liveness via its crash/heartbeat log.
 
-    Daemon ghi log mỗi chu kỳ 5 phút (learning_daemon.log qua stdout redirect
-    của KHOI_DONG — không có file riêng khi chạy minimized window). Dùng file
-    learning_daemon.log nếu có; thiếu file → coi như KHÔNG chạy (Y6).
+    28/10/2026 (sửa mất đồng bộ): daemon có thể ghi vào learning_daemon.log
+    (stdout redirect minimized window) HOẶC learning_daemon.py.log (stdout
+    redirect của start_daemon trong watchdog) — trước đây chỉ tra 1 file nên
+    daemon sống nhưng bị báo OFFLINE 12.6h. Lấy mtime MỚI NHẤT của cả hai;
+    thiếu cả hai → fail-closed OFFLINE.
     """
-    log_path = Path(CONFIG["learning_daemon_log"])
-    if not log_path.exists():
-        # Không có log → không xác nhận được sự sống → OFFLINE (fail-closed)
+    candidates = [
+        Path(CONFIG["learning_daemon_log"]),                      # logs/learning_daemon.log
+        Path(BASE_DIR) / "logs" / "learning_daemon.py.log",       # watchdog-spawned redirect
+        Path(BASE_DIR) / "logs" / "learning_daemon_crash.log",
+    ]
+    ages = [
+        time.time() - p.stat().st_mtime
+        for p in candidates
+        if p.exists()
+    ]
+    if not ages:
+        # Không có log nào → không xác nhận được sự sống → OFFLINE (fail-closed)
         return _update_component_state("learning_daemon", False) == "HEALTHY"
-    age_seconds = time.time() - log_path.stat().st_mtime
+    age_seconds = min(ages)  # file ghi gần nhất quyết định
     # Chu kỳ 300s; 15 phút không ghi gì = chết/treo
     alive = age_seconds < 900
     state = _update_component_state("learning_daemon", alive)
