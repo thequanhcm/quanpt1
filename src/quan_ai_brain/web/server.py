@@ -377,6 +377,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_executive_capabilities()
             return
 
+        # V6: Skill Registry — read-only listing (GET)
+        if path == "/api/skills":
+            self._handle_api_skills()
+            return
+
         if path == "/api/executive/consultations":
             self._handle_api_executive_consultations(parsed.query)
             return
@@ -1395,6 +1400,76 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     except Exception as clo_err:
                         # Non-blocking: log but don't fail the request
                         all_warnings.append(f"CLO session trigger: {str(clo_err)[:100]}")
+
+                    # V6: TaskPipeline evidence trail — pipeline gắn với task vừa đăng ký
+                    try:
+                        from quan_ai_brain.cognition.task_pipeline import (
+                            TaskPipelineEngine,
+                            PipelineStage,
+                        )
+
+                        _tp_engine = TaskPipelineEngine()
+                        _tp = _tp_engine.create_pipeline(
+                            owner_request=query,
+                            task_goal=task_rec.goal if hasattr(task_rec, "goal") else query,
+                            acceptance_criteria=[
+                                "Task đã đăng ký vào DurableTaskRegistry với task_id hợp lệ",
+                            ],
+                            risk_level=str(task_rec.risk_level),
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.DECOMPOSE,
+                            notes=f"Decomposed by ExecutiveCoordinator.plan() ({len(task_rec.approved_scope)} DAG steps)",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.DISCOVER,
+                            notes="Existing tools reused: ExecutiveCoordinator, PlanOrchestrator, DurableTaskRegistry",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.PLAN,
+                            notes=f"Plan registered with risk {task_rec.risk_level}",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        for _s in (PipelineStage.LEARN, PipelineStage.BUILD, PipelineStage.TEST):
+                            _tp_engine.advance(_tp, _s, notes="", skipped_reason="registration path — execution handled by durable task runner")
+                        _tp_engine.advance(
+                            _tp, PipelineStage.ANALYZE,
+                            notes=f"Task {task_rec.task_id} registered; awaiting execution evidence",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        # VERIFY fail-honest: chưa có bằng chứng thực thi → NOT_VERIFIED
+                        _crit = _tp.spec.acceptance_criteria[0]
+                        _tp_engine.advance(
+                            _tp, PipelineStage.VERIFY,
+                            notes="Task registered but not yet executed — honest not_verified",
+                            validation={"criteria": {
+                                _crit: {"passed": False, "not_verified": True,
+                                        "reason": "durable task execution pending"},
+                            }},
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        # ADVISE + REUSE — ghi khuyến nghị trung thực
+                        _tp_engine.advance(
+                            _tp, PipelineStage.ADVISE,
+                            notes=f"Task {task_rec.task_id} chờ thực thi theo DAG đã duyệt; theo dõi tại /api/executive/tasks",
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.REUSE,
+                            notes="", skipped_reason="no reusable asset generated at registration time",
+                        )
+                        # Gắn pipeline vào response (truy vết bằng chứng)
+                        if isinstance(durable_task_dict, dict):
+                            durable_task_dict["task_pipeline"] = {
+                                "pipeline_id": _tp.pipeline_id,
+                                "stages_completed": len(_tp.stage_history),
+                                "final_recommendation": _tp.final_recommendation,
+                                "verify_status": "NOT_VERIFIED (execution pending)",
+                            }
+                    except Exception as tp_err:
+                        # Non-blocking: pipeline chỉ là evidence trail, không chặn chat
+                        all_warnings.append(f"TaskPipeline trail: {str(tp_err)[:100]}")
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
 
@@ -1856,6 +1931,22 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
     def _handle_api_executive_capabilities(self) -> None:
         caps = CapabilityRegistry().list_capabilities()
         self._send_json({"success": True, "capabilities": [c.to_dict() for c in caps]})
+
+    def _handle_api_skills(self) -> None:
+        """V6: GET /api/skills — danh sách Skill trong registry (read-only)."""
+        try:
+            from quan_ai_brain.cognition.skill_registry import SkillRegistry
+
+            workspace = _find_workspace_root()
+            registry = SkillRegistry(workspace / "data" / "skill_registry.json")
+            skills = registry.list_skills()
+            self._send_json({
+                "success": True,
+                "total": len(skills),
+                "skills": [s.to_dict() for s in skills],
+            })
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]})
 
     def _handle_api_executive_consultations(self, query_str: str) -> None:
         workspace = _find_workspace_root()
