@@ -135,8 +135,21 @@ class NetChatApprovalAdapter:
         """Entry point cho auto-responder. Trả về chuỗi giải thích (đã post nếu post=True)."""
         self.store.refresh_expiry()
 
-        # Lệnh theo mã task: DUYỆT TASK-xxxx (cấu trúc mã phân biệt với chat thường)
+        # V3 Sprint 3 (27/10): tin có mã TASK nhưng không phải lệnh duyệt/sửa/
+        # chi tiết và task KHÔNG có approval card → có thể là trả lời yêu cầu
+        # bổ sung thông tin (information gap). Trả về '' để caller route tiếp
+        # sang info-gap adapter thay vì báo sai "CHƯA HIỂU LỆNH".
         parsed = self.parse(message_text)
+
+        if parsed["action"] == "unknown":
+            task_code = parsed.get("task_code") or ""
+            try:
+                from quan_ai_brain.governance.netchat_info_gap_adapter import has_waiting_task
+
+                if has_waiting_task(task_code):
+                    return ""  # info-gap reply — caller tự xử lý
+            except Exception:
+                pass
 
         if parsed["action"] == "none":
             return ""  # không phải lệnh phê duyệt — caller tự xử lý khác

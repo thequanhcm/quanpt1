@@ -1,11 +1,16 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-QUAN AI BRAIN — Sprint 2: GLM Streaming + Deep Reasoning + Pi Barge-in + Avatar V3 Phase B (Completed & Verified 2026-10-25, owner-approved).
-Owner Approval Status: Approved by Anh Quân (Quanpt1) as sole authorized creator, owner, and final authority.
-Test Suite: 512 PASSED, 1 SKIPPED, 0 FAILED (513 tests; skip = Pi 5 hardware voice E2E not run in automated session, truthful BLOCKED).
+QUAN AI BRAIN — V3 Sprint 3: Information Gap Awareness Engine (27/10/2026, ĐÃ TEST — chờ duyệt TASK-V3-SPRINT3 trước khi commit).
+Owner Approval Status: hồ sơ TASK-V3-SPRINT3 đang PENDING_APPROVAL trên kênh NetChat (approval_cards + approval_requests, consume-once). Trước đó: Sprint 2 V3 Approval Orchestrator đã duyệt 27/10; Sprint 2 GLM Streaming đã duyệt 25/10.
+Test Suite: 717 PASSED, 2 SKIPPED, 1 FAILED (Ollama OFFLINE — fail môi trường cũ, không liên quan Sprint 3; đã verify fail cả khi gỡ code Sprint 3).
+Sprint 3 additions: information_gap_analyzer.py (Task Spec 15 trường, 9 nhóm thiếu A–I, READY/NEEDS_OWNER_INPUT/NEEDS_VERIFICATION), CognitiveLoop.submit_task gap_check (thiếu thông tin → NOT_SUBMITTED, 0 hành động), netchat_info_gap_adapter.py (tin [CẦN ANH QUANPT1 BỔ SUNG THÔNG TIN] V3 §7, trả lời ≠ phê duyệt), persistence information_gaps.db + phục hồi restart, nhắc ≤5 lần/12h; 33 test mới (23 info-gap + 10 routing); chỉ số §13: hành động khi thiếu điều kiện = 0, tự suy đoán = 0.
 
 ## Status as implemented and verified by test suite
+- [x] QUAN AI BRAIN — V3 Sprint 3: Information Gap Awareness Engine (27/10/2026, tested, chờ owner duyệt commit):
+  - [x] InformationGapAnalyzer (`src/quan_ai_brain/cognition/information_gap_analyzer.py`): 18/18 tình huống bắt buộc V3 §12 đạt; im lặng ≠ đồng ý; nguồn mâu thuẫn → NEEDS_VERIFICATION không tự chọn; VERIFIED/OWNER_PROVIDED không hỏi lại (V3 §4).
+  - [x] CognitiveLoop integration: submit_task gap_check ON — NOT_SUBMITTED khi thiếu thông tin thiết yếu; TaskSpec.validate fail-closed giữ nguyên.
+  - [x] NetChat: route_message bước 0.5 (info_gap_reply) + approval adapter nhường tin info-gap; E2E TASK-E2E99 qua route_message thật.
 - [x] QUAN AI BRAIN — Sprint 2: GLM Streaming + Deep Reasoning + Pi Barge-in + Avatar V3 Phase B (Completed & Verified 2026-10-25, owner-approved):
   - [x] Streaming SSE (`src/quan_ai_brain/llm/netmind_provider.py::stream_chat()`): Live delta generator (no buffering), `_iter_chat_stream_events()` parse SSE on-the-fly, delta never replayed on transport error, first-delta latency 1.5–1.8s (down from 7.4s via 60s catalog cache).
   - [x] Deep Reasoning Tier: `Qwen/Qwen3.5-122B-A10B-FP8` added to allowlist with `max_tokens=2500` default; router recognizes "phân tích chuyên sâu/nghiên cứu sâu/deep dive" + queries >1200 chars → deep tier; probe verified 22.01s total, 2255 reasoning + 72 content tokens, finish=stop.

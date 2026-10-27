@@ -48,8 +48,11 @@ def test_grounding_block_contains_truth_rules() -> None:
     assert "GLM" in block or "cloud" in block.lower()
     # avatar honesty rule present
     assert "giao diện 2D" in block
-    # offline must not be beautified
-    assert facts["pi5_status"].startswith(("ONLINE", "OFFLINE"))
+    # offline must not be beautified: ONLINE / OFFLINE / hoặc trạng thái
+    # trung thực "chưa xác minh" khi edge DISCONNECTED (fix f92b32a — KHÔNG
+    # được beautify Pi 5 thành đang hoạt động khi mất heartbeat).
+    pi5 = facts["pi5_status"]
+    assert pi5.startswith(("ONLINE", "OFFLINE", "chưa xác minh"))
 
 
 def test_grounding_runtime_reports_real_python() -> None:

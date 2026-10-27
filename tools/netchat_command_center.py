@@ -454,6 +454,21 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
     except Exception as exc:  # adapter failure must not break other commands
         _audit("netchat_command.approval_adapter_error", {"error": str(exc)[:200]})
 
+    # 0.5) V3 Sprint 3: owner trả lời yêu cầu bổ sung thông tin (TASK-xxxx +
+    #      không khớp lệnh duyệt ở trên) → cập nhật trạng thái chờ (V3 §8.1).
+    #      Trả lời ≠ phê duyệt — approval đã xử lý ở bước 1 với priority cao hơn.
+    try:
+        from quan_ai_brain.governance.netchat_info_gap_adapter import (
+            handle_owner_info_reply,
+        )
+
+        info_reply = handle_owner_info_reply(text, sender_user_id=sender_user_id)
+        if info_reply:
+            _audit("netchat_command.info_gap_reply", {"session": chat_session_id})
+            return "info_gap_reply", info_reply
+    except Exception as exc:  # không phá các lệnh khác
+        _audit("netchat_command.info_gap_adapter_error", {"error": str(exc)[:200]})
+
     # 2) System commands (trạng thái/báo cáo/nhiệm vụ/tri thức/giúp/phê duyệt)
     intent = detect_intent(text)
     if intent is not None:

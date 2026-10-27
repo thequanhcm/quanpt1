@@ -23,6 +23,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from quan_ai_brain.cognition.information_gap_analyzer import (
+    EvidenceKind,
+    GapAnalysis,
+    InformationGapAnalyzer,
+    InfoItem,
+    ReadinessStatus,
+)
 from quan_ai_brain.cognition.reflection import ReflectionLoop
 from quan_ai_brain.core.audit import AuditLogger
 from quan_ai_brain.orchestration.models import AutonomyLevel, TaskStatus
@@ -101,10 +108,14 @@ class CognitiveLoop:
         *,
         pending_ttl_hours: int = DEFAULT_PENDING_TTL_HOURS,
         clock: Any = None,
+        gap_analyzer: InformationGapAnalyzer | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve() if workspace else Path.cwd().resolve()
         self.registry = task_registry
         self.orchestrator = orchestrator
+        self.gap_analyzer = gap_analyzer or InformationGapAnalyzer(
+            workspace=self.workspace, clock=clock
+        )
         self.reflection = reflection or ReflectionLoop(
             workspace=self.workspace, task_registry=task_registry
         )
@@ -122,6 +133,7 @@ class CognitiveLoop:
         *,
         plan_builder: Any = None,
         autonomy_level: AutonomyLevel = AutonomyLevel.LEVEL_A,
+        gap_check: bool = True,
     ) -> dict[str, Any]:
         """RECEIVED -> ... -> PLANNING: validate spec, register task + plan.
 
@@ -129,6 +141,13 @@ class CognitiveLoop:
         loop registers a durable, un- executable placeholder plan consisting
         of one R0 verification step so the task is tracked and auditable but
         can never silently execute anything.
+
+        V3 Sprint 3 gap_check (default ON): after UNDERSTANDING the
+        InformationGapAnalyzer decides READY vs NEEDS_OWNER_INPUT vs
+        NEEDS_VERIFICATION. Non-READY tasks park in WAITING_FOR_OWNER_INPUT
+        and NEVER reach plan registration until the owner supplies the
+        missing information (im silence is NOT consent). Pass gap_check=False
+        to opt out explicitly (e.g. internal self-checks).
         """
         problems = spec.validate()
         audit_ctx = {
@@ -138,6 +157,73 @@ class CognitiveLoop:
         if problems:
             self._audit.record("cognitive_loop.task_rejected", audit_ctx)
             raise CognitiveLoopError(f"Invalid TaskSpec: {'; '.join(problems)}")
+
+        # ---- V3 Sprint 3: Information Gap Awareness (after UNDERSTANDING) ----
+        if gap_check:
+            known_facts: list[InfoItem] = []
+            for ref in spec.context_refs:
+                known_facts.append(
+                    InfoItem(key=f"context_ref_{len(known_facts)}", value=ref, evidence=EvidenceKind.RETRIEVED)
+                )
+            for meta_key, meta_val in (spec.metadata or {}).items():
+                known_facts.append(
+                    InfoItem(key=str(meta_key), value=meta_val, evidence=EvidenceKind.OWNER_PROVIDED)
+                )
+            metadata = spec.metadata or {}
+            required_inputs_meta = metadata.get("required_inputs", [])
+            required_inputs = (
+                [
+                    i if isinstance(i, InfoItem) else InfoItem.from_dict(i)
+                    for i in required_inputs_meta
+                ]
+                if isinstance(required_inputs_meta, list)
+                else []
+            )
+            conflicts_meta = metadata.get("conflicts", [])
+            decisions_meta = metadata.get("owner_decisions_required", [])
+            gap = self.gap_analyzer.analyze_request(
+                task_id=f"TASK-{abs(hash((spec.goal, spec.deadline_utc))) % 10**8:08d}",
+                request_text=spec.goal[:2000],
+                goal=spec.goal.strip() or "",
+                acceptance_criteria=list(spec.acceptance_criteria),
+                known_facts=known_facts,
+                required_inputs=required_inputs,
+                conflicts=[str(c) for c in conflicts_meta]
+                if isinstance(conflicts_meta, list)
+                else [],
+                owner_decisions_required=[str(d) for d in decisions_meta]
+                if isinstance(decisions_meta, list)
+                else [],
+                constraints=[str(v) for v in metadata.get("constraints", [])]
+                if isinstance(metadata.get("constraints"), list)
+                else [],
+                available_resources=[str(r) for r in metadata.get("available_resources", [])]
+                if isinstance(metadata.get("available_resources"), list)
+                else [],
+            )
+            if gap.readiness is not ReadinessStatus.READY:
+                self._audit.record(
+                    "cognitive_loop.info_gap_blocked",
+                    {
+                        "readiness": gap.readiness.value,
+                        "missing": [c.value for c in gap.missing],
+                        "questions": len(gap.questions),
+                    },
+                )
+                return {
+                    "task_id": None,
+                    "status": "NOT_SUBMITTED",
+                    "readiness": gap.readiness.value,
+                    "waiting_state": gap.waiting_state.value,
+                    "missing": [c.value for c in gap.missing],
+                    "questions": [q.to_dict() for q in gap.questions],
+                    "info_request_text": self.gap_analyzer.render_info_request(gap),
+                    "gap_analysis": gap.to_dict(),
+                    "note": (
+                        "Nhiệm vụ CHƯA được đăng ký và CHƯA thực hiện hành động nào: "
+                        "thiếu thông tin thiết yếu. Trả lời ≠ phê duyệt."
+                    ),
+                }
 
         self._audit.record("cognitive_loop.task_received", audit_ctx)
 
