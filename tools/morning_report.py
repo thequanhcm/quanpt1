@@ -151,6 +151,15 @@ def send_to_netchat(message: str) -> bool:
 
 
 def main() -> int:
+    # Sprint 7a fix: chạy qua Task Scheduler → console cp1252 không in được
+    # tiếng Việt/emoji → UnicodeEncodeError giết script (đã xảy ra 12:02 sau
+    # boot). Force stdout UTF-8 + ErrorsIgnore để KHÔNG chết vì in console.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
     report = collect_report()
     print(report)
     ok = send_to_netchat(report)

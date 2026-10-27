@@ -17,19 +17,24 @@ def _read(name: str) -> str:
 
 def test_khoi_dong_contains_ollama_block():
     src = _read("KHOI_DONG_24_7.bat")
-    # Khối Ollama phải: check port trước khi start (idempotent), dùng đúng path binary
+    # Sprint 7a: khối Ollama chuyển sang python (khoi_dong_ollama.py) — cmd
+    # if/else với curl bị parse lỗi sau reboot thật (else unexpected).
     assert "[0/5]" in src
-    assert "11434" in src
-    assert "E:\\AI\\Ollama\\ollama.exe" in src
-    # phải check exist trước khi start (fail-safe khi máy khác không có Ollama)
-    assert 'if exist "E:\\AI\\Ollama\\ollama.exe"' in src
+    assert "khoi_dong_ollama.py" in src
+    # file python gánh logic: check port 11434 + exist ollama.exe (fail-safe)
+    ollama_tool = _read("tools/khoi_dong_ollama.py")
+    assert "11434" in ollama_tool
+    assert "ollama.exe" in ollama_tool
 
 
 def test_khoi_dong_backup_task_name_consistent():
     src = _read("KHOI_DONG_24_7.bat")
-    assert 'QUAN_AI_BRAIN_BACKUP_2AM' in src
+    # Sprint 7a: đăng ký task chuyển sang sched_task_setup.py (python)
+    assert "sched_task_setup.py" in src
+    setup = _read("tools/sched_task_setup.py")
+    assert "QUAN_AI_BRAIN_BACKUP_2AM" in setup
     # không còn tên task cũ rải rác
-    assert "QUAN_AIBRAIN_Backup_2AM" not in src
+    assert "QUAN_AIBRAIN_Backup_2AM" not in setup
 
 
 def test_scheduled_task_registered_and_ready():
