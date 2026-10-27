@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -17,6 +18,19 @@ def executive_server_instance(tmp_path_factory: pytest.TempPathFactory):
     test_workspace = tmp_path_factory.mktemp("exec_workspace")
     (test_workspace / "data").mkdir(parents=True, exist_ok=True)
 
+    # V6 hotfix (27/10/2026): isolate workspace — POST /api/executive/plan
+    # ghi vào test workspace, không vào production DB.
+    old_env = os.environ.get("QUAN_AI_BRAIN_WORKSPACE")
+    os.environ["QUAN_AI_BRAIN_WORKSPACE"] = str(test_workspace)
+
+    # Copy read-only assets cần cho test edge files (avatar) từ production
+    # workspace sang test workspace — test chỉ GHI vào tmp.
+    import shutil
+    real_ws = Path(__file__).resolve().parents[1]
+    src_assets = real_ws / "edge_client" / "assets" / "avatar"
+    if src_assets.exists():
+        shutil.copytree(src_assets, test_workspace / "edge_client" / "assets" / "avatar", dirs_exist_ok=True)
+
     server = ThreadedHTTPServer(("127.0.0.1", 0), BrainAPIHandler)
     host, port = server.server_address
     t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -28,6 +42,11 @@ def executive_server_instance(tmp_path_factory: pytest.TempPathFactory):
 
     server.shutdown()
     server.server_close()
+
+    if old_env is None:
+        os.environ.pop("QUAN_AI_BRAIN_WORKSPACE", None)
+    else:
+        os.environ["QUAN_AI_BRAIN_WORKSPACE"] = old_env
 
 
 def test_executive_html_served(executive_server_instance: str) -> None:

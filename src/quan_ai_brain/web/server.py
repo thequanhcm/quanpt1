@@ -265,6 +265,14 @@ def push_avatar_thinking(context_note: str = "") -> None:
 
 
 def _find_workspace_root() -> Path:
+    # V6 hotfix (27/10/2026): env override cho test isolation — không cho
+    # test suite ghi task thật vào data/tasks.db của production (nguồn gốc
+    # 294 task trùng lặp 'năng lượng' — daemon chạy pytest mỗi cycle).
+    override = os.environ.get("QUAN_AI_BRAIN_WORKSPACE", "").strip()
+    if override:
+        candidate = Path(override).resolve()
+        if candidate.exists():
+            return candidate
     current = Path.cwd().resolve()
     if (current / "src" / "quan_ai_brain").exists():
         return current
