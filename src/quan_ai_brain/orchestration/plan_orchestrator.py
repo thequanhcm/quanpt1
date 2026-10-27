@@ -134,6 +134,42 @@ class PlanOrchestrator:
             )
             self.task_registry.save_step(step_rec)
 
+        # 6. Sprint 15 (a): persist cognitive state + plan warnings vào checkpoint
+        #    HIỆN HỮU (durable_tasks.checkpoint_data_json) — evidence traceability:
+        #    beliefs/contradictions/uncertainties/metacognition đọc lại được sau này.
+        #    - CHỈ ghi cho task MỚI (register_task tạo checkpoint rỗng); replay theo
+        #      idempotency_key trả existing có checkpoint sẵn → KHÔNG ghi đè (bảo toàn
+        #      bằng chứng lần lập kế hoạch đầu tiên).
+        #    - Fail-open: lỗi persist không chết luồng đăng ký task (trung thực qua
+        #      API: has_cognitive_state=false nếu chưa persist được).
+        if not task_rec.checkpoint_data:
+            try:
+                cog_dict = None
+                if plan.cognitive_state is not None and hasattr(plan.cognitive_state, "to_dict"):
+                    cog_dict = plan.cognitive_state.to_dict()
+                from datetime import datetime as _dt, timezone as _tz
+                persisted_at = _dt.now(_tz.utc).isoformat()
+                snapshot: dict[str, Any] = {
+                    "sprint15_cognitive_state": {
+                        "has_cognitive_state": cog_dict is not None,
+                        "cognitive_state": cog_dict,
+                        "plan_warnings": [redact_text(w) for w in (plan.warnings or [])],
+                        "plan_id": plan.plan_id,
+                        "plan_source": plan.source,
+                        "persisted_at_utc": persisted_at,
+                    }
+                }
+                self.task_registry.update_task_status(
+                    task_rec.task_id,
+                    task_rec.status,
+                    checkpoint_data=snapshot,
+                    evidence_ref=f"plan:{plan.plan_id}",
+                )
+            except Exception:
+                # Không chết luồng đăng ký; state KHÔNG persist → API sẽ trả
+                # has_cognitive_state=false (trung thực, không 0 giả).
+                pass
+
         return task_rec
 
     def execute_lifecycle(

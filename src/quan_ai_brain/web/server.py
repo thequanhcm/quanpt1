@@ -393,6 +393,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_executive_task_detail(parsed.query)
             return
 
+        # Sprint 15 (b): evidence traceability — cognitive state của task (GET, read-only)
+        if path == "/api/executive/tasks/cognitive-state":
+            self._handle_api_task_cognitive_state(parsed.query)
+            return
+
         if path == "/api/executive/supervisor":
             self._handle_api_executive_supervisor()
             return
@@ -1328,6 +1333,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
                     t_orch = PlanOrchestrator(task_registry=t_reg, workspace=workspace, governance_store=g_store, consultation_store=c_store)
                     task_rec = t_orch.submit_plan(task_plan)
+                    # Sprint 15 (c): plan warnings (stale/adversarial/metacognitive)
+                    # phải tới owner — trước đây bị nuốt vì TaskRecord không chứa warnings.
+                    for _pw in (getattr(task_plan, "warnings", None) or []):
+                        if _pw and _pw not in all_warnings:
+                            all_warnings.append(f"Plan: {_pw}")
                     durable_task_dict = task_rec.to_dict()
                     plan_note = f"\n\n📋 *Nhiệm vụ đã được tự động phân rã và đăng ký bền vững vào DurableTaskRegistry: `{task_rec.task_id}` (Rủi ro: {task_rec.risk_level}, Tiến trình: {len(task_rec.approved_scope)} bước DAG).* "
                     sanitized_reply += plan_note
@@ -3853,6 +3863,72 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             return
 
         self._send_json({"success": True, "query": q, **result})
+
+    # ------------------------------------------------------------------
+    # Sprint 15 (b): Evidence traceability — cognitive state của một task
+    # ------------------------------------------------------------------
+    def _handle_api_task_cognitive_state(self, parsed_query) -> None:
+        """Trả cognitive state + plan warnings đã persist cho task (read-only).
+
+        - localhost-only; 404 nếu task không tồn tại; task cũ không có state →
+          has_cognitive_state=false (trung thực, không 0 giả); còn UNRESOLVED
+          contradiction → needs_review=true (KHÔNG tự phân giải — §IV.C).
+        """
+        client = self.client_address[0] if self.client_address else ""
+        if client not in ("127.0.0.1", "::1"):
+            self._send_error_json("Cognitive-state API chỉ chấp nhận localhost", 403)
+            return
+
+        params = urllib.parse.parse_qs(parsed_query)
+        task_id = (params.get("task_id", [""])[0] or "").strip()
+        if not task_id:
+            self._send_error_json("Thiếu tham số task_id", 400)
+            return
+
+        from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+        workspace = _find_workspace_root()
+        try:
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            task = registry.get_task(task_id)
+        except Exception as exc:
+            self._send_error_json(f"tasks.db không đọc được: {exc}", 500)
+            return
+        if task is None:
+            self._send_error_json(f"Task {task_id} không tồn tại", 404)
+            return
+
+        checkpoint = task.checkpoint_data or {}
+        snap = checkpoint.get("sprint15_cognitive_state") if isinstance(checkpoint, dict) else None
+        if not isinstance(snap, dict):
+            self._send_json({
+                "success": True,
+                "task_id": task_id,
+                "has_cognitive_state": False,
+                "reason": "Task đăng ký trước Sprint 15 — không có cognitive state persist (trung thực, không suy diễn).",
+                "needs_review": False,
+                "warnings": [],
+            })
+            return
+
+        cog = snap.get("cognitive_state") if isinstance(snap.get("cognitive_state"), dict) else None
+        contradictions = (cog or {}).get("contradictions") or []
+        unresolved = [
+            c for c in contradictions
+            if isinstance(c, dict) and str(c.get("resolution_status", "UNRESOLVED")).upper() == "UNRESOLVED"
+        ]
+        self._send_json({
+            "success": True,
+            "task_id": task_id,
+            "has_cognitive_state": True,
+            "plan_id": snap.get("plan_id"),
+            "plan_source": snap.get("plan_source"),
+            "persisted_at_utc": snap.get("persisted_at_utc"),
+            "needs_review": bool(unresolved),
+            "unresolved_contradiction_count": len(unresolved),
+            "warnings": snap.get("plan_warnings") or [],
+            "cognitive_state": cog,
+        })
 
     def _handle_api_email_proposals_list(self, parsed_query) -> None:
         """Sprint 10 (c): danh sách đề xuất email (đọc-only). Tự generate nếu chưa có.
