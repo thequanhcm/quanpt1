@@ -291,6 +291,11 @@
         <span class="tab-text">Bật/Tắt Hình Thể Pi 5</span>
         <span class="tab-badge" id="badge-tab-embodiment-state" style="background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);">STANDBY</span>
       </button>
+      <button class="nav-tab" data-tab="tab-workbench" id="nav-btn-workbench">
+        <span class="tab-icon">🧰</span>
+        <span class="tab-text">Workbench — Môi Trường Làm Việc</span>
+        <span class="tab-badge" id="badge-workbench-overview" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">—</span>
+      </button>
     </nav>
 
     <!-- Content Area: Dedicated Sections -->
@@ -1349,6 +1354,94 @@
                 🔌 Tắt Nguồn Toàn Bộ Thiết Bị Pi 5 (Safe Poweroff)
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB: WORKBENCH (Sprint 9) ================= -->
+      <section id="tab-workbench" class="tab-content">
+        <div class="section-intro">
+          <h2>🧰 Workbench — Môi Trường Làm Việc</h2>
+          <p>Tổng hợp số liệu <strong>thật</strong> từ tasks / tham vấn / to-do / phê duyệt.
+             Nguồn nào lỗi sẽ hiện <strong>CHƯA XÁC MINH</strong> — không bao giờ hiển thị 0 thay cho dữ liệu không xác minh được.
+             Phê duyệt qua dashboard chỉ hoạt động từ <strong>localhost</strong> (giới hạn thật của API, không phải xác thực danh tính mạnh).</p>
+        </div>
+
+        <!-- Tổng quan -->
+        <div class="wb-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px;">
+          <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
+            <div style="font-size:0.78rem; color:#94a3b8;">NHIỆM VỤ ĐANG MỞ</div>
+            <div id="wb-tasks-open" style="font-size:1.7rem; font-weight:700; color:#e2e8f0;">—</div>
+            <div id="wb-tasks-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+          </div>
+          <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
+            <div style="font-size:0.78rem; color:#94a3b8;">CHỜ PHÊ DUYỆT</div>
+            <div id="wb-approvals-pending" style="font-size:1.7rem; font-weight:700; color:#fbbf24;">—</div>
+            <div id="wb-approvals-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+          </div>
+          <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
+            <div style="font-size:0.78rem; color:#94a3b8;">VIỆC CẦN LÀM (TO-DO)</div>
+            <div id="wb-todos-open" style="font-size:1.7rem; font-weight:700; color:#93c5fd;">—</div>
+            <div id="wb-todos-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+          </div>
+          <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
+            <div style="font-size:0.78rem; color:#94a3b8;">THÔNG TIN CÒN THIẾU</div>
+            <div id="wb-gaps" style="font-size:1.7rem; font-weight:700; color:#f87171;">—</div>
+            <div id="wb-gaps-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+          </div>
+          <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
+            <div style="font-size:0.78rem; color:#94a3b8;">DỊCH VỤ CỤC BỘ</div>
+            <div id="wb-services" style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-top:6px;">đang tải…</div>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <!-- Nhiệm vụ -->
+          <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <h3 style="margin:0; font-size:0.95rem; color:#e2e8f0;">📋 Nhiệm vụ (data/tasks.db)</h3>
+              <select id="wb-task-filter" style="background:rgba(15,23,42,0.8); color:#cbd5e1; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
+                <option value="">Tất cả trạng thái</option>
+                <option value="PENDING">PENDING</option>
+                <option value="IN_PROGRESS">IN_PROGRESS</option>
+                <option value="WAITING_APPROVAL">WAITING_APPROVAL</option>
+                <option value="APPROVED">APPROVED</option>
+                <option value="COMPLETED">COMPLETED</option>
+                <option value="FAILED">FAILED</option>
+                <option value="BLOCKED">BLOCKED</option>
+              </select>
+            </div>
+            <div id="wb-tasks-list" style="font-size:0.8rem; color:#cbd5e1; max-height:260px; overflow-y:auto;">đang tải…</div>
+          </div>
+
+          <!-- Approval Center -->
+          <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(251,191,36,0.25); border-radius:10px; padding:14px;">
+            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#fbbf24;">🔐 Approval Center</h3>
+            <div id="wb-approvals-list" style="font-size:0.8rem; color:#cbd5e1; max-height:260px; overflow-y:auto;">đang tải…</div>
+            <div id="wb-approval-result" style="margin-top:8px; font-size:0.78rem; color:#f87171;"></div>
+          </div>
+
+          <!-- To-do -->
+          <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(147,197,253,0.25); border-radius:10px; padding:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <h3 style="margin:0; font-size:0.95rem; color:#93c5fd;">✅ Việc cần làm (todos.db)</h3>
+              <button id="wb-todo-refresh" style="background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.3); border-radius:6px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">↻ Làm mới</button>
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+              <input id="wb-todo-input" placeholder="Việc mới…" style="flex:1; background:rgba(15,23,42,0.8); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:6px 10px; font-size:0.8rem;">
+              <input id="wb-todo-due" type="date" style="background:rgba(15,23,42,0.8); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
+              <button id="wb-todo-add" style="background:rgba(34,197,94,0.2); color:#86efac; border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:4px 12px; font-size:0.8rem; cursor:pointer;">+ Thêm</button>
+            </div>
+            <div id="wb-todos-list" style="font-size:0.8rem; color:#cbd5e1; max-height:220px; overflow-y:auto;">đang tải…</div>
+            <div id="wb-todo-result" style="margin-top:6px; font-size:0.75rem; color:#f87171;"></div>
+          </div>
+
+          <!-- Email intake (mock) -->
+          <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px;">
+            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#e2e8f0;">📨 Email Intake <span style="font-size:0.7rem; color:#f87171; font-weight:700;">VMAIL: BLOCKED</span></h3>
+            <div id="wb-email-status" style="font-size:0.78rem; color:#94a3b8; margin-bottom:6px;">Vmail bị chặn vì mật khẩu SSO đã lộ — chờ anh đổi mật khẩu. Connector mock sẵn sàng.</div>
+            <button id="wb-email-sync" style="background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.3); border-radius:6px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">↻ Sync mock intake</button>
+            <div id="wb-email-list" style="font-size:0.78rem; color:#cbd5e1; max-height:180px; overflow-y:auto; margin-top:8px;">đang tải…</div>
           </div>
         </div>
       </section>

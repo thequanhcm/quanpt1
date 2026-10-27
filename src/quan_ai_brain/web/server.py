@@ -274,6 +274,19 @@ def _find_workspace_root() -> Path:
     return current
 
 
+def _table_has(con, column: str) -> bool:
+    """Sprint 9 (A): kiểm cột tồn tại trong bảng đầu tiên của schema — dùng cho
+    đếm thô an toàn (DB cũ thiếu cột thì bỏ qua chứ không chết)."""
+    try:
+        row = con.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1").fetchone()
+        if not row:
+            return False
+        cols = [r[1] for r in con.execute(f"PRAGMA table_info({row[0]})").fetchall()]
+        return column in cols
+    except Exception:
+        return False
+
+
 class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
     """Handles static files and JSON REST API for QUAN AI BRAIN."""
 
@@ -482,6 +495,21 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_todos_list()
             return
 
+        # Sprint 9 (A): Workbench overview — tổng hợp thật, fail-honest
+        if path == "/api/workbench/overview":
+            self._handle_api_workbench_overview()
+            return
+
+        # Sprint 9 (B): danh sách nhiệm vụ thật + filter ?status=&limit=
+        if path == "/api/workbench/tasks":
+            self._handle_api_workbench_tasks(parsed.query)
+            return
+
+        # Sprint 9 (C): email intake — list + sync (mock connector; Vmail BLOCKED)
+        if path == "/api/email/intake":
+            self._handle_api_email_intake_list(parsed.query)
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -587,6 +615,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Sprint 8 (c): Approval Center — duyệt/từ chối card (localhost-only)
         if path == "/api/approvals/decide":
             self._handle_api_approvals_decide(body)
+            return
+
+        # Sprint 9 (C): email intake sync (mock connector; Vmail BLOCKED giữ nguyên)
+        if path == "/api/email/intake/sync":
+            self._handle_api_email_intake_sync(body)
             return
 
         if path == "/api/executive/emergency":
@@ -3477,6 +3510,186 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Card không tồn tại: {exc}", 404)
         except Exception as exc:
             self._send_error_json(f"Error deciding approval: {exc}", 500)
+
+    def _handle_api_email_intake_sync(self, body: dict) -> None:
+        """Sprint 9 (C): 1 chu kỳ sync mock intake → data/email_intake.db.
+
+        Nguồn thật (Vmail) BLOCKED — endpoint này chỉ chạy connector mock và
+        GHI RÕ source="mock" trên từng email. Không giả vờ đọc hộp thư thật.
+        """
+        client = self.client_address[0] if self.client_address else ""
+        if client not in ("127.0.0.1", "::1"):
+            self._send_error_json("Email intake API chỉ chấp nhận localhost", 403)
+            return
+        try:
+            from quan_ai_brain.integration.email_intake import (
+                EmailIntakeStore,
+                MockEmailConnector,
+                sync_intake,
+            )
+
+            workspace = _find_workspace_root()
+            store = EmailIntakeStore(workspace / "data" / "email_intake.db")
+            result = sync_intake(MockEmailConnector(), store)
+            self._send_json({
+                "success": True,
+                "result": result.to_dict(),
+                "emails": store.list_emails(limit=20),
+                "vmail_status": "BLOCKED",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Intake sync lỗi: {type(exc).__name__}: {exc}", 500)
+
+    def _handle_api_email_intake_list(self, parsed_query) -> None:
+        """Sprint 9 (C): danh sách email đã tiếp nhận (mock), đọc-only."""
+        try:
+            from quan_ai_brain.integration.email_intake import EmailIntakeStore
+
+            workspace = _find_workspace_root()
+            store = EmailIntakeStore(workspace / "data" / "email_intake.db")
+            category = parsed_query.get("category", [None])[0] if "category" in parsed_query else None
+            self._send_json({
+                "success": True,
+                "emails": store.list_emails(limit=50, category=category),
+                "count": store.count(),
+                "vmail_status": "BLOCKED",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Intake list lỗi: {type(exc).__name__}: {exc}", 500)
+
+    def _handle_api_workbench_overview(self) -> None:
+        """Sprint 9 (A): tổng quan workbench — số liệu THẬT từ các DB/API hiện có.
+
+        Nguyên tắc trung thực: mỗi khối độc lập; một nguồn lỗi → trạng thái
+        "CHƯA XAC MINH" cho khối đó, KHÔNG điền 0 để tạo cảm giác hệ thống tốt.
+        """
+        overview: dict = {"success": True, "generated_at_utc": datetime.now(timezone.utc).isoformat()}
+        workspace = _find_workspace_root()
+
+        # --- Nhiệm vụ (data/tasks.db, DurableTaskRegistry) ---
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            reg = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=str(workspace))
+            tasks = reg.list_tasks()
+            by_status: dict[str, int] = {}
+            for t in tasks:
+                st = t.status.value if hasattr(t.status, "value") else str(t.status)
+                by_status[st] = by_status.get(st, 0) + 1
+            overview["tasks"] = {
+                "status": "OK",
+                "total": len(tasks),
+                "by_status": by_status,
+                "waiting_approval": by_status.get("WAITING_APPROVAL", 0),
+                "in_progress": by_status.get("IN_PROGRESS", 0),
+                "pending": by_status.get("PENDING", 0),
+                "approved_not_done": by_status.get("APPROVED", 0),
+                "failed": by_status.get("FAILED", 0),
+                "blocked": by_status.get("BLOCKED", 0),
+                "completed": by_status.get("COMPLETED", 0),
+            }
+        except Exception as exc:
+            overview["tasks"] = {"status": "CHƯA XÁC MINH", "error": f"{type(exc).__name__}: {exc}"}
+
+        # --- Thông tin còn thiếu (data/information_gaps.db, đếm thô sqlite) ---
+        try:
+            import sqlite3 as _sq
+
+            con = _sq.connect(f"file:{workspace / 'data' / 'information_gaps.db'}?mode=ro", uri=True)
+            try:
+                row = con.execute("SELECT COUNT(*) FROM information_gaps").fetchone()
+                open_row = con.execute(
+                    "SELECT COUNT(*) FROM information_gaps WHERE status IN ('OPEN','WAITING_OWNER')"
+                ).fetchone() if _table_has(con, "status") else None
+            finally:
+                con.close()
+            gaps = {"status": "OK", "total": row[0]}
+            if open_row is not None:
+                gaps["open"] = open_row[0]
+            overview["information_gaps"] = gaps
+        except Exception as exc:
+            overview["information_gaps"] = {"status": "CHƯA XÁC MINH", "error": f"{type(exc).__name__}: {exc}"}
+
+        # --- Tham vấn + phê duyệt (governance.db) ---
+        try:
+            from quan_ai_brain.governance.approval_cards import ApprovalCardStore
+
+            store = ApprovalCardStore(workspace / "data" / "governance.db", workspace=str(workspace))
+            cards = store.list_cards()
+            by_card_status: dict[str, int] = {}
+            for c in cards:
+                st = c.status.value if hasattr(c.status, "status") else str(c.status)
+                by_card_status[str(c.status)] = by_card_status.get(str(c.status), 0) + 1
+            overview["approvals"] = {
+                "status": "OK",
+                "total": len(cards),
+                "pending": by_card_status.get("PENDING_APPROVAL", 0),
+                "approved": by_card_status.get("APPROVED", 0),
+                "rejected": by_card_status.get("REJECTED", 0),
+            }
+        except Exception as exc:
+            overview["approvals"] = {"status": "CHƯA XÁC MINH", "error": f"{type(exc).__name__}: {exc}"}
+
+        # --- To-do (data/todos.db) ---
+        try:
+            from quan_ai_brain.tools.todo_store import TodoStore
+
+            todo = TodoStore(workspace / "data" / "todos.db")
+            items = todo.list_open()
+            today = datetime.now().strftime("%Y-%m-%d")
+            overdue = [t for t in items if t.get("due") and t["due"] < today]
+            due_today = [t for t in items if t.get("due") == today]
+            overview["todos"] = {
+                "status": "OK",
+                "open": len(items),
+                "overdue": len(overdue),
+                "due_today": len(due_today),
+            }
+        except Exception as exc:
+            overview["todos"] = {"status": "CHƯA XÁC MINH", "error": f"{type(exc).__name__}: {exc}"}
+
+        # --- Trạng thái dịch vụ cục bộ (probe thật, không đoán) ---
+        services = {}
+        for name, port in (("dual_server_8765", 8765), ("dual_server_8766", 8766), ("ollama", 11434)):
+            try:
+                import socket as _sock
+
+                with _sock.create_connection(("127.0.0.1", port), timeout=1.0):
+                    services[name] = "CONNECTED"
+            except Exception:
+                services[name] = "DISCONNECTED"
+        overview["services"] = services
+        self._send_json(overview)
+
+    def _handle_api_workbench_tasks(self, parsed_query) -> None:
+        """Sprint 9 (B): danh sách nhiệm vụ thật từ DurableTaskRegistry, kèm filter."""
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry, TaskStatus
+
+            # parsed_query là chuỗi raw query ("a=b&c=d") — parse thành dict
+            import urllib.parse as _up
+
+            params = _up.parse_qs(parsed_query) if isinstance(parsed_query, str) else parsed_query
+            workspace = _find_workspace_root()
+            reg = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=str(workspace))
+            status_filter = params.get("status", [None])[0] if "status" in params else None
+            status_enum = TaskStatus(status_filter) if status_filter else None
+            limit = int(params.get("limit", [50])[0]) if "limit" in params else 50
+            tasks = reg.list_tasks(status=status_enum, limit=limit)
+            items = []
+            for t in tasks[:limit]:
+                d = t.to_dict() if hasattr(t, "to_dict") else {}
+                items.append({
+                    "task_id": d.get("task_id"),
+                    "goal": d.get("goal"),
+                    "status": d.get("status"),
+                    "risk_level": d.get("risk_level"),
+                    "created_at_utc": d.get("created_at_utc"),
+                    "updated_at_utc": d.get("updated_at_utc"),
+                })
+            self._send_json({"success": True, "tasks": items, "count": len(items)})
+        except Exception as exc:
+            self._send_error_json(f"Tasks unavailable: {type(exc).__name__}: {exc}", 503)
 
     def _handle_api_supervisor_tick(self, body: dict) -> None:
         try:

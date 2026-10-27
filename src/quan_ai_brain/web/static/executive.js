@@ -3339,3 +3339,301 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 });
+
+/* ============================================================
+   SPRINT 9 (B): WORKBENCH — môi trường làm việc thống nhất
+   Số liệu thật từ API hiện có; lỗi nguồn → CHƯA XÁC MINH.
+   ============================================================ */
+(function () {
+  "use strict";
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  async function wbFetch(url, opts) {
+    const res = await fetch(url, opts);
+    let data = null;
+    try { data = await res.json(); } catch { /* non-JSON */ }
+    return { ok: res.ok, status: res.status, data };
+  }
+
+  function setUnverified(elId, detailId, source) {
+    const el = $(elId);
+    if (el) { el.textContent = "CHƯA XÁC MINH"; el.style.color = "#f87171"; }
+    const d = $(detailId);
+    if (d) d.textContent = `nguồn ${source} không khả dụng`;
+  }
+
+  async function loadOverview() {
+    try {
+      const { ok, data } = await wbFetch("/api/workbench/overview");
+      if (!ok || !data || data.success !== true) throw new Error("API overview lỗi");
+
+      // Nhiệm vụ
+      const t = data.tasks || {};
+      if (t.status === "OK") {
+        const open = (t.total || 0) - (t.completed || 0);
+        $("wb-tasks-open").textContent = String(open);
+        $("wb-tasks-open").style.color = "#e2e8f0";
+        const parts = Object.entries(t.by_status || {}).map(([k, v]) => `${k}: ${v}`);
+        $("wb-tasks-detail").textContent = parts.length ? parts.join(" · ") : "không có nhiệm vụ nào";
+      } else {
+        setUnverified("wb-tasks-open", "wb-tasks-detail", "tasks.db");
+      }
+
+      // Approvals
+      const a = data.approvals || {};
+      if (a.status === "OK") {
+        $("wb-approvals-pending").textContent = String(a.pending ?? 0);
+        $("wb-approvals-pending").style.color = (a.pending ?? 0) > 0 ? "#fbbf24" : "#86efac";
+        $("wb-approvals-detail").textContent = `tổng ${a.total ?? 0} · đã duyệt ${a.approved ?? 0} · từ chối ${a.rejected ?? 0}`;
+      } else {
+        setUnverified("wb-approvals-pending", "wb-approvals-detail", "governance.db");
+      }
+
+      // Todos
+      const td = data.todos || {};
+      if (td.status === "OK") {
+        $("wb-todos-open").textContent = String(td.open ?? 0);
+        $("wb-todos-open").style.color = "#93c5fd";
+        $("wb-todos-detail").textContent = `quá hạn ${td.overdue ?? 0} · đến hạn hôm nay ${td.due_today ?? 0}`;
+      } else {
+        setUnverified("wb-todos-open", "wb-todos-detail", "todos.db");
+      }
+
+      // Gaps
+      const g = data.information_gaps || {};
+      if (g.status === "OK") {
+        $("wb-gaps").textContent = String(g.open ?? g.total ?? 0);
+        $("wb-gaps").style.color = "#f87171";
+        $("wb-gaps-detail").textContent = `tổng ${g.total ?? 0} gap`;
+      } else {
+        setUnverified("wb-gaps", "wb-gaps-detail", "information_gaps.db");
+      }
+
+      // Services
+      const s = data.services || {};
+      $("wb-services").innerHTML = Object.entries(s).map(([k, v]) =>
+        `<div><span style="color:${v === "CONNECTED" ? "#86efac" : "#f87171"}">●</span> ${esc(k)}: ${esc(v)}</div>`
+      ).join("") || "không có dịch vụ nào được cấu hình";
+
+      // Badge tab
+      const badge = $("badge-workbench-overview");
+      if (badge) {
+        const pending = a.status === "OK" ? (a.pending ?? 0) : "?";
+        badge.textContent = `pend:${pending}`;
+      }
+    } catch (err) {
+      ["wb-tasks-open", "wb-approvals-pending", "wb-todos-open", "wb-gaps"].forEach((id) => setUnverified(id, null, "overview"));
+      const d = $("wb-tasks-detail");
+      if (d) d.textContent = "Lỗi: " + err.message;
+    }
+  }
+
+  async function loadTasks() {
+    const filter = $("wb-task-filter")?.value || "";
+    const url = "/api/workbench/tasks" + (filter ? `?status=${encodeURIComponent(filter)}` : "");
+    try {
+      const { ok, status, data } = await wbFetch(url);
+      const el = $("wb-tasks-list");
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        return;
+      }
+      if (!data.tasks.length) { el.textContent = "Không có nhiệm vụ nào ở trạng thái này."; return; }
+      el.innerHTML = data.tasks.map((t) =>
+        `<div style="padding:6px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <div><b>${esc(t.task_id)}</b> <span style="color:#fbbf24;">[${esc(t.status)}]</span> <span style="color:#94a3b8;">r=${esc(t.risk_level)}</span></div>
+          <div style="color:#94a3b8; font-size:0.74rem;">${esc((t.goal || "").slice(0, 140))}</div>
+          <div style="color:#64748b; font-size:0.7rem;">cập nhật ${esc((t.updated_at_utc || "").slice(0, 19))}</div>
+        </div>`
+      ).join("");
+    } catch (err) {
+      $("wb-tasks-list").innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
+    }
+  }
+
+  let wbApprovalBusy = false;  // chống double-submit
+  async function loadApprovals() {
+    try {
+      const { ok, data } = await wbFetch("/api/approvals");
+      const el = $("wb-approvals-list");
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG</span>`;
+        return;
+      }
+      const cards = (data.cards || []).filter((c) => c.status === "PENDING_APPROVAL");
+      if (!cards.length) { el.textContent = "Không có card nào chờ phê duyệt."; return; }
+      el.innerHTML = cards.map((c) =>
+        `<div style="padding:8px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <div><b style="color:#fbbf24;">${esc(c.task_code)}</b> <span style="color:#94a3b8;">v${c.version ?? 1}</span></div>
+          <div style="color:#94a3b8; font-size:0.74rem; margin:2px 0;">${esc((c.title || "").slice(0, 120))}</div>
+          <div style="display:flex; gap:6px; margin-top:4px;">
+            <button class="wb-approve" data-code="${esc(c.task_code)}" style="background:rgba(34,197,94,0.2); color:#86efac; border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✓ Duyệt</button>
+            <button class="wb-reject" data-code="${esc(c.task_code)}" style="background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✗ Từ chối</button>
+          </div>
+        </div>`
+      ).join("");
+      el.querySelectorAll(".wb-approve").forEach((b) =>
+        b.addEventListener("click", () => decideApproval(b.dataset.code, "approve", "")));
+      el.querySelectorAll(".wb-reject").forEach((b) =>
+        b.addEventListener("click", () => {
+          const reason = prompt("Lý do từ chối (bắt buộc):", "");
+          if (reason && reason.trim()) decideApproval(b.dataset.code, "reject", reason.trim());
+        }));
+    } catch (err) {
+      $("wb-approvals-list").innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function decideApproval(taskCode, decision, note) {
+    const result = $("wb-approval-result");
+    if (wbApprovalBusy) { result.textContent = "⏳ Đang xử lý — không gửi trùng."; return; }
+    wbApprovalBusy = true;
+    result.style.color = "#fbbf24";
+    result.textContent = "⏳ Đang gửi tới server…";
+    try {
+      const { ok, status, data } = await wbFetch("/api/approvals/decide", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_code: taskCode, decision, note }),
+      });
+      // KHÔNG coi bấm nút là thành công — chỉ tin HTTP status + body server trả
+      if (ok && data && data.success === true) {
+        result.style.color = "#86efac";
+        result.textContent = `✅ Server xác nhận: ${taskCode} → ${data.status}`;
+        await Promise.all([loadApprovals(), loadOverview()]);
+      } else if (status === 409) {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ ${taskCode} đã được xử lý trước đó (409) — danh sách sẽ làm mới.`;
+        await Promise.all([loadApprovals(), loadOverview()]);
+      } else if (status === 404) {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ Card ${taskCode} không tồn tại (404).`;
+      } else if (status === 403) {
+        result.style.color = "#f87171";
+        result.textContent = "⛔ Chỉ hoạt động từ localhost (403).";
+      } else {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ Lỗi HTTP ${status}: ${esc(data?.error || "không rõ")}`;
+      }
+    } catch (err) {
+      result.style.color = "#f87171";
+      result.textContent = "⚠️ Không kết nối được server: " + err.message;
+    } finally {
+      wbApprovalBusy = false;
+    }
+  }
+
+  async function loadTodos() {
+    try {
+      const { ok, data } = await wbFetch("/api/todos");
+      const el = $("wb-todos-list");
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG</span>`;
+        return;
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      if (!data.todos.length) { el.textContent = "Không có việc nào đang mở."; return; }
+      el.innerHTML = data.todos.map((t) => {
+        const over = t.due && t.due < today;
+        return `<div style="display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <input type="checkbox" class="wb-todo-done" data-id="${t.id}" title="Đánh dấu hoàn thành">
+          <span style="${over ? "color:#f87171;" : ""}">${over ? "🔴" : "⚪"} [${esc(t.due || "—")}] ${esc(t.title)}</span>
+        </div>`;
+      }).join("");
+      el.querySelectorAll(".wb-todo-done").forEach((cb) =>
+        cb.addEventListener("change", () => { if (cb.checked) markTodoDone(cb.dataset.id); }));
+    } catch (err) {
+      $("wb-todos-list").innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function markTodoDone(id) {
+    try {
+      const { ok, data } = await wbFetch("/api/todos/done", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(id) }),
+      });
+      if (!ok || !data || data.success !== true) {
+        $("wb-todo-result").textContent = `⚠️ Không hoàn thành được (HTTP ${data?.error || "lỗi"})`;
+      }
+      await Promise.all([loadTodos(), loadOverview()]);
+    } catch (err) {
+      $("wb-todo-result").textContent = "⚠️ " + err.message;
+    }
+  }
+
+  async function addTodo() {
+    const input = $("wb-todo-input");
+    const due = $("wb-todo-due").value || "";
+    const title = (input.value || "").trim();
+    if (!title) { $("wb-todo-result").textContent = "⚠️ Nhập nội dung việc cần làm."; return; }
+    $("wb-todo-add").disabled = true;  // chống gửi trùng khi bấm 2 lần
+    try {
+      const { ok, status, data } = await wbFetch("/api/todos/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, due }),
+      });
+      if (ok && data && data.success === true) {
+        input.value = "";
+        $("wb-todo-result").textContent = "";
+        await Promise.all([loadTodos(), loadOverview()]);
+      } else {
+        $("wb-todo-result").textContent = `⚠️ Lỗi HTTP ${status}: ${esc(data?.error || "không rõ")}`;
+      }
+    } catch (err) {
+      $("wb-todo-result").textContent = "⚠️ " + err.message;
+    } finally {
+      $("wb-todo-add").disabled = false;
+    }
+  }
+
+  async function syncMockIntake() {
+    const el = $("wb-email-list");
+    el.textContent = "⏳ Đang sync mock intake…";
+    try {
+      const { ok, status, data } = await wbFetch("/api/email/intake/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        return;
+      }
+      const r = data.result || {};
+      el.innerHTML = `<div style="color:#94a3b8;">connector=${esc(r.connector_status)} · mới ${r.new ?? 0} · trùng ${r.duplicates ?? 0}</div>` +
+        (data.emails || []).map((m) =>
+          `<div style="padding:4px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+            <b>${esc(m.subject)}</b> <span style="color:#94a3b8;">[${esc(m.category)}]</span>
+            <div style="color:#64748b; font-size:0.7rem;">từ ${esc(m.sender)} · nguồn ${esc(m.source)}</div>
+          </div>`).join("");
+    } catch (err) {
+      el.innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  function initWorkbench() {
+    if (!$("tab-workbench")) return;
+    $("wb-task-filter")?.addEventListener("change", loadTasks);
+    $("wb-todo-refresh")?.addEventListener("click", loadTodos);
+    $("wb-todo-add")?.addEventListener("click", addTodo);
+    $("wb-email-sync")?.addEventListener("click", syncMockIntake);
+    // Load khi tab được bật (lắng nghe click nav + load lần đầu nếu active)
+    document.querySelectorAll(".nav-tab").forEach((btn) =>
+      btn.addEventListener("click", () => {
+        if (btn.dataset.tab === "tab-workbench") {
+          loadOverview(); loadTasks(); loadApprovals(); loadTodos();
+        }
+      }));
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initWorkbench);
+  } else {
+    initWorkbench();
+  }
+})();

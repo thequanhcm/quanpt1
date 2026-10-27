@@ -38,8 +38,16 @@ def create_draft(
     body: str,
     cc: str = "",
     draft_dir: str | Path = DRAFT_DIR,
+    *,
+    task_id: str = "",
+    source_email_id: str = "",
+    reason: str = "",
 ) -> dict[str, Any]:
-    """Tạo nháp .eml. Trả về {path, to, subject}. KHÔNG gửi."""
+    """Tạo nháp .eml. Trả về {path, to, subject, ...}. KHÔNG gửi.
+
+    Sprint 9 (C): nháp có thể gắn metadata nhiệm vụ + email nguồn + lý do/căn cứ
+    soạn thảo (ghi vào header X-QAB-* để truy vết, không đổi nội dung thân mail).
+    """
     to = validate_address(to)
     if not subject or not subject.strip():
         raise EmailDraftError("Thiếu tiêu đề (subject) — nháp phải có subject")
@@ -55,6 +63,13 @@ def create_draft(
         msg["Cc"] = ", ".join(
             validate_address(a) for a in cc.split(";") if a.strip()
         )
+    # Sprint 9 (C): truy vết nguồn — chỉ ghi khi có (không rỗng)
+    if task_id.strip():
+        msg["X-QAB-Task-Id"] = task_id.strip()
+    if source_email_id.strip():
+        msg["X-QAB-Source-Email-Id"] = source_email_id.strip()
+    if reason.strip():
+        msg["X-QAB-Draft-Reason"] = reason.strip()[:300]
     msg.set_content(body.strip(), charset="utf-8")
 
     out_dir = Path(draft_dir)
@@ -64,4 +79,12 @@ def create_draft(
     path = out_dir / f"{stamp}_{safe_subj}.eml"
     path.write_bytes(msg.as_bytes())
 
-    return {"path": str(path), "to": to, "subject": subject.strip(), "created": True}
+    return {
+        "path": str(path),
+        "to": to,
+        "subject": subject.strip(),
+        "created": True,
+        "task_id": task_id.strip(),
+        "source_email_id": source_email_id.strip(),
+        "reason": reason.strip()[:300],
+    }
