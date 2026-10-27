@@ -288,5 +288,59 @@ class ContainedExecutionRunner:
             "notice": "[INERT STAGING - ZERO PROCESS SPAWNED]",
         }
 
+    def execute_contained(
+        self,
+        command: list[str],
+        budget: ResourceBudget,
+        risk_level: RiskLevel,
+        approval_id: str | None = None,
+        action_goal: str = "",
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+    ) -> Any:
+        """Execute a command through the configured backend under strict containment and governance.
+
+        First invokes prepare_and_stage() to verify emergency state, risk levels (R4/R5),
+        and resource budgets. If staging succeeds, delegates to backend.spawn_process().
+        """
+        staging_res = self.prepare_and_stage(
+            command=command,
+            budget=budget,
+            risk_level=risk_level,
+            approval_id=approval_id,
+            action_goal=action_goal,
+        )
+        if not staging_res.get("success"):
+            return staging_res
+
+        containment_handle = staging_res["containment_handle"]
+        try:
+            result = self.backend.spawn_process(
+                command=command,
+                containment_handle=containment_handle,
+                cwd=cwd,
+                env=env,
+            )
+            self._audit(
+                "runner.executed",
+                {
+                    "command": command,
+                    "risk_level": int(risk_level),
+                    "success": getattr(result, "success", True),
+                },
+            )
+            return result
+        except Exception as exc:
+            self._audit(
+                "runner.execution_error",
+                {
+                    "command": command,
+                    "risk_level": int(risk_level),
+                    "error": str(exc),
+                },
+            )
+            raise
+
     def _audit(self, event_type: str, details: dict[str, Any]) -> None:
         self.audit_logger.record(event_type=event_type, details=redact_value(details))
+
