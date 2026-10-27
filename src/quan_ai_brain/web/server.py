@@ -1952,41 +1952,43 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Lỗi khởi tạo nhiệm vụ: {exc}", 500)
 
     def _handle_api_executive_tasks(self) -> None:
-        workspace = _find_workspace_root()
-        task_list = []
-        try:
-            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
-            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
-            tasks = registry.list_tasks(limit=50)
-            for t in tasks:
-                t_dict = t.to_dict()
-                steps = registry.list_steps_for_task(t.task_id)
-                completed_steps = sum(1 for s in steps if str(getattr(s.status, "value", s.status)).upper() == "COMPLETED")
-                total_steps = len(steps)
-                is_task_done = str(getattr(t.status, "value", t.status)).upper() == "COMPLETED"
-                pct = round((completed_steps / total_steps * 100), 1) if total_steps > 0 else (100.0 if is_task_done else 0.0)
-                t_dict["steps_count"] = total_steps
-                t_dict["completed_steps_count"] = completed_steps
-                t_dict["progress_pct"] = pct
-                t_dict["steps"] = [s.to_dict() for s in steps]
-                task_list.append(t_dict)
-        except Exception:
-            pass
+            workspace = _find_workspace_root()
+            task_list = []
+            try:
+                from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+                registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+                tasks = registry.list_tasks(limit=50)
+                for t in tasks:
+                    t_dict = t.to_dict()
+                    steps = registry.list_steps_for_task(t.task_id)
+                    completed_steps = sum(1 for s in steps if str(getattr(s.status, "value", s.status)).upper() == "COMPLETED")
+                    total_steps = len(steps)
+                    is_task_done = str(getattr(t.status, "value", t.status)).upper() == "COMPLETED"
+                    pct = round((completed_steps / total_steps * 100), 1) if total_steps > 0 else (100.0 if is_task_done else 0.0)
+                    t_dict["steps_count"] = total_steps
+                    t_dict["completed_steps_count"] = completed_steps
+                    t_dict["progress_pct"] = pct
+                    t_dict["steps"] = [s.to_dict() for s in steps]
+                    task_list.append(t_dict)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                pass
 
-        self._send_json({
-            "success": True,
-            "orchestration_mode": "DAG_SAFE_PLANNING",
-            "active_tasks": task_list,
-            "total_tasks": len(task_list),
-            "governance_bounds": {
-                "R0": "Active",
-                "R1": "Active",
-                "R2": "Active",
-                "R3": "Quarantined",
-                "R4": "Approval-Gated",
-                "R5": "Hard-Blocked",
-            },
-        })
+            self._send_json({
+                "success": True,
+                "orchestration_mode": "DAG_SAFE_PLANNING",
+                "active_tasks": task_list,
+                "total_tasks": len(task_list),
+                "governance_bounds": {
+                    "R0": "Active",
+                    "R1": "Active",
+                    "R2": "Active",
+                    "R3": "Quarantined",
+                    "R4": "Approval-Gated",
+                    "R5": "Hard-Blocked",
+                },
+            })
 
     def _handle_api_executive_task_detail(self, query_str: str) -> None:
         params = urllib.parse.parse_qs(query_str)

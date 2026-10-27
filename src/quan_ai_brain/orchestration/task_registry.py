@@ -178,6 +178,7 @@ class DurableTaskRegistry:
                     json.dumps(record.checkpoint_data),
                 ),
             )
+            self._conn.commit()
         return record
 
     def get_task(self, task_id: str) -> TaskRecord | None:
@@ -287,6 +288,14 @@ class DurableTaskRegistry:
         return recovered
 
     def _row_to_record(self, row: sqlite3.Row) -> TaskRecord:
+        # Map 'archived' (legacy) to CANCELLED for backward compatibility
+        status_raw = row["status"]
+        if status_raw == "archived":
+            status_raw = "CANCELLED"
+        try:
+            status = TaskStatus(status_raw)
+        except ValueError:
+            status = TaskStatus.PENDING
         return TaskRecord(
             task_id=row["task_id"],
             correlation_id=row["correlation_id"],
@@ -294,7 +303,7 @@ class DurableTaskRegistry:
             goal=row["goal"],
             risk_level=row["risk_level"],
             autonomy_level=AutonomyLevel(row["autonomy_level"]),
-            status=TaskStatus(row["status"]),
+            status=status,
             acceptance_criteria=json.loads(row["acceptance_criteria_json"]),
             approved_scope=json.loads(row["approved_scope_json"]),
             created_at_utc=row["created_at_utc"],
