@@ -134,6 +134,7 @@ class KnowledgeIngestionEngine:
         source_version: str = "unknown",
         tags: list[str] | None = None,
         expires_days: int | None = None,
+        skip_duplicates: bool = False,
     ) -> KnowledgeRecord:
         """Ingest new knowledge from a source.
 
@@ -144,7 +145,11 @@ class KnowledgeIngestionEngine:
         4. STORE: Save to candidate_knowledge with QUARANTINED state
         5. INDEX: Prepare for embedding (Sprint 3: placeholder)
 
-        Returns the created KnowledgeRecord.
+        Sprint 7 (b): skip_duplicates=True → ingest IDEMPOTENT. Cùng một
+        statement đã ở quarantine/approved thì KHÔNG tạo dòng mới (chặn đúng
+        gốc lớp lỗi phát sinh 108k dòng trùng khi daemon re-ingest cùng tài
+        liệu mỗi chu kỳ). Mặc định False để giữ nguyên hành vi cũ cho các
+        caller khác.
         """
         # 1. Validate
         if not content.strip():
@@ -156,6 +161,26 @@ class KnowledgeIngestionEngine:
         # In Sprint 5+, this will use LLM to extract multiple facts
         statement = content.strip()
         normalized = KnowledgeRecord.normalize_text(statement)
+
+        # Sprint 7 (b): idempotent ingest — chặn trùng CHỮ (exact normalized)
+        # trước khi tạo record. Lớp lỗi gốc: daemon re-ingest cùng tài liệu
+        # mỗi chu kỳ 5 phút → phát sinh 108k dòng trùng (đã dedup Sprint 4).
+        if skip_duplicates:
+            existing = self.store._connection.execute(
+                """
+                SELECT id FROM candidate_knowledge
+                WHERE statement = ? AND status IN ('quarantined', 'approved')
+                LIMIT 1
+                """,
+                (statement,),
+            ).fetchone()
+            if existing:
+                dup = self.store._connection.execute(
+                    "SELECT id, statement, source_ref FROM candidate_knowledge WHERE id=?",
+                    (existing[0],),
+                ).fetchone()
+                # Trả về record GỐC (không tạo dòng mới) — caller thấy id cũ.
+                return self._rebuild_existing_record(dup, source_type, tags)
 
         # 3. Conflict detection
         conflict_ids = self._detect_conflicts(normalized)
@@ -198,6 +223,35 @@ class KnowledgeIngestionEngine:
         self._store_candidate(record)
 
         return record
+
+    def _rebuild_existing_record(
+        self,
+        row: Any,
+        source_type: KnowledgeSource,
+        tags: list[str] | None,
+    ) -> KnowledgeRecord:
+        """Sprint 7 (b): dựng lại KnowledgeRecord từ dòng đã tồn tại (idempotent
+        ingest) — caller nhận record cũ, không tạo dòng mới trong DB."""
+        now = datetime.now(timezone.utc).isoformat()
+        provenance = KnowledgeProvenance(
+            source_type=source_type,
+            source_ref=row["source_ref"],
+            source_version="existing",
+            ingested_at=now,
+            ingested_by=self.owner_id,
+            verification_state=VerificationState.QUARANTINED,
+            expires_at=None,
+            conflict_ids=[],
+        )
+        return KnowledgeRecord(
+            id=row["id"],
+            statement=row["statement"],
+            normalized_statement=KnowledgeRecord.normalize_text(row["statement"]),
+            content_snippet=row["statement"][:500],
+            provenance=provenance,
+            confidence_score=self._source_reliability.get(source_type, 0.5),
+            tags=tags or [],
+        )
 
     def _detect_conflicts(self, normalized_statement: str) -> list[str]:
         """Detect conflicting knowledge by semantic similarity (Sprint 3: keyword overlap)."""

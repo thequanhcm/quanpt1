@@ -189,14 +189,39 @@ def summarize(rows: list[BenchRow]) -> dict:
 
 
 def main() -> int:
-    rows = run_benchmark()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="RAG benchmark 10 câu")
+    parser.add_argument(
+        "--real", action="store_true",
+        help="Dùng BGE-M3 thật qua Ollama (mặc định: mock để CI ổn định)",
+    )
+    args = parser.parse_args()
+
+    if args.real:
+        from quan_ai_brain.cognition.embedding import BGEEmbeddingService
+
+        service = BGEEmbeddingService()
+        if not service.is_available():
+            print("Ollama BGE-M3 không truy cập được — fail-closed, không chạy real mode")
+            return 2
+        rag = DocumentRAG(workspace=WORKSPACE, embedding_service=service)
+        # Real mode: re-index để chunk embedding thật (nếu chưa)
+        print(f"REAL BGE-M3 mode — chunks: {rag.count_chunks()}")
+        rows = run_benchmark(rag)
+        result_path = RESULT_PATH.with_name("sprint7_rag_benchmark_real.json")
+    else:
+        rows = run_benchmark()
+        result_path = RESULT_PATH
+
     summary = summarize(rows)
-    RESULT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    RESULT_PATH.write_text(
+    result_path.parent.mkdir(parents=True, exist_ok=True)
+    result_path.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     print(f"RAG benchmark: {summary['passed']}/{summary['total']} passed "
-          f"({summary['pass_rate']}%) | no-answer honesty: {summary['no_answer_honesty']}")
+          f"({summary['pass_rate']}%) | no-answer honesty: {summary['no_answer_honesty']}"
+          f" | mode: {'REAL BGE-M3' if args.real else 'mock'} | file: {result_path.name}")
     for r in rows:
         mark = "PASS" if r.retrieved_ok else "FAIL"
         fail = f" — {r.failure_type}" if r.failure_type else ""

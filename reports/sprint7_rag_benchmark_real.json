@@ -1,0 +1,108 @@
+{
+  "total": 10,
+  "passed": 10,
+  "pass_rate": 100.0,
+  "no_answer_honesty": "2/2",
+  "rows": [
+    {
+      "question_id": "Q1",
+      "question": "SLA xử lý alarm critical là bao lâu?",
+      "qtype": "direct",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q2",
+      "question": "Mật khẩu tối thiểu bao nhiêu ký tự?",
+      "qtype": "direct",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q3",
+      "question": "Sau bao nhiêu lần sai thì tài khoản bị khóa?",
+      "qtype": "direct",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q4",
+      "question": "Quy trình xử lý alarm mất đồng bộ gồm bước nào và SLA bao lâu?",
+      "qtype": "multi",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q5",
+      "question": "Chu kỳ bảo trì trạm và checklist gồm việc gì?",
+      "qtype": "multi",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q6",
+      "question": "Thiết bị thường xuyên mất kết nối thì kiểm tra gì?",
+      "qtype": "paraphrase",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q7",
+      "question": "Bao lâu thì nên thay mật khẩu một lần?",
+      "qtype": "paraphrase",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q8",
+      "question": "Giá cước thuê bao 4G hiện nay là bao nhiêu?",
+      "qtype": "no_answer",
+      "retrieved_ok": true,
+      "context_recall": "n/a",
+      "faithful_proxy": "trống-đúng",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q9",
+      "question": "Cách nấu phở bò chuẩn vị Hà Nội?",
+      "qtype": "no_answer",
+      "retrieved_ok": true,
+      "context_recall": "n/a",
+      "faithful_proxy": "trống-đúng",
+      "citation_ok": true,
+      "failure_type": ""
+    },
+    {
+      "question_id": "Q10",
+      "question": "Theo sổ tay alarm phiên bản 2023, SLA critical là bao lâu?",
+      "qtype": "version",
+      "retrieved_ok": true,
+      "context_recall": "đúng",
+      "faithful_proxy": "có-căn-cứ",
+      "citation_ok": true,
+      "failure_type": ""
+    }
+  ]
+}

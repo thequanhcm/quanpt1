@@ -253,10 +253,16 @@ class DocumentRAG:
         dense: dict[str, float] = {}
         if self.embedding_service is not None:
             try:
-                q_vec = self.embedding_service.get_embedding(query)
+                # Sprint 7 (c): method đúng tên là embed_text() — get_embedding()
+                # không tồn tại khiến exception nuốt cả khối dense → retrieval
+                # rơi về keyword-only mà không ai hay (bug 8/10 real mode).
+                embed = getattr(self.embedding_service, "embed_text", None)
+                if embed is None:
+                    embed = getattr(self.embedding_service, "get_embedding")
+                q_vec = embed(query)
                 if q_vec:
                     for r in rows:
-                        c_vec = self.embedding_service.get_embedding(r[5])
+                        c_vec = embed(r[5])
                         if c_vec:
                             from quan_ai_brain.cognition.embedding import (
                                 cosine_similarity,

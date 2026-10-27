@@ -93,8 +93,10 @@ def both_servers_healthy() -> bool:
 
 CONFIG.setdefault("ollama_port", 11434)
 CONFIG.setdefault("netchat_responder_log", os.path.join(BASE_DIR, "logs", "netchat_responder_heartbeat.log"))
+CONFIG.setdefault("learning_daemon_log", os.path.join(BASE_DIR, "logs", "learning_daemon.log"))
 CONFIG.setdefault("disk_free_min_percent", 10.0)
 CONFIG.setdefault("max_component_fail_streak", 3)  # circuit breaker threshold
+CONFIG.setdefault("max_daemon_restart_per_hour", 5)  # Sprint 7 (b): cap giống server
 
 _component_fail_streaks: dict[str, int] = {}
 _component_states: dict[str, str] = {}  # component_id -> HEALTHY|DEGRADED|OFFLINE
@@ -157,6 +159,26 @@ def check_netchat_bot() -> bool:
     return alive
 
 
+def check_learning_daemon() -> bool:
+    """Sprint 7 (b): learning daemon liveness via its crash/heartbeat log.
+
+    Daemon ghi log mỗi chu kỳ 5 phút (learning_daemon.log qua stdout redirect
+    của KHOI_DONG — không có file riêng khi chạy minimized window). Dùng file
+    learning_daemon.log nếu có; thiếu file → coi như KHÔNG chạy (Y6).
+    """
+    log_path = Path(CONFIG["learning_daemon_log"])
+    if not log_path.exists():
+        # Không có log → không xác nhận được sự sống → OFFLINE (fail-closed)
+        return _update_component_state("learning_daemon", False) == "HEALTHY"
+    age_seconds = time.time() - log_path.stat().st_mtime
+    # Chu kỳ 300s; 15 phút không ghi gì = chết/treo
+    alive = age_seconds < 900
+    state = _update_component_state("learning_daemon", alive)
+    if not alive:
+        logger.warning(f"Learning daemon log stale ({int(age_seconds)}s; state={state})")
+    return alive
+
+
 def check_disk_space() -> bool:
     """GAP-R3: workspace drive free-space guard (fail before DB corruption)."""
     try:
@@ -175,6 +197,70 @@ def check_disk_space() -> bool:
     except Exception as e:
         logger.error(f"Disk check failed: {e}")
         return False
+
+
+def start_daemon(script_name: str, window_title: str):
+    """Sprint 7 (b): start 1 daemon em sở hữu (responder/learning) bằng venv
+    python, log ra logs/<name>.log append. Trả về Popen hoặc None."""
+    try:
+        script_path = Path(BASE_DIR) / "tools" / script_name
+        if not script_path.exists():
+            logger.error(f"Daemon script missing: {script_path}")
+            return None
+        out_path = Path(CONFIG["log_dir"]) / f"{script_name}.log"
+        out_handle = open(out_path, "a", encoding="utf-8", buffering=1)
+        process = subprocess.Popen(
+            [CONFIG["venv_python"], str(script_path)],
+            cwd=CONFIG["workdir"],
+            stdout=out_handle,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        _daemon_log_handles.append(out_handle)
+        logger.info(f"Daemon {script_name} started (PID: {process.pid})")
+        return process
+    except Exception as e:
+        logger.error(f"Failed to start daemon {script_name}: {e}")
+        return None
+
+
+_daemon_log_handles: list = []
+_daemon_processes: dict[str, subprocess.Popen] = {}
+_daemon_restart_times: dict[str, list[datetime]] = {}
+
+
+def ensure_daemon_alive(component_id: str, script_name: str, alive: bool) -> None:
+    """Sprint 7 (b): auto-restart daemon em SỞ HỮU khi chết — cap 5 lần/giờ.
+
+    Khác policy GAP-R3 với Ollama (không sở hữu → chỉ cảnh báo): responder +
+    learning là script trong tools/ của chính dự án → watchdog có quyền và
+    trách nhiệm hồi phục. Restart track riêng per-daemon, đúng chuẩn server.
+    """
+    if alive:
+        # Sống: nếu mình từng spawn mà giờ alive lại (hoặc xác nhận từ đầu)
+        # → dọn handle cũ nếu process đã thoát
+        proc = _daemon_processes.get(component_id)
+        if proc is not None and proc.poll() is not None:
+            _daemon_processes.pop(component_id, None)
+        return
+
+    now = datetime.now(timezone.utc)
+    window = [t for t in _daemon_restart_times.get(component_id, []) if now - t < timedelta(hours=1)]
+    if len(window) >= CONFIG["max_daemon_restart_per_hour"]:
+        logger.error(
+            f"Daemon {component_id}: max restart limit reached "
+            f"({CONFIG['max_daemon_restart_per_hour']}/hour). Manual intervention required!"
+        )
+        return
+    # Chưa có process ta spawn đang chạy → start mới
+    proc = _daemon_processes.get(component_id)
+    if proc is not None and proc.poll() is None:
+        return  # process ta spawn vẫn chạy (khai báo chết sai — không đúp)
+    window.append(now)
+    _daemon_restart_times[component_id] = window
+    new_proc = start_daemon(script_name, component_id)
+    if new_proc is not None:
+        _daemon_processes[component_id] = new_proc
 
 
 def start_server() -> Optional[subprocess.Popen]:
@@ -242,11 +328,16 @@ def main() -> int:
     while True:
         try:
             # Sprint A-fix: extended component checks (probe-only, no restart
-            # for components we don't own — Ollama/NetChat/disk are monitored
-            # and alerted, never blindly restarted — GAP-R3 policy).
+            # for components we don't own — Ollama/disk are monitored and
+            # alerted, never blindly restarted — GAP-R3 policy).
             check_ollama()
-            check_netchat_bot()
             check_disk_space()
+
+            # Sprint 7 (b): daemons em SỞ HỮU → auto-restart khi chết (cap 5/h)
+            responder_alive = check_netchat_bot()
+            ensure_daemon_alive("netchat_bot", "netchat_auto_responder.py", responder_alive)
+            learning_alive = check_learning_daemon()
+            ensure_daemon_alive("learning_daemon", "learning_daemon.py", learning_alive)
 
             # Check if server is running
             if both_servers_healthy():

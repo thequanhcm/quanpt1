@@ -9,11 +9,17 @@ This daemon:
 3. Ingests ALL git history (commit messages, diffs)
 4. Ingests ALL test results (pytest output, coverage)
 5. Ingests ALL configuration files (pyproject.toml, .env.example)
-6. Consolidates episodic → semantic every 5 minutes
-7. Auto-approves high-confidence facts (confidence > 0.85)
-8. Proposes improvements when patterns detected
+6. Reports quarantine status every cycle (không tự promote — Sprint 7)
+7. Survives transient errors (database is locked, file locks) — Sprint 7
 
 Runs continuously in background — learns 24/7.
+
+Sprint 7 (b) governance fix (27/10/2026):
+- BỎ auto-approve quarantine (vi phạm "Learning is not deployment" — AGENTS.md).
+  Tri thức cách ly chỉ owner duyệt; daemon chỉ đếm + log.
+- Vòng lặp chính CHỨNG TỬ lỗi tạm thời: 1 vòng fail = log + thử chu kỳ sau,
+  daemon KHÔNG chết im re (nguyên nhân chết 08:09 sáng nay: database is
+  locked khi regression chạy song song → traceback → SystemExit).
 """
 import json
 import os
@@ -21,6 +27,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -36,7 +43,7 @@ CONFIG = {
     "db_path": "data/brain.db",
     "owner_id": "Quanpt1",
     "consolidation_interval": 300,  # 5 minutes
-    "auto_approve_threshold": 0.85,
+    "crash_log": "logs/learning_daemon_crash.log",
     "sources_to_ingest": [
         "docs/",
         "reports/",
@@ -59,17 +66,17 @@ def ingest_document(engine: KnowledgeIngestionEngine, file_path: Path, source_ty
 
         # Extract key facts (simplified for Sprint 5)
         statements = []
-        
+
         # For markdown: extract headers as facts
         if file_path.suffix == ".md":
             headers = re.findall(r"^#+\s+(.+)$", content, re.MULTILINE)
             statements.extend([h.strip() for h in headers[:10]])  # Top 10 headers
-        
+
         # For Python: extract docstrings
         elif file_path.suffix == ".py":
             docstrings = re.findall(r'"""(.*?)"""', content, re.DOTALL)
             statements.extend([d.split("\n")[0].strip() for d in docstrings[:5]])  # First line of each docstring
-        
+
         # For config files: extract key-value pairs
         elif file_path.name == "pyproject.toml":
             lines = content.split("\n")[:20]
@@ -81,12 +88,13 @@ def ingest_document(engine: KnowledgeIngestionEngine, file_path: Path, source_ty
 
         ingested = 0
         for stmt in statements[:5]:  # Max 5 facts per file
-            record = engine.ingest(
+            engine.ingest(
                 content=stmt,
                 source_type=source_type,
                 source_ref=str(file_path.relative_to(CONFIG["workspace"])),
                 source_version="continuous_learning_" + datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S"),
                 tags=tags,
+                skip_duplicates=True,  # Sprint 7 (b): idempotent — chặn trùng
             )
             ingested += 1
 
@@ -117,12 +125,13 @@ def ingest_git_history(engine: KnowledgeIngestionEngine) -> int:
             if match:
                 commit_hash, commit_type, message = match.groups()
                 stmt = f"[{commit_type.upper()}] {message.strip()} (commit {commit_hash[:7]})"
-                record = engine.ingest(
+                engine.ingest(
                     content=stmt,
-                    source_type=KnowledgeSource.CODE_REVIEW,
+                    source_type=KnowledgeSource.PROJECT_DOCS,  # Sprint 7: CODE_REVIEW không tồn tại trong enum
                     source_ref=f"git:{commit_hash[:7]}",
                     source_version=commit_hash,
                     tags=["git", "commit", commit_type],
+                    skip_duplicates=True,  # Sprint 7 (b): idempotent
                 )
                 ingested += 1
 
@@ -136,25 +145,26 @@ def ingest_test_results(engine: KnowledgeIngestionEngine) -> int:
     """Ingest recent test results."""
     try:
         result = subprocess.run(
-            ["./.venv/Scripts/python.exe", "-m", "pytest", "-q", "tests", "--tb=no"],
+            [".\\.venv\\Scripts\\python.exe", "-m", "pytest", "-q", "tests", "--tb=no"],
             cwd=CONFIG["workspace"],
             capture_output=True,
             text=True,
             timeout=120
         )
-        
+
         # Parse pytest output
         output = result.stdout
         match = re.search(r"(\d+)\s+passed,?\s*(\d*)\s+skipped,?\s*(\d*)\s+failed", output)
         if match:
             passed, skipped, failed = match.groups()
             stmt = f"Test suite: {passed} passed, {skipped or 0} skipped, {failed or 0} failed"
-            record = engine.ingest(
+            engine.ingest(
                 content=stmt,
                 source_type=KnowledgeSource.TEST_EVIDENCE,
                 source_ref="pytest:latest",
                 source_version=datetime.now(timezone.utc).isoformat(),
                 tags=["testing", "pytest", "quality"],
+                skip_duplicates=False,  # kết quả test MỚI là tri thức mới (có version)
             )
             return 1
 
@@ -165,28 +175,37 @@ def ingest_test_results(engine: KnowledgeIngestionEngine) -> int:
 
 
 def consolidate_memories(engine: KnowledgeIngestionEngine, store: MemoryStore) -> int:
-    """Consolidate recent episodic memories into semantic knowledge."""
+    """Sprint 7 governance fix: KHÔNG tự duyệt tri thức quarantine nữa.
+
+    Nguyên tắc AGENTS.md "Learning is not deployment": tri thức cách ly chỉ
+    owner (quanpt1) mới được promote. Daemon chỉ ĐẾM + log để báo cáo, không
+    gọi approve_knowledge dưới bất kỳ hình thức nào.
+    """
     try:
-        # Get recent candidate knowledge
-        quarantined = store._connection.execute(
-            "SELECT id, statement, created_at_utc FROM candidate_knowledge "
-            "WHERE status='quarantined' ORDER BY created_at_utc DESC LIMIT 20"
-        ).fetchall()
-
-        consolidated = 0
-        for item_id, statement, created in quarantined:
-            # Auto-approve if high confidence (simplified: approve all for now)
-            engine.approve_knowledge(
-                record_id=item_id,
-                approved_by="continuous_learning_daemon",
-                notes="Auto-approved by continuous learning daemon (confidence > threshold)",
-            )
-            consolidated += 1
-
-        return consolidated
-    except Exception as e:
-        print(f"  ⚠️  Consolidation failed: {e}")
+        quarantined_count = store._connection.execute(
+            "SELECT COUNT(*) FROM candidate_knowledge WHERE status='quarantined'"
+        ).fetchone()[0]
+        print(
+            f"   🔒 Quarantine: {quarantined_count} items chờ owner duyệt "
+            "(daemon không tự promote — V3 governance)"
+        )
         return 0
+    except Exception as e:
+        print(f"  ⚠️  Consolidation check failed: {e}")
+        return 0
+
+
+def _log_crash(fatal: BaseException) -> None:
+    """Ghi crash vào log file để post-reboot verify / owner kiểm tra được."""
+    try:
+        log_path = CONFIG["workspace"] / CONFIG["crash_log"]
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).isoformat()
+        with open(log_path, "a", encoding="utf-8") as fh:
+            fh.write(f"[{ts}] FATAL: {fatal}\n")
+            fh.write("".join(traceback.format_exception(fatal)) + "\n")
+    except Exception:
+        pass  # Không bao giờ chết vì logging
 
 
 def main() -> int:
@@ -196,8 +215,8 @@ def main() -> int:
     print("=" * 70)
     print(f"Workspace: {CONFIG['workspace']}")
     print(f"Database: {CONFIG['db_path']}")
-    print(f"Consolidation: every {CONFIG['consolidation_interval']}s")
-    print(f"Auto-approve threshold: {CONFIG['auto_approve_threshold']}")
+    print(f"Cycle interval: {CONFIG['consolidation_interval']}s")
+    print("Governance: KHÔNG tự promote quarantine (Sprint 7)")
     print("=" * 70)
 
     store = MemoryStore(CONFIG["db_path"])
@@ -211,95 +230,111 @@ def main() -> int:
 
         print(f"\n[{timestamp}] Iteration {iteration} — Starting learning cycle...")
 
-        total_ingested = 0
+        # Sprint 7 (b): mỗi vòng CHỨNG TỬ lỗi tạm thời (database is locked,
+        # file locks khi regression chạy song song). Lỗi vòng → log + đợi
+        # chu kỳ sau, KHÔNG làm daemon chết. Chỉ KeyboardInterrupt được thoát.
+        try:
+            total_ingested = 0
 
-        # 1. Ingest documents
-        print("\n1. Ingesting documents...")
-        for source_path in CONFIG["sources_to_ingest"]:
-            full_path = CONFIG["workspace"] / source_path
-            if not full_path.exists():
-                continue
+            # 1. Ingest documents
+            print("\n1. Ingesting documents...")
+            for source_path in CONFIG["sources_to_ingest"]:
+                full_path = CONFIG["workspace"] / source_path
+                if not full_path.exists():
+                    continue
 
-            if full_path.is_file():
-                # Determine source type
-                if "docs/" in str(full_path):
-                    source_type = KnowledgeSource.PROJECT_DOCS
-                    tags = ["documentation"]
-                elif "reports/" in str(full_path):
-                    source_type = KnowledgeSource.TEST_EVIDENCE
-                    tags = ["report", "evidence"]
-                elif full_path.suffix == ".py":
-                    source_type = KnowledgeSource.TECHNICAL_SPEC
-                    tags = ["code", "documentation"]
-                else:
-                    source_type = KnowledgeSource.PROJECT_DOCS
-                    tags = ["config", "metadata"]
+                if full_path.is_file():
+                    # Determine source type
+                    if "docs/" in str(full_path):
+                        source_type = KnowledgeSource.PROJECT_DOCS
+                        tags = ["documentation"]
+                    elif "reports/" in str(full_path):
+                        source_type = KnowledgeSource.TEST_EVIDENCE
+                        tags = ["report", "evidence"]
+                    elif full_path.suffix == ".py":
+                        source_type = KnowledgeSource.TECHNICAL_SPEC
+                        tags = ["code", "documentation"]
+                    else:
+                        source_type = KnowledgeSource.PROJECT_DOCS
+                        tags = ["config", "metadata"]
 
-                ingested = ingest_document(engine, full_path, source_type, tags)
-                total_ingested += ingested
-                if ingested > 0:
-                    print(f"   ✅ {full_path.name}: {ingested} facts")
+                    ingested = ingest_document(engine, full_path, source_type, tags)
+                    total_ingested += ingested
+                    if ingested > 0:
+                        print(f"   ✅ {full_path.name}: {ingested} facts")
 
-            elif full_path.is_dir():
-                # Ingest all .md and .py files in directory
-                for ext in ["*.md", "*.py"]:
-                    for file_path in full_path.glob(ext):
-                        if "node_modules" in str(file_path) or ".venv" in str(file_path):
-                            continue
-                        
-                        if ext == "*.md":
-                            source_type = KnowledgeSource.PROJECT_DOCS
-                            tags = ["documentation", file_path.parent.name]
-                        else:
-                            source_type = KnowledgeSource.TECHNICAL_SPEC
-                            tags = ["code", file_path.parent.name]
+                elif full_path.is_dir():
+                    # Ingest all .md and .py files in directory
+                    for ext in ["*.md", "*.py"]:
+                        for file_path in full_path.glob(ext):
+                            if "node_modules" in str(file_path) or ".venv" in str(file_path):
+                                continue
 
-                        ingested = ingest_document(engine, file_path, source_type, tags)
-                        total_ingested += ingested
+                            if ext == "*.md":
+                                source_type = KnowledgeSource.PROJECT_DOCS
+                                tags = ["documentation", file_path.parent.name]
+                            else:
+                                source_type = KnowledgeSource.TECHNICAL_SPEC
+                                tags = ["code", file_path.parent.name]
 
-        print(f"   📊 Documents ingested: {total_ingested} facts")
+                            ingested = ingest_document(engine, file_path, source_type, tags)
+                            total_ingested += ingested
 
-        # 2. Ingest git history
-        print("\n2. Ingesting git history...")
-        git_facts = ingest_git_history(engine)
-        total_ingested += git_facts
-        print(f"   ✅ Git commits: {git_facts} facts")
+            print(f"   📊 Documents ingested: {total_ingested} facts")
 
-        # 3. Ingest test results
-        print("\n3. Ingesting test results...")
-        test_facts = ingest_test_results(engine)
-        total_ingested += test_facts
-        print(f"   ✅ Test results: {test_facts} facts")
+            # 2. Ingest git history
+            print("\n2. Ingesting git history...")
+            git_facts = ingest_git_history(engine)
+            total_ingested += git_facts
+            print(f"   ✅ Git commits: {git_facts} facts")
 
-        # 4. Consolidate memories
-        print("\n4. Consolidating memories...")
-        consolidated = consolidate_memories(engine, store)
-        print(f"   ✅ Consolidated: {consolidated} items")
+            # 3. Ingest test results
+            print("\n3. Ingesting test results...")
+            test_facts = ingest_test_results(engine)
+            total_ingested += test_facts
+            print(f"   ✅ Test results: {test_facts} facts")
 
-        # 5. Summary
-        elapsed = time.time() - start_time
-        
-        # Get current stats
-        total_knowledge = store._connection.execute(
-            "SELECT COUNT(*) FROM candidate_knowledge"
-        ).fetchone()[0]
-        approved = store._connection.execute(
-            "SELECT COUNT(*) FROM candidate_knowledge WHERE status='approved'"
-        ).fetchone()[0]
-        semantic = store._connection.execute(
-            "SELECT COUNT(*) FROM semantic_memory"
-        ).fetchone()[0]
+            # 4. Quarantine status (KHÔNG auto-promote — Sprint 7)
+            print("\n4. Consolidating memories...")
+            consolidated = consolidate_memories(engine, store)
+            print(f"   ✅ Consolidated: {consolidated} items")
 
-        print(f"\n{'=' * 70}")
-        print(f"✅ Learning cycle complete: {total_ingested} facts ingested, {consolidated} consolidated")
-        print(f"📊 Total knowledge: {total_knowledge} (approved: {approved}, semantic: {semantic})")
-        print(f"⏱️  Duration: {elapsed:.1f}s")
-        print(f"{'=' * 70}")
+            # 5. Summary
+            elapsed = time.time() - start_time
 
-        # Wait for next cycle
-        sleep_time = max(0, CONFIG["consolidation_interval"] - elapsed)
-        if sleep_time > 0:
-            print(f"\n⏳ Waiting {sleep_time:.0f}s for next cycle... (Ctrl+C to stop)")
+            # Get current stats
+            total_knowledge = store._connection.execute(
+                "SELECT COUNT(*) FROM candidate_knowledge"
+            ).fetchone()[0]
+            approved = store._connection.execute(
+                "SELECT COUNT(*) FROM candidate_knowledge WHERE status='approved'"
+            ).fetchone()[0]
+            semantic = store._connection.execute(
+                "SELECT COUNT(*) FROM semantic_memory"
+            ).fetchone()[0]
+
+            print(f"\n{'=' * 70}")
+            print(f"✅ Learning cycle complete: {total_ingested} facts ingested, {consolidated} consolidated")
+            print(f"📊 Total knowledge: {total_knowledge} (approved: {approved}, semantic: {semantic})")
+            print(f"⏱️  Duration: {elapsed:.1f}s")
+            print(f"{'=' * 70}")
+
+            # Wait for next cycle
+            sleep_time = max(0, CONFIG["consolidation_interval"] - elapsed)
+            if sleep_time > 0:
+                print(f"\n⏳ Waiting {sleep_time:.0f}s for next cycle... (Ctrl+C to stop)")
+                time.sleep(sleep_time)
+
+        except KeyboardInterrupt:
+            raise
+        except Exception as cycle_error:
+            # Lỗi tạm thời (database is locked, file lock...) → log + thử lại
+            elapsed = time.time() - start_time
+            ts = datetime.now(timezone.utc).isoformat()
+            print(f"\n[{ts}] ⚠️  Cycle {iteration} FAILED (không chết): {cycle_error}")
+            _log_crash(cycle_error)
+            sleep_time = max(5, CONFIG["consolidation_interval"] - elapsed)
+            print(f"⏳ Retry sau {sleep_time:.0f}s...")
             time.sleep(sleep_time)
 
     return 0
