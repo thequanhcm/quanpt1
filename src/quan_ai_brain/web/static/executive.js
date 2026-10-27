@@ -3693,6 +3693,53 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let wbLessonBusy = false;    // chống double-submit promote lesson
+  let wbExpqBusy = false;      // chống double-submit semantic search (Sprint 14)
+  async function searchExperienceSemantic() {
+    const result = $("wb-expq-result");
+    const q = ($("wb-expq")?.value || "").trim();
+    if (!q) { result.textContent = "Nhập từ khoá cần tìm."; return; }
+    if (wbExpqBusy) { result.textContent = "⏳ Đang tìm — không gửi trùng."; return; }
+    wbExpqBusy = true;
+    result.style.color = "#94a3b8";
+    result.textContent = "⏳ Đang embed + tìm (BGE-M3)…";
+    try {
+      const { ok, status, data } = await wbFetch("/api/experience/search?q=" + encodeURIComponent(q));
+      if (!ok || !data || data.success !== true) {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ Lỗi HTTP ${status}: ${esc(data?.error || "không rõ")}`;
+        return;
+      }
+      const conf = data.confirmed || [], cand = data.candidates || [];
+      if (!data.semantic_available) {
+        result.style.color = "#fbbf24";
+        result.textContent = "⚠️ Semantic KHÔNG khả dụng (Ollama offline hoặc DB lỗi)" + (data.reason ? " — " + data.reason : "") + ". Kinh nghiệm vẫn là tham chiếu keyword-only.";
+        return;
+      }
+      if (!conf.length && !cand.length) {
+        result.style.color = "#94a3b8";
+        result.textContent = "Không có kinh nghiệm nào đủ tương đồng (ngưỡng 0.30).";
+        return;
+      }
+      const row = (m, isCand) => `<details style="padding:4px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <summary style="cursor:pointer;">${isCand ? "🟡" : "✅"} <b>${esc(m.content.split("\n")[0] || "")}</b>
+            <span style="font-size:0.7rem; color:#93c5fd;">${(m.similarity * 100).toFixed(1)}%</span>
+            <span style="font-size:0.7rem; color:${isCand ? "#fbbf24" : "#86efac"};">[${isCand ? "chưa duyệt" : "đã duyệt"}]</span>
+          </summary>
+          <div style="margin:4px 0 2px 12px; color:#94a3b8; font-size:0.72rem; white-space:pre-wrap;">${esc(m.content)}</div>
+          <div style="margin-left:12px; font-size:0.7rem; color:#64748b;">Nguồn: ${esc(m.source_ref || "?")} · ${esc(m.memory_type || "")} · model ${esc(data.model || "?")}</div>
+        </details>`;
+      result.style.color = "#e2e8f0";
+      result.innerHTML =
+        `<div style="font-size:0.7rem; color:#86efac; margin-bottom:2px;">🧠 Semantic (${esc(data.model || "BGE-M3")}) — ${conf.length} xác nhận, ${cand.length} chưa duyệt</div>` +
+        conf.map((m) => row(m, false)).join("") + cand.map((m) => row(m, true)).join("");
+    } catch (err) {
+      result.style.color = "#f87171";
+      result.textContent = "⚠️ " + err.message;
+    } finally {
+      wbExpqBusy = false;
+    }
+  }
+
   async function loadLessons() {
     try {
       const { ok, status, data } = await wbFetch("/api/experience/lessons");
@@ -3853,6 +3900,8 @@ document.addEventListener("DOMContentLoaded", () => {
     $("wb-todo-add")?.addEventListener("click", addTodo);
     $("wb-email-sync")?.addEventListener("click", syncMockIntake);
     $("wb-lessons-refresh")?.addEventListener("click", loadLessons);
+    $("wb-expq-go")?.addEventListener("click", searchExperienceSemantic);
+    $("wb-expq")?.addEventListener("keydown", (e) => { if (e.key === "Enter") searchExperienceSemantic(); });
     $("wb-web-search")?.addEventListener("click", webSearch);
     $("wb-web-q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") webSearch(); });
     $("wb-impr-refresh")?.addEventListener("click", loadImprovement);

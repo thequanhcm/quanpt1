@@ -538,6 +538,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_improvement_report(parsed.query)
             return
 
+        # Sprint 14 (c): semantic search kinh nghiệm (GET, localhost-only, read-only)
+        if path == "/api/experience/search":
+            self._handle_api_experience_search(parsed.query)
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -1151,14 +1156,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     query=query,
                     project_scope=scope,
                     top_k=5,
-                    max_chars=4000,
+                    max_chars=6000,
                 )
                 retrieval = retriever.retrieve(m_query)
-                builder = PromptContextBuilder(default_max_chars=4000)
+                builder = PromptContextBuilder(default_max_chars=6000)
                 context = builder.build(
                     user_query=query,
                     retrieval=retrieval,
-                    max_chars=4000,
+                    max_chars=6000,
                     project_scope=scope,
                     conversation_history=recent_history,
                 )
@@ -3803,6 +3808,51 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_error_json(f"Lỗi xuất báo cáo: {exc}", 500)
+
+    # ------------------------------------------------------------------
+    # Sprint 14 (c): Semantic search kinh nghiệm (GET, localhost-only, read-only)
+    # ------------------------------------------------------------------
+    def _handle_api_experience_search(self, parsed_query) -> None:
+        """Tìm kinh nghiệm bằng BGE-M3 dense; fail-open + cờ trung thực."""
+        client = self.client_address[0] if self.client_address else ""
+        if client not in ("127.0.0.1", "::1"):
+            self._send_error_json("Experience search API chỉ chấp nhận localhost", 403)
+            return
+
+        from quan_ai_brain.cognition.experience_semantic import (
+            find_similar_experiences_semantic,
+        )
+
+        params = urllib.parse.parse_qs(parsed_query)
+        q = (params.get("q", [""])[0] or "").strip()
+        if not q:
+            self._send_error_json("Thiếu tham số q", 400)
+            return
+
+        limit = 5
+        try:
+            limit = max(1, min(20, int(params.get("limit", ["5"])[0])))
+        except (TypeError, ValueError):
+            pass
+
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            with MemoryStore(db_path, workspace=workspace) as store:
+                result = find_similar_experiences_semantic(store, q, limit=limit)
+        except Exception as exc:
+            # DB lỗi — fail-open trung thực, không chết luồng
+            self._send_json({
+                "success": True,
+                "query": q,
+                "semantic_available": False,
+                "reason": f"brain.db không đọc được: {exc}",
+                "confirmed": [],
+                "candidates": [],
+            })
+            return
+
+        self._send_json({"success": True, "query": q, **result})
 
     def _handle_api_email_proposals_list(self, parsed_query) -> None:
         """Sprint 10 (c): danh sách đề xuất email (đọc-only). Tự generate nếu chưa có.

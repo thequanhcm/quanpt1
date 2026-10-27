@@ -65,10 +65,13 @@ def ws(tmp_path):
     conn.execute("INSERT INTO email_proposals VALUES ('p1','m1','s','a@b','g','{}','TASK_CREATED','t0','2026')")
     conn.commit(); conn.close()
 
-    # information_gaps.db — schema thật của Sprint 3/4: dùng OPEN status? Nếu schema khác → chưa xác minh là hành vi đúng. Tạo đúng bảng common:
+    # information_gaps.db — Sprint 14: schema THẬT (info_gap_tasks + info_gap_events)
     conn = sqlite3.connect(data / "information_gaps.db")
-    conn.execute("CREATE TABLE information_gaps (gap_id TEXT PRIMARY KEY, group_code TEXT, question TEXT, status TEXT, created_at_utc TEXT, updated_at_utc TEXT, answer TEXT, answered_by TEXT)")
-    conn.execute("INSERT INTO information_gaps VALUES ('g1','A','?','OPEN','2026','2026','','')")
+    conn.execute("CREATE TABLE info_gap_tasks (task_id TEXT PRIMARY KEY, spec_json TEXT NOT NULL, readiness TEXT NOT NULL, waiting_state TEXT NOT NULL, request_text TEXT, created_at_utc TEXT, updated_at_utc TEXT, netchat_message_id TEXT, reminder_count INTEGER, last_reminder_utc TEXT)")
+    conn.execute("CREATE TABLE info_gap_events (event_id TEXT PRIMARY KEY, task_id TEXT, event_type TEXT, detail_json TEXT, created_at_utc TEXT)")
+    conn.execute("INSERT INTO info_gap_tasks VALUES ('g1','{}','NEED_MORE_INFO','WAITING_OWNER','?','2026','2026','',0,NULL)")
+    conn.execute("INSERT INTO info_gap_tasks VALUES ('g2','{}','READY','RESOLVED','?','2026','2026','',0,NULL)")
+    conn.execute("INSERT INTO info_gap_events VALUES ('e1','g1','REQUEST_SAVED','{}','2026')")
     conn.commit(); conn.close()
 
     # báo cáo test gần nhất
@@ -135,7 +138,8 @@ class TestBuildReport:
         joined = " ".join(r["suggested_improvements"])
         assert "1 bài học đang chờ" in joined          # lessons_pending = 1
         assert "BLOCKED" in joined                      # vmail
-        assert "1 thông tin thiếu" in joined            # gaps
+        # gap mở = 1 (g1 WAITING) — Sprint 14 schema thật
+        assert "1 thông tin thiếu" in joined
 
 
 class TestExport:

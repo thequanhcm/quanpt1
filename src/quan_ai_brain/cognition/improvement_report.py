@@ -27,7 +27,10 @@ M_BLOCKED = "Bị chặn"
 def _count_rows(db_path: Path, sql: str, params: tuple = ()) -> int | None:
     """Đếm dòng; DB lỗi → None (CHƯA XÁC MINH, không 0 giả)."""
     try:
-        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
+        if not db_path.exists():
+            return None
+        uri = db_path.resolve().as_uri() + "?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=5)
         try:
             cur = conn.execute(sql, params)
             row = cur.fetchone()
@@ -137,16 +140,28 @@ def build_improvement_report(workspace: str | Path) -> dict[str, Any]:
         "evidence": "integration/web_connector.py + smoke 27/10 (SSRF chặn, Bing search, VNE RSS 10 items) — commit cd626c0",
     }
 
-    # --- 6. Thông tin thiếu (information_gaps.db) ---
+    # --- 6. Thông tin thiếu (information_gaps.db — Sprint 14: schema THẬT) ---
+    # DB thật dùng info_gap_tasks (waiting_state) + info_gap_events, không có bảng
+    # information_gaps như Sprint 13 từng giả định (lỗi đã ghi trung thực trong báo cáo).
     gaps_db = data_dir / "information_gaps.db"
-    gaps_open = _count_rows(gaps_db, "SELECT COUNT(*) FROM information_gaps WHERE status IN ('OPEN','NOT_SUBMITTED')")
+    gaps_open = _count_rows(
+        gaps_db,
+        "SELECT COUNT(*) FROM info_gap_tasks WHERE waiting_state NOT IN ('RESOLVED','CANCELLED')",
+    )
+    gaps_resolved = _count_rows(
+        gaps_db,
+        "SELECT COUNT(*) FROM info_gap_tasks WHERE waiting_state IN ('RESOLVED','CANCELLED')",
+    )
+    gap_events = _count_rows(gaps_db, "SELECT COUNT(*) FROM info_gap_events")
     if gaps_open is None:
-        report["sections"]["information_gaps"] = {"status": M_UNVERIFIED, "reason": "information_gaps.db không đọc được"}
+        report["sections"]["information_gaps"] = {"status": M_UNVERIFIED, "reason": "information_gaps.db không đọc được (schema thật: info_gap_tasks/info_gap_events)"}
     else:
         report["sections"]["information_gaps"] = {
             "status": M_ACTIVE,
             "open_gaps": gaps_open,
-            "evidence": f"information_gaps.db @ {now}",
+            "resolved_gaps": gaps_resolved,
+            "events": gap_events,
+            "evidence": f"information_gaps.db info_gap_tasks/info_gap_events @ {now}",
         }
 
     # --- 7. Test regression (từ báo cáo gần nhất — không tự chạy pytest) ---
