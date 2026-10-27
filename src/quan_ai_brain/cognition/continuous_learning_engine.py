@@ -19,6 +19,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from quan_ai_brain.memory.knowledge_ingestion import (
@@ -29,6 +30,11 @@ from quan_ai_brain.memory.knowledge_ingestion import (
     VerificationState,
 )
 from quan_ai_brain.memory.sqlite_store import MemoryStore
+from quan_ai_brain.cognition.learning_session import (
+    LearningSession,
+    LearningSessionManager,
+    LearningSessionStatus,
+)
 
 
 class LearningType(str, Enum):
@@ -101,19 +107,27 @@ class LearningEvaluation:
 
 
 class ContinuousLearningEngine:
-    """Manages continuous learning across 5 types."""
+    """Manages continuous learning across 5 types with session handoff."""
 
     def __init__(
         self,
         store: MemoryStore,
         knowledge_engine: KnowledgeIngestionEngine | None = None,
         owner_id: str = "Quanpt1",
+        workspace: Path | None = None,
     ) -> None:
         self.store = store
         self.knowledge_engine = knowledge_engine or KnowledgeIngestionEngine(store, owner_id)
         self.owner_id = owner_id
         self._reports: list[LearningReport] = []
         self._evaluations: list[LearningEvaluation] = []
+        
+        # CLO V1: Session manager for continuous handoff
+        self.workspace = workspace or Path(__file__).parent.parent.parent
+        self.session_db_path = self.workspace / "data" / "learning_checkpoints.db"
+        # Ensure data directory exists
+        self.session_db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.session_manager = LearningSessionManager(self.session_db_path)
 
     def learn_type_a_knowledge(
         self,
@@ -499,4 +513,122 @@ class ContinuousLearningEngine:
             "passed": passed,
             "failed": total - passed,
             "average_improvement": avg_improvement,
+        }
+
+    # ========== CLO V1: Continuous Session Handoff ==========
+
+    def start_continuous_learning(self, objectives: list[str], source_manifest: dict[str, Any]) -> LearningSession:
+        """Start continuous learning mode and create first session."""
+        # Check if already enabled
+        if self.session_manager.is_clo_enabled():
+            current = self.session_manager.get_current_session()
+            if current and current.status in [LearningSessionStatus.RUNNING, LearningSessionStatus.PLANNING]:
+                raise RuntimeError(f"Continuous learning already active: session {current.session_id}")
+
+        # Enable CLO
+        self.session_manager.enable_clo()
+        
+        # Create new session
+        session = self.session_manager.create_session(objectives, source_manifest)
+        # Status is INITIALIZING after create, update to PLANNING
+        self.session_manager.set_status(session.session_id, LearningSessionStatus.PLANNING)
+        
+        # Return updated session
+        return self.session_manager.get_session_by_id(session.session_id)
+
+    def end_session(self, session_id: str, evaluation_result: dict[str, Any], 
+                    unresolved_questions: list[str], next_plan: dict[str, Any]) -> LearningSession:
+        """End current session and prepare for next session handoff."""
+        session = self.session_manager.get_session_by_id(session_id)
+        if not session:
+            raise ValueError(f"Session not found: {session_id}")
+        
+        # Check stop flag
+        stop_flag, stop_reason = self.session_manager.get_stop_flag()
+        if stop_flag:
+            session.status = LearningSessionStatus.STOPPING
+            session.stop_or_pause_reason = stop_reason
+        else:
+            session.status = LearningSessionStatus.CONSOLIDATING
+        
+        session.ended_at = datetime.now(timezone.utc).isoformat()
+        session.evaluation_result = evaluation_result
+        session.unresolved_questions = unresolved_questions
+        session.next_session_plan = next_plan
+        
+        self.session_manager.update_session(session)
+        
+        # If not stopping, create next session automatically
+        if not stop_flag and self.session_manager.is_clo_enabled():
+            return self._create_next_session(session)
+        
+        return session
+
+    def _create_next_session(self, previous_session: LearningSession) -> LearningSession:
+        """Create next session based on previous session's plan."""
+        # Check stop flag again
+        stop_flag, _ = self.session_manager.get_stop_flag()
+        if stop_flag:
+            # Don't create new session if stop flag is set
+            return previous_session
+        
+        objectives = previous_session.next_session_plan.get("objectives", [])
+        source_manifest = previous_session.next_session_plan.get("source_manifest", {})
+        
+        new_session = self.session_manager.create_session(objectives, source_manifest)
+        self.session_manager.set_status(new_session.session_id, LearningSessionStatus.RUNNING)
+        
+        return new_session
+
+    def pause_continuous_learning(self, reason: str):
+        """Pause continuous learning (no new sessions will be created)."""
+        self.session_manager.set_learning_state("PAUSE_FLAG", True)
+        self.session_manager.set_learning_state("PAUSE_REASON", reason)
+        self.session_manager.set_learning_state("PAUSED_AT", datetime.now(timezone.utc).isoformat())
+        
+        # Update current session status
+        current = self.session_manager.get_current_session()
+        if current and current.status in [LearningSessionStatus.RUNNING, LearningSessionStatus.PLANNING]:
+            self.session_manager.set_status(current.session_id, LearningSessionStatus.PAUSED, reason)
+
+    def resume_continuous_learning(self):
+        """Resume continuous learning from pause."""
+        # Verify pause reason is resolved
+        pause_reason = self.session_manager.get_learning_state("PAUSE_REASON")
+        self.session_manager.set_learning_state("PAUSE_FLAG", False)
+        self.session_manager.set_learning_state("RESUMED_AT", datetime.now(timezone.utc).isoformat())
+        
+        # Resume current session if paused
+        current = self.session_manager.get_current_session()
+        if current and current.status == LearningSessionStatus.PAUSED:
+            self.session_manager.set_status(current.session_id, LearningSessionStatus.RUNNING)
+
+    def stop_continuous_learning(self, reason: str):
+        """Stop continuous learning permanently (requires owner restart)."""
+        self.session_manager.set_stop_flag(reason)
+        self.session_manager.disable_clo()
+        
+        # Update current session
+        current = self.session_manager.get_current_session()
+        if current and current.status in [LearningSessionStatus.RUNNING, LearningSessionStatus.PLANNING, 
+                                           LearningSessionStatus.EVALUATING, LearningSessionStatus.CONSOLIDATING]:
+            self.session_manager.set_status(current.session_id, LearningSessionStatus.STOPPED, reason)
+
+    def get_learning_status(self) -> dict[str, Any]:
+        """Get current continuous learning status."""
+        clo_enabled = self.session_manager.is_clo_enabled()
+        stop_flag, stop_reason = self.session_manager.get_stop_flag()
+        pause_flag = self.session_manager.get_learning_state("PAUSE_FLAG") is True
+        
+        current = self.session_manager.get_current_session()
+        recent_sessions = self.session_manager.list_sessions(limit=5)
+        
+        return {
+            "clo_enabled": clo_enabled,
+            "stop_flag": stop_flag,
+            "stop_reason": stop_reason,
+            "pause_flag": pause_flag,
+            "current_session": current.to_dict() if current else None,
+            "recent_sessions": [s.to_dict() for s in recent_sessions],
+            "total_sessions": len(recent_sessions),
         }
