@@ -510,6 +510,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_email_intake_list(parsed.query)
             return
 
+        # Sprint 10 (c): email intelligence — đề xuất xử lý email (GET, đọc-only)
+        if path == "/api/email/proposals":
+            self._handle_api_email_proposals_list(parsed.query)
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -615,6 +620,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Sprint 8 (c): Approval Center — duyệt/từ chối card (localhost-only)
         if path == "/api/approvals/decide":
             self._handle_api_approvals_decide(body)
+            return
+
+        # Sprint 10 (c): email intelligence — tạo nhiệm vụ ứng viên (POST)
+        if path == "/api/email/task/create":
+            self._handle_api_email_task_create(body)
             return
 
         # Sprint 9 (C): email intake sync (mock connector; Vmail BLOCKED giữ nguyên)
@@ -3510,6 +3520,110 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Card không tồn tại: {exc}", 404)
         except Exception as exc:
             self._send_error_json(f"Error deciding approval: {exc}", 500)
+
+    def _handle_api_email_proposals_list(self, parsed_query) -> None:
+        """Sprint 10 (c): danh sách đề xuất email (đọc-only). Tự generate nếu chưa có.
+
+        Generate dùng mock intake HIỆN CÓ trong data/email_intake.db (source=mock).
+        """
+        client = self.client_address[0] if self.client_address else ""
+        if client not in ("127.0.0.1", "::1"):
+            self._send_error_json("Email proposals API chỉ chấp nhận localhost", 403)
+            return
+        try:
+            from quan_ai_brain.integration.email_intelligence import (
+                ProposalStore,
+                generate_proposals_for_intake,
+            )
+            from quan_ai_brain.memory.sqlite_store import MemoryStore
+
+            workspace = _find_workspace_root()
+            intake_db = workspace / "data" / "email_intake.db"
+            # Generate proposals cho ACTION_REQUIRED chưa có (idempotent)
+            gen = generate_proposals_for_intake(intake_db, MemoryStore(workspace / "data" / "memory.db"))
+            store = ProposalStore(intake_db)
+            self._send_json({
+                "success": True,
+                "generated": gen,
+                "proposals": store.list_proposals(limit=50),
+                "vmail_status": "BLOCKED",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Proposals lỗi: {type(exc).__name__}: {exc}", 500)
+
+    def _handle_api_email_task_create(self, body: dict) -> None:
+        """Sprint 10 (b): tạo NHIỆM VỤ ỨNG VIÊN từ đề xuất — chỉ khi owner bấm.
+
+        Task PENDING, LEVEL_A, idempotent theo message_id (cùng email → cùng task).
+        KHÔNG có đường thực thi tự động — task nằm chờ approval gate như mọi nhiệm vụ.
+        """
+        client = self.client_address[0] if self.client_address else ""
+        if client not in ("127.0.0.1", "::1"):
+            self._send_error_json("Email task create chỉ chấp nhận localhost", 403)
+            return
+        try:
+            from quan_ai_brain.integration.email_intelligence import ProposalStore
+            from quan_ai_brain.memory.sqlite_store import MemoryStore
+            from quan_ai_brain.orchestration.models import AutonomyLevel
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            proposal_id = str(body.get("proposal_id", "")).strip()
+            if not proposal_id:
+                self._send_error_json("Thiếu proposal_id", 400)
+                return
+            workspace = _find_workspace_root()
+            store = ProposalStore(workspace / "data" / "email_intake.db")
+            record = store.get(proposal_id)
+            if not record:
+                self._send_error_json(f"Không tìm thấy đề xuất {proposal_id}", 404)
+                return
+            if record["linked_task_id"]:
+                # Idempotent: email đã có task — trả lại task cũ, không tạo trùng
+                self._send_json({
+                    "success": True,
+                    "task_id": record["linked_task_id"],
+                    "created": False,
+                    "note": "Email này đã có nhiệm vụ ứng viên (idempotent)",
+                })
+                return
+
+            payload = record["payload"]
+            reg = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=str(workspace))
+            task = reg.register_task(
+                goal=f"[EMAIL:{record['message_id']}] {record['goal']}",
+                risk_level="R1",
+                autonomy_level=AutonomyLevel.LEVEL_A,
+                acceptance_criteria=payload.get("success_criteria", []),
+                approved_scope=["read-only", "draft-only"],
+                idempotency_key=f"email_task_{record['message_id']}",
+            )
+            task_id = task.task_id
+            store.link_task(proposal_id, task_id)
+            # Ghi back liên kết vào intake_emails (Sprint 9 schema)
+            try:
+                import sqlite3 as _sq
+
+                con = _sq.connect(str(workspace / "data" / "email_intake.db"))
+                with con:
+                    con.execute(
+                        "UPDATE intake_emails SET related_task_id = ? WHERE message_id = ?",
+                        (task_id, record["message_id"]),
+                    )
+                con.close()
+            except Exception:
+                pass  # liên kết intake là nice-to-have — task đã tạo thành công
+            # Cập nhật kinh nghiệm: nhớ MemoryStore liên quan (dùng chung 1 instance)
+            MemoryStore(workspace / "data" / "memory.db")  # warm-up (nếu DB chưa có)
+            self._send_json({
+                "success": True,
+                "task_id": task_id,
+                "created": True,
+                "status": "PENDING",
+                "autonomy": "LEVEL_A",
+                "note": "Nhiệm vụ ứng viên PENDING — chờ phê duyệt, không tự thực thi",
+            })
+        except Exception as exc:
+            self._send_error_json(f"Tạo nhiệm vụ lỗi: {type(exc).__name__}: {exc}", 500)
 
     def _handle_api_email_intake_sync(self, body: dict) -> None:
         """Sprint 9 (C): 1 chu kỳ sync mock intake → data/email_intake.db.

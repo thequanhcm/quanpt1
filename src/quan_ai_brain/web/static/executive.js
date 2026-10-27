@@ -3616,6 +3616,86 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  let wbProposalBusy = false;  // chống double-submit tạo task
+  async function loadProposals() {
+    try {
+      const { ok, status, data } = await wbFetch("/api/email/proposals");
+      const el = $("wb-proposals-list");
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        return;
+      }
+      const props = data.proposals || [];
+      if (!props.length) {
+        el.textContent = "Chưa có đề xuất nào — email ACTION_REQUIRED sẽ tự sinh đề xuất khi sync.";
+        return;
+      }
+      el.innerHTML = props.map((p) => {
+        const pay = p.payload || p;
+        const expConf = (pay.experience_confirmed || []).length;
+        const expCand = (pay.experience_candidates || []).length;
+        const linked = pay.linked_task_id || p.linked_task_id;
+        return `<details style="padding:8px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <summary style="cursor:pointer;">
+            <b>${esc(pay.subject || p.subject)}</b>
+            <span style="color:#a78bfa; font-size:0.72rem;">[${esc(p.status)}]${linked ? " → task " + esc(linked) : ""}</span>
+          </summary>
+          <div style="margin:8px 0 4px 12px; color:#94a3b8; font-size:0.75rem;">
+            <div><b style="color:#e2e8f0;">🎯 Mục tiêu:</b> ${esc(pay.goal || "")}</div>
+            <div style="margin-top:4px;"><b style="color:#e2e8f0;">📌 Căn cứ:</b><ul style="margin:2px 0 2px 18px;">${(pay.basis || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div>
+            <div><b style="color:#e2e8f0;">✅ Kết luận:</b> ${esc(pay.conclusion || "")}</div>
+            <div style="margin-top:4px;"><b style="color:#fbbf24;">⚠️ Giả định CHƯA xác minh:</b><ul style="margin:2px 0 2px 18px;">${(pay.assumptions || []).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
+            <div><b style="color:#86efac;">▶ Phương án khuyến nghị:</b> ${esc(pay.recommended_action || "")}</div>
+            <div style="margin-top:4px;"><b style="color:#94a3b8;">Phương án khác:</b><ul style="margin:2px 0 2px 18px;">${(pay.alternatives || []).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
+            <div><b style="color:#f87171;">Rủi ro:</b><ul style="margin:2px 0 2px 18px;">${(pay.risks || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
+            <div><b style="color:#94a3b8;">Phạm vi:</b> ${esc(pay.action_scope || "")} · <b>Rollback:</b> ${esc(pay.rollback || "")}</div>
+            <div><b style="color:#86efac;">Tiêu chí thành công:</b><ul style="margin:2px 0 2px 18px;">${(pay.success_criteria || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul></div>
+            <div><b style="color:#fbbf24;">Cần anh quyết:</b> ${esc(pay.owner_decision_needed || "")}</div>
+            <div style="margin-top:4px; color:#64748b;">Kinh nghiệm liên quan: ${expConf} đã xác nhận · ${expCand} ứng viên CHƯA duyệt (không tính là căn cứ mạnh)</div>
+          </div>
+          ${linked
+            ? `<div style="margin-left:12px; color:#86efac; font-size:0.75rem;">✓ Nhiệm vụ ứng viên đã tạo: <b>${esc(linked)}</b> (PENDING — chờ duyệt, không tự chạy)</div>`
+            : `<button class="wb-create-task" data-pid="${esc(p.proposal_id)}" style="margin-left:12px; background:rgba(168,85,247,0.2); color:#d8b4fe; border:1px solid rgba(168,85,247,0.3); border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">➕ Tạo nhiệm vụ ứng viên (PENDING — em không tự chạy)</button>`}
+        </details>`;
+      }).join("");
+      el.querySelectorAll(".wb-create-task").forEach((b) =>
+        b.addEventListener("click", () => createEmailTask(b.dataset.pid)));
+    } catch (err) {
+      $("wb-proposals-list").innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function createEmailTask(proposalId) {
+    const result = $("wb-proposal-result");
+    if (wbProposalBusy) { result.textContent = "⏳ Đang xử lý — không gửi trùng."; return; }
+    wbProposalBusy = true;
+    result.style.color = "#fbbf24";
+    result.textContent = "⏳ Đang tạo nhiệm vụ ứng viên…";
+    try {
+      const { ok, status, data } = await wbFetch("/api/email/task/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proposal_id: proposalId }),
+      });
+      if (ok && data && data.success === true) {
+        result.style.color = data.created ? "#86efac" : "#fbbf24";
+        result.textContent = (data.created ? "✅ Đã tạo nhiệm vụ ứng viên: " : "ℹ️ Email này đã có nhiệm vụ: ") + data.task_id + " (PENDING — không tự thực thi)";
+        await Promise.all([loadProposals(), loadTasks(), loadOverview()]);
+      } else if (status === 404) {
+        result.style.color = "#f87171";
+        result.textContent = "⚠️ Đề xuất không tồn tại (404).";
+      } else {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ Lỗi HTTP ${status}: ${esc(data?.error || "không rõ")}`;
+      }
+    } catch (err) {
+      result.style.color = "#f87171";
+      result.textContent = "⚠️ " + err.message;
+    } finally {
+      wbProposalBusy = false;
+    }
+  }
+
   function initWorkbench() {
     if (!$("tab-workbench")) return;
     $("wb-task-filter")?.addEventListener("change", loadTasks);
@@ -3626,7 +3706,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".nav-tab").forEach((btn) =>
       btn.addEventListener("click", () => {
         if (btn.dataset.tab === "tab-workbench") {
-          loadOverview(); loadTasks(); loadApprovals(); loadTodos();
+          loadOverview(); loadTasks(); loadApprovals(); loadTodos(); loadProposals();
         }
       }));
   }
