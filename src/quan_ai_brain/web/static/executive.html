@@ -1446,6 +1446,17 @@
             <div id="wb-lessons-result" style="font-size:0.75rem; color:#94a3b8; margin-top:6px;"></div>
           </div>
 
+          <!-- Sprint 12: Web & Intranet read-only -->
+          <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px; margin-top:14px;">
+            <h3 style="margin:0 0 8px 0; font-size:0.85rem;">🌐 Web &amp; Intranet <span style="font-size:0.7rem; color:#38bdf8; font-weight:700;">READ-ONLY</span></h3>
+            <p style="margin:0 0 8px 0; color:#64748b; font-size:0.7rem;">Chỉ GET công khai — không form/login/ghi ngoài; SSRF-guard + robots.txt; dữ liệu ngoài luôn "chưa xác minh".</p>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+              <input id="wb-web-q" placeholder="Tìm kiếm web (VD: Viettel IDC tuyển dụng)" style="flex:1; background:rgba(15,23,42,0.6); border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:6px 10px; font-size:0.78rem; color:#e2e8f0;">
+              <button id="wb-web-search" style="background:rgba(56,189,248,0.15); color:#7dd3fc; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">🔍 Tìm</button>
+            </div>
+            <div id="wb-web-result" style="font-size:0.75rem; color:#94a3b8; max-height:260px; overflow-y:auto;"></div>
+          </div>
+
           <!-- Email intake (mock) -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px;">
             <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#e2e8f0;">📨 Email Intake <span style="font-size:0.7rem; color:#f87171; font-weight:700;">VMAIL: BLOCKED</span></h3>

@@ -48,6 +48,7 @@ class EmailProposal:
     owner_decision_needed: str = ""
     experience_confirmed: list[dict[str, Any]] = field(default_factory=list)
     experience_candidates: list[dict[str, Any]] = field(default_factory=list)
+    research_links: list[dict[str, Any]] = field(default_factory=list)  # Sprint 12 (d)
     status: str = "PROPOSED"
     linked_task_id: str = ""
     created_at_utc: str = ""
@@ -71,6 +72,7 @@ class EmailProposal:
             "owner_decision_needed": self.owner_decision_needed,
             "experience_confirmed": self.experience_confirmed,
             "experience_candidates": self.experience_candidates,
+            "research_links": self.research_links,
             "status": self.status,
             "linked_task_id": self.linked_task_id,
             "created_at_utc": self.created_at_utc,
@@ -238,6 +240,27 @@ def build_proposal(
     for t in confirmed_titles:
         basis.append(f"Kinh nghiệm đã xác nhận liên quan: {t}")
 
+    # Sprint 12 (d): research links khi bối cảnh cần nghiên cứu — fail-closed,
+    # lỗi web KHÔNG phá proposal (bỏ qua im lặng nhưng ghi vào basis nếu có).
+    research_links: list[dict[str, Any]] = []
+    research_signals = ("nghiên cứu", "tìm hiểu", "tham khảo", "research", "tìm kiếm", "tra cứu")
+    if any(s in text for s in research_signals):
+        try:
+            from quan_ai_brain.integration.web_connector import BingRssSearcher
+
+            hits = BingRssSearcher().search(msg.subject, max_results=3)
+            research_links = [
+                {"title": h["title"], "url": h["url"], "source": "web_read_only", "verified": False}
+                for h in hits
+            ]
+            if research_links:
+                basis.append(
+                    "Nguồn tham khảo web READ-ONLY (chưa xác minh — chỉ để đọc thêm): "
+                    + "; ".join(h["url"] for h in research_links)
+                )
+        except Exception:
+            research_links = []  # fail-closed — không có mạng thì proposal như cũ
+
     recommended = "Soạn nhiệm vụ ứng viên cho anh duyệt: xác minh yêu cầu, chuẩn bị bản nháp trả lời/báo cáo (draft-only, không gửi)"
     alternatives = [
         "Bỏ qua email (nếu anh xác nhận không quan trọng)",
@@ -272,6 +295,7 @@ def build_proposal(
         owner_decision_needed="Duyệt tạo nhiệm vụ ứng viên, hoặc bỏ qua, hoặc yêu cầu làm rõ",
         experience_confirmed=exp["confirmed"],
         experience_candidates=exp["candidates"],
+        research_links=research_links,
         status="PROPOSED",
         created_at_utc=datetime.now(timezone.utc).isoformat(),
     )

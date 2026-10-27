@@ -520,6 +520,19 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_experience_lessons_list(parsed.query)
             return
 
+        # Sprint 12 (b): web read-only — search/page/rss (GET, localhost-only)
+        if path == "/api/web/search":
+            self._handle_api_web_search(parsed.query)
+            return
+
+        if path == "/api/web/page":
+            self._handle_api_web_page(parsed.query)
+            return
+
+        if path == "/api/web/rss":
+            self._handle_api_web_rss(parsed.query)
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -3659,6 +3672,86 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(str(exc), 409)
         except Exception as exc:
             self._send_error_json(f"Lỗi promote: {exc}", 500)
+
+    # ------------------------------------------------------------------
+    # Sprint 12 (b): Web read-only API (localhost-only, fail-honest)
+    # ------------------------------------------------------------------
+
+    def _web_common_guard(self) -> tuple[bool, None | dict, None | int]:
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            return False, {"error": "Chỉ truy cập được từ máy chủ (localhost)"}, 403
+        return True, None, None
+
+    @staticmethod
+    def _parse_web_query(parsed_query) -> dict[str, list[str]]:
+        import urllib.parse as _up
+
+        if isinstance(parsed_query, str):
+            return _up.parse_qs(parsed_query)
+        return parsed_query if isinstance(parsed_query, dict) else {}
+
+    def _handle_api_web_search(self, parsed_query) -> None:
+        ok, err, code = self._web_common_guard()
+        if not ok:
+            self._send_error_json(err["error"], code)  # type: ignore[index]
+            return
+        params = self._parse_web_query(parsed_query)
+        q = (params.get("q", [""])[0] if "q" in params else "").strip()
+        try:
+            max_results = min(int(params.get("max_results", ["5"])[0]), 10)
+        except ValueError:
+            max_results = 5
+        if not q:
+            self._send_error_json("q là bắt buộc", 400)
+            return
+        try:
+            from quan_ai_brain.integration.web_connector import BingRssSearcher
+
+            results = BingRssSearcher().search(q, max_results=max_results)
+            self._send_json({"success": True, "query": q, "results": results, "count": len(results)})
+        except Exception as exc:
+            self._send_json({"success": False, "query": q, "error": str(exc), "results": []})
+
+    def _handle_api_web_page(self, parsed_query) -> None:
+        ok, err, code = self._web_common_guard()
+        if not ok:
+            self._send_error_json(err["error"], code)  # type: ignore[index]
+            return
+        params = self._parse_web_query(parsed_query)
+        url = (params.get("url", [""])[0] if "url" in params else "").strip()
+        if not url:
+            self._send_error_json("url là bắt buộc", 400)
+            return
+        try:
+            from quan_ai_brain.integration.web_connector import HttpWebConnector
+
+            page = HttpWebConnector().fetch_page(url)
+            self._send_json({"success": True, "page": page})
+        except Exception as exc:
+            self._send_json({"success": False, "url": url, "error": str(exc)})
+
+    def _handle_api_web_rss(self, parsed_query) -> None:
+        ok, err, code = self._web_common_guard()
+        if not ok:
+            self._send_error_json(err["error"], code)  # type: ignore[index]
+            return
+        params = self._parse_web_query(parsed_query)
+        url = (params.get("url", [""])[0] if "url" in params else "").strip()
+        try:
+            max_items = min(int(params.get("max_items", ["10"])[0]), 25)
+        except ValueError:
+            max_items = 10
+        if not url:
+            self._send_error_json("url là bắt buộc", 400)
+            return
+        try:
+            from quan_ai_brain.integration.web_connector import RssConnector
+
+            feed = RssConnector().fetch_feed(url, max_items=max_items)
+            self._send_json({"success": True, "feed": feed})
+        except Exception as exc:
+            self._send_json({"success": False, "url": url, "error": str(exc)})
 
     def _handle_api_email_proposals_list(self, parsed_query) -> None:
         """Sprint 10 (c): danh sách đề xuất email (đọc-only). Tự generate nếu chưa có.

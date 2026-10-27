@@ -3617,6 +3617,32 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let wbProposalBusy = false;  // chống double-submit tạo task
+  let wbWebBusy = false;       // chống double-submit web search
+  async function webSearch() {
+    const el = $("wb-web-result");
+    const q = ($("wb-web-q").value || "").trim();
+    if (!q) { el.textContent = "Nhập từ khoá trước."; return; }
+    if (wbWebBusy) return;
+    wbWebBusy = true;
+    el.textContent = "⏳ Đang tìm…";
+    try {
+      const { ok, data } = await wbFetch(`/api/web/search?q=${encodeURIComponent(q)}&max_results=5`);
+      if (!ok || !data) { el.textContent = "KHÔNG KHẢ DỤNG"; return; }
+      if (data.success !== true) { el.innerHTML = `<span style="color:#f87171">⚠️ ${esc(data.error || "lỗi không rõ")}</span>`; return; }
+      if (!data.results.length) { el.textContent = "Không có kết quả nào."; return; }
+      el.innerHTML = data.results.map((r) => `
+        <div style="padding:6px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <div><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc;">${esc(r.title || r.url)}</a></div>
+          ${r.snippet ? `<div style="color:#94a3b8; font-size:0.7rem;">${esc(r.snippet)}</div>` : ""}
+          <div style="color:#64748b; font-size:0.65rem;">${esc(r.url)}</div>
+        </div>`).join("");
+    } catch (err) {
+      el.innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+    } finally {
+      wbWebBusy = false;
+    }
+  }
+
   let wbLessonBusy = false;    // chống double-submit promote lesson
   async function loadLessons() {
     try {
@@ -3778,6 +3804,8 @@ document.addEventListener("DOMContentLoaded", () => {
     $("wb-todo-add")?.addEventListener("click", addTodo);
     $("wb-email-sync")?.addEventListener("click", syncMockIntake);
     $("wb-lessons-refresh")?.addEventListener("click", loadLessons);
+    $("wb-web-search")?.addEventListener("click", webSearch);
+    $("wb-web-q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") webSearch(); });
     // Load khi tab được bật (lắng nghe click nav + load lần đầu nếu active)
     document.querySelectorAll(".nav-tab").forEach((btn) =>
       btn.addEventListener("click", () => {
