@@ -398,6 +398,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_task_cognitive_state(parsed.query)
             return
 
+        # Sprint 15 (d): session coordination — detect duplicate goals (GET, read-only)
+        if path == "/api/executive/tasks/duplicates":
+            self._handle_api_executive_task_duplicates()
+            return
+
         if path == "/api/executive/supervisor":
             self._handle_api_executive_supervisor()
             return
@@ -1286,13 +1291,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 with MemoryStore(db_path, workspace=workspace) as store:
                     session_mgr = SessionMemoryManager(store)
                     persistence_info = session_mgr.persist_chat_turn(
-                        session_id=session_id,
-                        user_query=query,
-                        assistant_reply=sanitized_reply,
-                        model_used=resp.model,
-                        used_memory_ids=[m.memory_id for m in context.used_memories],
-                        project_scope=scope or "general",
-                    )
+                                            session_id=session_id,
+                                            user_query=query,
+                                            assistant_reply=sanitized_reply,
+                                            model_used=resp.model,
+                                            used_memory_ids=[m.memory_id for m in context.used_memories],
+                                            project_scope=scope or "general",
+                                            # system_prompt NOT passed (Sprint 16 memory hygiene — do not store raw system instructions)
+                                        )
 
             all_warnings: list[str] = []
             if resp.warning:
@@ -2102,6 +2108,70 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_error_json(f"Error cancelling task: {exc}", 500)
+
+
+    def _handle_api_executive_task_duplicates(self) -> None:
+        """List tasks with duplicate goals (read-only, localhost-only). Sprint 15 (d)."""
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            self._send_error_json("Chỉ truy cập được từ máy chủ (localhost)", 403)
+            return
+        
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+            
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            tasks = registry.list_tasks(limit=200)
+            
+            # Group by goal
+            goal_map = {}
+            for t in tasks:
+                goal = t.goal.strip()
+                if not goal:
+                    continue
+                if goal not in goal_map:
+                    goal_map[goal] = []
+                goal_map[goal].append({
+                    "task_id": t.task_id,
+                    "status": t.status.value,
+                    "created_at_utc": t.created_at_utc,
+                    "correlation_id": t.correlation_id,
+                    "idempotency_key": t.idempotency_key,
+                })
+            
+            # Filter goals with >1 task
+            duplicates = {
+                goal: task_list
+                for goal, task_list in goal_map.items()
+                if len(task_list) > 1
+            }
+            
+            # Sort by count descending
+            sorted_duplicates = sorted(
+                duplicates.items(),
+                key=lambda x: len(x[1]),
+                reverse=True
+            )
+            
+            self._send_json({
+                "success": True,
+                "total_tasks": len(tasks),
+                "unique_goals": len(goal_map),
+                "duplicate_goals": len(duplicates),
+                "duplicates": [
+                    {
+                        "goal": goal,
+                        "count": len(task_list),
+                        "tasks": task_list
+                    }
+                    for goal, task_list in sorted_duplicates
+                ]
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self._send_error_json(f"Lỗi: {e}", 500)
 
     def _handle_api_executive_supervisor(self) -> None:
         workspace = _find_workspace_root()

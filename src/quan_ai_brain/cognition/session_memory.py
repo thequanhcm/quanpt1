@@ -98,13 +98,19 @@ class SessionMemoryManager:
         model_used: str,
         used_memory_ids: list[str] | None = None,
         project_scope: str = "general",
+        system_prompt: str | None = None,  # Sprint 16: optional, NOT stored (memory hygiene)
     ) -> dict[str, Any]:
-        """Record the conversational turn and any extracted facts into persistent storage."""
+        """Record the conversational turn and any extracted facts into persistent storage.
+        
+        Sprint 16 (Memory Hygiene): system_prompt is accepted but NOT stored to prevent
+        noise contradictions from raw system instructions. Only user_query + assistant_reply
+        are persisted.
+        """
         safe_query = redact_text(user_query.strip())
         safe_reply = redact_text(assistant_reply.strip())
         used_ids = used_memory_ids or []
 
-        # 1. Record episode in episodes table
+        # 1. Record episode in episodes table (NO system_prompt — memory hygiene)
         summary_text = f"User: {safe_query[:150]} | Assistant: {safe_reply[:150]}"
         episode_id = self.store.add_episode(
             summary=summary_text,
@@ -116,6 +122,7 @@ class SessionMemoryManager:
                 "assistant_reply": safe_reply,
                 "model_used": model_used,
                 "used_memory_ids": used_ids,
+                # system_prompt intentionally excluded (Sprint 16 memory hygiene)
             },
         )
 
