@@ -3618,6 +3618,55 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let wbProposalBusy = false;  // chống double-submit tạo task
   let wbWebBusy = false;       // chống double-submit web search
+  async function loadImprovement() {
+    try {
+      const { ok, status, data } = await wbFetch("/api/improvement/report");
+      const el = $("wb-impr-matrix");
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        return;
+      }
+      const r = data.report || {};
+      const lvlColor = (lvl) => lvl === "Đã có và hoạt động" ? "#86efac" : (lvl === "Bị chặn" ? "#f87171" : (lvl === "Chưa xác minh" ? "#fbbf24" : "#94a3b8"));
+      el.innerHTML = `<table style="width:100%; border-collapse:collapse;">
+        <tr style="color:#64748b; font-size:0.68rem;"><td>Năng lực</td><td>Mức</td><td>Bằng chứng</td></tr>
+        ${(r.matrix || []).map((m) => `
+          <tr style="border-top:1px solid rgba(148,163,184,0.12); padding:3px 0;">
+            <td style="padding:3px 4px 3px 0; color:#e2e8f0;">${esc(m.capability)}</td>
+            <td style="padding:3px 4px; color:${lvlColor(m.level)};">${esc(m.level)}</td>
+            <td style="padding:3px 0; color:#64748b; font-size:0.65rem;">${esc(m.evidence || "")}</td>
+          </tr>`).join("")}
+      </table>`;
+      $("wb-impr-improvements").innerHTML = (r.suggested_improvements || [])
+        .map((s) => `<div style="margin:2px 0;">💡 ${esc(s)}</div>`).join("");
+    } catch (err) {
+      $("wb-impr-matrix").innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function exportImprovement() {
+    const result = $("wb-impr-result");
+    result.style.color = "#fbbf24";
+    result.textContent = "⏳ Đang xuất…";
+    try {
+      const { ok, status, data } = await wbFetch("/api/improvement/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (ok && data && data.success === true) {
+        result.style.color = "#86efac";
+        result.textContent = `✅ Đã xuất: ${data.path} (${data.matrix_count} mục ma trận)`;
+      } else {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ Lỗi HTTP ${status}: ${esc(data?.error || "không rõ")}`;
+      }
+    } catch (err) {
+      result.style.color = "#f87171";
+      result.textContent = "⚠️ " + err.message;
+    }
+  }
+
   async function webSearch() {
     const el = $("wb-web-result");
     const q = ($("wb-web-q").value || "").trim();
@@ -3806,11 +3855,13 @@ document.addEventListener("DOMContentLoaded", () => {
     $("wb-lessons-refresh")?.addEventListener("click", loadLessons);
     $("wb-web-search")?.addEventListener("click", webSearch);
     $("wb-web-q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") webSearch(); });
+    $("wb-impr-refresh")?.addEventListener("click", loadImprovement);
+    $("wb-impr-export")?.addEventListener("click", exportImprovement);
     // Load khi tab được bật (lắng nghe click nav + load lần đầu nếu active)
     document.querySelectorAll(".nav-tab").forEach((btn) =>
       btn.addEventListener("click", () => {
         if (btn.dataset.tab === "tab-workbench") {
-          loadOverview(); loadTasks(); loadApprovals(); loadTodos(); loadProposals(); loadLessons();
+          loadOverview(); loadTasks(); loadApprovals(); loadTodos(); loadProposals(); loadLessons(); loadImprovement();
         }
       }));
   }

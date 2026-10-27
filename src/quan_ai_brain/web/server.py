@@ -533,6 +533,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_web_rss(parsed.query)
             return
 
+        # Sprint 13 (b): improvement report (GET, localhost-only)
+        if path == "/api/improvement/report":
+            self._handle_api_improvement_report(parsed.query)
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -647,6 +652,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/experience/lessons/promote":
             self._handle_api_experience_lessons_promote(body)
+            return
+
+        # Sprint 13 (b): xuất báo cáo tự đánh giá .md (POST — R2, owner bấm)
+        if path == "/api/improvement/export":
+            self._handle_api_improvement_export(body)
             return
 
         # Sprint 10 (c): email intelligence — tạo nhiệm vụ ứng viên (POST)
@@ -3752,6 +3762,47 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"success": True, "feed": feed})
         except Exception as exc:
             self._send_json({"success": False, "url": url, "error": str(exc)})
+
+    # ------------------------------------------------------------------
+    # Sprint 13 (b): Improvement report API (localhost-only, fail-honest)
+    # ------------------------------------------------------------------
+
+    def _handle_api_improvement_report(self, parsed_query) -> None:
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            self._send_error_json("Chỉ truy cập được từ máy chủ (localhost)", 403)
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.cognition.improvement_report import build_improvement_report
+
+            report = build_improvement_report(workspace)
+            self._send_json({"success": True, "report": report})
+        except Exception as exc:
+            self._send_error_json(f"Lỗi đọc improvement report: {exc}", 500)
+
+    def _handle_api_improvement_export(self, body: dict) -> None:
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            self._send_error_json("Chỉ truy cập được từ máy chủ (localhost)", 403)
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.cognition.improvement_report import (
+                build_improvement_report,
+                export_report_markdown,
+            )
+
+            report = build_improvement_report(workspace)
+            path = export_report_markdown(report, workspace)
+            self._send_json({
+                "success": True,
+                "exported": True,
+                "path": str(path.relative_to(workspace)),
+                "matrix_count": len(report.get("matrix", [])),
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi xuất báo cáo: {exc}", 500)
 
     def _handle_api_email_proposals_list(self, parsed_query) -> None:
         """Sprint 10 (c): danh sách đề xuất email (đọc-only). Tự generate nếu chưa có.
