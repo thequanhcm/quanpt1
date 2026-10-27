@@ -32,7 +32,12 @@ class SkillStatus(str, Enum):
 
 @dataclass
 class SkillRecord:
-    """Một Skill nghiệp vụ — quy trình tái sử dụng có kiểm chứng."""
+    """Một Skill nghiệp vụ — quy trình tái sử dụng có kiểm chứng.
+
+    V7 §3.2 mở rộng (back-compat: trường mới có default, from_dict tolerant):
+    schema đầu vào/đầu ra, quyền hạn, nguồn dữ liệu, chính sách timeout/lỗi,
+    rủi ro, tham chiếu test suite, thời điểm verify gần nhất.
+    """
 
     skill_id: str
     name: str
@@ -50,6 +55,20 @@ class SkillRecord:
     created_at: str = ""
     updated_at: str = ""
     change_notes: list[str] = field(default_factory=list)
+    # ---- V7 §3.2 additions (defaults giữ back-compat với registry V6) ----
+    input_schema: dict[str, str] = field(default_factory=dict)    # tên -> kiểu/ràng buộc
+    output_schema: dict[str, str] = field(default_factory=dict)   # tên -> kiểu/ràng buộc
+    permissions_required: list[str] = field(default_factory=list) # quyền tối thiểu
+    data_sources: list[str] = field(default_factory=list)         # nguồn dữ liệu được phép
+    timeout_policy: str = "default"       # vd "30s per source, fail-honest on timeout"
+    error_policy: str = "fail_honest"     # fail_honest | fail_closed | degrade_with_warning
+    risk_level: int = 0                   # 0-5, khớp thang rủi ro hệ thống
+    test_suite_ref: str = ""              # vd "tests/test_v7_skills.py::TestTaskStatusReconciliation"
+    test_result: str = ""                 # "PASS (n/n)" | "FAIL ..." | "" = chưa chạy
+    last_verified_at: str = ""            # ISO UTC; rỗng = chưa verify
+    exception_policy: list[str] = field(default_factory=list)     # xử lý ngoại lệ §3.3
+    stop_conditions: list[str] = field(default_factory=list)      # điều kiện dừng §3.3
+    approval_required: bool = False       # skill có cần phê duyệt chủ trước khi chạy thật
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -129,6 +148,18 @@ class SkillRegistry:
         evidence_refs: list[str] | None = None,
         known_limits: list[str] | None = None,
         initial_status: SkillStatus = SkillStatus.PROPOSED,
+        # ---- V7 §3.2 optional fields ----
+        input_schema: dict[str, str] | None = None,
+        output_schema: dict[str, str] | None = None,
+        permissions_required: list[str] | None = None,
+        data_sources: list[str] | None = None,
+        timeout_policy: str = "default",
+        error_policy: str = "fail_honest",
+        risk_level: int = 0,
+        test_suite_ref: str = "",
+        exception_policy: list[str] | None = None,
+        stop_conditions: list[str] | None = None,
+        approval_required: bool = False,
     ) -> SkillRecord:
         if not name.strip() or not goal.strip():
             raise ValueError("name and goal are required")
@@ -138,6 +169,10 @@ class SkillRegistry:
             raise ValueError("a skill must define acceptance criteria (fail-closed)")
         if initial_status not in (SkillStatus.PROPOSED, SkillStatus.IMPLEMENTED_IN_SANDBOX):
             raise ValueError("new skills must start PROPOSED or IMPLEMENTED_IN_SANDBOX")
+        if not 0 <= int(risk_level) <= 5:
+            raise ValueError("risk_level must be 0-5")
+        if error_policy not in ("fail_honest", "fail_closed", "degrade_with_warning"):
+            raise ValueError("error_policy must be one of fail_honest|fail_closed|degrade_with_warning")
 
         now = now_utc()
         skill = SkillRecord(
@@ -156,10 +191,48 @@ class SkillRegistry:
             created_at=now,
             updated_at=now,
             change_notes=[f"{now}: registered as {initial_status.value}"],
+            input_schema=dict(input_schema or {}),
+            output_schema=dict(output_schema or {}),
+            permissions_required=list(permissions_required or []),
+            data_sources=list(data_sources or []),
+            timeout_policy=timeout_policy,
+            error_policy=error_policy,
+            risk_level=int(risk_level),
+            test_suite_ref=test_suite_ref,
+            exception_policy=list(exception_policy or []),
+            stop_conditions=list(stop_conditions or []),
+            approval_required=bool(approval_required),
         )
         self._skills[skill.skill_id] = skill
         self._save()
         return skill
+
+    def record_test_result(self, skill_id: str, result: str) -> SkillRecord:
+        """V7 §3.5: ghi kết quả chạy test suite + dấu thời gian verify.
+
+        result phải khớp mẫu 'PASS ...' hoặc 'FAIL ...' (fail-honest: không
+        có mốc trung gian tự phong).
+        """
+        skill = self._skills.get(skill_id)
+        if skill is None:
+            raise KeyError(f"Unknown skill: {skill_id}")
+        r = (result or "").strip()
+        if not (r.startswith("PASS") or r.startswith("FAIL")):
+            raise ValueError("test result must start with PASS or FAIL (fail-honest)")
+        skill.test_result = r
+        skill.last_verified_at = now_utc()
+        skill.updated_at = skill.last_verified_at
+        skill.change_notes.append(f"{skill.last_verified_at}: test_result={r}")
+        self._save()
+        return skill
+
+    def list_skills_v7_ready(self) -> list[SkillRecord]:
+        """V7 §1: skill đủ điều kiện Cấp 1 — AVAILABLE/APPROVED + test PASS."""
+        return [
+            s for s in self._skills.values()
+            if s.status in (SkillStatus.AVAILABLE, SkillStatus.APPROVED)
+            and s.test_result.startswith("PASS")
+        ]
 
     def transition(
         self,
@@ -180,6 +253,12 @@ class SkillRegistry:
                 f"Illegal transition {skill.status.value} -> {new_status.value}; allowed: "
                 f"{sorted(s.value for s in allowed)}"
             )
+        # V7 fix: evidence truyền kèm transition được ghi nhận TRƯỚC khi kiểm
+        # tra điều kiện — vẫn fail-closed: nếu cả cũ lẫn mới đều rỗng thì chặn.
+        if evidence_refs:
+            for r in evidence_refs:
+                if r not in skill.evidence_refs:
+                    skill.evidence_refs.append(r)
         if new_status in (SkillStatus.AVAILABLE, SkillStatus.APPROVED) and not skill.evidence_refs:
             raise ValueError(
                 f"{new_status.value} requires verified evidence_refs (fail-closed: no untested skill in production)"
@@ -187,10 +266,6 @@ class SkillRegistry:
         skill.status = new_status
         skill.updated_at = now_utc()
         skill.change_notes.append(f"{skill.updated_at}: -> {new_status.value}: {reason.strip()}")
-        if evidence_refs:
-            for r in evidence_refs:
-                if r not in skill.evidence_refs:
-                    skill.evidence_refs.append(r)
         self._save()
         return skill
 
