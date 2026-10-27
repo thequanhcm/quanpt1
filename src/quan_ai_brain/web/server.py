@@ -515,6 +515,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_email_proposals_list(parsed.query)
             return
 
+        # Sprint 11 (b): experience lessons — list (GET, đọc-only)
+        if path == "/api/experience/lessons":
+            self._handle_api_experience_lessons_list(parsed.query)
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -620,6 +625,15 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Sprint 8 (c): Approval Center — duyệt/từ chối card (localhost-only)
         if path == "/api/approvals/decide":
             self._handle_api_approvals_decide(body)
+            return
+
+        # Sprint 11 (b): experience memory — consolidate + promote (POST, localhost-only)
+        if path == "/api/experience/consolidate":
+            self._handle_api_experience_consolidate(body)
+            return
+
+        if path == "/api/experience/lessons/promote":
+            self._handle_api_experience_lessons_promote(body)
             return
 
         # Sprint 10 (c): email intelligence — tạo nhiệm vụ ứng viên (POST)
@@ -1985,11 +1999,35 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             outcome = orchestrator.execute_lifecycle(task_id, dry_run=dry_run)
             task = registry.get_task(task_id)
             steps = registry.list_steps_for_task(task_id)
+
+            # Sprint 11 (d): consolidation — task kết thúc (COMPLETED/FAILED) tự sinh
+            # lesson candidate vào Experience Memory (fail-closed: lỗi không phá response)
+            lesson_note = None
+            try:
+                task_status = str(getattr(getattr(task, "status", None), "value", getattr(task, "status", ""))).upper()
+                if task_status in ("COMPLETED", "FAILED"):
+                    from quan_ai_brain.memory.experience_consolidation import extract_candidate_lesson
+                    from quan_ai_brain.memory.sqlite_store import MemoryStore
+
+                    mem_store = MemoryStore(workspace / "data" / "brain.db", workspace=workspace)
+                    lesson = extract_candidate_lesson(
+                        mem_store,
+                        task_id,
+                        str(getattr(task, "goal", "") or ""),
+                        task_status,
+                        result_summary=str(getattr(outcome, "summary", "") or ""),
+                        source_ref=f"execute:{task_id}",
+                    )
+                    lesson_note = lesson.to_dict()
+            except Exception as lesson_exc:
+                lesson_note = {"created": False, "reason": f"consolidation lỗi (không chặn execute): {lesson_exc}"}
+
             self._send_json({
                 "success": True,
                 "outcome": outcome.to_dict(),
                 "task": task.to_dict() if task else None,
                 "steps": [s.to_dict() for s in steps],
+                "experience_lesson": lesson_note,
             })
         except Exception as exc:
             self._send_error_json(f"Error executing task lifecycle: {exc}", 500)
@@ -3520,6 +3558,107 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Card không tồn tại: {exc}", 404)
         except Exception as exc:
             self._send_error_json(f"Error deciding approval: {exc}", 500)
+
+    # ------------------------------------------------------------------
+    # Sprint 11 (b): Experience Memory — lessons API (localhost-only, fail-closed)
+    # ------------------------------------------------------------------
+
+    def _handle_api_experience_lessons_list(self, parsed_query) -> None:
+        """Danh sách lessons: candidates (chờ duyệt) + confirmed (đã duyệt)."""
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            self._send_error_json("Chỉ truy cập được từ máy chủ (localhost)", 403)
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.memory.experience_consolidation import list_lessons
+            from quan_ai_brain.memory.sqlite_store import MemoryStore
+
+            store = MemoryStore(workspace / "data" / "brain.db", workspace=workspace)
+            data = list_lessons(store)
+            self._send_json({
+                "success": True,
+                "candidates": data["candidates"],
+                "confirmed": data["confirmed"],
+                "counts": {
+                    "candidates": len(data["candidates"]),
+                    "confirmed": len(data["confirmed"]),
+                },
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi đọc lessons: {exc}", 500)
+
+    def _handle_api_experience_consolidate(self, body: dict) -> None:
+        """Sinh lesson candidate từ kết quả nhiệm vụ (COMPLETED/FAILED)."""
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            self._send_error_json("Chỉ truy cập được từ máy chủ (localhost)", 403)
+            return
+        task_id = str(body.get("task_id", "")).strip()
+        outcome = str(body.get("outcome", "")).strip()
+        if not task_id or not outcome:
+            self._send_error_json("task_id và outcome là bắt buộc", 400)
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.memory.experience_consolidation import extract_candidate_lesson
+            from quan_ai_brain.memory.sqlite_store import MemoryStore
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            task = registry.get_task(task_id)
+            goal = task.goal if task else str(body.get("goal", ""))
+            store = MemoryStore(workspace / "data" / "brain.db", workspace=workspace)
+            result = extract_candidate_lesson(
+                store,
+                task_id,
+                goal,
+                outcome,
+                result_summary=str(body.get("result_summary", "")),
+            )
+            self._send_json({"success": True, **result.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Lỗi consolidate: {exc}", 500)
+
+    def _handle_api_experience_lessons_promote(self, body: dict) -> None:
+        """Owner duyệt lesson → VERIFIED + active. Bắt buộc owner xác nhận trong body."""
+        client_ip = self.client_address[0] if self.client_address else ""
+        if client_ip not in ("127.0.0.1", "::1", "localhost"):
+            self._send_error_json("Chỉ truy cập được từ máy chủ (localhost)", 403)
+            return
+        memory_id = str(body.get("memory_id", "")).strip()
+        owner_confirm = str(body.get("owner_confirm", "")).strip().upper()
+        if not memory_id:
+            self._send_error_json("memory_id là bắt buộc", 400)
+            return
+        if owner_confirm != "DUYET":
+            self._send_error_json(
+                "Cần owner_confirm='DUYET' — lesson chỉ promoted khi chủ sở hữu xác nhận",
+                403,
+            )
+            return
+        workspace = _find_workspace_root()
+        try:
+            from quan_ai_brain.memory.experience_consolidation import promote_lesson
+            from quan_ai_brain.memory.sqlite_store import MemoryStore
+
+            store = MemoryStore(workspace / "data" / "brain.db", workspace=workspace)
+            result = promote_lesson(
+                store,
+                memory_id,
+                lesson_note=str(body.get("lesson_note", "")),
+                approved_by="quanpt1",
+                approval_verified=True,  # owner_confirm=DUYET đã kiểm ở trên
+            )
+            self._send_json({"success": True, **result})
+        except KeyError as exc:
+            self._send_error_json(str(exc), 404)
+        except PermissionError as exc:
+            self._send_error_json(str(exc), 403)
+        except ValueError as exc:
+            self._send_error_json(str(exc), 409)
+        except Exception as exc:
+            self._send_error_json(f"Lỗi promote: {exc}", 500)
 
     def _handle_api_email_proposals_list(self, parsed_query) -> None:
         """Sprint 10 (c): danh sách đề xuất email (đọc-only). Tự generate nếu chưa có.

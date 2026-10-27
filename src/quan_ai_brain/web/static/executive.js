@@ -3617,6 +3617,81 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   let wbProposalBusy = false;  // chống double-submit tạo task
+  let wbLessonBusy = false;    // chống double-submit promote lesson
+  async function loadLessons() {
+    try {
+      const { ok, status, data } = await wbFetch("/api/experience/lessons");
+      const el = $("wb-lessons-list");
+      if (!ok || !data || data.success !== true) {
+        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        return;
+      }
+      const cands = data.candidates || [];
+      const confirmed = data.confirmed || [];
+      if (!cands.length && !confirmed.length) {
+        el.textContent = "Chưa có bài học nào — nhiệm vụ COMPLETED/FAILED sẽ tự sinh ứng viên.";
+        return;
+      }
+      const render = (rec, isCand) => {
+        const meta = rec.metadata || {};
+        return `<details style="padding:6px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
+          <summary style="cursor:pointer;">
+            ${isCand ? "🟡" : "✅"} <b>${esc(rec.content.split("\n")[0] || "")}</b>
+            <span style="font-size:0.7rem; color:${isCand ? "#fbbf24" : "#86efac"};">[${isCand ? "ỨNG VIÊN — CHƯA duyệt" : "ĐÃ DUYỆT"}]</span>
+          </summary>
+          <div style="margin:6px 0 4px 12px; color:#94a3b8; font-size:0.72rem; white-space:pre-wrap;">${esc(rec.content)}</div>
+          <div style="margin-left:12px; font-size:0.7rem; color:#64748b;">Task: ${esc(meta.task_id || "?")} · Nguồn: ${esc(rec.source_ref || "?")} · ${esc(rec.created_at_utc || "")}</div>
+          ${isCand ? `<button class="wb-promote-lesson" data-mid="${esc(rec.id)}" style="margin:6px 0 0 12px; background:rgba(16,185,129,0.15); color:#86efac; border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✔ Anh duyệt thành kinh nghiệm xác nhận</button>` : ""}
+        </details>`;
+      };
+      el.innerHTML =
+        (confirmed.length ? `<div style="margin-bottom:4px; color:#86efac; font-size:0.72rem;">Đã xác nhận (${confirmed.length})</div>` + confirmed.map((r) => render(r, false)).join("") : "") +
+        (cands.length ? `<div style="margin:8px 0 4px 0; color:#fbbf24; font-size:0.72rem;">Ứng viên chờ duyệt (${cands.length})</div>` + cands.map((r) => render(r, true)).join("") : "");
+      el.querySelectorAll(".wb-promote-lesson").forEach((b) =>
+        b.addEventListener("click", () => promoteLesson(b.dataset.mid)));
+    } catch (err) {
+      $("wb-lessons-list").innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function promoteLesson(memoryId) {
+    const result = $("wb-lessons-result");
+    if (wbLessonBusy) { result.textContent = "⏳ Đang xử lý — không gửi trùng."; return; }
+    if (!confirm("Duyệt bài học này thành kinh nghiệm XÁC NHẬN? Chỉ làm khi anh thật sự chấp nhận.")) return;
+    wbLessonBusy = true;
+    result.style.color = "#fbbf24";
+    result.textContent = "⏳ Đang duyệt…";
+    try {
+      const { ok, status, data } = await wbFetch("/api/experience/lessons/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memory_id: memoryId, owner_confirm: "DUYET" }),
+      });
+      if (ok && data && data.success === true) {
+        result.style.color = data.promoted ? "#86efac" : "#fbbf24";
+        result.textContent = data.promoted ? "✅ Đã duyệt — lesson VERIFIED + active." : "ℹ️ " + (data.reason || "Không đổi.");
+        await loadLessons();
+      } else if (status === 403) {
+        result.style.color = "#f87171";
+        result.textContent = "⚠️ " + (data?.error || "Cần xác nhận của anh (owner_confirm=DUYET).");
+      } else if (status === 404) {
+        result.style.color = "#f87171";
+        result.textContent = "⚠️ Lesson không tồn tại (404).";
+      } else if (status === 409) {
+        result.style.color = "#f87171";
+        result.textContent = "⚠️ " + (data?.error || "Lesson không ở trạng thái duyệt được.");
+      } else {
+        result.style.color = "#f87171";
+        result.textContent = `⚠️ Lỗi HTTP ${status}: ${esc(data?.error || "không rõ")}`;
+      }
+    } catch (err) {
+      result.style.color = "#f87171";
+      result.textContent = "⚠️ " + err.message;
+    } finally {
+      wbLessonBusy = false;
+    }
+  }
+
   async function loadProposals() {
     try {
       const { ok, status, data } = await wbFetch("/api/email/proposals");
@@ -3702,11 +3777,12 @@ document.addEventListener("DOMContentLoaded", () => {
     $("wb-todo-refresh")?.addEventListener("click", loadTodos);
     $("wb-todo-add")?.addEventListener("click", addTodo);
     $("wb-email-sync")?.addEventListener("click", syncMockIntake);
+    $("wb-lessons-refresh")?.addEventListener("click", loadLessons);
     // Load khi tab được bật (lắng nghe click nav + load lần đầu nếu active)
     document.querySelectorAll(".nav-tab").forEach((btn) =>
       btn.addEventListener("click", () => {
         if (btn.dataset.tab === "tab-workbench") {
-          loadOverview(); loadTasks(); loadApprovals(); loadTodos(); loadProposals();
+          loadOverview(); loadTasks(); loadApprovals(); loadTodos(); loadProposals(); loadLessons();
         }
       }));
   }
