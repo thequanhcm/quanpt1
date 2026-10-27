@@ -1102,6 +1102,57 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as _ev_exc:
                 ext_lookup_info["error"] = str(_ev_exc)[:160]
 
+            # 2.7 TTNS lookup (Sprint 6-GOP mục 4) — câu hỏi nhân sự/lịch họp nội bộ
+            # → bọc skill ttns-meeting-lookup (read-only), đưa kết quả vào context.
+            # Fail-closed: lỗi → không evidence, chat vẫn chạy; KHÔNG cache DB.
+            ttns_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.tools.ttns_lookup import (
+                    looks_like_ttns_query,
+                    ttns_lookup,
+                )
+
+                if looks_like_ttns_query(query):
+                    ttns_info["attempted"] = True
+                    _ttns = ttns_lookup(query)
+                    if _ttns and _ttns.get("answer"):
+                        ttns_info["answer_len"] = len(_ttns["answer"])
+                        _ttns_block = (
+                            "[EVIDENCE TTNS NỘI BỘ — nguồn tra cứu chính thức công ty, "
+                            "CHỈ TRA CỨU. Dùng thông tin này để trả lời; nếu không đủ, "
+                            "nói thiếu]\n" + _ttns["answer"][:6000]
+                        )
+                        context.system_instructions = (
+                            context.system_instructions + "\n" + _ttns_block
+                        )
+                    else:
+                        ttns_info["note"] = "lookup trả rỗng/lỗi — fail-closed"
+            except Exception as _ttns_exc:
+                ttns_info["error"] = str(_ttns_exc)[:160]
+
+            # 2.8 Document RAG evidence (Sprint 6-GOP mục 1) — câu hỏi về quy trình/
+            # sổ tay nội bộ → retrieve từ kho tài liệu (index riêng), đưa bằng chứng
+            # có citation vào context. Fail-closed: lỗi/không đủ → không evidence.
+            doc_rag_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.cognition.document_rag import DocumentRAG
+
+                _rag = DocumentRAG(workspace=str(workspace))
+                if _rag.count_chunks() > 0:
+                    _rr = _rag.retrieve(query)
+                    doc_rag_info["attempted"] = True
+                    if _rr.has_evidence:
+                        doc_rag_info["chunks"] = len(_rr.chunks)
+                        doc_rag_info["best_score"] = _rr.chunks[0].score
+                        _rag_block = _rr.render_evidence_block()
+                        context.system_instructions = (
+                            context.system_instructions + "\n" + _rag_block
+                        )
+                    else:
+                        doc_rag_info["note"] = "không tìm thấy bằng chứng đủ tốt"
+            except Exception as _rag_exc:
+                doc_rag_info["error"] = str(_rag_exc)[:160]
+
             # 3. LLM Generation
             req = LLMRequest(
                 prompt=context.rendered_context,

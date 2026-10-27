@@ -23,6 +23,23 @@ set "NETMIND_EXTERNAL_DATA_ALLOWED=true"
 if "%NETMIND_API_KEY%"=="" call :LoadUserEnv
 if "%GEMINI_API_KEY%"=="" call :LoadUserEnv
 
+REM [0/5] Ollama embedding (BGE-M3 cho semantic search 24/7) — Sprint 6-GOP
+REM Kiểm tra port 11434 trước khi start (tránh chạy 2 instance)
+echo [0/5] Kiem tra Ollama (BGE-M3 embedding)...
+curl -s -o nul --max-time 2 http://127.0.0.1:11434/api/tags >nul 2>&1
+if %errorlevel%==0 (
+    echo    OK: Ollama dang chay — bo qua
+) else (
+    if exist "E:\AI\Ollama\ollama.exe" (
+        start "QAB-Ollama" /MIN cmd /c "E:\AI\Ollama\ollama.exe serve >> logs\ollama_serve.log 2>&1"
+        timeout /t 5 /nobreak >nul
+        echo    OK: Ollama da khoi dong (port 11434)
+    ) else (
+        echo    CANH BAO: khong thay E:\AI\Ollama\ollama.exe — bo qua
+    )
+)
+
+
 REM [1/5] Dual Web Servers (8765 Local UI + 8766 Executive)
 echo [1/5] Khoi dong Dual Servers (8765 + 8766)...
 start "QAB-DualServers" /MIN .venv\Scripts\python.exe start_dual_servers.py
@@ -44,7 +61,7 @@ start "QAB-Watchdog" /MIN .venv\Scripts\python.exe tools\watchdog.py
 
 REM [5/5] Daily Backup 2AM (Task Scheduler user-level, idempotent)
 echo [5/5] Dat lich backup 2AM (Task Scheduler, user-level)...
-schtasks /Create /F /SC DAILY /ST 02:00 /TN "QUAN_AIBRAIN_Backup_2AM" /TR "\"E:\AI\QUAN AI BRAIN\tools\run_backup.bat\"" >nul 2>&1
+schtasks /Create /F /SC DAILY /ST 02:00 /TN "QUAN_AI_BRAIN_BACKUP_2AM" /TR "\"E:\AI\QUAN AI BRAIN\tools\run_backup.bat\"" >nul 2>&1
 if %errorlevel%==0 (echo    OK: backup 2AM da dat) else (echo    Binh thuong: backup da dat tu truoc hoac can Admin - bo qua)
 
 echo.
@@ -54,7 +71,7 @@ echo      - QAB-DualServers : http://127.0.0.1:8765 + http://127.0.0.1:8766
 echo      - QAB-NetChatBot  : Bot Tony Pham (NetChat 24/7)
 echo      - QAB-Learning    : Tu hoc lien tuc
 echo      - QAB-Watchdog    : Tu restart neu crash (ca 2 cong)
-echo    Backup tu dong 2AM: QUAN_AIBRAIN_Backup_2AM (Task Scheduler)
+echo    Backup tu dong 2AM: QUAN_AI_BRAIN_BACKUP_2AM (Task Scheduler)
 echo.
 echo    DE DUNG HE THONG: Dong 4 cua so MINIMIZED tuong ung.
 echo ============================================================
