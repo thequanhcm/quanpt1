@@ -23,7 +23,7 @@ import re
 import sqlite3
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +48,9 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "tasks": ("nhiệm vụ", "nhiem vu", "tasks", "backlog", "công việc", "cong viec"),
     "knowledge": ("tri thức", "tri thuc", "knowledge", "học được gì", "hoc duoc gi"),
     "help": ("giúp", "giup", "help", "lệnh", "lenh", "menu"),
+    # Sprint 8 (a): to-do cá nhân (read-only list; thêm việc qua câu tự do
+    # "nhớ giúp tôi..." xử lý ở route_message riêng)
+    "todo": ("việc cần làm", "viec can lam", "todo", "to-do", "việc hôm nay", "viec hom nay"),
 }
 
 # State-changing commands MUST start the message (imperative form).
@@ -398,11 +401,68 @@ def handle_help(payload: dict[str, Any] | None = None) -> str:
         "• 'trạng thái' — hiện trạng hệ thống (probe thật)",
         "• 'báo cáo' — báo cáo mới nhất",
         "• 'nhiệm vụ' — backlog nhiệm vụ",
+        "• 'việc cần làm' — to-do cá nhân đang mở",
+        "• 'nhớ giúp tôi: <việc> hạn <ngày>' — ghi việc mới",
         "• 'tri thức' — số liệu tri thức đã học",
         "• 'giúp' — xem lại các lệnh này",
         "",
         "Câu hỏi tự do khác: em sẽ trả lời bằng AI hội thoại.",
     ])
+
+
+def handle_todo_list(payload: dict[str, Any] | None = None) -> str:
+    """'việc cần làm': liệt kê to-do đang mở của anh (read-only)."""
+    try:
+        from quan_ai_brain.tools.todo_store import TodoStore
+
+        store = TodoStore(WORKSPACE / "data" / "todos.db")
+        items = store.list_open()
+        if not items:
+            return "✅ Anh không có việc nào đang mở. Cứ nhắn 'nhớ giúp tôi: ...' để em ghi lại việc mới."
+        lines = ["📋 VIỆC CẦN LÀM ĐANG MỞ", ""]
+        for t in items[:15]:
+            due = t.get("due") or "—"
+            pr = t.get("priority") or "normal"
+            mark = "🔴" if pr == "high" else ("🟡" if pr == "low" else "⚪")
+            lines.append(f"{mark} [{due}] {t['title']}")
+        lines.append("")
+        lines.append("Nhắn 'nhớ giúp tôi: <việc> hạn <ngày>' để thêm việc mới.")
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"⚠️ Lỗi đọc to-do: {type(exc).__name__}: {exc}"
+
+
+# Sprint 8 (a): "nhớ giúp tôi: <nội dung>" / "nhớ giúp tôi <nội dung>" → thêm to-do.
+# Có hạn thì dạng "hạn <YYYY-MM-DD>" hoặc "hạn mai/hôm kia".
+_TODO_ADD_RE = re.compile(
+    r"^\s*nhớ giúp tôi[:\s]+(.+)$", re.IGNORECASE
+)
+_TODO_DUE_RE = re.compile(r"\b(?:hạn|deadline)\s*(?:là\s*)?(dy|mai|hôm kia|hom kia|\d{4}-\d{2}-\d{2})\s*$", re.IGNORECASE)
+
+
+def _parse_todo_add(text: str) -> tuple[str, str] | None:
+    """Trả về (title, due) hoặc None nếu không khớp lệnh thêm việc."""
+    m = _TODO_ADD_RE.match(text or "")
+    if not m:
+        return None
+    content = m.group(1).strip()
+    due = ""
+    m_due = _TODO_DUE_RE.search(content)
+    if m_due:
+        token = m_due.group(1).lower()
+        today = datetime.now()
+        if token == "dy":
+            due = today.strftime("%Y-%m-%d")
+        elif token == "mai":
+            due = (today + timedelta(days=1)).strftime("%Y-%m-%d")
+        elif token in ("hôm kia", "hom kia"):
+            due = (today + timedelta(days=2)).strftime("%Y-%m-%d")
+        else:
+            due = token  # YYYY-MM-DD
+        content = content[: m_due.start()].strip(" ,-–—")
+    if not content:
+        return None
+    return content, due
 
 
 HANDLERS = {
@@ -412,6 +472,7 @@ HANDLERS = {
     "tasks": handle_tasks,
     "knowledge": handle_knowledge,
     "help": handle_help,
+    "todo": handle_todo_list,
 }
 
 
@@ -469,7 +530,24 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
     except Exception as exc:  # không phá các lệnh khác
         _audit("netchat_command.info_gap_adapter_error", {"error": str(exc)[:200]})
 
-    # 2) System commands (trạng thái/báo cáo/nhiệm vụ/tri thức/giúp/phê duyệt)
+    # 2) Sprint 8 (a): "nhớ giúp tôi: ..." → thêm to-do — chạy TRƯỚC detect_intent
+    #    để "nhớ giúp tôi: giúp anh Hùng sửa camera hạn mai" không bị nuốt vào help.
+    #    Lệnh đổi trạng thái mức thấp (chỉ ghi việc) — đứng SAU approval/info-gap.
+    todo_add = _parse_todo_add(text)
+    if todo_add is not None:
+        try:
+            from quan_ai_brain.tools.todo_store import TodoStore
+
+            store = TodoStore(WORKSPACE / "data" / "todos.db")
+            title, due = todo_add
+            item = store.add(title=title, due=due)
+            due_note = f" (hạn {due})" if due else ""
+            _audit("netchat_command.todo_add", {"id": item["id"]})
+            return "todo_add", f"✅ Đã ghi việc: {item['title']}{due_note}"
+        except Exception as exc:
+            return "todo_add", f"⚠️ Lỗi thêm việc: {type(exc).__name__}: {exc}"
+
+    # 3) System commands (trạng thái/báo cáo/nhiệm vụ/tri thức/giúp/phê duyệt)
     intent = detect_intent(text)
     if intent is not None:
         handler = HANDLERS[intent]

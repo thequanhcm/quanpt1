@@ -53,6 +53,8 @@ CONFIG = {
         "tools/",
         "pyproject.toml",
         "README.md",
+        "Skill/",
+        ".agents/skills/",
     ],
 }
 
@@ -264,10 +266,11 @@ def main() -> int:
                         print(f"   ✅ {full_path.name}: {ingested} facts")
 
                 elif full_path.is_dir():
-                    # Ingest all .md and .py files in directory
+                    # Ingest all .md and .py files in directory (recursive)
                     for ext in ["*.md", "*.py"]:
-                        for file_path in full_path.glob(ext):
-                            if "node_modules" in str(file_path) or ".venv" in str(file_path):
+                        for file_path in full_path.rglob(ext):
+                            p_str = str(file_path)
+                            if any(ignored in p_str for ignored in ("node_modules", ".venv", ".git", "__pycache__")):
                                 continue
 
                             if ext == "*.md":

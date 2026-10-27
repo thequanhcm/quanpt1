@@ -20,9 +20,11 @@ set "NETMIND_EXTERNAL_DATA_ALLOWED=true"
 if "%NETMIND_API_KEY%"=="" call :LoadUserEnv
 if "%GEMINI_API_KEY%"=="" call :LoadUserEnv
 
-REM ---- [0/5] Ollama: kiem tra + start bang python (khong dung curl/if/else) ----
+REM ---- [0/5] Ollama (port 11434, E:\AI\Ollama\ollama.exe): kiem tra + start bang python ----
 echo [0/5] Kiem tra Ollama (BGE-M3 embedding)...
-".venv\Scripts\python.exe" tools\khoi_dong_ollama.py
+if exist "E:\AI\Ollama\ollama.exe" (
+    ".venv\Scripts\python.exe" tools\khoi_dong_ollama.py
+)
 echo    (chi tiet xem logs\khoi_dong_ollama.log)
 
 REM ---- [1/5] Dual Web Servers ----
@@ -45,7 +47,7 @@ echo [4/5] Khoi dong Watchdog (tu restart, cap 5/gio)...
 start "QAB-Watchdog" /MIN ".venv\Scripts\python.exe" tools\watchdog.py
 timeout /t 2 /nobreak >nul
 
-REM ---- [5/5] Backup 2AM + Report 8AM (Task Scheduler, idempotent) ----
+REM ---- [5/5] Backup 2AM (QUAN_AI_BRAIN_BACKUP_2AM) + Report 8AM (Task Scheduler, idempotent) ----
 echo [5/5] Dat lich backup 2AM + report 8AM (Task Scheduler)...
 ".venv\Scripts\python.exe" tools\sched_task_setup.py
 

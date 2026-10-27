@@ -472,6 +472,16 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_supervisor_state()
             return
 
+        # Sprint 8 (c): Approval Center — danh sách cards đọc-only
+        if path == "/api/approvals":
+            self._handle_api_approvals_list()
+            return
+
+        # Sprint 8 (a): To-do — danh sách việc cần làm (đọc-only)
+        if path == "/api/todos":
+            self._handle_api_todos_list()
+            return
+
         if path.startswith("/edge_client/"):
             workspace = _find_workspace_root()
             rel = path.lstrip("/").replace("edge_client/", "")
@@ -563,6 +573,20 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/tasks/cancel":
             self._handle_api_executive_task_cancel(body)
+            return
+
+        # Sprint 8 (a): To-do — thêm / hoàn thành việc
+        if path == "/api/todos/add":
+            self._handle_api_todos_add(body)
+            return
+
+        if path == "/api/todos/done":
+            self._handle_api_todos_done(body)
+            return
+
+        # Sprint 8 (c): Approval Center — duyệt/từ chối card (localhost-only)
+        if path == "/api/approvals/decide":
+            self._handle_api_approvals_decide(body)
             return
 
         if path == "/api/executive/emergency":
@@ -3338,6 +3362,121 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_error_json(f"Error fetching supervisor state: {exc}", 500)
+
+    # ------------------------------------------------------------------
+    # Sprint 8 (a)+(c): To-do + Approval Center (27/10/2026)
+    # ------------------------------------------------------------------
+
+    def _handle_api_todos_list(self) -> None:
+        try:
+            from quan_ai_brain.tools.todo_store import TodoStore
+
+            store = TodoStore(_find_workspace_root() / "data" / "todos.db")
+            self._send_json({"success": True, "todos": store.list_open()})
+        except Exception as exc:
+            self._send_error_json(f"Error listing todos: {exc}", 500)
+
+    def _handle_api_todos_add(self, body: dict) -> None:
+        try:
+            from quan_ai_brain.tools.todo_store import TodoStore
+
+            store = TodoStore(_find_workspace_root() / "data" / "todos.db")
+            item = store.add(
+                title=str(body.get("title", "")),
+                due=str(body.get("due", "")),
+                priority=str(body.get("priority", "normal")),
+            )
+            self._send_json({"success": True, "todo": item})
+        except ValueError as exc:
+            self._send_error_json(str(exc), 400)
+        except Exception as exc:
+            self._send_error_json(f"Error adding todo: {exc}", 500)
+
+    def _handle_api_todos_done(self, body: dict) -> None:
+        try:
+            from quan_ai_brain.tools.todo_store import TodoStore
+
+            store = TodoStore(_find_workspace_root() / "data" / "todos.db")
+            ok = store.mark_done(int(body.get("id", 0)))
+            self._send_json({"success": ok}, 200 if ok else 404)
+        except Exception as exc:
+            self._send_error_json(f"Error completing todo: {exc}", 500)
+
+    def _handle_api_approvals_list(self) -> None:
+        try:
+            from quan_ai_brain.governance.approval_cards import ApprovalCardStore
+
+            workspace = _find_workspace_root()
+            store = ApprovalCardStore(
+                workspace / "data" / "governance.db", workspace=str(workspace)
+            )
+            cards = [
+                {
+                    "task_code": c.task_code,
+                    "title": c.title,
+                    "status": c.status,
+                    "version": c.version,
+                    "updated_at_utc": c.updated_at_utc,
+                    "card_markdown": c.card_markdown,
+                }
+                for c in store.list_cards()
+            ]
+            self._send_json({"success": True, "cards": cards})
+        except Exception as exc:
+            self._send_error_json(f"Error listing approval cards: {exc}", 500)
+
+    def _handle_api_approvals_decide(self, body: dict) -> None:
+        """Duyệt/từ chối card từ dashboard. An toàn:
+        - Chỉ localhost (server bind 127.0.0.1 mặc định; kiểm thêm header host).
+        - Require task_code + decision + note; consume-once như chuẩn.
+        """
+        try:
+            # localhost-only guard
+            client = (self.client_address[0] if self.client_address else "")
+            if client not in ("127.0.0.1", "::1"):
+                self._send_error_json("Approvals API chỉ chấp nhận localhost", 403)
+                return
+
+            from quan_ai_brain.governance.approval_cards import ApprovalCardStore
+
+            workspace = _find_workspace_root()
+            store = ApprovalCardStore(
+                workspace / "data" / "governance.db", workspace=str(workspace)
+            )
+            task_code = str(body.get("task_code", "")).strip()
+            decision = str(body.get("decision", "")).strip().lower()
+            note = str(body.get("note", ""))[:300]
+
+            if not task_code:
+                self._send_error_json("Thiếu task_code", 400)
+                return
+            if decision == "approve":
+                card = store.approve_card(
+                    task_code, "quanpt1",
+                    auth_method="dashboard_approval_center",
+                    notes=note or "Approved via dashboard Approval Center",
+                )
+                self._send_json({
+                    "success": True, "task_code": task_code,
+                    "status": card.status,
+                })
+            elif decision == "reject":
+                if not note:
+                    self._send_error_json("Từ chối phải kèm lý do (note)", 400)
+                    return
+                card = store.reject_card(task_code, note)
+                self._send_json({
+                    "success": True, "task_code": task_code,
+                    "status": card.status,
+                })
+            else:
+                self._send_error_json("decision phải là 'approve' hoặc 'reject'", 400)
+        except PermissionError as exc:
+            self._send_error_json(str(exc), 409)
+        except KeyError as exc:
+            self._send_error_json(f"Card không tồn tại: {exc}", 404)
+        except Exception as exc:
+            self._send_error_json(f"Error deciding approval: {exc}", 500)
 
     def _handle_api_supervisor_tick(self, body: dict) -> None:
         try:

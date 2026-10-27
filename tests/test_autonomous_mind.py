@@ -12,7 +12,7 @@ Verifies:
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -141,9 +141,15 @@ def test_keep_warm_pulse():
     mock_autonomic.ollama_port = 11434
     mock_autonomic.probe_port.return_value = (True, 15.0)
 
-    mind = AutonomousMind(autonomic_system=mock_autonomic)
-    assert mind.keep_warm_pulse() is True
-    assert mind.get_state()["keep_warm_count"] == 1
+    with patch("quan_ai_brain.cognition.autonomous_mind.GLOBAL_LLM_PROVIDER") as mock_provider:
+        mock_resp = MagicMock()
+        mock_resp.success = True
+        mock_provider.generate.return_value = mock_resp
+        mock_provider.client.embed.return_value = [0.1] * 1024
+
+        mind = AutonomousMind(autonomic_system=mock_autonomic)
+        assert mind.keep_warm_pulse() is True
+        assert mind.get_state()["keep_warm_count"] == 1
 
 
 def test_web_api_mind_handlers():

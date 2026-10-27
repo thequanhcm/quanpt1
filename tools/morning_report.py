@@ -122,6 +122,23 @@ def collect_report() -> str:
     else:
         lines.append("• Task chờ thông tin: chưa xác minh được (DB lỗi)")
 
+    # Sprint 8 (a): to-do quá hạn + đến hạn hôm nay
+    try:
+        from quan_ai_brain.tools.todo_store import TodoStore
+
+        todo = TodoStore(WORKSPACE / "data" / "todos.db")
+        groups = todo.overdue_and_today()
+        if groups["overdue"]:
+            names = "; ".join(t["title"] for t in groups["overdue"][:5])
+            lines.append(f"• 🔴 Việc QUÁ HẠN: {len(groups['overdue'])} — {names}")
+        if groups["today"]:
+            names = "; ".join(t["title"] for t in groups["today"][:5])
+            lines.append(f"• 📅 Việc đến hạn HÔM NAY: {len(groups['today'])} — {names}")
+        if not groups["overdue"] and not groups["today"]:
+            lines.append("• Việc cần làm: không có việc quá hạn/hạn hôm nay")
+    except Exception:
+        lines.append("• Việc cần làm: chưa xác minh được (DB lỗi)")
+
     lines.append("— Chi tiết: hỏi em trực tiếp hoặc xem dashboard 8765.")
     return "\n".join(lines)
 
