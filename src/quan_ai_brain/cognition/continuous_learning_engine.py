@@ -46,6 +46,17 @@ class LearningType(str, Enum):
     TYPE_E_SYSTEM = "TYPE_E_SYSTEM"            # Thay đổi hệ thống (cần phê duyệt)
 
 
+class LearningMode(str, Enum):
+    """CLO V1: Learning modes (A-G from master prompt)."""
+    MODE_A_SELF_DISCOVERY = "MODE_A_SELF_DISCOVERY"      # Hiểu trạng thái hệ thống
+    MODE_B_KNOWLEDGE_ACQUISITION = "MODE_B_KNOWLEDGE_ACQUISITION"  # Tiếp thu tri thức
+    MODE_C_REASONING = "MODE_C_REASONING"                # Phân tích và giải quyết vấn đề
+    MODE_D_MEMORY_CONSOLIDATION = "MODE_D_MEMORY_CONSOLIDATION"    # Gộp bộ nhớ
+    MODE_E_SELF_EVALUATION = "MODE_E_SELF_EVALUATION"    # Tự đánh giá
+    MODE_F_EXPERIMENT = "MODE_F_EXPERIMENT"              # Thử nghiệm và regression
+    MODE_G_PLANNING = "MODE_G_PLANNING"                  # Lập kế hoạch và ưu tiên
+
+
 class LearningStatus(str, Enum):
     """Learning lifecycle status."""
     DETECTED = "detected"
@@ -519,6 +530,10 @@ class ContinuousLearningEngine:
 
     def start_continuous_learning(self, objectives: list[str], source_manifest: dict[str, Any]) -> LearningSession:
         """Start continuous learning mode and create first session."""
+        return self.start_session_with_mode(objectives, source_manifest, None)
+
+    def start_session_with_mode(self, objectives: list[str], source_manifest: dict[str, Any], mode: LearningMode | None = None) -> LearningSession:
+        """Start a learning session with optional mode specification."""
         # Check if already enabled
         if self.session_manager.is_clo_enabled():
             current = self.session_manager.get_current_session()
@@ -527,6 +542,11 @@ class ContinuousLearningEngine:
 
         # Enable CLO
         self.session_manager.enable_clo()
+        
+        # Add mode to objectives if specified
+        if mode:
+            objectives = [f"[{mode.value}] {obj}" for obj in objectives]
+            source_manifest["mode"] = mode.value
         
         # Create new session
         session = self.session_manager.create_session(objectives, source_manifest)

@@ -397,6 +397,23 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/executive/tasks/cognitive-state":
             self._handle_api_task_cognitive_state(parsed.query)
             return
+        
+        # CLO V1: Continuous Learning API endpoints
+        if path == "/api/learning/status":
+            self._handle_api_learning_status()
+            return
+        elif path == "/api/learning/start":
+            self._handle_api_learning_start(parsed.query)
+            return
+        elif path == "/api/learning/stop":
+            self._handle_api_learning_stop(parsed.query)
+            return
+        elif path == "/api/learning/pause":
+            self._handle_api_learning_pause(parsed.query)
+            return
+        elif path == "/api/learning/resume":
+            self._handle_api_learning_resume()
+            return
 
         # Sprint 15 (d): session coordination — detect duplicate goals (GET, read-only)
         if path == "/api/executive/tasks/duplicates":
@@ -1347,6 +1364,37 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     durable_task_dict = task_rec.to_dict()
                     plan_note = f"\n\n📋 *Nhiệm vụ đã được tự động phân rã và đăng ký bền vững vào DurableTaskRegistry: `{task_rec.task_id}` (Rủi ro: {task_rec.risk_level}, Tiến trình: {len(task_rec.approved_scope)} bước DAG).* "
                     sanitized_reply += plan_note
+                    
+                    # CLO V1: Trigger learning session when task created
+                    try:
+                        from quan_ai_brain.cognition.continuous_learning_engine import ContinuousLearningEngine
+                        
+                        # Check if CLO is enabled
+                        with MemoryStore(db_path, workspace=workspace) as clo_store:
+                            clo_engine = ContinuousLearningEngine(clo_store, workspace=workspace)
+                            if clo_engine.session_manager.is_clo_enabled():
+                                # End current session if running, create next session
+                                current_session = clo_engine.session_manager.get_current_session()
+                                if current_session and current_session.status.value in ["RUNNING", "PLANNING", "EVALUATING"]:
+                                    # End current session with task info
+                                    next_plan = {
+                                        "objectives": ["Continue learning from task execution"],
+                                        "source_manifest": {"task_id": task_rec.task_id, "source": "chat_task"}
+                                    }
+                                    ended_session = clo_engine.end_session(
+                                        session_id=current_session.session_id,
+                                        evaluation_result={"task_created": True, "task_id": task_rec.task_id},
+                                        unresolved_questions=[],
+                                        next_plan=next_plan
+                                    )
+                                    learning_session_info = {
+                                        "session_ended": current_session.session_id,
+                                        "next_session": ended_session.session_id if ended_session.session_id != current_session.session_id else None,
+                                        "cycle_number": ended_session.cycle_number
+                                    }
+                    except Exception as clo_err:
+                        # Non-blocking: log but don't fail the request
+                        all_warnings.append(f"CLO session trigger: {str(clo_err)[:100]}")
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
 
@@ -4346,6 +4394,98 @@ def run_web_server(port: int = 8765, open_browser: bool = True) -> None:
     except KeyboardInterrupt:
         print("\n[Dung Server] Dang dong QUAN AI BRAIN Web UI...")
         server.server_close()
+
+    # ========== CLO V1: Continuous Learning API Handlers ==========
+
+    def _handle_api_learning_status(self) -> None:
+        """GET /api/learning/status — Get current CLO status."""
+        try:
+            from quan_ai_brain.cognition.continuous_learning_engine import ContinuousLearningEngine
+            
+            with MemoryStore(self.workspace / "data" / "brain.db", workspace=self.workspace) as store:
+                clo_engine = ContinuousLearningEngine(store, workspace=self.workspace)
+                status = clo_engine.get_learning_status()
+            
+            self._send_json({"success": True, "status": status})
+        except Exception as e:
+            self._send_json({"success": False, "error": str(e)[:200]})
+
+    def _handle_api_learning_start(self, parsed_query) -> None:
+        """POST /api/learning/start — Start continuous learning mode."""
+        try:
+            from quan_ai_brain.cognition.continuous_learning_engine import ContinuousLearningEngine
+            
+            # Parse request body
+            import json
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(content_length).decode('utf-8')) if content_length > 0 else {}
+            
+            objectives = body.get("objectives", ["Learn from tasks and interactions"])
+            source_manifest = body.get("source_manifest", {"sources": ["chat", "tasks", "memory"]})
+            
+            with MemoryStore(self.workspace / "data" / "brain.db", workspace=self.workspace) as store:
+                clo_engine = ContinuousLearningEngine(store, workspace=self.workspace)
+                session = clo_engine.start_continuous_learning(objectives, source_manifest)
+            
+            self._send_json({
+                "success": True,
+                "message": "Continuous learning started",
+                "session": session.to_dict()
+            })
+        except Exception as e:
+            self._send_json({"success": False, "error": str(e)[:200]})
+
+    def _handle_api_learning_stop(self, parsed_query) -> None:
+        """POST /api/learning/stop — Stop continuous learning permanently."""
+        try:
+            from quan_ai_brain.cognition.continuous_learning_engine import ContinuousLearningEngine
+            
+            import json
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(content_length).decode('utf-8')) if content_length > 0 else {}
+            
+            reason = body.get("reason", "Owner requested stop")
+            
+            with MemoryStore(self.workspace / "data" / "brain.db", workspace=self.workspace) as store:
+                clo_engine = ContinuousLearningEngine(store, workspace=self.workspace)
+                clo_engine.stop_continuous_learning(reason)
+            
+            self._send_json({"success": True, "message": f"Continuous learning stopped: {reason}"})
+        except Exception as e:
+            self._send_json({"success": False, "error": str(e)[:200]})
+
+    def _handle_api_learning_pause(self, parsed_query) -> None:
+        """POST /api/learning/pause — Pause continuous learning."""
+        try:
+            from quan_ai_brain.cognition.continuous_learning_engine import ContinuousLearningEngine
+            
+            import json
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = json.loads(self.rfile.read(content_length).decode('utf-8')) if content_length > 0 else {}
+            
+            reason = body.get("reason", "Temporary pause")
+            
+            with MemoryStore(self.workspace / "data" / "brain.db", workspace=self.workspace) as store:
+                clo_engine = ContinuousLearningEngine(store, workspace=self.workspace)
+                clo_engine.pause_continuous_learning(reason)
+            
+            self._send_json({"success": True, "message": f"Continuous learning paused: {reason}"})
+        except Exception as e:
+            self._send_json({"success": False, "error": str(e)[:200]})
+
+    def _handle_api_learning_resume(self) -> None:
+        """POST /api/learning/resume — Resume from pause."""
+        try:
+            from quan_ai_brain.cognition.continuous_learning_engine import ContinuousLearningEngine
+            
+            with MemoryStore(self.workspace / "data" / "brain.db", workspace=self.workspace) as store:
+                clo_engine = ContinuousLearningEngine(store, workspace=self.workspace)
+                clo_engine.resume_continuous_learning()
+            
+            self._send_json({"success": True, "message": "Continuous learning resumed"})
+        except Exception as e:
+            self._send_json({"success": False, "error": str(e)[:200]})
+
 def run_executive_server(port: int = 8766, open_browser: bool = True, host: str = "0.0.0.0") -> None:
     actual_port = port
     while is_port_in_use(actual_port, "127.0.0.1"):
