@@ -10,6 +10,26 @@ document.addEventListener("DOMContentLoaded", () => {
   let isListening = false;
   let wakeEngine = null;
   let isTtsEnabled = true;
+  // Speech lifecycle counters for the continuous conversation loop
+  let convTtsSeq = 0;
+  let convTtsLeakTimer = null;
+  // ===== Continuous Conversation Mode (V7.1 voice upgrade, 27/10/2026) =====
+  // Speech flow: STT -> /api/chat/stream -> edge-tts -> auto re-listen (no mic
+  // button, no wake word needed). isAwaitingReply keeps the loop honest: only
+  // re-arm listening AFTER a real reply (or error) — never on a dead stream.
+  let convMode = false;
+  let convWakeOnEntry = false; // wake word state before entering conv mode
+  let isAwaitingReply = false;
+  let convTtsPlaying = 0; // in-flight TTS count (0 = nothing playing)
+  let convPendingAfterSpeech = null; // callback to run once TTS finishes
+  function onConversationTtsDone() {
+    if (convTtsPlaying > 0) convTtsPlaying--;
+    if (convTtsPlaying === 0 && convMode && !isAwaitingReply && convPendingAfterSpeech) {
+      const cb = convPendingAfterSpeech;
+      convPendingAfterSpeech = null;
+      cb();
+    }
+  }
   let currentAvatarState = "IDLE";
   let setAvatarState = function(state) {};
 
@@ -554,9 +574,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
           window.digitalHuman.setContextFromText(finalText);
         }
-        speakText(finalText);   // TTS only AFTER the complete answer arrives
+        speakText(finalText, function () { resumeConvListeningAfterReply(); });   // TTS only AFTER the complete answer arrives
       } else {
         appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI.", "assistant");
+        finishConvTurn();
       }
     } catch (err) {
       // Streaming path failed — fall back to the legacy non-streaming endpoint.
@@ -574,9 +595,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
             window.digitalHuman.setContextFromText(data.reply);
           }
-          speakText(data.reply);
+          speakText(data.reply, function () { resumeConvListeningAfterReply(); });
         } else {
           appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI cục bộ.", "assistant");
+          finishConvTurn();
         }
       } catch (err2) {
         const removed = document.getElementById(streamId);
@@ -668,6 +690,156 @@ document.addEventListener("DOMContentLoaded", () => {
           if (wakeEngine) wakeEngine.notifySpeakingEnd();
         }
       });
+    }
+
+    // ===== Continuous Conversation Mode (V7.1 voice upgrade) =====
+    // One click = full speech conversation loop without wake words:
+    // speak -> AI replies aloud -> listens again automatically -> repeat.
+    const btnConvMode = document.getElementById("btn-conv-mode");
+    if (btnConvMode) {
+      btnConvMode.addEventListener("click", async () => {
+        if (!convMode) {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) {
+            appendMessage("HỆ THỐNG", "⚠️ Trình duyệt không hỗ trợ Web Speech API — cần Google Chrome hoặc Edge.", "system");
+            return;
+          }
+          try {
+            // Pre-request mic permission so the loop never dies silently on denial
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (err) {
+            appendMessage("HỆ THỐNG", "⚠️ Quyền truy cập Microphone bị từ chối — không thể bật hội thoại liên tục.", "system");
+            return;
+          }
+          convMode = true;
+          convWakeOnEntry = wakeEngine && wakeEngine.state !== "DISABLED";
+          if (convWakeOnEntry && wakeEngine) wakeEngine.stop();
+          btnConvMode.textContent = "💬 Hội thoại: BẬT";
+          btnConvMode.classList.add("active");
+          appendMessage("HỆ THỐNG", "💬 Chế độ hội thoại liên tục ĐÃ BẬT — Anh cứ nói thẳng, không cần gọi 'Tony ơi'. Em trả lời xong sẽ tự nghe tiếp. Nói 'dừng hội thoại' để tắt.", "system");
+          updateWakeWordUI("LISTENING");
+          startConvListening();
+        } else {
+          stopConvMode("Đã tắt chế độ hội thoại liên tục.");
+        }
+      });
+    }
+
+    function startConvListening() {
+      if (!convMode) return;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { stopConvMode("Trình duyệt không hỗ trợ Web Speech API."); return; }
+      try {
+        if (recognition) { try { recognition.onend = null; recognition.onresult = null; recognition.abort(); } catch (_) {} }
+        recognition = new SpeechRecognition();
+        recognition.lang = "vi-VN";
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onstart = () => {
+          isListening = true;
+          const voiceBtn = document.getElementById("btn-dialogue-voice");
+          if (voiceBtn) voiceBtn.classList.add("listening");
+          updateWakeWordUI("LISTENING");
+        };
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          handleConvUtterance(transcript);
+        };
+        recognition.onerror = (ev) => {
+          // no-speech / aborted are normal pauses in a live conversation — keep
+          // the loop alive; only hard errors end the turn.
+          if (ev.error === "no-speech" || ev.error === "aborted") {
+            if (convMode) startConvListening();
+            return;
+          }
+          isListening = false;
+          const voiceBtn = document.getElementById("btn-dialogue-voice");
+          if (voiceBtn) voiceBtn.classList.remove("listening");
+          if (convMode) {
+            updateWakeWordUI("ERROR");
+            finishConvTurn();
+          }
+        };
+        recognition.onend = () => {
+          isListening = false;
+          const voiceBtn = document.getElementById("btn-dialogue-voice");
+          if (voiceBtn) voiceBtn.classList.remove("listening");
+          // no-speech pauses: recognition ends without result — re-arm if idle
+          if (convMode && !isAwaitingReply && convTtsPlaying === 0) startConvListening();
+        };
+        try { recognition.start(); } catch (e) { /* already started */ }
+      } catch (err) {
+        stopConvMode("Không thể khởi động microphone: " + (err.message || err));
+      }
+    }
+
+    function handleConvUtterance(transcript) {
+      const t = (transcript || "").trim();
+      if (!t) { if (convMode) startConvListening(); return; }
+      const lower = t.toLowerCase();
+      // Voice control: end the continuous conversation
+      if (lower === "dừng hội thoại" || lower.includes("dừng hội thoại") || lower.includes("tắt hội thoại") || lower === "stop conversation") {
+        stopConvMode("Đã tắt chế độ hội thoại liên tục theo yêu cầu bằng giọng nói.");
+        return;
+      }
+      if (isAwaitingReply) return; // debounce: one reply at a time
+      isAwaitingReply = true;
+      updateWakeWordUI("THINKING");
+      const input = document.getElementById("dialogue-input");
+      if (input) {
+        input.value = t;
+        sendDialogueMessage();
+      } else {
+        finishConvTurn();
+      }
+    }
+
+    function finishConvTurn() {
+      isAwaitingReply = false;
+      if (convMode) {
+        updateWakeWordUI("LISTENING");
+        startConvListening();
+      }
+    }
+
+    function resumeConvListeningAfterReply() {
+      isAwaitingReply = false;
+      if (!convMode) return;
+      // If audio already finished before this callback, re-arm now; otherwise
+      // onConversationTtsDone will call us when the last audio ends.
+      if (convTtsPlaying === 0) {
+        updateWakeWordUI("LISTENING");
+        startConvListening();
+      } else {
+        convPendingAfterSpeech = function () {
+          updateWakeWordUI("LISTENING");
+          startConvListening();
+        };
+      }
+    }
+
+    function stopConvMode(reason) {
+      convMode = false;
+      isAwaitingReply = false;
+      convPendingAfterSpeech = null;
+      convTtsPlaying = 0;
+      try { if (recognition) { recognition.onend = null; recognition.onresult = null; recognition.abort(); } } catch (_) {}
+      const voiceBtn = document.getElementById("btn-dialogue-voice");
+      if (voiceBtn) voiceBtn.classList.remove("listening");
+      const btnConvMode = document.getElementById("btn-conv-mode");
+      if (btnConvMode) {
+        btnConvMode.textContent = "💬 Hội thoại: TẮT";
+        btnConvMode.classList.remove("active");
+      }
+      // Restore wake word if it was active before entering conv mode
+      if (convWakeOnEntry && wakeEngine) {
+        wakeEngine.start();
+        convWakeOnEntry = false;
+      }
+      if (typeof setAvatarState === "function") setAvatarState("IDLE");
+      if (reason) appendMessage("HỆ THỐNG", reason, "system");
+      updateWakeWordUI("DISABLED");
     }
 
     // Manual Mic button fallback
@@ -792,10 +964,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (wakeEngine) wakeEngine.notifySpeakingEnd();
   }
 
-  async function speakText(text) {
-    if (!isTtsEnabled) return;
+  async function speakText(text, onDone) {
+    if (!isTtsEnabled) {
+      // V7.1 fix: TTS disabled — still close the speech cycle so wake engine
+      // and avatar never stick in THINKING/SPEAKING after a text-only reply.
+      stopExecutiveAudio();
+      if (typeof setAvatarState === "function") setAvatarState("IDLE");
+      if (wakeEngine) wakeEngine.notifySpeakingEnd();
+      onConversationTtsDone();
+      if (typeof onDone === "function") { try { onDone(); } catch (_) {} }
+      return;
+    }
     stopExecutiveAudio();
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim()) {
+      onConversationTtsDone();
+      if (typeof onDone === "function") { try { onDone(); } catch (_) {} }
+      return;
+    }
 
     // Clean up markers preserving Vietnamese diacritics
     const clean = text.replace(/```[\s\S]*?```/g, " [Khối mã nguồn] ")
@@ -811,6 +996,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (wakeEngine) wakeEngine.notifySpeakingStart();
     if (typeof setAvatarState === "function") setAvatarState("SPEAKING");
+    // Track in-flight audio so the conversation loop knows when speech ends.
+    // Leak self-heal: if a count never drains (network stall), force-close
+    // after 120s so listening always re-arms.
+    convTtsPlaying++;
+    const mySeq = ++convTtsSeq;
+    const convDone = (() => {
+      let fired = false;
+      return () => {
+        if (fired) return;
+        fired = true;
+        clearTimeout(convTtsLeakTimer);
+        onConversationTtsDone();
+        if (typeof onDone === "function") { try { onDone(); } catch (_) {} }
+      };
+    })();
+    convTtsLeakTimer = setTimeout(() => { convTtsPlaying = 0; convDone(); }, 120000);
     if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
       window.digitalHuman.setContextFromText(clean);
     }
@@ -836,19 +1037,23 @@ document.addEventListener("DOMContentLoaded", () => {
           if (window.digitalHuman) window.digitalHuman.cancelUtterance();
           if (typeof setAvatarState === "function") setAvatarState("IDLE");
           if (wakeEngine) wakeEngine.notifySpeakingEnd();
+          convDone();
         };
         audio.onerror = () => {
           currentExecutiveAudio = null;
+          convDone();
           fallbackExecutiveBrowserTTS(clean);
         };
         await audio.play();
         return;
       } else {
         console.warn("Core TTS synthesize failed, checking browser voices:", data.error);
+        convDone();
         fallbackExecutiveBrowserTTS(clean);
       }
     } catch (err) {
       console.warn("Error calling /api/voice/tts-synthesize:", err);
+      convDone();
       fallbackExecutiveBrowserTTS(clean);
     }
   }
@@ -879,6 +1084,14 @@ document.addEventListener("DOMContentLoaded", () => {
       utter.voice = viVoice;
       utter.lang = viVoice.lang || "vi-VN";
       utter.rate = 1.0;
+      // Keep the loop honest: browser TTS counts as in-flight speech too.
+      convTtsPlaying++;
+      let fbDone = false;
+      const fbConvDone = () => {
+        if (fbDone) return;
+        fbDone = true;
+        onConversationTtsDone();
+      };
       utter.onstart = () => {
         if (typeof setAvatarState === "function") setAvatarState("SPEAKING");
         if (window.digitalHuman) window.digitalHuman.startSpeaking(3000);
@@ -887,11 +1100,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.digitalHuman) window.digitalHuman.cancelUtterance();
         if (typeof setAvatarState === "function") setAvatarState("IDLE");
         if (wakeEngine) wakeEngine.notifySpeakingEnd();
+        fbConvDone();
       };
       utter.onerror = () => {
         if (window.digitalHuman) window.digitalHuman.cancelUtterance();
         if (typeof setAvatarState === "function") setAvatarState("IDLE");
         if (wakeEngine) wakeEngine.notifySpeakingEnd();
+        fbConvDone();
       };
       window.speechSynthesis.speak(utter);
     } catch (e) {
