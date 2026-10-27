@@ -13,7 +13,10 @@ from email.utils import formatdate
 from pathlib import Path
 from typing import Any
 
-DRAFT_DIR = Path(__file__).resolve().parents[2] / "data" / "email_drafts"
+# Sprint 8 (b): nháp nằm trong WORKSPACE/data/email_drafts (src/ là code, không chứa data).
+# parents[2] từ src/quan_ai_brain/tools/ = src/ — sai; đi 3 cấp lên = workspace root.
+WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+DRAFT_DIR = WORKSPACE_ROOT / "data" / "email_drafts"
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
