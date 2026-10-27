@@ -1628,10 +1628,42 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             selected_model = decision.model
             self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
 
+            # V8 P1 (parity fix): teaching pipeline — stream path đã THIẾU lớp này
+            # khiến dashboard/voice/NetChat dạy "nhớ rằng..." bị bỏ quên. Nhân bản
+            # hành vi /api/chat (1160-1187): detect → persist → teach_note.
+            teach_note: str | None = None
+            try:
+                from quan_ai_brain.core.audit import AuditLogger as _V8AuditLogger
+                from quan_ai_brain.cognition.teach_pipeline import detect_teaching, persist_taught_memory
+
+                def _audit_s(event: str, details: dict[str, Any]) -> None:
+                    try:
+                        _V8AuditLogger(workspace).record(event, details)
+                    except Exception:
+                        pass
+
+                with MemoryStore(db_path, workspace=workspace) as t_store:
+                    teach = detect_teaching(query)
+                    if teach.is_teaching:
+                        saved = persist_taught_memory(
+                            t_store, teach.content, teach.memory_type, session_id=session_id,
+                        )
+                        teach_note = (
+                            f"✅ Em đã NHỚ vào trí nhớ dài hạn (ID {saved['id']}, loại {saved['memory_type']}, "
+                            f"nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"{teach.content[:200]}\""
+                        )
+                        _audit_s("owner_teach.persisted.stream", {"memory_id": saved["id"], "type": saved["memory_type"], "chars": len(teach.content)})
+            except Exception as teach_exc:
+                try:
+                    from quan_ai_brain.core.audit import AuditLogger as _V8AuditLogger2
+                    _V8AuditLogger2(workspace).record("owner_teach.error.stream", {"error": str(teach_exc)[:200]})
+                except Exception:
+                    pass
+
             # 2. Memory retrieval & session history.
             with MemoryStore(db_path, workspace=workspace) as store:
                 session_mgr = SessionMemoryManager(store)
-                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=6)  # V8 P4: depth 3→6 cho trao đổi đa lượt
                 retriever = CognitiveRetriever(store)
                 m_query = MemoryQuery(query=query, project_scope=scope, top_k=5, max_chars=4000)
                 retrieval = retriever.retrieve(m_query)
@@ -1650,6 +1682,51 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+            # V8 P1 (parity fix): Living Grounding Facts — nhân bản /api/chat
+            # (1211-1218): ép bot nói đúng về bản thân bằng probe thật.
+            try:
+                from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
+
+                grounding_block = render_grounding_block(collect_grounding_facts(current_model=selected_model))
+                context.system_instructions = grounding_block + "\n\n" + context.system_instructions
+            except Exception:
+                pass
+
+            # V8 P1 (parity fix): TTNS lookup (nhân sự/lịch họp nội bộ) — nhân bản
+            # /api/chat (1254-1280). Fail-closed: lỗi → không evidence, stream vẫn chạy.
+            try:
+                from quan_ai_brain.tools.ttns_lookup import looks_like_ttns_query, ttns_lookup
+
+                if looks_like_ttns_query(query):
+                    _ttns = ttns_lookup(query)
+                    if _ttns and _ttns.get("answer"):
+                        _ttns_block = (
+                            "[EVIDENCE TTNS NỘI BỘ — nguồn tra cứu chính thức công ty, "
+                            "CHỈ TRA CỨU. Dùng thông tin này để trả lời; nếu không đủ, "
+                            "nói thiếu]\n" + _ttns["answer"][:6000]
+                        )
+                        context.system_instructions = (
+                            context.system_instructions + "\n" + _ttns_block
+                        )
+            except Exception:
+                pass
+
+            # V8 P1 (parity fix): Document RAG (kho tài liệu nội bộ) — nhân bản
+            # /api/chat (1282-1303). Fail-closed.
+            try:
+                from quan_ai_brain.cognition.document_rag import DocumentRAG
+
+                _rag = DocumentRAG(workspace=str(workspace))
+                if _rag.count_chunks() > 0:
+                    _rr = _rag.retrieve(query)
+                    if _rr.has_evidence:
+                        _rag_block = _rr.render_evidence_block()
+                        context.system_instructions = (
+                            context.system_instructions + "\n" + _rag_block
+                        )
+            except Exception:
+                pass
+
             # 2.6 External lookup evidence — như /api/chat (câu hỏi thời sự mới tra;
             # fail-closed, không bao giờ làm chết stream).
             _stream_researching = False
@@ -1665,6 +1742,31 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     push_avatar_expression("RESEARCHING", transcript="Đang tra cứu thông tin ngoài...")
             except Exception:
                 pass
+
+            # V8 P1: V7 progress chain parity — nhân bản /api/chat (1485-1507).
+            # Read-only, fail-honest; lỗi chỉ gửi warning frame, không chết stream.
+            progress_check_block = None
+            try:
+                from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
+                from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
+
+                _v7_matches = _V7SR(workspace / "data" / "skill_registry.json").find_matching_skills(query or "")
+                if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
+                    _v7_result = _v7_chain(query or "", workspace)
+                    progress_check_block = {
+                        "chain": _v7_result["chain"],
+                        "conclusion": _v7_result["reconciliation"]["conclusion"],
+                        "records_matched": _v7_result["reconciliation"]["records_matched"],
+                        "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
+                        "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
+                        "risk_summary": _v7_result["risk_summary"],
+                        "report_md": _v7_result["report_md"],
+                    }
+            except Exception as v7_err:
+                try:
+                    self.wfile.write(_sse({"type": "meta", "v7_chain_warning": str(v7_err)[:100]}))
+                except Exception:
+                    pass
 
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
             req = LLMRequest(
@@ -1702,6 +1804,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             full_text = OutputGuardrails.sanitize("".join(parts))[0]
             grounding_analysis = OutputGuardrails.analyze_grounding(full_text, context=context)
 
+            # V8 P1 (parity): teach confirmation ghép TRƯỚC reply — như /api/chat:1526-1527.
+            if teach_note:
+                full_text = (teach_note + "\n\n" + full_text) if full_text else teach_note
+
             # 4. Persist the COMPLETE answer only after stream completion.
             persistence_info: dict[str, Any] = {}
             if full_text:
@@ -1719,6 +1825,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             final_event.setdefault("type", "final")
             final_event.update({
                 "reply": full_text,
+                "teach_note": teach_note,
+                "progress_check": progress_check_block,
                 "grounding": grounding_analysis.to_dict(),
                 "session_id": session_id,
                 "routing": {"tier": decision.tier, "model": decision.model, "is_fallback": decision.is_fallback},

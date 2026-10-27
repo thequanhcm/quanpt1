@@ -283,6 +283,26 @@ class PromptContextBuilder:
         sections.append(sec_request)
         section_stats["user_request"] = len(sec_request)
 
+        # V8 P2: [CONVERSATION GUIDANCE] — tiếng Việt tự nhiên, đúng trọng tâm,
+        # không bịa (master prompt V8 §III/§IV/§V). Inject SAO CHÉP quy tắc vào
+        # prompt LLM, không đụng nội dung trả lời; tắt được qua flag env.
+        try:
+            import os as _v8_os
+
+            from quan_ai_brain.cognition.vietnamese_conversation import (
+                build_guidance_block,
+                classify_request,
+                should_inject_guidance,
+            )
+
+            if not _v8_os.environ.get("QUAN_AI_BRAIN_V8_GUIDANCE_OFF") and should_inject_guidance(safe_query):
+                _v8_kind = classify_request(safe_query)
+                sec_guidance = build_guidance_block(_v8_kind)
+                sections.append(sec_guidance)
+                section_stats["conversation_guidance"] = len(sec_guidance)
+        except Exception:
+            pass  # guidance là lớp tăng cường — không bao giờ làm chết context
+
         # Assemble complete context text
         rendered_context = "\n\n".join(sections)
         total_chars = len(rendered_context)

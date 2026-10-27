@@ -1,0 +1,99 @@
+{
+  "mode": "after",
+  "total": 15,
+  "passed": 15,
+  "failed": 0,
+  "checks": [
+    {
+      "group": "A",
+      "name": "[parity] teach pipeline (detect_teaching): chat=True(2) stream=True(2)",
+      "pass": true,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=2"
+    },
+    {
+      "group": "A",
+      "name": "[parity] grounding facts (BỘ SỰ THẬT SỐNG): chat=True(2) stream=True(2)",
+      "pass": true,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=2"
+    },
+    {
+      "group": "A",
+      "name": "[parity] TTNS lookup (nhân sự/lịch họp): chat=True(2) stream=True(2)",
+      "pass": true,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=2"
+    },
+    {
+      "group": "A",
+      "name": "[parity] Document RAG (kho tài liệu): chat=True(2) stream=True(2)",
+      "pass": true,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=2"
+    },
+    {
+      "group": "A",
+      "name": "[parity] V7 progress chain: chat=True(1) stream=True(1)",
+      "pass": true,
+      "evidence": "/api/chat refs=1, /api/chat/stream refs=1"
+    },
+    {
+      "group": "A",
+      "name": "[history] stream history limit>=6",
+      "pass": true,
+      "evidence": "find 'limit=6' at get_recent_session_history in stream handler"
+    },
+    {
+      "group": "B",
+      "name": "[normalize] làm sạch filler + khoảng trắng",
+      "pass": true,
+      "evidence": "in='ừ  ơi  cho anh hỏi   hiện trạng hệ thống nhé' out='ơi cho anh hỏi hiện trạng hệ thống nhé'"
+    },
+    {
+      "group": "B",
+      "name": "[normalize] giữ nguyên mã kỹ thuật",
+      "pass": true,
+      "evidence": "in='Kiểm tra TASK-123 và R5 85% 8766' out='Kiểm tra TASK-123 và R5 85% 8766'"
+    },
+    {
+      "group": "B",
+      "name": "[classify] 7 loại yêu cầu §3.2",
+      "pass": true,
+      "evidence": "'8766 là cổng gì?'->question_short; 'Phân tích kiến trúc DAG so sán'->tech_analysis; 'Làm tiếp đi'->context_dependent; 'Sửa phần đó'->context_dependent; 'Khẩn cấp: hệ thống còn chạy kh'->urgent; 'Nhớ "
+    },
+    {
+      "group": "B",
+      "name": "[guidance] block xuất hiện trong rendered_context",
+      "pass": true,
+      "evidence": "tìm '[CONVERSATION GUIDANCE' trong context query 'làm tiếp đi'"
+    },
+    {
+      "group": "B",
+      "name": "[guidance] không phá context tiếng Anh/thường",
+      "pass": true,
+      "evidence": "các block gốc vẫn còn"
+    },
+    {
+      "group": "B",
+      "name": "[tts] từ điển đọc mã (R5→đọc được)",
+      "pass": true,
+      "evidence": "out='Cổng R năm bị chặn, task TASK-123 chạy 85% trên cổng 8766, dung lượng 4GB'"
+    },
+    {
+      "group": "B",
+      "name": "[tts] không cắt giữa câu",
+      "pass": true,
+      "evidence": "out_tail=' chạy 85% trên cổng 8766, dung lượng 4GB'"
+    },
+    {
+      "group": "B",
+      "name": "[tts] đọc số/quy mô tự nhiên",
+      "pass": true,
+      "evidence": "out='Kết quả: 1071 passed, 1 skipped, tổng 1072 tests'"
+    },
+    {
+      "group": "C",
+      "name": "[live-stream-teach] dạy qua stream → episode persist",
+      "pass": true,
+      "evidence": " Em đã NHỚ vào trí nhớ dài hạn (ID 4986e18a-d703-4eac-99be-ea42393a3327, loại SEMANTIC, nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"marker smoke V8 \nepisodes AFTER: 1\n\n✅ PASS: teach-via-stream persis"
+    }
+  ],
+  "note": "Section C viết 1 episode teach thật vào brain.db (đúng chức năng owner teaching)."
+}

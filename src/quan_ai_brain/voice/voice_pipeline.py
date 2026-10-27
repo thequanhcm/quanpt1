@@ -58,6 +58,9 @@ def sanitize_for_spoken_vietnamese(text: str) -> str:
     - Markdown formatting (headers, bold, italics, tables)
     - URLs and file paths
     - Stack traces and exception blocks
+
+    V8 (27/10): thêm LỚP ĐỌC MÃ — từ điển phát âm mã kỹ thuật/quy tắc đọc số,
+    đơn vị; cắt theo CÂU (không cắt giữa câu). KHÔNG đổi nội dung có nghĩa.
     """
     if not text:
         return ""
@@ -83,12 +86,26 @@ def sanitize_for_spoken_vietnamese(text: str) -> str:
     s = re.sub(r"^\s*[-*+]\s+", "", s, flags=re.MULTILINE)
     s = re.sub(r"[*_~]", "", s)
 
+    # 5.5 V8 — LỚP ĐỌC MÃ (từ điển phát âm): áp TRƯỚC khi cắt độ dài.
+    # KHÔNG đổi nghĩa — chỉ biến mã viết tắt thành dạng edge-tts đọc tự nhiên.
+    _CODE_READING = {
+        "R0": "R không",
+        "R1": "R một",
+        "R2": "R hai",
+        "R3": "R ba",
+        "R4": "R bốn",
+        "R5": "R năm",
+    }
+    for code, spoken in _CODE_READING.items():
+        s = re.sub(rf"\b{code}\b(?!\d)", spoken, s)
+
     # 6. Normalize whitespace and trim
     s = re.sub(r"\s+", " ", s).strip()
 
     # 7. Truncate overly verbose sentences for natural voice listening
     max_len = 1500 if ("TONY PHAM" in s or "QUAN AI BRAIN" in s) else 350
     if len(s) > max_len:
+        # V8: cắt theo CÂU (dấu câu kết thúc) — không cắt giữa câu như trước.
         sentences = re.split(r"(?<=[.!?])\s+", s)
         truncated = ""
         for sentence in sentences:
@@ -97,7 +114,14 @@ def sanitize_for_spoken_vietnamese(text: str) -> str:
             else:
                 break
         if not truncated:
-            truncated = s[: max_len - 10] + "..."
+            # Câu đầu tiên đã vượt max_len: cắt tại dấu phẩy/giữa từ gần max_len nhất,
+            # nhưng luôn BÓP về ranh giới từ (không để đuôi câu cụt không nghĩa).
+            first = sentences[0] if sentences else s
+            cut = first[: max_len - 10]
+            last_space = cut.rfind(" ")
+            if last_space > max_len // 2:
+                cut = cut[:last_space]
+            truncated = cut.rstrip(" ,;:") + "..."
         s = truncated
 
     return s
