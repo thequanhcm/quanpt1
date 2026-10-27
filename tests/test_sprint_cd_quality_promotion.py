@@ -236,10 +236,16 @@ def test_self_model_live_probe_answers_with_evidence(tmp_path):
     # Q2/Q3: components online/offline from real probes
     all_components = qa["q2_components_online"] + qa["q3_components_offline_unverified"]
     assert {c["component_id"] for c in all_components} == {"core_server", "ollama_daemon", "pi5_edge"}
-    # Ollama is offline in this environment — honesty contract
-    ollama_states = [e["status"] for e in qa["q2_components_online"] + qa["q3_components_offline_unverified"]
+    # Ollama status must reflect the REAL probe — whichever state the environment is in.
+    # Honesty contract: the engine reports what it measured, not what the test assumes.
+    ollama_states = [e["status"] for e in all_components
                      if e["component_id"] == "ollama_daemon"]
-    assert ollama_states == ["OFFLINE"]
+    assert len(ollama_states) == 1
+    assert ollama_states[0] in ("OFFLINE", "ONLINE", "HEALTHY", "DEGRADED")
+    # exactly one of Q2 (online) or Q3 (offline) contains it, never both
+    online_ids = {c["component_id"] for c in qa["q2_components_online"]}
+    offline_ids = {c["component_id"] for c in qa["q3_components_offline_unverified"]}
+    assert ("ollama_daemon" in online_ids) != ("ollama_daemon" in offline_ids)
     # DB counts come from real SQL
     assert qa["q7_approved_knowledge"]["count"] >= 0
     assert qa["q7_approved_knowledge"]["source"].startswith("sqlite:")

@@ -118,7 +118,7 @@ def collect_grounding_facts(current_model: str | None = None) -> dict[str, Any]:
     # 4. Kết luận kiến trúc trung thực (chỉ dựa trên kết quả probe ở trên)
     ollama = ports.get("ollama_local") == "ONLINE"
     pi5 = edge["connected"]
-    if current_model and "cloud" in facts["llm"]["runs_on"]:
+    if current_model and "cloud" in facts["llm"]["runs_on"].lower():
         arch = (
             f"Suy luận hiện tại chạy trên cloud ({current_model}). "
             f"Ollama local: {'ONLINE' if ollama else 'OFFLINE'}. "

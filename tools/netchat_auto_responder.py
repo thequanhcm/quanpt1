@@ -269,8 +269,40 @@ def main():
                 if len(seen_ids) > 500:
                     seen_ids = set(sorted(seen_ids)[-200:])
 
+            # V3 Sprint 4 (b): auto-reminder info-gap — mỗi ~12 vòng (≈1 phút)
+            # quét task chờ quá hạn → gửi nhắc theo chính sách should_send_reminder
+            # (≤5 lần, cách 12h; im lặng của anh KHÔNG đồng ý — chỉ nhắc, không tự làm)
             if iteration % 12 == 0:
-                print(f"[DEBUG] Iteration {iteration}, seen={len(seen_ids)}")
+                try:
+                    from quan_ai_brain.governance.netchat_info_gap_adapter import (
+                        get_analyzer, CHANNEL_ID as _CH,
+                    )
+                    import subprocess as _sp
+
+                    _ana = get_analyzer()
+                    for _row in _ana.list_waiting():
+                        _tid = _row["task_id"]
+                        if not _ana.should_send_reminder(_tid):
+                            continue
+                        _spec = json.loads(_row["spec_json"])
+                        _open = [q for q in _spec.get("questions", []) if q.get("status") == "OPEN"]
+                        if not _open:
+                            continue
+                        _remind = (
+                            f"🔔 Nhắc việc (lần {_row['reminder_count'] + 1}/5) — {_tid}: "
+                            + " ".join(q["question"] for q in _open[:2])
+                            + "\nTrạng thái: ĐANG CHỜ ANH QUANPT1 CUNG CẤP THÔNG TIN HOẶC CHỈ ĐẠO. CHƯA THỰC HIỆN HÀNH ĐỘNG NGHIỆP VỤ."
+                        )
+                        _ana.note_reminder_sent(_tid)
+                        _sp.run(
+                            [r"C:/Users/DELL/AppData/Local/netmind_desktop/netmind-agent/venv/Scripts/python.exe",
+                             r"C:/Users/DELL/AppData/Local/netmind_desktop/skills/bot-netchat/netchat_bot.py",
+                             "send", _CH, "--to-channel", _remind],
+                            capture_output=True, text=True, timeout=30,
+                        )
+                        print(f"   ⏰ Reminder sent: {_tid} (lần {_row['reminder_count'] + 1})")
+                except Exception as _rem_err:
+                    print(f"   ⚠️ reminder job error: {_rem_err}")
 
             time.sleep(5)
 
