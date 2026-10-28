@@ -1,9 +1,9 @@
 """
-Voice Interface (V24.3) — QUAN AI BRAIN.
+Voice Interface (V24.3) - QUAN AI BRAIN.
 
-SIMULATED: speech I/O via in-memory MockASR / MockTTS implementing
-ASR/TTS interfaces. No microphone, no audio files, no network, no
-PyAudio/librosa/Cloud STT as sketched in the V24 plan.
+SIMULATED: speech I/O via in-memory MockASR / MockTTS implementing the
+ASRInterface/TTSInterface contracts. No microphone, no audio files, no
+network, no PyAudio/Cloud STT as sketched in the V24 plan.
 """
 
 from __future__ import annotations
@@ -43,25 +43,25 @@ class TTSError(Exception):
 
 
 class ASRInterface:
-    """Abstract speech-to-text interface (production would wrap a real engine)."""
+    """Abstract speech-to-text interface."""
 
-    def start_listening(self) -> None:  # pragma: no cover - interface
+    def start_listening(self) -> None:
         raise NotImplementedError
 
-    def stop_listening(self) -> None:  # pragma: no cover - interface
+    def stop_listening(self) -> None:
         raise NotImplementedError
 
-    def transcribe(self, audio: Any = None) -> str:  # pragma: no cover
+    def transcribe(self, audio: Any = None) -> str:
         raise NotImplementedError
 
 
 class TTSInterface:
     """Abstract text-to-speech interface."""
 
-    def speak(self, text: str) -> str:  # pragma: no cover - interface
+    def speak(self, text: str) -> str:
         raise NotImplementedError
 
-    def stop(self) -> None:  # pragma: no cover - interface
+    def stop(self) -> None:
         raise NotImplementedError
 
 
@@ -69,7 +69,7 @@ class TTSInterface:
 class MockASR(ASRInterface):
     """In-memory ASR stub: replays a scripted transcript; optionally fails.
 
-    SIMULATED speech recognition — no audio, just scripted strings.
+    SIMULATED speech recognition - no audio, just scripted strings.
     """
     script: List[str] = field(default_factory=list)
     fail: bool = False
@@ -96,7 +96,7 @@ class MockASR(ASRInterface):
 class MockTTS(TTSInterface):
     """In-memory TTS stub: records spoken lines instead of playing audio.
 
-    SIMULATED speech synthesis — lines are captured in `spoken`.
+    SIMULATED speech synthesis - lines are captured in `spoken`.
     """
     spoken: List[str] = field(default_factory=list)
     speaking: bool = False
@@ -116,16 +116,16 @@ class MockTTS(TTSInterface):
 
 @dataclass
 class VoiceTurn:
-    """One completed listen -> respond cycle."""
-    transcript: str
+    """One listen->respond cycle within a session."""
+    transcript: str = ""
     response: str = ""
     interrupted: bool = False
-    started_at: float = field(default_factory=time.monotonic)
+    started_at: Optional[float] = None
     ended_at: Optional[float] = None
 
     @property
     def duration(self) -> Optional[float]:
-        if self.ended_at is None:
+        if self.started_at is None or self.ended_at is None:
             return None
         return self.ended_at - self.started_at
 
@@ -149,10 +149,12 @@ class VoiceInterface:
 
     State flow: IDLE -> LISTENING -> TRANSCRIBING -> RESPONDING -> IDLE.
     - timeout: max seconds for LISTENING before auto-return to IDLE
-      (checked with an injectable clock — no real sleeps in tests).
-    - barge-in: user speech during RESPONDING cancels the response;
-      simulated deterministically via respond(interrupt_during_speech=True)
-      or an external barge_in() call while RESPONDING.
+      (checked with an injectable clock - no real sleeps in tests).
+    - barge-in: user speech cancels the pending/in-progress response;
+      call barge_in() from TRANSCRIBING/RESPONDING, or pass
+      interrupt_during_speech=True to respond() to simulate mid-speech
+      interruption deterministically.
+    - Multiple turns per session: use next_turn() between utterances.
     """
 
     def __init__(self, asr: ASRInterface, tts: TTSInterface,
@@ -181,7 +183,7 @@ class VoiceInterface:
     # -- session control ------------------------------------------------------
 
     def start_session(self) -> None:
-        """IDLE -> LISTENING. Resets per-session counters."""
+        """IDLE -> LISTENING. Starts a new turn and resets session counters."""
         if self.state is not VoiceState.IDLE:
             raise RuntimeError("session already active")
         self.turns = []
@@ -193,6 +195,7 @@ class VoiceInterface:
         self._transition(VoiceState.LISTENING)
         self.asr.start_listening()
         self._listen_started = self._clock()
+        self.turns.append(VoiceTurn(started_at=self._clock()))
 
     def end_session(self) -> VoiceSessionResult:
         """Any state -> IDLE; returns the session summary."""
@@ -200,8 +203,7 @@ class VoiceInterface:
         self.tts.stop()
         if self.timeouts:
             reason = "timeout"
-        elif self._interrupt_requested or any(
-                t.interrupted for t in self.turns):
+        elif any(t.interrupted for t in self.turns):
             reason = "barge_in"
         else:
             reason = "completed"
@@ -236,29 +238,30 @@ class VoiceInterface:
         """LISTENING -> TRANSCRIBING; returns text via the ASR mock."""
         self._transition(VoiceState.TRANSCRIBING)
         try:
-            return self.asr.transcribe()
+            text = self.asr.transcribe()
         except ASRError:
             self.errors.append("asr_error")
             self.state = VoiceState.IDLE
             raise
+        self.turns[-1].transcript = text
+        return text
 
     def respond(self, text: str,
                 interrupt_during_speech: bool = False) -> VoiceTurn:
         """TRANSCRIBING -> RESPONDING -> IDLE; speaks via the TTS mock.
 
         interrupt_during_speech=True deterministically simulates the user
-        starting to talk mid-response (barge-in) — no threads needed.
+        starting to talk mid-response (barge-in) - no threads needed.
         """
         if self.state is not VoiceState.TRANSCRIBING:
             raise RuntimeError("respond() called outside TRANSCRIBING state")
-        turn = VoiceTurn(transcript=text)
+        turn = self.turns[-1]
         self._transition(VoiceState.RESPONDING)
         interrupted = self._interrupt_requested or interrupt_during_speech
         if not interrupted:
             turn.response = self.tts.speak(text.upper())
         turn.interrupted = interrupted
         turn.ended_at = self._clock()
-        self.turns.append(turn)
         if interrupted:
             self.barge_in_count += 1
             self.tts.stop()
@@ -271,16 +274,28 @@ class VoiceInterface:
     def barge_in(self) -> bool:
         """External speech detected: cancel the current response.
 
-        Works from TRANSCRIBING (before TTS starts) or RESPONDING (mid-speech).
-        Returns True when the pending/current response was cancelled.
+        Works from TRANSCRIBING (before TTS starts) or RESPONDING
+        (mid-speech). Returns True when the response was cancelled.
         """
-        if self.state in (VoiceState.RESPONDING, VoiceState.TRANSCRIBING):
+        if self.state in (VoiceState.TRANSCRIBING, VoiceState.RESPONDING):
             self._interrupt_requested = True
             self.tts.stop()
             return True
         return False
 
-    # -- convenience -----------------------------------------------------------
+    # -- multi-turn convenience ---------------------------------------------------
+
+    def next_turn(self) -> None:
+        """Start a new turn inside the running session (IDLE -> LISTENING)."""
+        if self.state is not VoiceState.IDLE:
+            raise RuntimeError(
+                "next_turn() requires IDLE state inside an active session")
+        self._interrupt_requested = False
+        self._listen_started = None
+        self.state = VoiceState.LISTENING
+        self.asr.start_listening()
+        self._listen_started = self._clock()
+        self.turns.append(VoiceTurn(started_at=self._clock()))
 
     def process_utterance(self, text: str,
                           interrupt_during_speech: bool = False) -> VoiceTurn:

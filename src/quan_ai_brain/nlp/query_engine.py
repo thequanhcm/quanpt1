@@ -14,7 +14,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 # ---------------------------------------------------------------------------
 # Tokenization
@@ -54,6 +54,12 @@ def tokenize(text: str) -> List[str]:
     return _TOKEN_RE.findall(ascii_fold(text))
 
 
+def _bigrams(tokens: List[str]) -> Set[str]:
+    """Join adjacent token pairs with '_' so multi-word phrases match
+    ('so sanh' -> 'so_sanh', 'last week' -> 'last_week')."""
+    return {f"{tokens[i]}_{tokens[i + 1]}" for i in range(len(tokens) - 1)}
+
+
 # ---------------------------------------------------------------------------
 # Intent
 # ---------------------------------------------------------------------------
@@ -67,36 +73,105 @@ class Intent:
     TIMELINE = "TIMELINE"
     UNKNOWN = "UNKNOWN"
 
-    COUNT_WORDS = {
-        # Vietnamese
-        "dem", "bao_nhieu", "bao_nhieu_kinh_nghiem", "may", "may_kinh_nghiem",
-        "tong_so", "so_luong", "co_bao_nhieu",
-        # English
-        "count", "how", "many", "howmany", "total", "number",
-    }
-    SEARCH_WORDS = {
-        # Vietnamese
-        "tim", "kiem_tra", "tra_cuu", "xem", "cho", "hien_thi", "lay", "can",
-        "liet_ke", "mo_rong", "muon", "nhin",
-        # English
-        "find", "show", "search", "list", "get", "display", "look", "want",
-        "need", "filter",
-    }
-    COMPARE_WORDS = {
-        # Vietnamese
-        "so_sanh", "so_voi", "khac_gi", "giua", "nhanh_hon", "tot_hon",
-        "khac_biet", "hon",
-        # English
-        "compare", "versus", "vs", "difference", "better", "against",
-    }
-    TIMELINE_WORDS = {
-        # Vietnamese
-        "lich_su", "tuan_truoc", "thang_truoc", "hom_nay", "hom_qua",
-        "gian_day", "moi_nhat", "cu_nhat", "tuan_nay", "thang_nay", "nam_ngoai",
-        # English
-        "history", "timeline", "last_week", "last_month", "today",
-        "yesterday", "recent", "latest", "oldest", "newest", "since", "recently",
-    }
+    COUNT_PHRASES = [
+        "dem", "bao_nhieu", "co_bao_nhieu", "tong_so", "so_luong",
+        "count", "how_many", "howmany", "total",
+    ]
+    SEARCH_PHRASES = [
+        "tim", "kiem_tra", "tra_cuu", "xem", "hien_thi", "lay", "liet_ke",
+        "find", "show", "search", "list", "get", "display", "look_for",
+        "filter",
+    ]
+    COMPARE_PHRASES = [
+        "so_sanh", "so_voi", "khac_gi", "khac_biet",
+        "compare", "versus", "vs", "difference",
+    ]
+    # Core timeline words outrank SEARCH. Pure time ranges ('last week')
+    # do NOT set TIMELINE intent — they only add a TimeFilter to the plan.
+    TIMELINE_CORE_PHRASES = [
+        "lich_su", "history", "timeline",
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Synonym tables (values are canonical KU field values)
+# ---------------------------------------------------------------------------
+
+_TYPE_SYNONYMS = {
+    "LESSON_LEARNED": ["lesson", "lessons", "kinh_nghiem", "bai_hoc"],
+    "ERROR": ["error", "errors", "loi", "su_co", "incident"],
+    "BEST_PRACTICE": ["practice", "practices", "best_practice"],
+    "DECISION": ["decision", "decisions", "quyet_dinh"],
+    "NOTE": ["note", "notes", "ghi_chu"],
+}
+
+_SCOPE_SYNONYMS = {
+    "PRODUCTION": ["production", "prod", "san_xuat"],
+    "STAGING": ["staging", "stg"],
+    "DEVELOPMENT": ["development", "dev", "phat_trien"],
+    "TESTING": ["testing", "kiem_thu"],
+    "OPS": ["ops", "operations", "van_hanh"],
+}
+
+_STATUS_SYNONYMS = {
+    "VERIFIED": ["verified", "da_xac_minh", "xac_minh"],
+    "DRAFT": ["draft", "nhap"],
+    "PENDING": ["pending", "cho_duyet"],
+    "ARCHIVED": ["archived", "luu_tru"],
+}
+
+_TIME_KEYWORDS = {
+    "today": 1, "hom_nay": 1,
+    "yesterday": 2, "hom_qua": 2,
+    "last_week": 7, "tuan_truoc": 7, "tuan_nay": 7,
+    "recent": 7, "recently": 7,
+    "last_month": 30, "thang_truoc": 30, "thang_nay": 30,
+    "last_year": 365, "nam_ngoai": 365,
+}
+
+_SORT_NEWEST = {"moi_nhat", "newest", "latest"}
+_SORT_OLDEST = {"cu_nhat", "oldest"}
+
+# filler words that never make sense as free-text search terms
+_STOPWORDS = {
+    "cac", "cua", "va", "tu", "trong", "cho", "toi", "duoc", "khong",
+    "gi", "nao", "vay", "la", "tren", "vao", "nhieu", "bao", "so",
+    "the", "all", "from", "for", "please", "that", "this", "what",
+    "which", "was", "were", "have", "has", "and", "give", "want", "need",
+    "do", "we", "me", "my",
+}
+
+
+def _flatten_phrases(phrases: List[str]) -> Set[str]:
+    """Split 'so_sanh' -> {'so', 'sanh'} for token-level exclusion."""
+    out: Set[str] = set()
+    for p in phrases:
+        out.update(p.split("_"))
+    return out
+
+
+ALL_KEYWORD_TOKENS: Set[str] = set()
+for _phrases in (Intent.COUNT_PHRASES, Intent.SEARCH_PHRASES,
+                 Intent.COMPARE_PHRASES, Intent.TIMELINE_CORE_PHRASES):
+    ALL_KEYWORD_TOKENS |= _flatten_phrases(_phrases)
+for _table in (_TYPE_SYNONYMS, _SCOPE_SYNONYMS, _STATUS_SYNONYMS):
+    for _syns in _table.values():
+        ALL_KEYWORD_TOKENS |= _flatten_phrases(_syns)
+ALL_KEYWORD_TOKENS |= _flatten_phrases(list(_TIME_KEYWORDS.keys()))
+ALL_KEYWORD_TOKENS |= _SORT_NEWEST | _SORT_OLDEST
+
+
+def _match_synonyms(tokens: Set[str], bigrams: Set[str],
+                    table: Dict[str, List[str]]) -> Optional[Tuple[str, str]]:
+    """Return (canonical_value, matched_phrase) for the first hit."""
+    for value, syns in table.items():
+        for s in syns:
+            if "_" in s:
+                if s in bigrams:
+                    return value, s
+            elif s in tokens:
+                return value, s
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -112,17 +187,13 @@ class TimeFilter:
     direction: str = "past"  # 'past' | 'future' (reserved)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {
-            "field": self.field,
-            "keyword": self.keyword,
-            "days": self.days,
-            "direction": self.direction,
-        }
+        return {"field": self.field, "keyword": self.keyword,
+                "days": self.days, "direction": self.direction}
 
 
 @dataclass
 class Filter:
-    """Equality/substring filter on one record field."""
+    """Equality filter on one record field."""
     field: str
     value: Any
     op: str = "eq"        # 'eq' | 'contains'
@@ -193,126 +264,37 @@ class QueryResult:
 
 
 # ---------------------------------------------------------------------------
-# Keyword tables
+# Field aliases (records may use different key names)
 # ---------------------------------------------------------------------------
 
-_TYPE_SYNONYMS = {
-    "LESSON_LEARNED": ["lesson", "lessons", "kinh_nghiem", "bai_hoc"],
-    "ERROR": ["error", "errors", "loi", "su_co", "incident", "incidente"],
-    "BEST_PRACTICE": ["practice", "practices", "thuc_hanh_tot", "best_practice"],
-    "DECISION": ["decision", "decisions", "quyet_dinh", "dieu_huong"],
-    "NOTE": ["note", "notes", "ghi_chu", "noted"],
-}
-
-_SCOPE_SYNONYMS = {
-    "PRODUCTION": ["production", "prod", "san_xuat", "product"],
-    "STAGING": ["staging", "stg"],
-    "DEVELOPMENT": ["development", "dev", "phat_trien"],
-    "TESTING": ["testing", "test", "kiem_thu"],
-    "OPS": ["ops", "operations", "van_hanh"],
-}
-
 _FIELD_ALIASES = {
-    # canonical -> list of record keys tried in order
     "type": ["type", "ku_type", "knowledge_type", "category"],
     "scope": ["scope", "environment", "env"],
     "status": ["status", "state"],
-    "tag": ["tags", "tag"],
-    "title": ["title", "name", "summary"],
-    "content": ["content", "text", "body", "description", "note"],
     "created_at": ["created_at", "timestamp", "date", "time"],
 }
 
-_TIME_KEYWORDS = {
-    # keyword -> (lookback days, display label)
-    "today": (1, "today"),
-    "hom_nay": (1, "today"),
-    "yesterday": (2, "yesterday"),
-    "hom_qua": (2, "yesterday"),
-    "last_week": (7, "last week"),
-    "tuan_truoc": (7, "last week"),
-    "tuan_nay": (7, "this week"),
-    "last_month": (30, "last month"),
-    "thang_truoc": (30, "last month"),
-    "thang_nay": (30, "this month"),
-    "recent": (7, "recent"),
-    "recently": (7, "recent"),
-    "moi_nhat": (7, "recent"),
-    "nam_ngoai": (365, "last year"),
-    "last_year": (365, "last year"),
-}
-
-_TIME_FIELD_HINTS = ("created_at", "timestamp", "date", "time", "ngay", "thoi_gian")
-
-_POSSESSIVE_RE = re.compile(r"(?:^|\s)(?:cua|of|in|trong)\s+(\S+)")
-
-
-def _detect_type(tokens: List[str]) -> Optional[tuple]:
-    joined = set(tokens)
-    # multi-word phrase check first (e.g. 'bai hoc', 'thuc hanh tot')
-    phrases = {
-        "bai hoc": "LESSON_LEARNED", "kinh nghiem": "LESSON_LEARNED",
-        "thuc hanh": "BEST_PRACTICE", "best practice": "BEST_PRACTICE",
-    }
-    text = " ".join(tokens)
-    for phrase, ku_type in phrases.items():
-        if phrase in text:
-            return ku_type, phrase
-    for ku_type, syns in _TYPE_SYNONYMS.items():
-        for s in syns:
-            if s in joined:
-                return ku_type, s
-    return None
-
-
-def _detect_scope(tokens: List[str]) -> Optional[tuple]:
-    joined = set(tokens)
-    for scope, syns in _SCOPE_SYNONYMS.items():
-        for s in syns:
-            if s in joined:
-                return scope, s
-    return None
-
-
-def _detect_status(tokens: List[str]) -> Optional[tuple]:
-    joined = set(tokens)
-    table = {
-        "VERIFIED": ["verified", "da_xac_minh", "xac_minh"],
-        "DRAFT": ["draft", "nhap"],
-        "PENDING": ["pending", "cho_duyet"],
-        "ARCHIVED": ["archived", "luu_tru"],
-    }
-    for status, syns in table.items():
-        for s in syns:
-            if s in joined:
-                return status, s
-    return None
+_TIME_FIELD_HINTS = ("created_at", "timestamp", "date", "time", "ngay",
+                     "thoi_gian")
 
 
 def _detect_limit(tokens: List[str]) -> Optional[int]:
-    num_words = {"mot": 1, "hai": 2, "ba": 3, "nam": 5, "muoi": 10,
-                 "hai_muoi": 20, "năm": 5}
+    search_like = set(_flatten_phrases(Intent.SEARCH_PHRASES)) | \
+        set(_flatten_phrases(Intent.COUNT_PHRASES)) | {"top"}
     for i, t in enumerate(tokens):
         if t.isdigit():
-            # only treat as limit when adjacent to a list/count word
             prev = tokens[i - 1] if i else ""
             nxt = tokens[i + 1] if i + 1 < len(tokens) else ""
-            if prev in Intent.TIMELINE_WORDS or nxt in Intent.TIMELINE_WORDS:
-                continue
-            if prev in Intent.SEARCH_WORDS or prev in Intent.COUNT_WORDS or \
-               nxt in Intent.SEARCH_WORDS or nxt in Intent.COUNT_WORDS or \
-               prev in ("top",) or prev in ("lay", "get"):
+            if prev in search_like or nxt in search_like:
                 return int(t)
-        if t == "nam" and i + 1 < len(tokens) and tokens[i + 1] in ("kinh_nghiem", "results", "items"):
-            return num_words[t]
     return None
 
 
-def _pick_sort(tokens: List[str]) -> Optional[Sort]:
-    joined = set(tokens)
-    if "moi_nhat" in joined or "newest" in joined or "latest" in joined or "recent" in joined or "recently" in joined:
+def _pick_sort(tokens: Set[str], bigrams: Set[str]) -> Optional[Sort]:
+    phrases = tokens | bigrams
+    if phrases & _SORT_NEWEST:
         return Sort(field="created_at", direction="desc")
-    if "cu_nhat" in joined or "oldest" in joined:
+    if phrases & _SORT_OLDEST:
         return Sort(field="created_at", direction="asc")
     return None
 
@@ -342,29 +324,33 @@ class NLQueryEngine:
             plan.warnings.append("empty_query")
             return plan
 
-        plan.intent = self._detect_intent(tokens)
-        plan.text_terms = [t for t in tokens if len(t) >= 3 and not t.isdigit()]
-        plan.compare_targets = self._extract_compare_targets(tokens)
-        plan.limit = _detect_limit(tokens) or self.DEFAULT_LIMIT
-        plan.sort = _pick_sort(tokens)
+        bigrams = _bigrams(tokens)
+        token_set = set(tokens)
 
-        type_hit = _detect_type(tokens)
+        plan.intent = self._detect_intent(token_set, bigrams)
+        plan.compare_targets = self._extract_compare_targets(token_set, bigrams)
+        plan.limit = _detect_limit(tokens) or self.DEFAULT_LIMIT
+        plan.sort = _pick_sort(token_set, bigrams)
+
+        type_hit = _match_synonyms(token_set, bigrams, _TYPE_SYNONYMS)
         if type_hit:
             plan.filters.append(Filter(field="type", value=type_hit[0]))
-        scope_hit = _detect_scope(tokens)
+        scope_hit = _match_synonyms(token_set, bigrams, _SCOPE_SYNONYMS)
         if scope_hit:
             plan.filters.append(Filter(field="scope", value=scope_hit[0]))
-        status_hit = _detect_status(tokens)
+        status_hit = _match_synonyms(token_set, bigrams, _STATUS_SYNONYMS)
         if status_hit:
             plan.filters.append(Filter(field="status", value=status_hit[0]))
 
-        tf = self._detect_time(tokens)
+        tf = self._detect_time(token_set, bigrams)
         if tf:
             plan.time_filters.append(tf)
 
-        for m in _POSSESSIVE_RE.finditer(query.lower()):
-            plan.warnings.append(f"possessive_phrase:{m.group(1)}")
-
+        # free-text terms: tokens not consumed by structured keywords
+        plan.text_terms = [t for t in tokens
+                           if len(t) >= 3 and not t.isdigit()
+                           and t not in ALL_KEYWORD_TOKENS
+                           and t not in _STOPWORDS]
         return plan
 
     def execute(self, plan: QueryPlan,
@@ -377,7 +363,7 @@ class NLQueryEngine:
             keys = _FIELD_ALIASES.get(f.field, [f.field])
             rows = [r for r in rows if self._match_filter(r, keys, f)]
 
-        # free-text terms (must appear in at least one searchable field)
+        # free-text terms (must all appear in searchable fields)
         if plan.text_terms:
             rows = [r for r in rows if self._match_text(r, plan.text_terms)]
 
@@ -387,12 +373,10 @@ class NLQueryEngine:
 
         # sort
         if plan.sort:
-            key = plan.sort.field
+            key_field = plan.sort.field
             reverse = plan.sort.direction == "desc"
-            rows.sort(
-                key=lambda r: self._sort_key(r, key),
-                reverse=reverse,
-            )
+            rows.sort(key=lambda r: self._sort_key(r, key_field),
+                      reverse=reverse)
 
         total = len(rows)
         limited = rows[: plan.limit]
@@ -414,38 +398,43 @@ class NLQueryEngine:
 
     # -- intent -------------------------------------------------------------
 
-    def _detect_intent(self, tokens: List[str]) -> str:
-        joined = set(tokens)
-        if joined & Intent.COMPARE_WORDS:
+    def _detect_intent(self, tokens: Set[str], bigrams: Set[str]) -> str:
+        phrases = tokens | bigrams
+        if set(Intent.COMPARE_PHRASES) & phrases:
             return Intent.COMPARE
-        if joined & Intent.COUNT_WORDS:
+        if set(Intent.COUNT_PHRASES) & phrases:
             return Intent.COUNT
-        if joined & Intent.TIMELINE_WORDS:
+        if set(Intent.TIMELINE_CORE_PHRASES) & phrases:
             return Intent.TIMELINE
-        if joined & Intent.SEARCH_WORDS:
+        if set(Intent.SEARCH_PHRASES) & phrases:
             return Intent.SEARCH
         return Intent.UNKNOWN
 
-    def _extract_compare_targets(self, tokens: List[str]) -> List[str]:
+    def _extract_compare_targets(self, tokens: Set[str],
+                                 bigrams: Set[str]) -> List[str]:
+        if not (set(Intent.COMPARE_PHRASES) & (tokens | bigrams)):
+            return []
         targets: List[str] = []
         for scope, syns in _SCOPE_SYNONYMS.items():
-            if any(s in tokens for s in syns):
-                targets.append(scope)
-        if "vs" in tokens or "versus" in tokens or "so_sanh" in tokens:
-            return targets
+            for s in syns:
+                if ("_" in s and s in bigrams) or ("_" not in s and s in tokens):
+                    targets.append(scope)
+                    break
         return targets[:2]
 
     # -- time filter --------------------------------------------------------
 
-    def _detect_time(self, tokens: List[str]) -> Optional[TimeFilter]:
-        for t in tokens:
-            if t in _TIME_KEYWORDS:
-                days, label = _TIME_KEYWORDS[t]
+    def _detect_time(self, tokens: Set[str],
+                     bigrams: Set[str]) -> Optional[TimeFilter]:
+        phrases = tokens | bigrams
+        for kw, days in _TIME_KEYWORDS.items():
+            if kw in phrases:
                 return TimeFilter(field=self._time_field_label(tokens),
-                                  keyword=t, days=days)
+                                  keyword=kw, days=days)
         return None
 
-    def _time_field_label(self, tokens: List[str]) -> str:
+    @staticmethod
+    def _time_field_label(tokens: Set[str]) -> str:
         for hint in _TIME_FIELD_HINTS:
             if hint in tokens:
                 return hint
@@ -476,27 +465,26 @@ class NLQueryEngine:
 
     def _match_text(self, row: Dict[str, Any], terms: List[str]) -> bool:
         hay_parts: List[str] = []
-        for canon in ("title", "content"):
-            for k in _FIELD_ALIASES[canon]:
-                v = row.get(k)
-                if isinstance(v, str):
-                    hay_parts.append(v)
+        for k in ("title", "name", "summary", "content", "text", "body",
+                  "description", "note"):
+            v = row.get(k)
+            if isinstance(v, str):
+                hay_parts.append(v)
         for v in row.get("tags", []) or []:
             hay_parts.append(str(v))
         hay = ascii_fold(" ".join(hay_parts))
         return all(t in hay for t in terms)
 
     def _match_time(self, row: Dict[str, Any], tf: TimeFilter) -> bool:
-        for canon in ("created_at",):
-            for k in _FIELD_ALIASES[canon]:
-                v = row.get(k)
-                if v is None:
-                    continue
-                dt = self._parse_dt(v)
-                if dt is None:
-                    continue
-                cutoff = self.now - timedelta(days=tf.days)
-                return dt >= cutoff
+        for k in _FIELD_ALIASES["created_at"]:
+            v = row.get(k)
+            if v is None:
+                continue
+            dt = self._parse_dt(v)
+            if dt is None:
+                continue
+            cutoff = self.now - timedelta(days=tf.days)
+            return dt >= cutoff
         return False
 
     @staticmethod
@@ -513,8 +501,8 @@ class NLQueryEngine:
         return None
 
     @staticmethod
-    def _sort_key(row: Dict[str, Any], field: str) -> Any:
-        for k in _FIELD_ALIASES.get(field, [field]):
+    def _sort_key(row: Dict[str, Any], field_name: str) -> Any:
+        for k in _FIELD_ALIASES.get(field_name, [field_name]):
             v = row.get(k)
             if v is not None:
                 dt = NLQueryEngine._parse_dt(v)
@@ -539,12 +527,14 @@ class NLQueryEngine:
             parts.append(f"filters: [{fdesc}]")
         if plan.time_filters:
             parts.append(", ".join(
-                f"time: last {tf.days}d on {tf.field}" for tf in plan.time_filters))
+                f"time: last {tf.days}d on {tf.field}"
+                for tf in plan.time_filters))
         if plan.text_terms:
             parts.append(f"terms: {plan.text_terms}")
         if plan.sort:
             parts.append(f"sorted by {plan.sort.field} {plan.sort.direction}")
-        parts.append(f"matched {total}, returned {len(returned)} (limit {plan.limit})")
+        parts.append(f"matched {total}, returned {len(returned)} "
+                     f"(limit {plan.limit})")
         if plan.intent == Intent.COUNT:
             parts.append(f"answer: {total}")
         return " | ".join(parts)

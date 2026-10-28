@@ -300,7 +300,9 @@ class TestNLQueryEngine:
 class TestVoiceInterface:
 
     def _make(self, script=None, fail=False, timeout=5.0):
-        asr = MockASR(script=script or ["tìm lỗi production"], fail=fail)
+        if script is None:
+            script = ["tìm lỗi production"]
+        asr = MockASR(script=script, fail=fail)
         tts = MockTTS()
         t = [100.0]
         vi = VoiceInterface(asr, tts, timeout=timeout, clock=lambda: t[0])
@@ -444,10 +446,9 @@ class TestVoiceInterface:
         vi.start_session()
         vi.listen()
         vi.respond(vi.transcribe())
-        vi2 = vi
-        vi2.start_session()
-        vi2.listen()
-        vi2.respond(vi2.transcribe())
+        vi.next_turn()  # second turn inside the same session
+        vi.listen()
+        vi.respond(vi.transcribe())
         assert len(vi.turns) == 2
         assert tts.spoken == ["TURN MOT", "TURN HAI"]
 
@@ -550,12 +551,8 @@ class TestOfflineSync:
 
     def test_lww_server_wins(self, tmp_path):
         eng, server = self._engine(tmp_path)
-        # make local op timestamp older than server's
-        eng._ops.clear()
-        eng.state.clear()
-        old = eng._clock() if callable(getattr(eng, "_clock", None)) else ""
         eng.local_set("ku-1", "local-old")
-        # force local op to look old
+        # force the local op to look older than the server's write
         eng._ops[-1].updated_at = "2020-01-01T00:00:00"
         server.store["ku-1"] = {
             "value": "server-new", "updated_at": "2030-01-01T00:00:00",
@@ -563,8 +560,7 @@ class TestOfflineSync:
         report = eng.sync()
         assert report.conflicts[0].resolution == "server_wins"
         assert eng.state["ku-1"] == "server-new"
-        assert "ku-1" not in server.store or \
-            server.store["ku-1"]["value"] == "server-new"
+        assert server.store["ku-1"]["value"] == "server-new"
 
     def test_rollback_resolution_restores_server_value(self, tmp_path):
         eng, server = self._engine(tmp_path)
@@ -829,27 +825,16 @@ class TestV24Integration:
         """Offline sync pulls server rows; NL engine queries the merged state."""
         server = ServerStub()
         server.store["ku-9"] = {
-            "id": "ku-9", "title": "kubernetes rollback",
-            "type": "ERROR", "scope": "PRODUCTION", "status": "VERIFIED",
-            "tags": ["k8s"], "created_at": "2026-10-27T10:00:00",
-            "value": {"id": "ku-9"}, "updated_at": "2026-10-28T01:00:00",
-            "device_id": "dev-2"}
+            "value": {"id": "ku-9", "title": "kubernetes rollback",
+                      "type": "ERROR", "scope": "PRODUCTION",
+                      "status": "VERIFIED", "tags": ["k8s"],
+                      "created_at": "2026-10-27T10:00:00"},
+            "updated_at": "2026-10-28T01:00:00", "device_id": "dev-2"}
         eng = OfflineSyncEngine(server, str(tmp_path / "log.jsonl"))
         eng.sync()
+        assert eng.state["ku-9"]["id"] == "ku-9"  # pulled into local state
 
-        rows = []
-        for key, srv in server.store.items():
-            row = dict(srv["value"])
-            row.update({"title": srv["value"].get("id", key)})
-            rows.append(row)
-        # simpler: query engine over the pulled KU dicts
-        pulled = [dict(server.store["ku-9"]["value"])]
-        pulled[0]["title"] = "kubernetes rollback"
-        pulled[0]["type"] = "ERROR"
-        pulled[0]["scope"] = "PRODUCTION"
-        pulled[0]["created_at"] = "2026-10-27T10:00:00"
-
-        engine = NLQueryEngine(pulled, now=NOW)
+        engine = NLQueryEngine(list(eng.state.values()), now=NOW)
         result = engine.query("tim loi production")
         assert [r["id"] for r in result.results] == ["ku-9"]
 
@@ -885,28 +870,30 @@ class TestV24Integration:
         server = ServerStub()
         eng = OfflineSyncEngine(server, str(tmp_path / "log.jsonl"))
         eng.local_set("a", "x")
+        server.store["a"] = {
+            "value": "y", "updated_at": "2020-01-01T00:00:00",
+            "device_id": "dev-2"}
         report1 = eng.sync()
+        assert report1.conflicts  # conflict -> notification
 
         svc = NotificationService(clock=lambda: datetime(2026, 10, 28, 12, 0))
         svc.register_device("d", "owner", "android", "t")
 
         def alert(r):
-            key = r.conflicts[0].key if r.conflicts else "none"
+            key = r.conflicts[0].key
             n = Notification(notif_id="nx", user_id="owner", title="conflict",
                              body=key, priority=3, idempotency_key=f"c-{key}")
             return svc.enqueue(n)
 
         r1 = alert(report1)
-        # simulate a duplicate sync report (e.g., replayed event)
+        # simulate the same conflict arriving again (replayed event)
         report2 = SyncReport(conflicts=[Conflict(
-            key=report1.conflicts[0].key if report1.conflicts else "none",
+            key=report1.conflicts[0].key,
             local_value="x", server_value="y",
             local_updated_at="", server_updated_at="")])
         r2 = alert(report2)
-        if report1.conflicts:
-            assert r1 is not None and r2 is None
-        else:
-            assert r1 is not None and r2 is not None  # no conflicts -> different keys path
+        assert r1 is not None
+        assert r2 is None  # duplicate suppressed by idempotency key
         svc.flush()
 
     def test_voice_barge_in_then_retry_turn(self):
@@ -927,18 +914,20 @@ class TestV24Integration:
         turn2 = vi.respond(t2)
         assert turn2.interrupted is False
         assert tts.spoken == ["CAU HOI HAI"]
-        assert vi.barge_in_count == 1  # reset by the second start_session
+        # start_session resets per-session counters
+        assert vi.barge_in_count == 0
 
     def test_end_to_end_owner_story(self, tmp_path):
         """Owner edits offline -> sync -> NL query -> voice answer + alert."""
         server = ServerStub()
         eng = OfflineSyncEngine(server, str(tmp_path / "log.jsonl"))
-        eng.local_set("ku-100", {"title": "new incident postmortem",
+        eng.local_set("ku-100", {"id": "ku-100",
+                                 "title": "new incident postmortem",
                                  "type": "ERROR", "scope": "PRODUCTION",
                                  "created_at": "2026-10-28T09:00:00"})
         eng.sync()
 
-        rows = [dict(v["value"]) | {"key": k} for k, v in server.store.items()]
+        rows = [v["value"] for v in server.store.values()]
         engine = NLQueryEngine(rows, now=NOW)
         result = engine.query("dem loi production")
 
@@ -954,3 +943,4 @@ class TestV24Integration:
         assert transcript == "dem loi production"
         assert result.total_matches == 1
         assert turn.response == answer.upper()
+        assert len(rows) == 1 and rows[0]["id"] == "ku-100"
