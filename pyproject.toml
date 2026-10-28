@@ -14,6 +14,8 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<10.0"]
+memory = ["chromadb>=1.0.0", "sentence-transformers>=2.0"]
+all = ["chromadb>=1.0.0", "sentence-transformers>=2.0"]
 
 [project.scripts]
 quan-ai-brain = "quan_ai_brain.cli:main"
