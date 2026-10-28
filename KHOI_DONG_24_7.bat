@@ -61,7 +61,7 @@ echo.
 echo ============================================================
 echo    HOAN TAT! He thong dang chay ngam (4 cua so MINIMIZED):
 echo      - QAB-DualServers : http://127.0.0.1:8765 + 8766
-echo      - QAB-NetChatBot  : Bot Tony Pham (NetChat 24/7)
+echo      - QAB-NetChatBot  : Bot TONY (NetChat 24/7)
 echo      - QAB-Learning    : Tu hoc lien tuc
 echo      - QAB-Watchdog    : Tu restart neu crash
 echo    Backup tu dong 2AM + Bao cao sang 8AM (Task Scheduler)

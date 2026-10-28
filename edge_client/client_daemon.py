@@ -432,6 +432,12 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_kiosk_camera_stream()
             return
 
+        if path == "/api/kiosk/music/status":
+            with self.daemon_state.lock:
+                m = self.daemon_state.current_music
+            self._send_json({"success": True, "music": m, "playing": m is not None})
+            return
+
         self.send_error(404, "File Not Found")
 
     def do_POST(self) -> None:
@@ -482,6 +488,14 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/kiosk/camera/capture":
             self._handle_api_kiosk_camera_capture(body)
+            return
+
+        if path == "/api/kiosk/music/play":
+            self._handle_api_kiosk_music_play(body)
+            return
+
+        if path == "/api/kiosk/music/stop":
+            self._handle_api_kiosk_music_stop()
             return
 
         self.send_error(404, "Endpoint Not Found")
@@ -644,7 +658,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                 audio_b64 and (
                     AUDIO_PLAYBACK_MODE in ("HARDWARE_ONLY", "DUAL")
                     or not is_kiosk_running()
-                    or body.get("force_hardware")
+                    or body.get("force_hardware", True)
                 )
             )
             if should_play_hardware:
@@ -797,6 +811,34 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                 return
         except Exception as e:
             self._send_json({"success": False, "error": str(e), "local_safety": "ENGAGED"})
+
+    def _handle_api_kiosk_music_play(self, body: dict[str, Any]) -> None:
+        video_id = str(body.get("video_id", "")).strip()
+        url = str(body.get("url", "")).strip()
+        title = str(body.get("title", "")).strip() or "Bản nhạc YouTube"
+        if not url and video_id:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        if not url:
+            self._send_error_json("Missing url or video_id for music playback", 400)
+            return
+
+        play_music_stream(url=url, title=title, video_id=video_id, daemon_state=self.daemon_state)
+        self._send_json({
+            "success": True,
+            "playing": True,
+            "title": title,
+            "video_id": video_id,
+            "url": url,
+            "message": f"Đang phát bài hát '{title}' trên loa Raspberry Pi 5.",
+        })
+
+    def _handle_api_kiosk_music_stop(self) -> None:
+        stop_music_stream(self.daemon_state)
+        self._send_json({
+            "success": True,
+            "playing": False,
+            "message": "Đã dừng phát nhạc trên Raspberry Pi 5.",
+        })
 
     # =========================================================================
     # AUDIO & MICROPHONE ENDPOINTS (ADDENDUM V2.1)

@@ -81,7 +81,7 @@ def run_tests():
     sys.path.insert(0, str(current_dir))
     from mouth_sync import MouthSyncEngine
     engine = MouthSyncEngine(frame_interval_ms=50)
-    timeline = engine.generate_timeline("backup_test", "Xin chào Anh Quân, em là Tony.", target_duration_ms=2500)
+    timeline = engine.generate_timeline("backup_test", "Xin chào Anh Quân, em là TONY.", target_duration_ms=2500)
     assert timeline.total_duration_ms == 2500
     assert len(timeline.frames) >= 30
     visemes = {f.viseme for f in timeline.frames}

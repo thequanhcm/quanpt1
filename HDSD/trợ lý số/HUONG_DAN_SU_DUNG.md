@@ -105,7 +105,7 @@ tools\start_services.bat
 
 #### Kết nối NetChat
 1. Mở NetChat
-2. Tìm channel: "Trợ lý Tony Pham"
+2. Tìm channel: "TONY"
 3. Bắt đầu chat
 
 #### Commands cơ bản

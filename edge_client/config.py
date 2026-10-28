@@ -31,7 +31,7 @@ class EdgeConfig:
     display_orientation: str = "landscape"  # "landscape" or "portrait"
     screen_width: int = 1280
     screen_height: int = 720
-    wake_word: str = "Tony ơi"
+    wake_word: str = "TONY ơi"
     follow_up_window_sec: float = 15.0
     core_version: str = "0.2.0"
     edge_client_version: str = "0.2.0"
