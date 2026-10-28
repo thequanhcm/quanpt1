@@ -1,721 +1,455 @@
-# QUAN AI BRAIN - Production Deployment Guide
-**Version:** V22.0  
-**Last Updated:** 2024-10-28  
-**Author:** QUAN AI BRAIN Team
+# QUAN AI BRAIN — Deployment Guide
+
+**Version:** 1.0  
+**Date:** 2026-10-28  
+**Status:** Production Ready ✅
 
 ---
 
-## Table of Contents
-1. [Prerequisites](#1-prerequisites)
-2. [Environment Setup](#2-environment-setup)
-3. [Database Migration](#3-database-migration)
-4. [Docker Deployment](#4-docker-deployment)
-5. [Kubernetes Deployment](#5-kubernetes-deployment)
-6. [Configuration](#6-configuration)
-7. [Health Checks](#7-health-checks)
-8. [Monitoring Setup](#8-monitoring-setup)
-9. [Backup & Recovery](#9-backup--recovery)
-10. [Troubleshooting](#10-troubleshooting)
+## Quick Start (5 phút)
 
----
+### Bước 1: Enable Pi 5 SSH
 
-## 1. Prerequisites
+**Yêu cầu:** Console access (màn hình + bàn phím)
 
-### 1.1 System Requirements
-- **CPU**: 4+ cores (8+ recommended for production)
-- **RAM**: 8GB minimum (16GB recommended)
-- **Disk**: 50GB+ SSD (100GB+ recommended)
-- **Network**: 1Gbps+ connection
-- **OS**: Linux (Ubuntu 20.04+, CentOS 8+, Debian 11+)
-
-### 1.2 Software Requirements
-- Docker 20.10+
-- Docker Compose 2.0+
-- Kubernetes 1.24+ (if using K8s)
-- Python 3.11+ (for local tools)
-- Git 2.30+
-
-### 1.3 Network Requirements
-- Port 8080: Application API
-- Port 6379: Redis (internal only)
-- Port 5432: PostgreSQL (internal only)
-- Port 9090: Prometheus (monitoring)
-- Port 3000: Grafana (monitoring)
-- Port 443: HTTPS (nginx reverse proxy)
-
-### 1.4 Security Requirements
-- SSL/TLS certificates for HTTPS
-- Firewall rules to restrict access
-- Secrets management (Vault, AWS Secrets Manager, etc.)
-- Regular security updates
-
----
-
-## 2. Environment Setup
-
-### 2.1 Clone Repository
 ```bash
-git clone https://github.com/thequanhcm/quanpt1.git
-cd quanpt1
-git checkout main
+# Trên Pi 5 console:
+cd ~/tools
+sudo chmod +x enable_pi5_ssh.sh
+sudo ./enable_pi5_ssh.sh
+
+# Kết quả:
+✅ SSH service started
+✅ SSH enabled for auto-start
+# IP: 192.168.1.10
 ```
 
-### 2.2 Environment Variables
-Create `.env` file in project root:
-
+**Verify:**
 ```bash
-# Application
-APP_ENV=production
-APP_PORT=8080
-APP_SECRET_KEY=<generate-random-32-char-string>
-APP_LOG_LEVEL=INFO
-
-# Database
-DATABASE_URL=postgresql://quanai:password@postgres:5432/quan_ai_brain
-DATABASE_POOL_SIZE=20
-DATABASE_MAX_OVERFLOW=5
-
-# Redis
-REDIS_URL=redis://redis:6379/0
-REDIS_MAX_CONNECTIONS=50
-
-# Security
-JWT_SECRET_KEY=<generate-random-64-char-string>
-CORS_ORIGINS=https://api.quan-ai-brain.vn
-RATE_LIMIT_PER_MINUTE=100
-
-# Monitoring
-PROMETHEUS_ENABLED=true
-GRAFANA_ADMIN_USER=admin
-GRAFANA_ADMIN_PASSWORD=<secure-password>
-
-# Backup
-BACKUP_RETENTION_DAYS=30
-BACKUP_BUCKET=s3://your-backup-bucket
-```
-
-### 2.3 Generate Secrets
-```bash
-# Generate secure random strings
-openssl rand -base64 32  # For APP_SECRET_KEY
-openssl rand -base64 64  # For JWT_SECRET_KEY
-
-# Or use Python
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
-
-### 2.4 SSL/TLS Certificates
-```bash
-# Option 1: Let's Encrypt (recommended for production)
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d api.quan-ai-brain.vn
-
-# Option 2: Self-signed (for testing)
-mkdir -p monitoring/nginx/ssl
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout monitoring/nginx/ssl/server.key \
-  -out monitoring/nginx/ssl/server.crt \
-  -subj "/CN=api.quan-ai-brain.vn"
+# Từ PC:
+ssh quanpt1@192.168.1.10
+# Nếu kết nối được → thành công
 ```
 
 ---
 
-## 3. Database Migration
+### Bước 2: Setup Windows Services
 
-### 3.1 PostgreSQL Setup
-```bash
-# Create database and user
-docker exec -it quan-ai-postgres psql -U postgres
+**Yêu cầu:** Administrator privileges
 
-CREATE DATABASE quan_ai_brain;
-CREATE USER quanai WITH PASSWORD 'your-secure-password';
-GRANT ALL PRIVILEGES ON DATABASE quan_ai_brain TO quanai;
-\q
+```cmd
+# Right-click → Run as Administrator:
+cd "E:\AI\QUAN AI BRAIN"
+tools\setup_windows_services.bat
+
+# Kết quả:
+✅ Server task created
+✅ Watchdog task created
+✅ Learning task created
+✅ Responder task created
+✅ Dashboard task created
 ```
 
-### 3.2 Run Migrations
-```bash
-# Initialize database schema
-docker-compose run --rm quan-ai-brain python -m quan_ai_brain.db.migrate
+**Verify:**
+```cmd
+# List tasks:
+schtasks /Query /TN "QUAN-AI-BRAIN-*"
 
-# Verify migration
-docker-compose run --rm quan-ai-brain python -m quan_ai_brain.db.check
-```
-
-### 3.3 Initial Data
-```bash
-# Load initial knowledge units (optional)
-docker-compose run --rm quan-ai-brain python tools/load_initial_data.py
-
-# Create admin user
-docker-compose run --rm quan-ai-brain python tools/create_admin.py --username admin --email admin@quan-ai-brain.vn
+# Health check:
+python tools\health_check.py
 ```
 
 ---
 
-## 4. Docker Deployment
+### Bước 3: Reboot & Auto-start Test
 
-### 4.1 Quick Start (Development)
-```bash
-# Start all services
-docker-compose up -d
+```cmd
+# Reboot PC:
+shutdown /r /t 0
 
-# Check status
-docker-compose ps
+# Sau khi reboot, kiểm tra:
+python tools\health_check.py
 
-# View logs
-docker-compose logs -f quan-ai-brain
-```
-
-### 4.2 Production Deployment
-```bash
-# Use production profile
-APP_ENV=production docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-
-# Build optimized images
-docker-compose build --no-cache --pull
-
-# Start services
-docker-compose up -d
-```
-
-### 4.3 Zero-Downtime Deployment
-```bash
-# Pull new image
-docker-compose pull
-
-# Rollout with health checks
-docker-compose up -d --no-recreate
-
-# Wait for health check
-until curl -f http://localhost:8080/v1/memory/health; do
-  echo "Waiting for service to be healthy..."
-  sleep 5
-done
-
-# Remove old containers
-docker-compose down
-```
-
-### 4.4 Rollback
-```bash
-# Rollback to previous version
-docker-compose pull previous
-docker-compose up -d
-
-# Or use specific tag
-docker tag ghcr.io/thequanhcm/quanpt1:v21.0 ghcr.io/thequanhcm/quanpt1:current
-docker-compose up -d
+# Kết quả mong đợi:
+✅ server ONLINE (port 8765)
+✅ watchdog ONLINE (port 17236)
+✅ learning ONLINE (port 7724)
+✅ responder ONLINE
+✅ dashboard ONLINE (port 8766)
 ```
 
 ---
 
-## 5. Kubernetes Deployment
+## Detailed Deployment Steps
 
-### 5.1 Prerequisites
+### Phase 1: Pre-Deployment Checklist
+
+#### 1.1 System Requirements
+
+| Component | Requirement | Status |
+|-----------|-------------|--------|
+| **OS** | Windows 10/11 | ✅ |
+| **Python** | 3.11+ | ✅ |
+| **RAM** | 8GB+ | ✅ |
+| **GPU** | NVIDIA 4GB+ (optional) | ✅ T1000 4GB |
+| **Disk** | 50GB free | ✅ |
+| **Network** | Internet (for Ollama cloud) | ✅ |
+
+#### 1.2 Dependencies
+
 ```bash
-# Install kubectl
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+# Activate venv:
+cd "E:\AI\QUAN AI BRAIN"
+.venv\Scripts\activate
 
-# Install Helm
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+# Install all dependencies:
+pip install -e ".[all]"
+
+# Verify:
+python -c "import chromadb; print('ChromaDB OK')"
+python -c "import ollama; print('Ollama OK')"
 ```
 
-### 5.2 Deploy to Kubernetes
+#### 1.3 Environment Variables
+
 ```bash
-# Create namespace
-kubectl create namespace quan-ai-brain
+# Create .env file:
+cd "E:\AI\QUAN AI BRAIN"
+copy .env.example .env
 
-# Apply manifests
-kubectl apply -f kubernetes/namespace.yaml
-kubectl apply -f kubernetes/configmap.yaml
-kubectl apply -f kubernetes/secrets.yaml
-kubectl apply -f kubernetes/deployment.yaml
-kubectl apply -f kubernetes/service.yaml
-kubectl apply -f kubernetes/ingress.yaml
+# Edit .env:
+NOTEPAD .env
 
-# Verify deployment
-kubectl get all -n quan-ai-brain
-kubectl get pods -n quan-ai-brain -w
-```
-
-### 5.3 Horizontal Pod Autoscaler
-```bash
-# Apply HPA
-kubectl apply -f kubernetes/hpa.yaml
-
-# Check HPA status
-kubectl get hpa -n quan-ai-brain
-```
-
-### 5.4 Rolling Update
-```bash
-# Update image
-kubectl set image deployment/quan-ai-brain quan-ai-brain=ghcr.io/thequanhcm/quanpt1:v22.0 -n quan-ai-brain
-
-# Monitor rollout
-kubectl rollout status deployment/quan-ai-brain -n quan-ai-brain
-
-# Rollback if needed
-kubectl rollout undo deployment/quan-ai-brain -n quan-ai-brain
+# Required variables:
+AZURE_SPEECH_KEY=your_key_here
+AZURE_SPEECH_REGION=your_region
+OLLAMA_HOST=http://localhost:11434
 ```
 
 ---
 
-## 6. Configuration
+### Phase 2: Database Setup
 
-### 6.1 Application Configuration
-Edit `config/production.yaml`:
+#### 2.1 Initialize brain.db
 
-```yaml
-application:
-  name: QUAN AI BRAIN
-  version: 22.0.0
-  environment: production
-  
-database:
-  pool_size: 20
-  max_overflow: 5
-  pool_timeout: 30
-  pool_recycle: 3600
-  
-cache:
-  enabled: true
-  ttl: 300
-  max_size: 10000
-  
-security:
-  jwt_expiry: 3600
-  rate_limit: 100
-  cors_origins:
-    - https://api.quan-ai-brain.vn
-  
-logging:
-  level: INFO
-  format: json
-  output: /app/logs/app.log
-```
-
-### 6.2 Resource Limits
-```yaml
-# docker-compose.prod.yml
-services:
-  quan-ai-brain:
-    deploy:
-      resources:
-        limits:
-          cpus: '4'
-          memory: 8G
-        reservations:
-          cpus: '2'
-          memory: 4G
-```
-
-### 6.3 Environment-Specific Settings
 ```bash
-# Development
-APP_ENV=development
-APP_LOG_LEVEL=DEBUG
-CACHE_ENABLED=false
+# Check if exists:
+dir data\brain.db
 
-# Staging
-APP_ENV=staging
-APP_LOG_LEVEL=INFO
-CACHE_ENABLED=true
+# If not exists, initialize:
+python -c "from quan_ai_brain.memory.models import *; print('DB ready')"
+```
 
-# Production
-APP_ENV=production
-APP_LOG_LEVEL=WARNING
-CACHE_ENABLED=true
+#### 2.2 Initialize vector_db
+
+```bash
+# Run initialization:
+python tools\init_vector_memory.py
+
+# Expected output:
+✅ Vector store initialized at: data/vector_db
+✅ Collection: quan_ai_brain_memory
+✅ Current chunks: 0
+```
+
+#### 2.3 Ingest existing knowledge
+
+```bash
+# Ingest brain.db into vector_db:
+python tools\ingest_brain_db.py
+
+# Expected output:
+✅ Found 150 knowledge units in brain.db
+✅ Ingested 50 chunks, 0 errors
+✅ Vector DB now has 53 total chunks
+```
+
+#### 2.4 Initialize quarantine.db
+
+```bash
+# Auto-created on first use
+# Verify:
+dir data\quarantine.db
 ```
 
 ---
 
-## 7. Health Checks
+### Phase 3: Service Configuration
 
-### 7.1 Application Health
-```bash
-# Check API health
-curl http://localhost:8080/v1/memory/health
+#### 3.1 Task Scheduler Details
 
-# Expected response:
-{
-  "overall_status": "healthy",
-  "modules": {
-    "temporal": "healthy",
-    "cross_modal": "healthy",
-    "quality": "healthy",
-    ...
-  },
-  "timestamp": "2024-10-28T10:00:00Z"
-}
+Each task configured with:
+
+- **Trigger:** ONSTART (Windows boot)
+- **User:** SYSTEM
+- **Privileges:** Highest
+- **Restart:** On failure (1 attempt, 60s)
+- **Hidden:** Yes
+
+#### 3.2 Manual Service Control
+
+```cmd
+# Start all:
+tools\start_services.bat
+
+# Stop all:
+tools\stop_services.bat
+
+# Restart specific:
+schtasks /End /TN "QUAN-AI-BRAIN-Server"
+schtasks /Run /TN "QUAN-AI-BRAIN-Server"
 ```
 
-### 7.2 Database Health
-```bash
-# Check PostgreSQL
-docker exec quan-ai-postgres pg_isready -U quanai
+#### 3.3 Log Files Location
 
-# Check Redis
-docker exec quan-ai-redis redis-cli ping
+```
+E:\AI\QUAN AI BRAIN\logs\
+├── server.log
+├── watchdog.log
+├── learning.log
+├── responder.log
+├── dashboard.log
+├── audit.log
+└── uat_YYYY-MM-DD.json
 ```
 
-### 7.3 Docker Health
-```bash
-# Check container health
-docker inspect --format='{{.State.Health.Status}}' quan-ai-brain
+**Log rotation:** 5 files, 10MB each
 
-# Check all containers
-docker-compose ps
+---
+
+### Phase 4: Verification
+
+#### 4.1 Health Check
+
+```bash
+python tools\health_check.py
+
+# Expected output:
+============================================================
+QUAN AI BRAIN — Health Check
+============================================================
+
+📊 SERVICE STATUS
+------------------------------------------------------------
+server          ✅ ONLINE (port 8765 listening)
+watchdog        ✅ ONLINE (port 17236 listening)
+learning        ✅ ONLINE (port 7724 listening)
+responder       ✅ ONLINE
+dashboard       ✅ ONLINE (port 8766 listening)
+
+📅 TASK SCHEDULER STATUS
+------------------------------------------------------------
+QUAN-AI-BRAIN-Server      ✅ Task configured
+QUAN-AI-BRAIN-Watchdog    ✅ Task configured
+QUAN-AI-BRAIN-Learning    ✅ Task configured
+QUAN-AI-BRAIN-Responder   ✅ Task configured
+QUAN-AI-BRAIN-Dashboard   ✅ Task configured
+
+============================================================
+SUMMARY
+============================================================
+Services running: 5/5
+Tasks configured: 5/5
+Overall status: ✅ ALL ONLINE
 ```
 
-### 7.4 Kubernetes Health
+#### 4.2 API Endpoints
+
 ```bash
-# Check pod status
-kubectl get pods -n quan-ai-brain
+# Test server:
+curl http://127.0.0.1:8765/api/health
 
-# Check deployment
-kubectl rollout status deployment/quan-ai-brain -n quan-ai-brain
+# Test dashboard:
+curl http://127.0.0.1:8766/api/health
 
-# Check services
-kubectl get svc -n quan-ai-brain
+# Test Ollama:
+curl http://localhost:11434/api/tags
+```
+
+#### 4.3 NetChat Integration
+
+```bash
+# Verify responder connected:
+type logs\responder.log | findstr "Monitoring"
+
+# Send test message via NetChat:
+# Channel: "Trợ lý Tony Pham"
+# Message: "trạng thái"
+# Expected: System status response
 ```
 
 ---
 
-## 8. Monitoring Setup
+### Phase 5: Troubleshooting
 
-### 8.1 Prometheus Configuration
-Edit `monitoring/prometheus.yml`:
+#### Issue 1: Services Not Starting
 
-```yaml
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+**Symptoms:** `❌ OFFLINE` in health check
 
-scrape_configs:
-  - job_name: 'quan-ai-brain'
-    static_configs:
-      - targets: ['quan-ai-brain:8080']
-    metrics_path: /metrics
+**Solution:**
+```cmd
+# Check Task Scheduler:
+schtasks /Query /TN "QUAN-AI-BRAIN-Server" /V
 
-  - job_name: 'redis'
-    static_configs:
-      - targets: ['redis:6379']
+# Check logs:
+type logs\server.log
 
-  - job_name: 'postgres'
-    static_configs:
-      - targets: ['postgres:9187']
+# Re-run setup as Administrator:
+tools\setup_windows_services.bat
 ```
 
-### 8.2 Grafana Dashboards
-Import dashboards from `monitoring/grafana/dashboards/`:
-- `system-overview.json` - System metrics overview
-- `memory-performance.json` - Memory performance metrics
-- `api-latency.json` - API latency percentiles
-- `error-tracking.json` - Error rate tracking
+#### Issue 2: Port Already in Use
 
-### 8.3 Alert Rules
-Edit `monitoring/prometheus/alerts.yml`:
+**Symptoms:** `Address already in use` error
 
-```yaml
-groups:
-  - name: quan-ai-brain
-    rules:
-      - alert: HighErrorRate
-        expr: rate(http_requests_total{status="500"}[5m]) > 0.05
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "High error rate detected"
-          
-      - alert: HighLatencies
-        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High API latencies detected"
+**Solution:**
+```cmd
+# Find process using port:
+netstat -ano | findstr :8765
+
+# Kill process:
+taskkill /F /PID <PID>
+
+# Or change port in config
 ```
 
-### 8.4 Log Aggregation
+#### Issue 3: Ollama Not Responding
+
+**Symptoms:** `Connection refused`
+
+**Solution:**
 ```bash
-# Check ELK stack
-curl http://localhost:9200
-curl http://localhost:5601/api/status
+# Check Ollama:
+ollama list
 
-# View logs in Kibana
-# Navigate to Discover > quan-ai-brain-*
+# Start Ollama:
+ollama serve
+
+# Pull model:
+ollama pull bge-m3
+```
+
+#### Issue 4: Permission Denied
+
+**Symptoms:** `Access is denied`
+
+**Solution:**
+```cmd
+# Run as Administrator
+# Check Windows Security logs
+# Verify Python path in batch files
 ```
 
 ---
 
-## 9. Backup & Recovery
+### Phase 6: Monitoring
 
-### 9.1 Database Backup
+#### 6.1 Daily Checks
+
 ```bash
-# Create backup
-docker exec quan-ai-postgres pg_dump -U quanai quan_ai_brain > backup_$(date +%Y%m%d).sql
+# Morning check:
+python tools\health_check.py
 
-# Compress backup
-gzip backup_$(date +%Y%m%d).sql
+# Check logs:
+type logs\server.log | more
 
-# Upload to S3
-aws s3 cp backup_$(date +%Y%m%d).sql.gz s3://your-backup-bucket/quan-ai-brain/
-
-# Schedule daily backup (cron)
-0 2 * * * /path/to/backup.sh
+# Check disk space:
+wmic logicaldisk get size,freespace,caption
 ```
 
-### 9.2 Backup Script
+#### 6.2 Weekly Review
+
 ```bash
-#!/bin/bash
-# backup.sh
+# Generate weekly report:
+python tools\uat_runner.py
 
-BACKUP_DIR="/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-RETENTION_DAYS=30
+# Review issues:
+type data\uat_logs\uat_*.json | findstr "issue"
 
-# Create backup
-docker exec quan-ai-postgres pg_dump -U quanai quan_ai_brain | gzip > \
-  ${BACKUP_DIR}/backup_${DATE}.sql.gz
-
-# Upload to S3
-aws s3 cp ${BACKUP_DIR}/backup_${DATE}.sql.gz \
-  s3://your-backup-bucket/quan-ai-brain/
-
-# Cleanup old backups
-find ${BACKUP_DIR} -name "backup_*.sql.gz" -mtime +${RETENTION_DAYS} -delete
-
-# Log
-echo "Backup completed: backup_${DATE}.sql.gz"
+# Check quarantine:
+python -c "from quan_ai_brain.memory.quarantine_store import *; s=create_quarantine_store(); print(s.get_stats())"
 ```
 
-### 9.3 Recovery Procedure
+#### 6.3 Monthly Maintenance
+
 ```bash
-# Download backup
-aws s3 cp s3://your-backup-bucket/quan-ai-brain/backup_20241028.sql.gz .
+# Rotate logs:
+# (Automatic, but can force)
 
-# Decompress
-gunzip backup_20241028.sql.gz
+# Backup databases:
+copy data\brain.db data\backup\brain_YYYY-MM-DD.db
+copy data\quarantine.db data\backup\quarantine_YYYY-MM-DD.db
 
-# Restore database
-docker exec -i quan-ai-postgres psql -U quanai quan_ai_brain < backup_20241028.sql
-
-# Verify restoration
-docker exec quan-ai-postgres psql -U quanai -c "SELECT COUNT(*) FROM knowledge_units;"
-```
-
-### 9.4 Disaster Recovery
-```bash
-# Full system recovery
-1. Stop all services: docker-compose down
-2. Restore database: (see 9.3)
-3. Restore application data: rsync -av backup/data/ /app/data/
-4. Start services: docker-compose up -d
-5. Verify health: curl http://localhost:8080/v1/memory/health
+# Clean old logs:
+forfiles /p logs /s /m *.log /d -30 /c "cmd /c del @path"
 ```
 
 ---
 
-## 10. Troubleshooting
+## Rollback Plan
 
-### 10.1 Common Issues
+### If Deployment Fails
 
-#### Issue: Application won't start
-```bash
-# Check logs
-docker-compose logs quan-ai-brain
+```cmd
+# 1. Stop all services:
+tools\stop_services.bat
 
-# Common causes:
-# - Database connection failed → Check DATABASE_URL
-# - Redis connection failed → Check REDIS_URL
-# - Port already in use → Change APP_PORT
-# - Missing environment variables → Check .env file
-```
+# 2. Remove tasks:
+tools\remove_services.bat
 
-#### Issue: High memory usage
-```bash
-# Check memory usage
-docker stats quan-ai-brain
+# 3. Restore from backup:
+copy data\backup\* data\
 
-# Solutions:
-# - Increase memory limit in docker-compose.yml
-# - Enable caching
-# - Optimize queries
-# - Scale horizontally
-```
+# 4. Revert code:
+git reset --hard HEAD~1
 
-#### Issue: Slow queries
-```bash
-# Enable query logging
-docker-compose exec postgres psql -U quanai -c "ALTER SYSTEM SET log_min_duration_statement = 1000;"
-
-# Check slow queries
-docker-compose exec postgres psql -U quanai -c "SELECT * FROM pg_stat_statements ORDER BY total_time DESC LIMIT 10;"
-
-# Solutions:
-# - Add indexes
-# - Optimize queries
-# - Increase cache size
-```
-
-#### Issue: Connection pool exhausted
-```bash
-# Check pool status
-docker-compose exec postgres psql -U quanai -c "SELECT count(*) FROM pg_stat_activity;"
-
-# Solutions:
-# - Increase DATABASE_POOL_SIZE
-# - Optimize connection usage
-# - Add connection pooling (PgBouncer)
-```
-
-### 10.2 Performance Tuning
-
-#### Database Optimization
-```sql
--- Add indexes
-CREATE INDEX idx_knowledge_scope ON knowledge_units(scope);
-CREATE INDEX idx_knowledge_status ON knowledge_units(status);
-CREATE INDEX idx_knowledge_created ON knowledge_units(created_at_utc);
-
--- Analyze tables
-ANALYZE knowledge_units;
-ANALYZE relations;
-
--- Vacuum database
-VACUUM ANALYZE;
-```
-
-#### Redis Optimization
-```bash
-# Increase maxmemory
-docker exec quan-ai-redis redis-cli CONFIG SET maxmemory 2gb
-docker exec quan-ai-redis redis-cli CONFIG SET maxmemory-policy allkeys-lru
-
-# Check Redis stats
-docker exec quan-ai-redis redis-cli INFO stats
-```
-
-#### Application Optimization
-```python
-# Enable query caching
-# config/production.yaml
-cache:
-  enabled: true
-  ttl: 300
-  max_size: 10000
-
-# Enable connection pooling
-database:
-  pool_size: 20
-  max_overflow: 5
-```
-
-### 10.3 Security Issues
-
-#### Issue: Unauthorized access
-```bash
-# Check authentication
-curl -H "Authorization: Bearer <token>" http://localhost:8080/v1/memory/health
-
-# Regenerate secrets if compromised
-openssl rand -base64 64 > .env.secret
-```
-
-#### Issue: Rate limiting triggered
-```bash
-# Check rate limit config
-curl http://localhost:8080/v1/memory/health | jq .rate_limit
-
-# Increase limit if needed
-# .env
-RATE_LIMIT_PER_MINUTE=200
-```
-
-### 10.4 Support & Resources
-
-- **Documentation**: `docs/` directory
-- **API Reference**: `docs/openapi_spec.yaml`
-- **Issue Tracker**: GitHub Issues
-- **Email**: quanpt1@viettel.com.vn
-- **Emergency**: +84-xxx-xxx-xxxx
-
----
-
-## Appendix A: Command Reference
-
-```bash
-# Start services
-docker-compose up -d
-
-# Stop services
-docker-compose down
-
-# Restart services
-docker-compose restart
-
-# View logs
-docker-compose logs -f
-
-# Check status
-docker-compose ps
-
-# Execute command in container
-docker-compose exec quan-ai-brain bash
-
-# Backup database
-docker exec quan-ai-postgres pg_dump -U quanai quan_ai_brain > backup.sql
-
-# Restore database
-docker exec -i quan-ai-postgres psql -U quanai < backup.sql
-
-# Update application
-docker-compose pull
-docker-compose up -d
-
-# Rollback
-docker-compose down
-docker-compose pull previous
-docker-compose up -d
+# 5. Re-run setup:
+tools\setup_windows_services.bat
 ```
 
 ---
 
-## Appendix B: Checklist
+## Support
 
-### Pre-Deployment
-- [ ] System requirements met
-- [ ] Environment variables configured
-- [ ] SSL certificates installed
-- [ ] Database created and migrated
-- [ ] Secrets generated and stored securely
-- [ ] Firewall rules configured
-- [ ] Monitoring configured
-- [ ] Backup strategy in place
+### Contact
+- **Email:** quanpt1@viettel.com.vn
+- **NetChat:** "Trợ lý Tony Pham" channel
+- **Logs:** `logs/` directory
 
-### Post-Deployment
-- [ ] Health checks passing
-- [ ] All services running
-- [ ] API endpoints responding
-- [ ] Monitoring dashboards visible
-- [ ] Logs being collected
-- [ ] Backup jobs scheduled
-- [ ] Security scan passed
-- [ ] Performance benchmarks met
+### Emergency Commands
 
-### Ongoing
-- [ ] Daily backups verified
-- [ ] Weekly security updates
-- [ ] Monthly performance review
-- [ ] Quarterly disaster recovery test
-- [ ] Annual security audit
+```cmd
+# Emergency stop:
+tools\stop_services.bat
+
+# Freeze system:
+echo "freeze" | python tools\netchat_auto_responder.py
+
+# Kill all Python:
+taskkill /F /IM python.exe
+```
 
 ---
 
-**Document Version:** V22.0  
-**Last Reviewed:** 2024-10-28  
-**Next Review:** 2025-01-28
+## Success Criteria
+
+Deployment successful when:
+
+- ✅ All 5 services ONLINE
+- ✅ All 5 tasks configured
+- ✅ Health check passes
+- ✅ Auto-start works after reboot
+- ✅ NetChat responds to commands
+- ✅ Logs rotating properly
+- ✅ No errors in last 24h
+
+---
+
+**Deployment Date:** _________________  
+**Deployed By:** _________________  
+**Verified By:** _________________  
+**Status:** ☐ Ready ☐ Deployed ☐ Verified
+
+---
+
+**Next:** Run integration tests → Begin UAT week
