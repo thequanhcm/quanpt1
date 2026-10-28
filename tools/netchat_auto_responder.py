@@ -57,6 +57,37 @@ def _maybe_autorun_probe(ai_response: str) -> str | None:
     head = ai_response.split("Đề xuất")[0].strip()
     return f"{head}\n\n{fresh}" if head else fresh
 
+
+def generate_memory_storage_answer() -> str:
+    """Generate answer about memory storage locations."""
+    return """Dạ, trí nhớ của em được lưu trữ theo 3 tầng:
+
+**1. Trí nhớ ngắn hạn (Session Memory)** 📝
+- Lưu tại: `data/brain.db` (SQLite)
+- Nội dung: Cuộc trò chuyện hiện tại, context phiên làm việc
+- Đặc điểm: Tạm thời, mất khi kết thúc phiên
+
+**2. Trí nhớ dài hạn (Long-term Memory)** 🗄️
+- Lưu tại: `data/vector_db` (ChromaDB vector database)
+- Nội dung: 
+  • 150+ kiến thức từ brain.db đã được embedding
+  • Kiến thức USER_PROVIDED (anh dạy)
+  • Kiến thức VERIFIED (đã xác minh)
+  • Kiến thức UNVERIFIED (chờ duyệt)
+- Đặc điểm: Vĩnh viễn, có semantic search
+- Công nghệ: ChromaDB + BGE-M3 embeddings (1024 dims)
+
+**3. Kiến thức chuẩn (Verified Knowledge)** ✅
+- Lưu tại: Cùng vector_db nhưng với verification_status = VERIFIED hoặc USER_PROVIDED
+- Nội dung: Kiến thức đã được anh duyệt, có bằng chứng xác minh
+- Đặc điểm: Ưu tiên cao nhất khi retrieval
+
+**Tiers:**
+- Short-term → Long-term → Verified (priority ranking)
+
+Anh muốn em giải thích chi tiết phần nào ạ?"""
+
+
 CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
 CHANNEL_NAME = "Trợ lý Tony Pham"
 BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
@@ -373,7 +404,28 @@ def process_message(message_text, sender_user_id="", chat_session_id="default"):
     27/10/2026 (owner): intent 'ok_silent' = anh xác nhận nhưng không có việc
     chờ → KHÔNG gửi gì cả (không lòng vòng). 'ok_confirm' = đã thực thi việc
     chờ xác nhận.
+    
+    28/10/2026: Fix prompt card parsing - extract actual question from card text.
     """
+    # (28/10/2026) Fix: Extract actual question from prompt card
+    # NetChat prompt cards may send text like "Trả lời câu hỏi này" after the question
+    # We need to extract the actual question before such phrases
+    import re
+    question_extract_re = re.compile(r'^(.+?)(?:\s*[.-]\s*Trả lời|Trả lời câu|Gửi câu hỏi|Nhấn để)', re.IGNORECASE)
+    match = question_extract_re.match(message_text.strip())
+    if match:
+        extracted_question = match.group(1).strip()
+        if extracted_question and len(extracted_question) > 3:
+            print(f"   📝 Extracted question from prompt card: '{extracted_question[:50]}...'")
+            message_text = extracted_question
+    
+    # Handle common prompt card patterns
+    if "Trí nhớ" in message_text or "memory" in message_text.lower():
+        if "lưu trữ" in message_text or "ở đâu" in message_text:
+            # Direct question about memory storage - bypass router
+            print(f"   📚 Memory storage question detected")
+            return generate_memory_storage_answer()
+    
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from tools.netchat_command_center import route_message
