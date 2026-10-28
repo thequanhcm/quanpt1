@@ -295,7 +295,8 @@ class IntelligentCache:
 
     def keys(self, prefix: Optional[str] = None) -> List[str]:
         with self._lock:
-            keys = [k for k, e in self._entries.items() if not e.is_expired]
+            keys = [k for k, e in self._entries.items()
+                    if not self._is_expired(e)]
         if prefix is not None:
             keys = [k for k in keys if k.startswith(prefix)]
         return keys

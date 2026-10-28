@@ -30,6 +30,7 @@ import hashlib
 import hmac
 import time
 from datetime import date, timedelta
+from typing import Tuple
 
 import pytest
 
@@ -186,6 +187,7 @@ class TestAPIGateway:
             authenticator=APIKeyAuthenticator(),
             rate_limiter=TokenBucketRateLimiter(capacity=1, refill_rate=0.0),
         )
+        gw.authenticator.register_key("k", "u")  # register the test key
         gw.add_route("GET", "/v1/x", lambda r: {})
         gw.handle_request("GET", "/v1/x", headers={"X-API-Key": "k"})  # 200, token gone
         resp = gw.handle_request("GET", "/v1/x")  # bucket empty AND no key
@@ -857,22 +859,19 @@ class TestWebhooks:
     def test_verify_signature_roundtrip(self):
         d = WebhookDispatcher(max_retries=1)
         ep = d.register("https://hooks.example.test/s", ["e"], secret=TEST_SECRET)
-        results = d.dispatch("e", {"x": 1})
-        sig = results[0].signature
-        body = d._deliveries and None  # dispatcher signs canonical JSON internally
-        # reconstruct the signed body exactly as the dispatcher did
-        import json as _json
+        seen = {}
 
-        from quan_ai_brain.gateway.webhooks import SIGNATURE_HEADER as H
+        def transport(url, body, headers):
+            seen["body"] = body
+            seen["sig"] = headers.get(SIGNATURE_HEADER)
+            return 200
 
-        # The envelope used for signing is deterministic for the same inputs
-        # except timestamp, so verify instead via the recorded signature:
-        assert verify_signature(_json.dumps({
-            "event": "e",
-            "endpoint_id": ep.endpoint_id,
-            "timestamp": results[0].__dict__.get("timestamp", None) or "unknown",
-            "data": {"x": 1},
-        }, sort_keys=True).encode(), TEST_SECRET.encode(), sig) in (True, False)
+        d.set_transport(ep.endpoint_id, transport)
+        d.dispatch("e", {"x": 1})
+        # the signature delivered on the wire verifies against the exact body
+        assert seen["sig"] == compute_signature(seen["body"], TEST_SECRET.encode())
+        assert verify_signature(seen["body"], TEST_SECRET.encode(), seen["sig"]) is True
+        assert verify_signature(seen["body"] + b" ", TEST_SECRET.encode(), seen["sig"]) is False
 
     def test_verify_signature_detects_tampering(self):
         payload = b'{"a": 1}'
@@ -1128,6 +1127,234 @@ class TestVersioning:
         vm = self._manager()
         with pytest.raises(UnknownVersionError):
             vm.migration_note("v1", "v3")
+
+
+# =====================================================================
+# V28 Integration — cross-module flows (M1+M2+M3+M4+M5)
+# =====================================================================
+
+
+class TestV28Integration:
+    """End-to-end flows wiring gateway + connectors + broker + webhooks +
+    versioning together (all in-memory, no network)."""
+
+    def _build_gateway(self) -> Tuple[APIGateway, MockSalesforceConnector, InMemoryMessageBroker]:
+        """Gateway exposing mock-connector and broker operations, versioned."""
+        auth = APIKeyAuthenticator()
+        auth.register_key("key-ops", {"user": "ops", "role": "operator"})
+
+        gw = APIGateway(
+            authenticator=auth,
+            rate_limiter=TokenBucketRateLimiter(capacity=1000, refill_rate=1000.0),
+            cache=ResponseCache(default_ttl=60.0),
+        )
+        sf = MockSalesforceConnector()
+        broker = InMemoryMessageBroker(max_retries=3)
+
+        gw.add_route(
+            "GET", "/v1/connectors/salesforce/accounts",
+            lambda r: {"accounts": sf.fetch("accounts", limit=2)},
+            cache_ttl=30, name="sf-accounts",
+        )
+        gw.add_route(
+            "POST", "/v1/queue/{topic}",
+            lambda r: {"published": broker.publish(r.path_params["topic"], r.body).message_id},
+            name="publish",
+        )
+        return gw, sf, broker
+
+    def test_gateway_serves_connector_data_with_auth_and_cache(self):
+        gw, _sf, _broker = self._build_gateway()
+        h = {"X-API-Key": "key-ops"}
+        r1 = gw.handle_request("GET", "/v1/connectors/salesforce/accounts", headers=h)
+        assert r1.status == 200
+        assert r1.body["accounts"][0]["name"] == "Acme Corp"
+        assert r1.headers["X-Cache"] == "MISS"
+        r2 = gw.handle_request("GET", "/v1/connectors/salesforce/accounts", headers=h)
+        assert r2.headers["X-Cache"] == "HIT"
+        assert r2.body == r1.body  # cached — connector not re-queried
+
+    def test_gateway_unauthenticated_connector_access_rejected(self):
+        gw, _sf, _broker = self._build_gateway()
+        resp = gw.handle_request("GET", "/v1/connectors/salesforce/accounts")
+        assert resp.status == 401
+
+    def test_gateway_publishes_to_broker_and_consumer_processes(self):
+        gw, _sf, broker = self._build_gateway()
+        h = {"X-API-Key": "key-ops"}
+        # publish through the gateway route
+        resp = gw.handle_request(
+            "POST", "/v1/queue/orders", headers=h, body={"order_id": "O-1", "total": 99}
+        )
+        assert resp.status == 200
+        assert resp.body["published"].startswith("m-")
+        # the SAME broker instance received the message
+        assert broker.queued_count("orders") == 1
+        # a consumer processes it end-to-end
+        broker.subscribe("orders", "order-worker")
+        (msg,) = broker.consume("orders", "order-worker")
+        assert msg.payload == {"order_id": "O-1", "total": 99}
+        assert broker.ack("orders", "order-worker", msg.message_id) is True
+        assert broker.global_stats()["published_total"] == 1
+
+    def test_broker_to_webhook_event_pipeline(self):
+        """Domain event -> broker topic -> webhook delivery (signed, verified)."""
+        broker = InMemoryMessageBroker()
+        dispatcher = WebhookDispatcher()
+        ep = dispatcher.register(
+            "https://hooks.example.test/crm", ["crm.account.created"],
+            secret="test-secret-key",
+        )
+        delivered = []
+        # real receiver semantics: verify the HMAC before accepting
+        def receiver(url, body, headers):
+            import json as _json
+            sig = headers.get(SIGNATURE_HEADER)
+            assert verify_signature(body, b"test-secret-key", sig), "bad signature"
+            delivered.append(_json.loads(body)["data"])
+            return 200
+
+        dispatcher.set_transport(ep.endpoint_id, receiver)
+        # consumer pushes broker events into the webhook dispatcher
+        broker.subscribe("crm.account.created", "webhook-bridge", handler=lambda m: dispatcher.dispatch("crm.account.created", m.payload))
+        broker.publish("crm.account.created", {"account": "Acme", "arr": 1_000_000})
+        assert delivered == [{"account": "Acme", "arr": 1_000_000}]
+
+    def test_broker_poison_message_ends_in_dlq_and_gateway_reports(self):
+        broker = InMemoryMessageBroker(max_retries=2)
+        attempts = {"n": 0}
+
+        def always_fails(message):
+            attempts["n"] += 1
+            raise RuntimeError("poison")
+
+        broker.subscribe("billing.events", "billing-consumer", handler=always_fails)
+        broker.publish("billing.events", {"invoice": "I-402"})
+        assert len(broker.dead_letter_queue()) == 1
+        assert attempts["n"] == 2  # max_retries respected
+        stats = broker.global_stats()
+        assert stats["dlq_total"] == 1
+
+    def test_circuit_breaker_protects_connector_behind_gateway(self):
+        sf = MockSalesforceConnector(fail_next=5)
+        breaker = CircuitBreaker(failure_threshold=2, cooldown_seconds=60)
+
+        def guarded_fetch():
+            return breaker.call(lambda: sf.fetch("accounts", limit=1))
+
+        with pytest.raises(ConnectorError):
+            guarded_fetch()
+        with pytest.raises(ConnectorError):
+            guarded_fetch()
+        # breaker OPEN -> connector shielded
+        with pytest.raises(CircuitOpenError):
+            guarded_fetch()
+        assert breaker.state is CircuitState.OPEN
+        # cooldown passes, one success closes it again
+        fake_now = {"t": 0.0}
+        breaker2 = CircuitBreaker(failure_threshold=1, cooldown_seconds=10, clock=lambda: fake_now["t"])
+        healthy = MockSalesforceConnector()  # no queued failures
+        with pytest.raises(ConnectorError):
+            breaker2.call(lambda: (_ for _ in ()).throw(ConnectorError("blip")))
+        fake_now["t"] = 11
+        assert breaker2.call(lambda: healthy.fetch("accounts", limit=1)) is not None
+        assert breaker2.state is CircuitState.CLOSED
+
+    def test_versioned_gateway_routes_with_deprecation_headers(self):
+        """v1 route returns data + Deprecation headers; v2 route clean."""
+        vm = APIVersionManager(today=date(2026, 10, 28))
+        vm.register_version("v1")
+        vm.register_version("v2")
+        vm.deprecate("v1", sunset_on=date(2027, 4, 30), replacement="v2")
+
+        auth = APIKeyAuthenticator()
+        auth.register_key("k", "u")
+        gw = APIGateway(authenticator=auth)
+
+        def users_v1(request):
+            resp = Response(status=200, body={"users": ["a"], "shape": "v1"})
+            for name, value in vm.deprecation_headers("v1").items():
+                resp.headers[name] = value
+            return resp
+
+        gw.add_route("GET", "/v1/users", users_v1)
+        gw.add_route("GET", "/v2/users", lambda r: {"users": ["a", "b"], "shape": "v2"})
+
+        r1 = gw.handle_request("GET", "/v1/users", headers={"X-API-Key": "k"})
+        assert r1.status == 200
+        assert r1.headers["Deprecation"] == "true"
+        assert r1.headers["Sunset"] == "Fri, 30 Apr 2027 00:00:00 GMT"
+        assert "v2" in r1.headers["Link"]
+        r2 = gw.handle_request("GET", "/v2/users", headers={"X-API-Key": "k"})
+        assert r2.status == 200
+        assert "Deprecation" not in r2.headers
+
+    def test_migration_note_generated_for_versioned_endpoints(self):
+        vm = APIVersionManager(today=date(2026, 10, 28))
+        vm.register_version("v1")
+        vm.register_version("v2")
+        vm.map_route("/users", "GET", "v1")
+        vm.map_route("/users", "GET", "v2")
+        vm.map_route("/reports", "GET", "v1")  # v1-only, will be flagged
+        vm.register_field_rename("v1", "v2", {"user_name": "username"})
+        note = vm.migration_note("v1", "v2")
+        assert note["field_renames"] == {"user_name": "username"}
+        assert ("/reports", "GET") in [
+            (r["endpoint"], r["method"]) for r in note["endpoints_removed_in_target"]
+        ]
+
+    def test_full_enterprise_event_loop(self):
+        """connector fetch -> gateway response -> broker fan-out -> 2 webhooks."""
+        sf = MockSalesforceConnector()
+        broker = InMemoryMessageBroker()
+        dispatcher = WebhookDispatcher(max_retries=2)
+        ep_a = dispatcher.register("https://a.test/hook", ["sf.accounts.synced"], secret="test-secret-key")
+        ep_b = dispatcher.register("https://b.test/hook", ["sf.accounts.synced"], secret="test-secret-key")
+
+        received = []
+        def make_receiver(tag):
+            def receiver(url, body, headers):
+                assert verify_signature(body, b"test-secret-key", headers.get(SIGNATURE_HEADER))
+                import json as _json
+                received.append((tag, _json.loads(body)["data"]))
+                return 200
+            return receiver
+
+        dispatcher.set_transport(ep_a.endpoint_id, make_receiver("a"))
+        dispatcher.set_transport(ep_b.endpoint_id, make_receiver("b"))
+        broker.subscribe("sf.accounts.synced", "hook-bridge", handler=lambda m: dispatcher.dispatch("sf.accounts.synced", m.payload))
+
+        # 1. connector produces data
+        accounts = sf.fetch("accounts", limit=2)
+        # 2. broker fans the event out to the webhook bridge
+        broker.publish("sf.accounts.synced", {"count": len(accounts)})
+        # 3. both endpoints received a verified, signed payload
+        assert sorted(received) == [("a", {"count": 2}), ("b", {"count": 2})]
+        assert dispatcher.stats()["delivery_attempts_ok"] == 2
+
+    def test_connector_failure_fans_out_to_dlq_and_breaker(self):
+        """Connector outage -> gateway 502-ish handler error + broker retry -> DLQ."""
+        sf = MockSalesforceConnector(fail_next=10)
+        broker = InMemoryMessageBroker(max_retries=2)
+        auth = APIKeyAuthenticator()
+        auth.register_key("k", "u")
+        gw = APIGateway(authenticator=auth)
+        gw.map_exception(ConnectorError, 502)
+
+        def handler(request):
+            return {"accounts": sf.fetch("accounts", limit=1)}
+
+        gw.add_route("GET", "/v1/sf", handler)
+        resp = gw.handle_request("GET", "/v1/sf", headers={"X-API-Key": "k"})
+        assert resp.status == 502
+
+        # meanwhile an event pipeline retrying the connector lands in DLQ
+        def failing_bridge(message):
+            sf.fetch("accounts", limit=1)
+
+        broker.subscribe("sf.sync", "bridge", handler=failing_bridge)
+        broker.publish("sf.sync", {"trigger": True})
+        assert len(broker.dead_letter_queue()) == 1
 
 
 # fix import used above (kept at bottom to preserve class ordering readability)

@@ -350,20 +350,35 @@ class TestFederatedOrchestrator:
 
     def test_run_training_stops_on_convergence(self):
         orch = self._make_orchestrator(n_nodes=2, convergence_threshold=0.5)
-        losses = iter([10.0, 9.8, 9.6, 1.0])
+        # Per-round loss schedule (shared by both nodes in a round; note the
+        # train_fn is called once per node, so use a round-keyed dict).
+        schedule = {0: 10.0, 1: 9.8, 2: 9.6, 3: 9.59}
+
+        def train(node_id, gw):
+            round_no = orch.global_model_version
+            return NodeUpdate(
+                node_id=node_id,
+                round_id=round_no + 1,
+                weights={"w": 1.0},
+                loss=schedule[round_no],
+            )
+
+        results = orch.run_training(train, max_rounds=10)
+        assert len(results) == 3  # stopped at 3rd round when converged
+        assert results[-1].converged is True
+        assert results[0].converged is False
+
+    def test_run_training_max_rounds(self):
+        orch = self._make_orchestrator(n_nodes=2, convergence_threshold=1e-9)
+        # Oscillating losses never satisfy the all-deltas-shrinking condition.
+        losses = iter([1.0, 2.0, 1.0, 2.0, 1.0, 2.0, 1.0, 2.0])
 
         def train(node_id, gw):
             return NodeUpdate(
                 node_id=node_id, round_id=1, weights={"w": 1.0}, loss=next(losses)
             )
 
-        results = orch.run_training(train, max_rounds=10)
-        assert len(results) == 3  # stopped at 3rd round when converged
-        assert all(r.converged for r in results[1:])
-
-    def test_run_training_max_rounds(self):
-        orch = self._make_orchestrator(n_nodes=2, convergence_threshold=1e-9)
-        results = orch.run_training(self._train_ok, max_rounds=4)
+        results = orch.run_training(train, max_rounds=4, stop_on_convergence=False)
         assert len(results) == 4
         assert orch.global_model_version == 4
 

@@ -299,7 +299,9 @@ class CommonSenseReasoner:
                context: Optional[Iterable[str]] = None) -> dict[str, Any]:
         """Toy QA over the store, e.g. 'người có thể uống nước không?'."""
         q = (question_vi or "").lower()
-        found = [c for c in self.store.concepts if c in q]
+        # order concepts by their position in the question, not store order
+        found = sorted((c for c in self.store.concepts if c in q),
+                       key=q.index)
         result: dict[str, Any] = {
             "question": question_vi,
             "found_concepts": found,

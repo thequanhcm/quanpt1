@@ -302,7 +302,10 @@ class TestEpsilonGreedyPolicy:
         clone = policy.clone()
         clone.update('s', 'a1', 100.0)
         assert policy.expected_reward('s', 'a1') == pytest.approx(1.0)
-        assert clone.expected_reward('s', 'a1') == pytest.approx(1.0)  # mean after 2 updates: (1+100)/2
+        # clone now holds the incremental mean of (1, 100)
+        assert clone.expected_reward('s', 'a1') == pytest.approx(50.5)
+        assert clone.count('s', 'a1') == 2
+        assert policy.count('s', 'a1') == 1
 
     def test_available_actions_override(self):
         policy = EpsilonGreedyPolicy(actions=['a1', 'a2'], epsilon=0.0)
@@ -874,10 +877,14 @@ class TestImprovementLoop:
 
     def _loop(self, metrics_sequence, verify_fn=None, config=None,
               validator=None, max_iterations=3):
+        """Each element of ``metrics_sequence`` is one measurement batch
+        (a list of MetricSnapshot) consumed by successive measure() calls."""
         sequence = list(metrics_sequence)
 
         def measure():
-            return sequence.pop(0) if sequence else sequence[-1] if sequence else []
+            if sequence:
+                return sequence.pop(0)
+            return []
 
         return ImprovementLoop(
             measure_fn=measure,
@@ -953,7 +960,7 @@ class TestImprovementLoop:
     def test_iteration_no_findings_no_change(self):
         healthy = _make_metrics(latency_p95=100.0, error_rate=0.1,
                                 cache_hit_rate=99.0)
-        loop = self._loop([[healthy]])
+        loop = self._loop([healthy])
         result = loop.run_iteration(1)
         assert result.status == 'no_change'
         assert loop.get_config()['batch_size'] == 100
@@ -964,7 +971,7 @@ class TestImprovementLoop:
         improved = _make_metrics(latency_p95=100.0, error_rate=0.1,
                                  cache_hit_rate=99.0)
         loop = self._loop(
-            [[baseline, improved]],
+            [baseline, improved],
             validator=SandboxValidator(simulate=lambda c, p: 0.5,
                                        min_expected_improvement=0.1))
         result = loop.run_iteration(1)
@@ -980,7 +987,7 @@ class TestImprovementLoop:
         worse = _make_metrics(latency_p95=500.0, error_rate=0.1,
                               cache_hit_rate=99.0)
         loop = self._loop(
-            [[baseline, worse]],
+            [baseline, worse],
             validator=SandboxValidator(simulate=lambda c, p: 0.9,
                                        min_expected_improvement=0.1))
         result = loop.run_iteration(1)
@@ -994,7 +1001,7 @@ class TestImprovementLoop:
         baseline = _make_metrics(latency_p95=300.0, error_rate=0.1,
                                  cache_hit_rate=99.0)
         loop = self._loop(
-            [[baseline]],
+            [baseline],
             validator=SandboxValidator(simulate=lambda c, p: 0.0,
                                        min_expected_improvement=0.5))
         result = loop.run_iteration(1)
@@ -1009,7 +1016,7 @@ class TestImprovementLoop:
         improved = _make_metrics(latency_p95=100.0, error_rate=0.1,
                                  cache_hit_rate=99.0)
         loop = self._loop(
-            [[baseline, improved]],
+            [baseline, improved],
             validator=SandboxValidator(simulate=lambda c, p: 0.5,
                                        min_expected_improvement=0.1))
         loop.run_iteration(1)
@@ -1023,7 +1030,7 @@ class TestImprovementLoop:
                                  cache_hit_rate=99.0)
         worse = _make_metrics(latency_p95=400.0, error_rate=0.1,
                               cache_hit_rate=99.0)
-        loop = self._loop([[baseline, worse, worse, worse]],
+        loop = self._loop([baseline, worse, worse, worse],
                           validator=SandboxValidator(simulate=lambda c, p: 0.9,
                                                      min_expected_improvement=0.1))
         summary = loop.run()
@@ -1042,7 +1049,7 @@ class TestImprovementLoop:
 
         seq = make_pair() * 5
         loop = self._loop(
-            [seq], max_iterations=3,
+            seq, max_iterations=3,
             validator=SandboxValidator(simulate=lambda c, p: 0.5,
                                        min_expected_improvement=0.1))
         summary = loop.run()
@@ -1306,26 +1313,27 @@ class TestCacheAdaptiveCapacity:
         assert cache.stats.capacity_adjustments == 0
 
     def test_grow_on_high_hit_rate(self):
-        cache = IntelligentCache(max_size=100, adjustment_interval=10,
+        cache = IntelligentCache(max_size=100, adjustment_interval=20,
                                  grow_threshold=0.8, grow_factor=1.5,
                                  clock=FakeClock())
         for i in range(10):
             cache.set(f'k{i}', i)
-        for _ in range(2):  # 20 lookups, all hits
+        for _ in range(2):  # 20 lookups, all hits -> exactly 1 adjustment
             for i in range(10):
                 cache.get(f'k{i}')
         assert cache.max_size == 150
         assert cache.stats.capacity_adjustments == 1
 
     def test_shrink_on_low_hit_rate(self):
-        cache = IntelligentCache(max_size=100, adjustment_interval=10,
+        cache = IntelligentCache(max_size=100, adjustment_interval=20,
                                  shrink_threshold=0.5, shrink_factor=0.5,
                                  min_size=10, clock=FakeClock())
         for i in range(20):
             cache.set(f'k{i}', i)  # 20 sets
         for i in range(20):
-            cache.get(f'miss-{i}')  # 20 misses
+            cache.get(f'miss-{i}')  # 20 misses -> exactly 1 adjustment
         assert cache.max_size == 50
+        assert cache.stats.capacity_adjustments == 1
 
     def test_shrink_respects_min_size(self):
         cache = IntelligentCache(max_size=100, adjustment_interval=10,
@@ -1568,20 +1576,25 @@ class TestV26Integration:
     """Cross-module integration tests (V26)."""
 
     def test_learning_engine_feeds_adaptive_threshold(self):
-        # Learn the best action, then use its rewards as threshold data
+        # Learn the best action (quality score: higher is better), then feed
+        # the learned rewards into a dynamic threshold.
         engine = SelfLearningEngine(actions=['fast', 'slow'], epsilon=0.0,
                                     min_experiences=4, rng=random.Random(5))
         for _ in range(3):
             engine.record_experience('q', 'fast', 10.0, 'good')
-        engine.record_experience('q', 'slow', 50.0, 'bad')
+        engine.record_experience('q', 'slow', 2.0, 'bad')
         engine.learn()
         best = engine.select_action('q')
         assert best == 'fast'
 
-        th = DynamicThreshold('reward', percentile_value=50, min_samples=2)
+        # Scores cluster at 10; a much lower new score dips below the
+        # percentile floor -> 'below' gate flags the regression.
+        th = DynamicThreshold('quality', percentile_value=50, min_samples=2,
+                              direction='below')
         for e in engine.buffer.all():
             th.observe(e.reward)
-        assert th.evaluate(100.0).breached
+        assert th.evaluate(1.0).breached
+        assert not th.evaluate(10.0).breached
 
     def test_cache_stats_feed_dynamic_threshold(self):
         clock = FakeClock()
@@ -1593,19 +1606,25 @@ class TestV26Integration:
             cache.get(f'k{i}')  # hits
             hit_rates.append(cache.stats.hit_rate)
         th = DynamicThreshold('hit_rate', percentile_value=50, min_samples=3,
-                              direction='below')
+                              direction='above')
         for hr in hit_rates:
             th.observe(hr)
-        assert not th.evaluate(0.99).breached
+        # hit_rate rises monotonically toward 1.0; final values sit at the
+        # top of the observed window, so nothing breaches an 'above' gate.
+        assert not th.evaluate(hit_rates[-1]).breached
+        assert th.evaluate(2.0).breached  # impossible spike is flagged
 
     def test_cooldown_gates_improvement_loop_reapply(self):
         applied = {'n': 0}
         cc = CooldownController(cooldown_seconds=3600)
         baseline = _make_metrics(latency_p95=300.0, error_rate=0.1,
                                  cache_hit_rate=99.0)
+        improved = _make_metrics(latency_p95=100.0, error_rate=0.1,
+                                 cache_hit_rate=99.0)
 
         def measure():
-            return baseline
+            # alternate: baseline (findings) then improved (no findings)
+            return improved if applied['n'] else baseline
 
         loop = ImprovementLoop(
             measure_fn=measure,
@@ -1617,20 +1636,27 @@ class TestV26Integration:
             result = loop.run_iteration(1)
             if result.status == 'no_change':
                 break
-            if cc.try_change('batch_size', now=t0):
+            if result.status == 'improved' and cc.try_change('batch_size', now=t0):
                 applied['n'] += 1
-        # healthy metrics -> no proposals -> no cooldown consumption
-        assert applied['n'] == 0
+            else:
+                break
+        assert applied['n'] == 1
+        # last audit entry belongs to the final (no_change) iteration
+        assert loop.audit_log[-1].step == 'analyze'
 
     def test_improvement_loop_with_intelligent_cache(self):
         clock = FakeClock()
         cache = IntelligentCache(max_size=10, clock=clock, name='loop_cache')
         baseline = _make_metrics(latency_p95=300.0, error_rate=0.1,
                                  cache_hit_rate=99.0)
+        improved = _make_metrics(latency_p95=100.0, error_rate=0.1,
+                                 cache_hit_rate=99.0)
+        calls = {'n': 0}
 
         def measure():
-            cache.set('probe', 1)
-            return baseline
+            calls['n'] += 1
+            cache.set('probe', calls['n'])
+            return improved if calls['n'] > 1 else baseline
 
         loop = ImprovementLoop(
             measure_fn=measure,
@@ -1638,8 +1664,9 @@ class TestV26Integration:
             validator=SandboxValidator(simulate=lambda c, p: 0.5,
                                        min_expected_improvement=0.1))
         result = loop.run_iteration(1)
-        assert result.status == 'no_change'  # healthy metrics
+        assert result.status == 'improved'
         assert cache.exists('probe')
+        assert cache.get('probe') == 2
 
     def test_policy_snapshot_into_cache_style_store(self):
         engine = SelfLearningEngine(actions=['a1', 'a2'], epsilon=0.0,

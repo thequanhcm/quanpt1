@@ -61,8 +61,9 @@ class FeatureAttribution:
 
 
 class AttributionExplainer:
-    """Perturb each feature (replace with a baseline) and measure the
-    score delta. Positive delta = feature contributed positively."""
+    """Leave-one-out attribution: replace each feature with its baseline
+    (default 0.0) and report the *contribution* = base_score - perturbed
+    score. Positive contribution = the feature pushed the score up."""
 
     def __init__(self, score_fn: ScoreFn,
                  feature_names: Sequence[str],
@@ -78,15 +79,15 @@ class AttributionExplainer:
                 f"instance has {len(values)} features, "
                 f"expected {len(self.feature_names)}")
         base = float(self.score_fn(values))
-        scores: dict[str, float] = {}
+        contributions: dict[str, float] = {}
         for i, name in enumerate(self.feature_names):
             perturbed = list(values)
             if self.baseline is not None:
                 perturbed[i] = float(self.baseline[i])
             else:
                 perturbed[i] = 0.0
-            scores[name] = float(self.score_fn(perturbed)) - base
-        return FeatureAttribution(base_score=base, scores=scores,
+            contributions[name] = base - float(self.score_fn(perturbed))
+        return FeatureAttribution(base_score=base, scores=contributions,
                                   features=dict(zip(self.feature_names, values)))
 
 

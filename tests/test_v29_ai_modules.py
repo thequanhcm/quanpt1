@@ -432,9 +432,11 @@ class TestExplainableAI:
 
     @staticmethod
     def _score_fn(features):
-        # decision: confident when f1 and f2 both high, f3 is noise
-        return (features[0] * 0.4 + features[1] * 0.4 + features[2] * 0.1
-                + 0.05) / 1.0
+        # decision: confident when f1 and f2 are high, f3 is (mild) noise;
+        # supports any feature count >= 1 for generic tests
+        weights = [0.4, 0.4, 0.1]
+        total = sum(w * v for w, v in zip(weights, features)) + 0.05
+        return total
 
     def test_attribution_identifies_top_feature(self):
         names = ["f1", "f2", "f3"]

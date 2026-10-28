@@ -133,8 +133,13 @@ class TestNLQueryEngine:
 
     def test_intent_timeline(self):
         engine = NLQueryEngine(KU_FIXTURES, now=NOW)
-        plan = engine.parse("Lịch sử các sự cố tuần trước")
+        # 'lich su' (history) sets TIMELINE; 'tuan truoc' only adds TimeFilter
+        plan = engine.parse("Lịch sử các sự cố")
         assert plan.intent == Intent.TIMELINE
+        # time range alone keeps SEARCH intent but adds a time filter
+        plan2 = engine.parse("Tìm các sự cố tuần trước")
+        assert plan2.intent == Intent.SEARCH
+        assert plan2.time_filters[0].days == 7
 
     def test_intent_unknown(self):
         engine = NLQueryEngine(KU_FIXTURES, now=NOW)
@@ -365,8 +370,8 @@ class TestVoiceInterface:
         vi.start_session()
         vi.listen()
         text = vi.transcribe()
-        vi._transition(VoiceState.RESPONDING)
-        vi.barge_in()
+        # barge-in fires while TRANSCRIBING (before TTS starts)
+        assert vi.barge_in() is True
         turn = vi.respond(text)
         assert turn.interrupted is True
         assert turn.response == ""
@@ -385,7 +390,7 @@ class TestVoiceInterface:
     def test_barge_in_ignored_outside_responding(self):
         vi, _, _, _ = self._make()
         vi.start_session()
-        vi.barge_in()  # LISTENING: no-op, must not raise
+        assert vi.barge_in() is False  # LISTENING: nothing to cancel
         assert vi.barge_in_count == 0
 
     def test_invalid_transition_rejected(self):
@@ -912,6 +917,7 @@ class TestV24Integration:
         vi.start_session()
         vi.listen()
         t1 = vi.transcribe()
+        # user starts talking during response -> barge-in
         turn1 = vi.respond(t1, interrupt_during_speech=True)
         assert turn1.interrupted and tts.spoken == []
 
@@ -920,8 +926,8 @@ class TestV24Integration:
         t2 = vi.transcribe()
         turn2 = vi.respond(t2)
         assert turn2.interrupted is False
-        assert tts.spoken == ["CAU HOI HAI".upper()]
-        assert vi.barge_in_count == 1
+        assert tts.spoken == ["CAU HOI HAI"]
+        assert vi.barge_in_count == 1  # reset by the second start_session
 
     def test_end_to_end_owner_story(self, tmp_path):
         """Owner edits offline -> sync -> NL query -> voice answer + alert."""

@@ -172,6 +172,14 @@ class OfflineSyncEngine:
         with open(self.op_log_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry.to_dict()) + "\n")
 
+    def _rewrite_checkpoints(self) -> None:
+        """Persist checkpoint flags by atomically rewriting the op log."""
+        tmp_path = self.op_log_path + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            for op in self._ops:
+                f.write(json.dumps(op.to_dict()) + "\n")
+        os.replace(tmp_path, self.op_log_path)
+
     def _materialize(self) -> None:
         """Rebuild in-memory state by replaying the op log in order."""
         state: Dict[str, Any] = {}
@@ -307,9 +315,10 @@ class OfflineSyncEngine:
                     pulled += 1
             report.pulled = pulled
 
-            # 4. checkpoint: mark all ops as acknowledged
+            # 4. checkpoint: mark all ops as acknowledged and persist the flag
             for op in self._ops:
                 op.checkpointed = True
+            self._rewrite_checkpoints()
             report.checkpoints = 1
             self.last_checkpoint = self._clock()
             report.completed = True

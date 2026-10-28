@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 try:  # opportunistic reuse of V26.1 - never a hard dependency
     from quan_ai_brain.optimization.auto_tuner import (  # type: ignore
         AutoTuner,
+        Metric as AutoTunerMetric,
+        MetricType,
         MetricsCollector,
         OptimizationSuggestion,
         TuningConfig,
@@ -41,6 +43,8 @@ try:  # opportunistic reuse of V26.1 - never a hard dependency
     _AUTOTUNER_AVAILABLE = True
 except ImportError:  # pragma: no cover - exercised only without V26.1
     AutoTuner = None  # type: ignore
+    AutoTunerMetric = None  # type: ignore
+    MetricType = None  # type: ignore
     MetricsCollector = None  # type: ignore
     OptimizationSuggestion = None  # type: ignore
     TuningConfig = None  # type: ignore
@@ -297,29 +301,64 @@ class ImprovementLoop:
             return None
 
     def analyze(self, metrics: List[MetricSnapshot]) -> List[Dict[str, Any]]:
-        """Analyze metrics with AutoTuner when available, else fallback."""
+        """Analyze measured metrics.
+
+        Uses AutoTuner's bottleneck logic (V26.1) when importable and enough
+        samples exist; falls back to the internal analyzer otherwise. The
+        measured metrics are mapped onto AutoTuner's Metric objects so the
+        tuners' thresholds run against the loop's own measurements - not on
+        random simulated data.
+        """
         if not metrics:
             return []
         findings: List[Dict[str, Any]] = []
-        if len(metrics) >= self.min_samples_for_analysis:
-            tuner = self._build_autotuner()
-            if tuner is not None:
-                try:
-                    suggestions = tuner.analyze_and_tune()
-                    for s in suggestions:
-                        findings.append({
-                            'metric': s.metrics_affected[0] if s.metrics_affected else 'unknown',
-                            'value': s.current_value,
-                            'threshold': s.suggested_value,
-                            'severity': s.risk_level,
-                            'source': 'autotuner',
-                            'suggestion': s.to_dict(),
-                        })
-                except Exception as exc:
-                    logger.warning("AutoTuner analysis failed: %s", exc)
-                    findings = []
+        if len(metrics) >= self.min_samples_for_analysis and _AUTOTUNER_AVAILABLE:
+            findings = self._analyze_with_autotuner(metrics)
         if not findings:
             findings = self.analyzer.analyze(metrics)
+        return findings
+
+    def _analyze_with_autotuner(self, metrics: List[MetricSnapshot]) -> List[Dict[str, Any]]:
+        """Map measured metrics onto AutoTuner bottleneck detection."""
+        tuner = self._build_autotuner()
+        if tuner is None:
+            return []
+        type_map = {
+            'latency_p95': 'latency_p95',
+            'error_rate': 'error_rate',
+            'cpu_usage': 'cpu_usage',
+            'cache_hit_rate': 'cache_hit_rate',
+        }
+        collected: List[Any] = []
+        now = datetime.utcnow()
+        for metric in metrics:
+            metric_type_name = type_map.get(metric.name)
+            if metric_type_name is None:
+                continue
+            metric_type = MetricType(metric_type_name)
+            collected.append(AutoTunerMetric(
+                metric_id=metric.name,
+                metric_type=metric_type,
+                value=metric.value,
+                timestamp=now,
+            ))
+        if not collected:
+            return []
+        try:
+            bottlenecks = tuner._identify_bottlenecks(collected)
+        except Exception as exc:
+            logger.warning("AutoTuner bottleneck analysis failed: %s", exc)
+            return []
+        findings = []
+        for bottleneck in bottlenecks:
+            findings.append({
+                'metric': bottleneck['metric'],
+                'value': bottleneck['value'],
+                'threshold': bottleneck['threshold'],
+                'severity': 'high',
+                'source': 'autotuner',
+                'bottleneck_type': bottleneck['type'],
+            })
         return findings
 
     # ------------------------------------------------------------------

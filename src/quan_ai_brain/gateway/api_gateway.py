@@ -301,7 +301,9 @@ class APIGateway:
     ) -> None:
         self.authenticator = authenticator
         self.rate_limiter = rate_limiter
-        self.cache = cache or ResponseCache(default_ttl=0.0)
+        # NOTE: ``is not None`` (not truthiness) — ResponseCache defines
+        # __len__, so an empty cache would otherwise be discarded.
+        self.cache = cache if cache is not None else ResponseCache(default_ttl=0.0)
         self._routes: List[Route] = []
         self._stats: Dict[str, int] = {
             "requests_total": 0,
@@ -463,7 +465,7 @@ class APIGateway:
     # -- internals -------------------------------------------------------------
 
     def _match_detailed(self, method: str, path: str) -> Tuple[Optional[Route], Dict[str, str], bool]:
-        """Return (route, params, path_matched_other_method)."""
+        """Return (route, params, path_matched_other_method); updates miss counters."""
         method = method.upper()
         path_matched_other_method = False
         for route in self._routes:
@@ -473,6 +475,7 @@ class APIGateway:
             if route.method == method:
                 return route, params, False
             path_matched_other_method = True
+        self._stats["method_not_allowed" if path_matched_other_method else "not_found"] += 1
         return None, {}, path_matched_other_method
 
     def _status_for_exception(self, exc: Exception) -> int:

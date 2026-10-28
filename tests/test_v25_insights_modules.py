@@ -72,6 +72,13 @@ def make_anomaly(severity='critical', metric_name='creates_24h'):
     )
 
 
+class _FakeAge:
+    """M1 MetricsCalculator calls ``.total_days`` on the db's age object."""
+
+    def __init__(self, days):
+        self.total_days = days
+
+
 def make_mock_db():
     db = Mock()
     db.count_knowledge_units = Mock(return_value=1000)
@@ -85,7 +92,7 @@ def make_mock_db():
     )
     db.get_average_confidence = Mock(return_value=0.75)
     db.count_recent = Mock(return_value=50)
-    db.get_average_age = Mock(return_value=timedelta(days=15))
+    db.get_average_age = Mock(return_value=_FakeAge(15.0))
     db.count_stale = Mock(return_value=10)
     db.count_searches = Mock(return_value=200)
     db.get_average_search_results = Mock(return_value=15.5)
@@ -347,8 +354,8 @@ class TestReportGenerator:
         assert html.startswith('<!DOCTYPE html>')
         assert '<h1>' in html and '<h2>' in html
         assert '<table border="1">' in html
-        assert '&lt;ku&gt;' in html  # metric name escaped
-        assert '<Knowledge>' not in html
+        assert 'Total &lt;Ku&gt;' in html  # metric name escaped
+        assert '<Total <Ku>>' not in html
 
     def test_csv_export_rows(self, generator):
         report = generator.generate_report(

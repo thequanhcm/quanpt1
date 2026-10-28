@@ -249,7 +249,7 @@ class HybridRecommender:
     Weighted blend of content-based and collaborative scores.
 
     ``content_weight + collab_weight`` need not sum to 1; the blended score
-    is the weighted sum of each component's min-max-normalized scores.
+    is the weighted sum of each component's max-normalized scores.
     """
 
     def __init__(
@@ -266,13 +266,13 @@ class HybridRecommender:
 
     @staticmethod
     def _normalize(scores: List[Tuple[str, float]]) -> Dict[str, float]:
+        """Max-normalize positive scores into [0, 1]; ties -> 1.0."""
         if not scores:
             return {}
-        values = [s for _i, s in scores]
-        lo, hi = min(values), max(values)
-        if hi == lo:
-            return {i: 0.5 for i, _s in scores}
-        return {i: (s - lo) / (hi - lo) for i, s in scores}
+        hi = max(s for _i, s in scores)
+        if hi <= 0.0:
+            return {}
+        return {i: s / hi for i, s in scores}
 
     def recommend(
         self, user_id: str, liked_item_ids: Optional[Sequence[str]] = None,
@@ -307,6 +307,9 @@ class HybridRecommender:
             cs = content_norm.get(item, 0.0)
             xs = collab_norm.get(item, 0.0)
             score = self.content_weight * cs + self.collab_weight * xs
+            if score <= 0.0:
+                # No weighted component actually recommended this item.
+                continue
             components = []
             if item in content_norm:
                 components.append('content')

@@ -55,6 +55,7 @@ class LinearModel:
         self.weights: list[float] = [float(w) for w in weights]
         self.bias = float(bias)
         self.frozen: list[bool] = [False] * dim
+        self.bias_frozen: bool = False
 
     def predict(self, x: Sequence[float]) -> float:
         if len(x) != self.dim:
@@ -78,9 +79,11 @@ class LinearModel:
         return clone
 
     def freeze_layer(self, indices: Optional[Sequence[int]] = None) -> None:
-        """Freeze weights (all if indices is None); bias stays trainable."""
+        """Freeze weights (all if indices is None). When *all* weights are
+        frozen the bias is frozen too, so the model output cannot drift."""
         if indices is None:
             self.frozen = [True] * self.dim
+            self.bias_frozen = True
         else:
             for i in indices:
                 if not 0 <= i < self.dim:
@@ -124,7 +127,8 @@ class GradientDescentTrainer:
             for j in range(model.dim):
                 if not model.frozen[j]:
                     model.weights[j] -= self.lr * 2.0 * grad_w[j] / n
-            model.bias -= self.lr * 2.0 * grad_b / n
+            if not model.bias_frozen:
+                model.bias -= self.lr * 2.0 * grad_b / n
             loss_curve.append(model.mse(X, y))
         return TrainingReport(
             task=task, epochs=self.epochs, initial_loss=initial_loss,
