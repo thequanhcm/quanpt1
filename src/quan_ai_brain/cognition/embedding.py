@@ -64,7 +64,11 @@ class BGEEmbeddingService:
     def is_available(self) -> bool:
         """Check if local Ollama daemon is reachable and responding."""
         return self.client.ping(timeout=0.5)
-
+    
+    def get_dimension(self) -> int:
+        """Return embedding dimension for BGE-M3 (1024)."""
+        return 1024
+    
     def embed_text(self, text: str) -> list[float]:
         """Generate or retrieve cached 1024-dim BGE-M3 dense embedding for text."""
         cleaned = text.strip()
