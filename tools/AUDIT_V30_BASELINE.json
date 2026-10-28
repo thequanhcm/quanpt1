@@ -1,0 +1,153 @@
+{
+  "timestamp": "2026-10-28T18:57:40.294211",
+  "version": "V30-Audit-1.0",
+  "workspace": "E:\\AI\\QUAN AI BRAIN\\tools",
+  "sections": {
+    "workspace": {
+      "root": "E:\\AI\\QUAN AI BRAIN\\tools",
+      "directories": [
+        "E:\\AI\\QUAN AI BRAIN\\tools\\data",
+        "E:\\AI\\QUAN AI BRAIN\\tools\\legacy_launchers",
+        "E:\\AI\\QUAN AI BRAIN\\tools\\__pycache__"
+      ],
+      "total_files": 127
+    },
+    "modules": {
+      "packages": 0,
+      "total_files": 0,
+      "total_lines": 0,
+      "by_package": {}
+    },
+    "databases": {
+      "brain.db": {
+        "tables": {
+          "episodes": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "kind",
+              "summary",
+              "source_ref",
+              "status",
+              "metadata_json"
+            ]
+          },
+          "candidate_knowledge": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "rationale",
+              "status",
+              "decision_note"
+            ]
+          },
+          "semantic_memory": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "approved_by",
+              "regression_passed"
+            ]
+          },
+          "memories": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "memory_type",
+              "content",
+              "source_ref",
+              "verification_status",
+              "confidence_score",
+              "project_scope",
+              "tags_json",
+              "lifecycle_status",
+              "version",
+              "superseded_by",
+              "created_at_utc",
+              "updated_at_utc",
+              "metadata_json"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\tools\\data\\brain.db"
+      },
+      "learning_checkpoints.db": {
+        "tables": {
+          "learning_sessions": {
+            "row_count": 1,
+            "columns": [
+              "session_id",
+              "cycle_number",
+              "started_at",
+              "ended_at",
+              "status",
+              "learning_objectives",
+              "source_manifest",
+              "tasks_completed",
+              "tasks_failed",
+              "evidence_refs",
+              "knowledge_candidates",
+              "evaluation_result",
+              "unresolved_questions",
+              "resource_usage",
+              "checkpoint_ref",
+              "next_session_plan",
+              "stop_or_pause_reason"
+            ]
+          },
+          "learning_state": {
+            "row_count": 2,
+            "columns": [
+              "key",
+              "value"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\tools\\data\\learning_checkpoints.db"
+      }
+    },
+    "entry_points": {
+      "run_web_ui.py": {
+        "exists": false
+      },
+      "start_dual_servers.py": {
+        "exists": false
+      },
+      "run_executive_desk.py": {
+        "exists": false
+      },
+      "KHOI_DONG_QUAN_AI_BRAIN.bat": {
+        "exists": false
+      },
+      "KHOI_DONG_24_7.bat": {
+        "exists": false
+      }
+    },
+    "tests": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "tests": []
+    },
+    "module_status": {
+      "counts": {},
+      "details": {}
+    },
+    "dependencies": {
+      "total": 0,
+      "packages": []
+    },
+    "documentation": {
+      "total_files": 0,
+      "files": []
+    }
+  }
+}
