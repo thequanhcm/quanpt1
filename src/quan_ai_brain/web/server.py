@@ -365,32 +365,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_list_memories()
             return
 
-        # V9 Deep Memory — Trí Nhớ Chuyên Sâu (GET, localhost-only)
-        if path == "/api/memory/deep/stats":
-            self._handle_api_deep_stats()
-            return
-
-        if path == "/api/memory/deep/units":
-            self._handle_api_deep_units(parsed.query)
-            return
-
-        if path == "/api/memory/deep/questions":
-            self._handle_api_deep_questions(parsed.query)
-            return
-
-        if path == "/api/memory/deep/timeline":
-            self._handle_api_deep_timeline()
-            return
-
-        # V10 Owner-Gated Memory Review — đợt sàng lọc mẫu (GET, localhost-only)
-        if path == "/api/memory/review/current":
-            self._handle_api_review_current()
-            return
-
-        if path == "/api/memory/review/session":
-            self._handle_api_review_session(parsed.query)
-            return
-
         if path == "/api/executive/overview":
             self._handle_api_executive_overview()
             return
@@ -716,36 +690,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_approvals_decide(body)
             return
 
-        # V9 Deep Memory — POST extract / review / answer (localhost-only)
-        if path == "/api/memory/deep/extract":
-            self._handle_api_deep_extract(body)
-            return
-
-        if path == "/api/memory/deep/review":
-            self._handle_api_deep_review(body)
-            return
-
-        if path == "/api/memory/deep/answer":
-            self._handle_api_deep_answer(body)
-            return
-
-        # V10 Owner-Gated Memory Review — POST respond / confirm / undo (localhost-only)
-        if path == "/api/memory/review/respond":
-            self._handle_api_review_respond(body)
-            return
-
-        if path == "/api/memory/review/confirm":
-            self._handle_api_review_confirm(body)
-            return
-
-        if path == "/api/memory/review/undo":
-            self._handle_api_review_undo(body)
-            return
-
-        if path == "/api/memory/review/close":
-            self._handle_api_review_close(body)
-            return
-
         # Sprint 11 (b): experience memory — consolidate + promote (POST, localhost-only)
         if path == "/api/experience/consolidate":
             self._handle_api_experience_consolidate(body)
@@ -1056,324 +1000,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_error_json(f"Database error: {exc}", 500)
 
-    # ------------------------------------------------------------------
-    # V9 Deep Memory — Trí Nhớ Chuyên Sâu ( Slice 5 UI backend )
-    # ------------------------------------------------------------------
-
-    def _deep_store(self):
-        from quan_ai_brain.memory.deep_memory import DeepMemoryStore
-
-        workspace = _find_workspace_root()
-        return DeepMemoryStore(workspace / "data" / "brain.db", workspace=workspace)
-
-    def _handle_api_deep_stats(self) -> None:
-        store = self._deep_store()
-        try:
-            stats = store.deep_stats()
-            junk = store.report_semantic_junk(limit=200)
-            stats["semantic_junk_candidates"] = junk["junk_candidates"]
-            stats["engine"] = "V9-deep-memory r1"
-            self._send_json({"success": True, "stats": stats})
-        except Exception as exc:
-            self._send_error_json(f"deep stats error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_deep_units(self, parsed_query) -> None:
-        from urllib.parse import parse_qs
-
-        params = parse_qs(parsed_query) if isinstance(parsed_query, str) else (parsed_query or {})
-        status = (params.get("status") or [""])[0]
-        limit_raw = (params.get("limit") or ["50"])[0]
-        try:
-            limit = max(1, min(int(limit_raw), 200))
-        except ValueError:
-            limit = 50
-        store = self._deep_store()
-        try:
-            with store._lock:
-                if status:
-                    rows = store._connection.execute(
-                        """
-                        SELECT knowledge_id, knowledge_type, subject, predicate, object,
-                               statement, scope, status, confidence, version, review_status,
-                               created_at_utc, updated_at_utc
-                        FROM knowledge_units WHERE status=? ORDER BY updated_at_utc DESC LIMIT ?
-                        """,
-                        (status, limit),
-                    ).fetchall()
-                else:
-                    rows = store._connection.execute(
-                        """
-                        SELECT knowledge_id, knowledge_type, subject, predicate, object,
-                               statement, scope, status, confidence, version, review_status,
-                               created_at_utc, updated_at_utc
-                        FROM knowledge_units ORDER BY updated_at_utc DESC LIMIT ?
-                        """,
-                        (limit,),
-                    ).fetchall()
-            units = []
-            for row in rows:
-                item = dict(row)
-                kid = item["knowledge_id"]
-                with store._lock:
-                    rels = store._connection.execute(
-                        "SELECT relation_type, to_id, from_id, basis, is_speculative "
-                        "FROM knowledge_relations WHERE from_id=? OR to_id=? LIMIT 20",
-                        (kid, kid),
-                    ).fetchall()
-                item["relations"] = [dict(r) for r in rels]
-                units.append(item)
-            self._send_json({"success": True, "units": units, "count": len(units)})
-        except Exception as exc:
-            self._send_error_json(f"deep units error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_deep_questions(self, parsed_query) -> None:
-        from urllib.parse import parse_qs
-
-        params = parse_qs(parsed_query) if isinstance(parsed_query, str) else (parsed_query or {})
-        status = (params.get("status") or ["OPEN"])[0]
-        store = self._deep_store()
-        try:
-            questions = store.list_owner_questions(status=status, limit=50)
-            self._send_json({"success": True, "questions": questions, "count": len(questions)})
-        except Exception as exc:
-            self._send_error_json(f"deep questions error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_deep_timeline(self) -> None:
-        store = self._deep_store()
-        try:
-            events: list[dict] = []
-            with store._lock:
-                rows = store._connection.execute(
-                    """
-                    SELECT knowledge_id, knowledge_type, statement, status, version,
-                           review_status, created_at_utc, updated_at_utc
-                    FROM knowledge_units ORDER BY updated_at_utc DESC LIMIT 15
-                    """
-                ).fetchall()
-                runs = store._connection.execute(
-                    "SELECT run_id, started_at_utc, finished_at_utc, status, batch_limit "
-                    "FROM memory_review_runs ORDER BY started_at_utc DESC LIMIT 5"
-                ).fetchall()
-            for r in rows:
-                events.append({
-                    "kind": "knowledge_unit", "at": r["updated_at_utc"],
-                    "detail": f"[{r['status']} v{r['version']}] {r['statement'][:90]}",
-                    "ref": r["knowledge_id"],
-                })
-            for r in runs:
-                events.append({
-                    "kind": "review_run", "at": r["started_at_utc"],
-                    "detail": f"Review {r['run_id']} — {r['status']} (batch {r['batch_limit']})",
-                    "ref": r["run_id"],
-                })
-            events.sort(key=lambda e: e["at"], reverse=True)
-            self._send_json({"success": True, "events": events[:20]})
-        except Exception as exc:
-            self._send_error_json(f"deep timeline error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_deep_extract(self, body: dict) -> None:
-        limit = int(body.get("limit", 20) or 20)
-        store = self._deep_store()
-        try:
-            stats = store.extract_from_chat_turns(limit=max(1, min(limit, 200)))
-            self._send_json({"success": True, "extraction": stats})
-        except Exception as exc:
-            self._send_error_json(f"deep extract error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_deep_review(self, body: dict) -> None:
-        from quan_ai_brain.cognition.memory_review_cycle import MemoryReviewCycle
-
-        batch = int(body.get("batch_limit", 20) or 20)
-        store = self._deep_store()
-        try:
-            cycle = MemoryReviewCycle(store, batch_limit=max(1, min(batch, 100)))
-            result = cycle.run()
-            self._send_json({"success": True, "review": result})
-        except Exception as exc:
-            self._send_error_json(f"deep review error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_deep_answer(self, body: dict) -> None:
-        from quan_ai_brain.memory.owner_feedback import OwnerFeedbackProcessor
-
-        question_id = str(body.get("question_id", "")).strip()
-        answer_text = str(body.get("answer", "")).strip()
-        if not question_id or not answer_text:
-            self._send_error_json("question_id and answer are required", 400)
-            return
-        store = self._deep_store()
-        try:
-            processor = OwnerFeedbackProcessor(store)
-            result = processor.answer_owner_question(question_id, answer_text, answered_by="quanpt1")
-            self._send_json({"success": True, "feedback": result})
-        except ValueError as exc:
-            self._send_error_json(str(exc), 400)
-        except Exception as exc:
-            self._send_error_json(f"deep answer error: {exc}", 500)
-        finally:
-            store.close()
-
-    # ------------------------------------------------------------------
-    # V10 Owner-Gated Memory Review — đợt sàng lọc mẫu theo lệnh chủ (SÀNG LỌC)
-    # ------------------------------------------------------------------
-
-    def _review_session_engine(self):
-        from quan_ai_brain.cognition.memory_review_session import MemoryReviewSession
-
-        return MemoryReviewSession(self._deep_store())
-
-    def _handle_api_review_current(self) -> None:
-        """Trạng thái đợt sàng lọc đang mở (hoặc IDLE) cho UI."""
-        engine = self._review_session_engine()  # constructor bảo đảm schema V10
-        store = engine._store
-        try:
-            with store._lock:
-                row = store._connection.execute(
-                    "SELECT session_id, status, created_at_utc, stats_json FROM memory_review_sessions "
-                    "WHERE status NOT IN ('COMPLETED','FAILED','CLOSED') ORDER BY created_at_utc DESC LIMIT 1"
-                ).fetchone()
-            if row is None:
-                self._send_json({"success": True, "state": "IDLE", "session": None})
-                return
-            self._send_json({
-                "success": True,
-                "state": row[1],
-                "session": {
-                    "session_id": row[0], "status": row[1],
-                    "created_at_utc": row[2],
-                    "stats": json.loads(row[3]) if row[3] else {},
-                },
-            })
-        except Exception as exc:
-            self._send_error_json(f"review current error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_review_session(self, query_str: str) -> None:
-        """Full payload 4 nhóm cho UI (Test 2/13)."""
-        params = urllib.parse.parse_qs(query_str)
-        session_id = params.get("session_id", [""])[0]
-        engine = self._review_session_engine()
-        store = engine._store
-        try:
-            if not session_id:
-                with store._lock:
-                    row = store._connection.execute(
-                        "SELECT session_id FROM memory_review_sessions "
-                        "WHERE status NOT IN ('COMPLETED','FAILED','CLOSED') ORDER BY started_at_utc DESC LIMIT 1"
-                    ).fetchone()
-                session_id = row[0] if row else ""
-            if not session_id:
-                self._send_json({"success": True, "state": "IDLE", "session": None})
-                return
-            data = engine.get_session(session_id)
-            if data is None:
-                self._send_error_json(f"session not found: {session_id}", 404)
-                return
-            self._send_json({"success": True, **data})
-        except Exception as exc:
-            self._send_error_json(f"review session error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_review_respond(self, body: dict) -> None:
-        """Ghi phản hồi của chủ vào phát hiện/câu hỏi/tri thức (Test 5/6)."""
-        session_id = str(body.get("session_id", "")).strip()
-        target_type = str(body.get("target_type", "")).strip()
-        target_id = body.get("target_id")
-        kind = str(body.get("kind", "")).strip()
-        text = str(body.get("text", "")).strip()
-        if not session_id or target_type not in ("question", "finding", "unit") or not kind:
-            self._send_error_json("session_id, target_type (question|finding|unit), kind required", 400)
-            return
-        if target_type != "unit" and not target_id:
-            self._send_error_json("target_id required for question/finding", 400)
-            return
-        engine = self._review_session_engine()
-        store = engine._store
-        try:
-            result = engine.respond(session_id, target_type, target_id, kind, text)
-            self._send_json({"success": True, "response": result})
-        except ValueError as exc:
-            self._send_error_json(str(exc), 400)
-        except Exception as exc:
-            self._send_error_json(f"review respond error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_review_confirm(self, body: dict) -> None:
-        """Preview + xác nhận lần 2 → áp dụng thay đổi đã confirm (Test 6/7)."""
-        session_id = str(body.get("session_id", "")).strip()
-        change_id = str(body.get("change_id", "")).strip()
-        confirm = bool(body.get("confirm", False))
-        preview_only = bool(body.get("preview_only", False))
-        if not session_id or not change_id:
-            self._send_error_json("session_id and change_id are required", 400)
-            return
-        engine = self._review_session_engine()
-        store = engine._store
-        try:
-            if preview_only:
-                preview = engine.preview_change(session_id, change_id)
-                self._send_json({"success": True, "preview": preview})
-                return
-            result = engine.confirm_and_apply(session_id, change_id, confirm=confirm)
-            self._send_json({"success": True, "applied": result})
-        except ValueError as exc:
-            self._send_error_json(str(exc), 400)
-        except Exception as exc:
-            self._send_error_json(f"review confirm error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_review_undo(self, body: dict) -> None:
-        """Hoàn tác một thay đổi đã áp dụng trong đợt (PHẦN VII)."""
-        session_id = str(body.get("session_id", "")).strip()
-        change_id = str(body.get("change_id", "")).strip()
-        if not session_id or not change_id:
-            self._send_error_json("session_id and change_id are required", 400)
-            return
-        engine = self._review_session_engine()
-        store = engine._store
-        try:
-            result = engine.undo_change(session_id, change_id)
-            self._send_json({"success": True, "undo": result})
-        except ValueError as exc:
-            self._send_error_json(str(exc), 400)
-        except Exception as exc:
-            self._send_error_json(f"review undo error: {exc}", 500)
-        finally:
-            store.close()
-
-    def _handle_api_review_close(self, body: dict) -> None:
-        """Chốt đợt sàng lọc (COMPLETED) — mở đường cho đợt sau."""
-        session_id = str(body.get("session_id", "")).strip()
-        if not session_id:
-            self._send_error_json("session_id is required", 400)
-            return
-        engine = self._review_session_engine()
-        store = engine._store
-        try:
-            engine.close(session_id)
-            self._send_json({"success": True, "closed": session_id})
-        except ValueError as exc:
-            self._send_error_json(str(exc), 400)
-        except Exception as exc:
-            self._send_error_json(f"review close error: {exc}", 500)
-        finally:
-            store.close()
-
     def _handle_api_add_memory(self, body: dict) -> None:
         summary = str(body.get("summary", "")).strip()
         if not summary:
@@ -1492,56 +1118,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         query = str(body.get("query") or body.get("message", "")).strip()
         if not query:
             self._send_error_json("Query cannot be empty", 400)
-            return
-
-        # V10 — lệnh SÀNG LỌC: owner-gated memory review (xử lý deterministic,
-        # KHÔNG gọi LLM; chỉ phân tích CHỈ ĐỌC + hiển thị 4 nhóm chờ chủ phản hồi).
-        if query.strip().strip(".,!?:;\"'").upper() in ("SÀNG LỌC", "SANG LOC"):
-            workspace = _find_workspace_root()
-            db_path = workspace / "data" / "brain.db"
-            started = time.perf_counter()
-            try:
-                from quan_ai_brain.memory.deep_memory import DeepMemoryStore as _V10DMS
-
-                from quan_ai_brain.cognition.memory_review_session import MemoryReviewSession
-
-                engine = MemoryReviewSession(_V10DMS(db_path, workspace=workspace))
-                result = engine.start()
-                engine._store.close()
-                elapsed = round((time.perf_counter() - started) * 1000, 2)
-                if result.get("already_open"):
-                    reply = (
-                        f"⏸ Đang có đợt sàng lọc chưa kết thúc: `{result['session_id']}` "
-                        f"(trạng thái {result['status']}). Anh xem tiếp trên tab "
-                        f"🧠 Trí Nhớ Chuyên Sâu → khu Sàng Lọc; hệ thống không tạo đợt trùng."
-                    )
-                else:
-                    st = result["stats"]
-                    reply = (
-                        f"🔎 Đã khởi động đợt sàng lọc mẫu `{result['session_id']}` "
-                        f"(trạng thái {result['status']}).\n\n"
-                        f"**Phạm vi mẫu:** {st.get('scope_size', 0)} tri thức được chọn theo tiêu chí minh bạch "
-                        f"(ưu tiên nhóm liên quan, trùng lặp, mâu thuẫn, RULE — có ghi lý do từng bản ghi).\n"
-                        f"**Phát hiện:** {st.get('findings', 0)} quan hệ/mâu thuẫn · "
-                        f"**Suy luận:** {st.get('inferences', 0)} (kèm bằng chứng) · "
-                        f"**Câu hỏi cần anh:** {st.get('questions', 0)}\n\n"
-                        f"⚠️ Lệnh này CHỈ phân tích và đề xuất — chưa có tri thức nào bị sửa. "
-                        f"Anh mở tab **🧠 Trí Nhớ Chuyên Sâu → Sàng Lọc** xem 4 nhóm kết quả, "
-                        f"trả lời câu hỏi và xác nhận từng thay đổi; hệ thống chỉ cập nhật đúng phạm vi được anh chấp nhận."
-                    )
-                self._send_json({
-                    "success": True,
-                    "answer": reply,
-                    "reply": reply,
-                    "review_session": result,
-                    "model": "deterministic-review",
-                    "provider": "local",
-                    "is_mock": False,
-                    "elapsed_ms": elapsed,
-                    "session_id": str(body.get("session_id", "default_executive_session")),
-                })
-            except Exception as exc:
-                self._send_error_json(f"review start error: {exc}", 500)
             return
 
         session_id = str(body.get("session_id", "default_executive_session")).strip() or "default_executive_session"
@@ -1905,30 +1481,28 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
 
+                # V7 Cấp 2: chain skill kiểm tra tiến độ — chạy khi query khớp
+                # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
+                # fail-honest, không chặn chat (lỗi chỉ append warning).
+                try:
+                    from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
+                    from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
 
-            # V7_CHAIN_WIRE: chain skill kiểm tra tiến độ — chạy khi query khớp
-            # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
-            # fail-honest, không chặn chat (lỗi chỉ append warning).
-            progress_check_block = None
-            try:
-                from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
-                from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
-
-                _v7_ws = _find_workspace_root()
-                _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
-                if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
-                    _v7_result = _v7_chain(query or "", _v7_ws)
-                    progress_check_block = {
-                        "chain": _v7_result["chain"],
-                        "conclusion": _v7_result["reconciliation"]["conclusion"],
-                        "records_matched": _v7_result["reconciliation"]["records_matched"],
-                        "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
-                        "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
-                        "risk_summary": _v7_result["risk_summary"],
-                        "report_md": _v7_result["report_md"],
-                    }
-            except Exception as v7_err:
-                all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
+                    _v7_ws = _find_workspace_root()
+                    _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
+                    if any(s.name == "TASK_STATUS_RECONCILIATION for s in _v7_matches):
+                        _v7_result = _v7_chain(query or "", _v7_ws)
+                        response_data["progress_check"] = {
+                            "chain": _v7_result["chain"],
+                            "conclusion": _v7_result["reconciliation"]["conclusion"],
+                            "records_matched": _v7_result["reconciliation"]["records_matched"],
+                            "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
+                            "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
+                            "risk_summary": _v7_result["risk_summary"],
+                            "report_md": _v7_result["report_md"],
+                        }
+                except Exception as v7_err:
+                    all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
@@ -1982,7 +1556,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
-                "progress_check": progress_check_block,
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
@@ -2052,42 +1625,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             selected_model = decision.model
             self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
 
-            # V8 P1 (parity fix): teaching pipeline — stream path đã THIẾU lớp này
-            # khiến dashboard/voice/NetChat dạy "nhớ rằng..." bị bỏ quên. Nhân bản
-            # hành vi /api/chat (1160-1187): detect → persist → teach_note.
-            teach_note: str | None = None
-            try:
-                from quan_ai_brain.core.audit import AuditLogger as _V8AuditLogger
-                from quan_ai_brain.cognition.teach_pipeline import detect_teaching, persist_taught_memory
-
-                def _audit_s(event: str, details: dict[str, Any]) -> None:
-                    try:
-                        _V8AuditLogger(workspace).record(event, details)
-                    except Exception:
-                        pass
-
-                with MemoryStore(db_path, workspace=workspace) as t_store:
-                    teach = detect_teaching(query)
-                    if teach.is_teaching:
-                        saved = persist_taught_memory(
-                            t_store, teach.content, teach.memory_type, session_id=session_id,
-                        )
-                        teach_note = (
-                            f"✅ Em đã NHỚ vào trí nhớ dài hạn (ID {saved['id']}, loại {saved['memory_type']}, "
-                            f"nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"{teach.content[:200]}\""
-                        )
-                        _audit_s("owner_teach.persisted.stream", {"memory_id": saved["id"], "type": saved["memory_type"], "chars": len(teach.content)})
-            except Exception as teach_exc:
-                try:
-                    from quan_ai_brain.core.audit import AuditLogger as _V8AuditLogger2
-                    _V8AuditLogger2(workspace).record("owner_teach.error.stream", {"error": str(teach_exc)[:200]})
-                except Exception:
-                    pass
-
             # 2. Memory retrieval & session history.
             with MemoryStore(db_path, workspace=workspace) as store:
                 session_mgr = SessionMemoryManager(store)
-                recent_history = session_mgr.get_recent_session_history(session_id, limit=6)  # V8 P4: depth 3→6 cho trao đổi đa lượt
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
                 retriever = CognitiveRetriever(store)
                 m_query = MemoryQuery(query=query, project_scope=scope, top_k=5, max_chars=4000)
                 retrieval = retriever.retrieve(m_query)
@@ -2106,51 +1647,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-            # V8 P1 (parity fix): Living Grounding Facts — nhân bản /api/chat
-            # (1211-1218): ép bot nói đúng về bản thân bằng probe thật.
-            try:
-                from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
-
-                grounding_block = render_grounding_block(collect_grounding_facts(current_model=selected_model))
-                context.system_instructions = grounding_block + "\n\n" + context.system_instructions
-            except Exception:
-                pass
-
-            # V8 P1 (parity fix): TTNS lookup (nhân sự/lịch họp nội bộ) — nhân bản
-            # /api/chat (1254-1280). Fail-closed: lỗi → không evidence, stream vẫn chạy.
-            try:
-                from quan_ai_brain.tools.ttns_lookup import looks_like_ttns_query, ttns_lookup
-
-                if looks_like_ttns_query(query):
-                    _ttns = ttns_lookup(query)
-                    if _ttns and _ttns.get("answer"):
-                        _ttns_block = (
-                            "[EVIDENCE TTNS NỘI BỘ — nguồn tra cứu chính thức công ty, "
-                            "CHỈ TRA CỨU. Dùng thông tin này để trả lời; nếu không đủ, "
-                            "nói thiếu]\n" + _ttns["answer"][:6000]
-                        )
-                        context.system_instructions = (
-                            context.system_instructions + "\n" + _ttns_block
-                        )
-            except Exception:
-                pass
-
-            # V8 P1 (parity fix): Document RAG (kho tài liệu nội bộ) — nhân bản
-            # /api/chat (1282-1303). Fail-closed.
-            try:
-                from quan_ai_brain.cognition.document_rag import DocumentRAG
-
-                _rag = DocumentRAG(workspace=str(workspace))
-                if _rag.count_chunks() > 0:
-                    _rr = _rag.retrieve(query)
-                    if _rr.has_evidence:
-                        _rag_block = _rr.render_evidence_block()
-                        context.system_instructions = (
-                            context.system_instructions + "\n" + _rag_block
-                        )
-            except Exception:
-                pass
-
             # 2.6 External lookup evidence — như /api/chat (câu hỏi thời sự mới tra;
             # fail-closed, không bao giờ làm chết stream).
             _stream_researching = False
@@ -2166,31 +1662,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     push_avatar_expression("RESEARCHING", transcript="Đang tra cứu thông tin ngoài...")
             except Exception:
                 pass
-
-            # V8 P1: V7 progress chain parity — nhân bản /api/chat (1485-1507).
-            # Read-only, fail-honest; lỗi chỉ gửi warning frame, không chết stream.
-            progress_check_block = None
-            try:
-                from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
-                from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
-
-                _v7_matches = _V7SR(workspace / "data" / "skill_registry.json").find_matching_skills(query or "")
-                if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
-                    _v7_result = _v7_chain(query or "", workspace)
-                    progress_check_block = {
-                        "chain": _v7_result["chain"],
-                        "conclusion": _v7_result["reconciliation"]["conclusion"],
-                        "records_matched": _v7_result["reconciliation"]["records_matched"],
-                        "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
-                        "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
-                        "risk_summary": _v7_result["risk_summary"],
-                        "report_md": _v7_result["report_md"],
-                    }
-            except Exception as v7_err:
-                try:
-                    self.wfile.write(_sse({"type": "meta", "v7_chain_warning": str(v7_err)[:100]}))
-                except Exception:
-                    pass
 
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
             req = LLMRequest(
@@ -2228,10 +1699,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             full_text = OutputGuardrails.sanitize("".join(parts))[0]
             grounding_analysis = OutputGuardrails.analyze_grounding(full_text, context=context)
 
-            # V8 P1 (parity): teach confirmation ghép TRƯỚC reply — như /api/chat:1526-1527.
-            if teach_note:
-                full_text = (teach_note + "\n\n" + full_text) if full_text else teach_note
-
             # 4. Persist the COMPLETE answer only after stream completion.
             persistence_info: dict[str, Any] = {}
             if full_text:
@@ -2249,8 +1716,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             final_event.setdefault("type", "final")
             final_event.update({
                 "reply": full_text,
-                "teach_note": teach_note,
-                "progress_check": progress_check_block,
                 "grounding": grounding_analysis.to_dict(),
                 "session_id": session_id,
                 "routing": {"tier": decision.tier, "model": decision.model, "is_fallback": decision.is_fallback},
