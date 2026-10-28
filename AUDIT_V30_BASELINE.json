@@ -1,0 +1,1517 @@
+{
+  "timestamp": "2026-10-28T18:57:47.141585",
+  "version": "V30-Audit-1.0",
+  "workspace": "E:\\AI\\QUAN AI BRAIN",
+  "sections": {
+    "workspace": {
+      "root": "E:\\AI\\QUAN AI BRAIN",
+      "directories": [
+        "E:\\AI\\QUAN AI BRAIN\\.agents",
+        "E:\\AI\\QUAN AI BRAIN\\.git",
+        "E:\\AI\\QUAN AI BRAIN\\.github",
+        "E:\\AI\\QUAN AI BRAIN\\.pytest_cache",
+        "E:\\AI\\QUAN AI BRAIN\\.venv",
+        "E:\\AI\\QUAN AI BRAIN\\backups",
+        "E:\\AI\\QUAN AI BRAIN\\bao cao xay dung he thong",
+        "E:\\AI\\QUAN AI BRAIN\\data",
+        "E:\\AI\\QUAN AI BRAIN\\deploy",
+        "E:\\AI\\QUAN AI BRAIN\\docs",
+        "E:\\AI\\QUAN AI BRAIN\\edge_client",
+        "E:\\AI\\QUAN AI BRAIN\\HDSD",
+        "E:\\AI\\QUAN AI BRAIN\\kho_tai_lieu",
+        "E:\\AI\\QUAN AI BRAIN\\logs",
+        "E:\\AI\\QUAN AI BRAIN\\mobile",
+        "E:\\AI\\QUAN AI BRAIN\\Module 3",
+        "E:\\AI\\QUAN AI BRAIN\\Pi5",
+        "E:\\AI\\QUAN AI BRAIN\\reports",
+        "E:\\AI\\QUAN AI BRAIN\\Skill",
+        "E:\\AI\\QUAN AI BRAIN\\src",
+        "E:\\AI\\QUAN AI BRAIN\\tests",
+        "E:\\AI\\QUAN AI BRAIN\\tools"
+      ],
+      "total_files": 7773
+    },
+    "modules": {
+      "packages": 26,
+      "total_files": 167,
+      "total_lines": 60001,
+      "by_package": {
+        "cli.py": 1,
+        "ai": 7,
+        "analytics": 5,
+        "clae": 1,
+        "cognition": 36,
+        "contract": 2,
+        "core": 5,
+        "daemon": 1,
+        "edge": 3,
+        "execution": 4,
+        "gateway": 5,
+        "governance": 6,
+        "integration": 15,
+        "learning": 6,
+        "llm": 6,
+        "memory": 18,
+        "mobile": 2,
+        "nlp": 1,
+        "optimization": 6,
+        "orchestration": 4,
+        "planning": 2,
+        "scaling": 5,
+        "security": 7,
+        "tools": 11,
+        "voice": 6,
+        "web": 2
+      }
+    },
+    "databases": {
+      "audit.db": {
+        "tables": {
+          "audit_logs": {
+            "row_count": 1035,
+            "columns": [
+              "id",
+              "timestamp",
+              "user_id",
+              "action",
+              "module",
+              "details",
+              "success",
+              "error_message"
+            ]
+          },
+          "sqlite_sequence": {
+            "row_count": 1,
+            "columns": [
+              "name",
+              "seq"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\audit.db"
+      },
+      "brain.db": {
+        "tables": {
+          "episodes": {
+            "row_count": 2070,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "kind",
+              "summary",
+              "source_ref",
+              "status",
+              "metadata_json"
+            ]
+          },
+          "candidate_knowledge": {
+            "row_count": 3201,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "rationale",
+              "status",
+              "decision_note"
+            ]
+          },
+          "semantic_memory": {
+            "row_count": 1841,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "approved_by",
+              "regression_passed"
+            ]
+          },
+          "memories": {
+            "row_count": 2159,
+            "columns": [
+              "id",
+              "memory_type",
+              "content",
+              "source_ref",
+              "verification_status",
+              "confidence_score",
+              "project_scope",
+              "tags_json",
+              "lifecycle_status",
+              "version",
+              "superseded_by",
+              "created_at_utc",
+              "updated_at_utc",
+              "metadata_json"
+            ]
+          },
+          "candidate_knowledge_archive": {
+            "row_count": 108501,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "rationale",
+              "status",
+              "decision_note",
+              "archived_at_utc",
+              "archive_reason"
+            ]
+          },
+          "approval_cards": {
+            "row_count": 0,
+            "columns": [
+              "task_code",
+              "title",
+              "card_markdown",
+              "status",
+              "version",
+              "created_at_utc",
+              "updated_at_utc",
+              "ttl_expires_at_utc",
+              "request_id",
+              "evidence_json"
+            ]
+          },
+          "knowledge_units": {
+            "row_count": 150,
+            "columns": [
+              "knowledge_id",
+              "knowledge_type",
+              "subject",
+              "predicate",
+              "object",
+              "statement",
+              "source_refs_json",
+              "evidence_refs_json",
+              "created_at_utc",
+              "updated_at_utc",
+              "valid_from_utc",
+              "valid_until_utc",
+              "scope",
+              "status",
+              "confidence",
+              "verification_method",
+              "derived_from_json",
+              "contradiction_refs_json",
+              "version",
+              "review_status",
+              "extraction_meta_json"
+            ]
+          },
+          "knowledge_relations": {
+            "row_count": 210,
+            "columns": [
+              "relation_id",
+              "from_id",
+              "relation_type",
+              "to_id",
+              "basis",
+              "is_speculative",
+              "created_at_utc",
+              "created_by"
+            ]
+          },
+          "memory_exchange_log": {
+            "row_count": 40,
+            "columns": [
+              "message_id",
+              "source_module",
+              "target_module",
+              "payload_type",
+              "payload_ref",
+              "created_at_utc",
+              "correlation_id",
+              "provenance_refs_json",
+              "status"
+            ]
+          },
+          "memory_review_runs": {
+            "row_count": 1,
+            "columns": [
+              "run_id",
+              "started_at_utc",
+              "finished_at_utc",
+              "status",
+              "checkpoint_json",
+              "stats_json",
+              "batch_limit"
+            ]
+          },
+          "owner_questions": {
+            "row_count": 0,
+            "columns": [
+              "question_id",
+              "run_id",
+              "problem",
+              "evidence",
+              "current_view",
+              "interpretations_json",
+              "question",
+              "impact",
+              "scope_hint",
+              "status",
+              "answer_text",
+              "answered_at_utc",
+              "created_at_utc"
+            ]
+          },
+          "memory_review_sessions": {
+            "row_count": 2,
+            "columns": [
+              "session_id",
+              "created_at_utc",
+              "status",
+              "scope_json",
+              "selection_reasons_json",
+              "stats_json",
+              "closed_at_utc"
+            ]
+          },
+          "review_findings": {
+            "row_count": 76,
+            "columns": [
+              "finding_id",
+              "session_id",
+              "finding_type",
+              "ku_a",
+              "ku_b",
+              "evidence",
+              "reason",
+              "confidence",
+              "scope_impact",
+              "proposed_action",
+              "status",
+              "created_at_utc"
+            ]
+          },
+          "review_inferences": {
+            "row_count": 6,
+            "columns": [
+              "inference_id",
+              "session_id",
+              "question",
+              "input_kus_json",
+              "evidence_refs_json",
+              "assumptions_json",
+              "proposed_conclusion",
+              "contradicting_evidence_json",
+              "missing_info_json",
+              "scope",
+              "certainty",
+              "status",
+              "created_at_utc"
+            ]
+          },
+          "review_questions": {
+            "row_count": 42,
+            "columns": [
+              "question_id",
+              "session_id",
+              "problem",
+              "evidence",
+              "current_view",
+              "interpretations_json",
+              "question",
+              "impact",
+              "scope_hint",
+              "status",
+              "answer_text",
+              "answered_at_utc",
+              "finding_ref",
+              "created_at_utc"
+            ]
+          },
+          "review_changes": {
+            "row_count": 1,
+            "columns": [
+              "change_id",
+              "session_id",
+              "target_ku",
+              "change_kind",
+              "before_json",
+              "after_json",
+              "reason",
+              "owner_response_json",
+              "confirm_state",
+              "applied_at_utc",
+              "undo_json",
+              "result"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\brain.db"
+      },
+      "consultations.db": {
+        "tables": {
+          "consultation_tickets": {
+            "row_count": 6,
+            "columns": [
+              "ticket_id",
+              "title",
+              "category",
+              "priority",
+              "context_summary",
+              "proposed_action",
+              "options_json",
+              "status",
+              "owner_decision",
+              "owner_guidance",
+              "created_at",
+              "resolved_at",
+              "evidence_notes",
+              "metadata_json"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\consultations.db"
+      },
+      "document_index.db": {
+        "tables": {
+          "doc_chunks": {
+            "row_count": 6,
+            "columns": [
+              "chunk_id",
+              "doc_id",
+              "doc_title",
+              "section",
+              "version",
+              "content",
+              "source_path",
+              "content_hash",
+              "indexed_at_utc"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\document_index.db"
+      },
+      "email_intake.db": {
+        "tables": {
+          "intake_emails": {
+            "row_count": 3,
+            "columns": [
+              "message_id",
+              "sender",
+              "subject",
+              "body_preview",
+              "received_at_utc",
+              "source",
+              "category",
+              "related_task_id",
+              "synced_at_utc"
+            ]
+          },
+          "email_proposals": {
+            "row_count": 1,
+            "columns": [
+              "proposal_id",
+              "message_id",
+              "subject",
+              "sender",
+              "goal",
+              "payload_json",
+              "status",
+              "linked_task_id",
+              "created_at_utc"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\email_intake.db"
+      },
+      "experience.db": {
+        "tables": {},
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\experience.db"
+      },
+      "governance.db": {
+        "tables": {
+          "schema_info": {
+            "row_count": 1,
+            "columns": [
+              "version",
+              "applied_at_utc",
+              "description"
+            ]
+          },
+          "emergency_states": {
+            "row_count": 402,
+            "columns": [
+              "id",
+              "state",
+              "scope",
+              "reason",
+              "activated_by",
+              "activated_at_utc",
+              "cleared_at_utc",
+              "audit_ref"
+            ]
+          },
+          "approval_requests": {
+            "row_count": 19,
+            "columns": [
+              "request_id",
+              "tool_id",
+              "action",
+              "params_json",
+              "resource_scope",
+              "risk_level",
+              "fingerprint",
+              "status",
+              "goal",
+              "created_at_utc",
+              "metadata_json"
+            ]
+          },
+          "approvals": {
+            "row_count": 18,
+            "columns": [
+              "approval_id",
+              "request_id",
+              "approver",
+              "tool_id",
+              "action",
+              "params_json",
+              "resource_scope",
+              "risk_level",
+              "fingerprint",
+              "status",
+              "granted_at_utc",
+              "expires_at_utc",
+              "consumed",
+              "consumed_at_utc",
+              "revoked",
+              "revocation_reason",
+              "auth_method",
+              "notes",
+              "audit_ref"
+            ]
+          },
+          "delegation_grants": {
+            "row_count": 0,
+            "columns": [
+              "grant_id",
+              "owner_identity",
+              "description",
+              "allowed_tool_ids_json",
+              "allowed_action_types_json",
+              "allowed_resource_scope",
+              "allowed_project_scope",
+              "maximum_risk_level",
+              "valid_from_utc",
+              "expires_at_utc",
+              "max_calls",
+              "calls_count",
+              "status",
+              "created_by",
+              "approval_reference",
+              "audit_reference",
+              "metadata_json"
+            ]
+          },
+          "consumed_nonces": {
+            "row_count": 0,
+            "columns": [
+              "nonce",
+              "approval_id",
+              "consumed_at_utc",
+              "audit_ref"
+            ]
+          },
+          "governance_events": {
+            "row_count": 812,
+            "columns": [
+              "event_id",
+              "event_type",
+              "timestamp_utc",
+              "entity_type",
+              "entity_id",
+              "details_json",
+              "risk_level",
+              "outcome"
+            ]
+          },
+          "approval_cards": {
+            "row_count": 19,
+            "columns": [
+              "task_code",
+              "title",
+              "card_markdown",
+              "status",
+              "version",
+              "created_at_utc",
+              "updated_at_utc",
+              "ttl_expires_at_utc",
+              "request_id",
+              "evidence_json"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\governance.db"
+      },
+      "gov_sandbox.db": {
+        "tables": {
+          "schema_info": {
+            "row_count": 1,
+            "columns": [
+              "version",
+              "applied_at_utc",
+              "description"
+            ]
+          },
+          "emergency_states": {
+            "row_count": 1,
+            "columns": [
+              "id",
+              "state",
+              "scope",
+              "reason",
+              "activated_by",
+              "activated_at_utc",
+              "cleared_at_utc",
+              "audit_ref"
+            ]
+          },
+          "approval_requests": {
+            "row_count": 0,
+            "columns": [
+              "request_id",
+              "tool_id",
+              "action",
+              "params_json",
+              "resource_scope",
+              "risk_level",
+              "fingerprint",
+              "status",
+              "goal",
+              "created_at_utc",
+              "metadata_json"
+            ]
+          },
+          "approvals": {
+            "row_count": 0,
+            "columns": [
+              "approval_id",
+              "request_id",
+              "approver",
+              "tool_id",
+              "action",
+              "params_json",
+              "resource_scope",
+              "risk_level",
+              "fingerprint",
+              "status",
+              "granted_at_utc",
+              "expires_at_utc",
+              "consumed",
+              "consumed_at_utc",
+              "revoked",
+              "revocation_reason",
+              "auth_method",
+              "notes",
+              "audit_ref"
+            ]
+          },
+          "delegation_grants": {
+            "row_count": 0,
+            "columns": [
+              "grant_id",
+              "owner_identity",
+              "description",
+              "allowed_tool_ids_json",
+              "allowed_action_types_json",
+              "allowed_resource_scope",
+              "allowed_project_scope",
+              "maximum_risk_level",
+              "valid_from_utc",
+              "expires_at_utc",
+              "max_calls",
+              "calls_count",
+              "status",
+              "created_by",
+              "approval_reference",
+              "audit_reference",
+              "metadata_json"
+            ]
+          },
+          "consumed_nonces": {
+            "row_count": 0,
+            "columns": [
+              "nonce",
+              "approval_id",
+              "consumed_at_utc",
+              "audit_ref"
+            ]
+          },
+          "governance_events": {
+            "row_count": 0,
+            "columns": [
+              "event_id",
+              "event_type",
+              "timestamp_utc",
+              "entity_type",
+              "entity_id",
+              "details_json",
+              "risk_level",
+              "outcome"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\gov_sandbox.db"
+      },
+      "information_gaps.db": {
+        "tables": {
+          "info_gap_tasks": {
+            "row_count": 0,
+            "columns": [
+              "task_id",
+              "spec_json",
+              "readiness",
+              "waiting_state",
+              "request_text",
+              "created_at_utc",
+              "updated_at_utc",
+              "netchat_message_id",
+              "reminder_count",
+              "last_reminder_utc"
+            ]
+          },
+          "info_gap_events": {
+            "row_count": 3,
+            "columns": [
+              "event_id",
+              "task_id",
+              "event_type",
+              "detail_json",
+              "created_at_utc"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\information_gaps.db"
+      },
+      "learning_checkpoints.db": {
+        "tables": {
+          "learning_sessions": {
+            "row_count": 7,
+            "columns": [
+              "session_id",
+              "cycle_number",
+              "started_at",
+              "ended_at",
+              "status",
+              "learning_objectives",
+              "source_manifest",
+              "tasks_completed",
+              "tasks_failed",
+              "evidence_refs",
+              "knowledge_candidates",
+              "evaluation_result",
+              "unresolved_questions",
+              "resource_usage",
+              "checkpoint_ref",
+              "next_session_plan",
+              "stop_or_pause_reason"
+            ]
+          },
+          "learning_state": {
+            "row_count": 6,
+            "columns": [
+              "key",
+              "value"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\learning_checkpoints.db"
+      },
+      "learning_reports.db": {
+        "tables": {
+          "learning_reports": {
+            "row_count": 4,
+            "columns": [
+              "report_id",
+              "cycle_number",
+              "created_at",
+              "title",
+              "summary",
+              "gaps_json",
+              "candidates_json",
+              "proposals_json",
+              "regression_status",
+              "confidence_score",
+              "recommendations_json",
+              "markdown_content"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\learning_reports.db"
+      },
+      "learning_sandbox.db": {
+        "tables": {
+          "episodes": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "kind",
+              "summary",
+              "source_ref",
+              "status",
+              "metadata_json"
+            ]
+          },
+          "candidate_knowledge": {
+            "row_count": 2,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "rationale",
+              "status",
+              "decision_note"
+            ]
+          },
+          "semantic_memory": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "approved_by",
+              "regression_passed"
+            ]
+          },
+          "memories": {
+            "row_count": 2,
+            "columns": [
+              "id",
+              "memory_type",
+              "content",
+              "source_ref",
+              "verification_status",
+              "confidence_score",
+              "project_scope",
+              "tags_json",
+              "lifecycle_status",
+              "version",
+              "superseded_by",
+              "created_at_utc",
+              "updated_at_utc",
+              "metadata_json"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\learning_sandbox.db"
+      },
+      "memory.db": {
+        "tables": {
+          "episodes": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "kind",
+              "summary",
+              "source_ref",
+              "status",
+              "metadata_json"
+            ]
+          },
+          "candidate_knowledge": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "rationale",
+              "status",
+              "decision_note"
+            ]
+          },
+          "semantic_memory": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "approved_by",
+              "regression_passed"
+            ]
+          },
+          "memories": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "memory_type",
+              "content",
+              "source_ref",
+              "verification_status",
+              "confidence_score",
+              "project_scope",
+              "tags_json",
+              "lifecycle_status",
+              "version",
+              "superseded_by",
+              "created_at_utc",
+              "updated_at_utc",
+              "metadata_json"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\memory.db"
+      },
+      "tasks.db": {
+        "tables": {
+          "durable_tasks": {
+            "row_count": 578,
+            "columns": [
+              "task_id",
+              "correlation_id",
+              "idempotency_key",
+              "goal",
+              "risk_level",
+              "autonomy_level",
+              "status",
+              "acceptance_criteria_json",
+              "approved_scope_json",
+              "created_at_utc",
+              "updated_at_utc",
+              "completed_at_utc",
+              "resource_budget_json",
+              "retry_count",
+              "max_retries",
+              "error_message",
+              "evidence_refs_json",
+              "result_payload_json",
+              "checkpoint_data_json"
+            ]
+          },
+          "durable_task_steps": {
+            "row_count": 1029,
+            "columns": [
+              "step_id",
+              "task_id",
+              "sequence",
+              "name",
+              "description",
+              "risk_level",
+              "status",
+              "requires_approval",
+              "dependencies_json",
+              "expected_output",
+              "verification_method",
+              "result_payload_json",
+              "error_message",
+              "completed_at_utc"
+            ]
+          },
+          "episodes": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "kind",
+              "summary",
+              "source_ref",
+              "status",
+              "metadata_json"
+            ]
+          },
+          "candidate_knowledge": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "rationale",
+              "status",
+              "decision_note"
+            ]
+          },
+          "semantic_memory": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "created_at_utc",
+              "statement",
+              "source_ref",
+              "approved_by",
+              "regression_passed"
+            ]
+          },
+          "memories": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "memory_type",
+              "content",
+              "source_ref",
+              "verification_status",
+              "confidence_score",
+              "project_scope",
+              "tags_json",
+              "lifecycle_status",
+              "version",
+              "superseded_by",
+              "created_at_utc",
+              "updated_at_utc",
+              "metadata_json"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\tasks.db"
+      },
+      "todos.db": {
+        "tables": {
+          "todos": {
+            "row_count": 0,
+            "columns": [
+              "id",
+              "title",
+              "due",
+              "priority",
+              "status",
+              "created_at",
+              "done_at"
+            ]
+          },
+          "sqlite_sequence": {
+            "row_count": 1,
+            "columns": [
+              "name",
+              "seq"
+            ]
+          }
+        },
+        "path": "E:\\AI\\QUAN AI BRAIN\\data\\todos.db"
+      }
+    },
+    "entry_points": {
+      "run_web_ui.py": {
+        "exists": false
+      },
+      "start_dual_servers.py": {
+        "exists": false
+      },
+      "run_executive_desk.py": {
+        "exists": false
+      },
+      "KHOI_DONG_QUAN_AI_BRAIN.bat": {
+        "exists": false
+      },
+      "KHOI_DONG_24_7.bat": {
+        "exists": false
+      }
+    },
+    "tests": {
+      "total": 0,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "tests": []
+    },
+    "module_status": {
+      "counts": {
+        "C_SIMULATED": 50,
+        "A_VERIFIED_WORKING": 117
+      },
+      "details": {
+        "cli.py": "C_SIMULATED",
+        "ai\\auto_tuning.py": "A_VERIFIED_WORKING",
+        "ai\\multi_agent.py": "A_VERIFIED_WORKING",
+        "ai\\recommendation_engine.py": "A_VERIFIED_WORKING",
+        "ai\\neural_symbolic.py": "C_SIMULATED",
+        "ai\\explainable_ai.py": "A_VERIFIED_WORKING",
+        "ai\\common_sense.py": "A_VERIFIED_WORKING",
+        "ai\\transfer_learning.py": "A_VERIFIED_WORKING",
+        "analytics\\analytics_engine.py": "A_VERIFIED_WORKING",
+        "analytics\\insights_engine.py": "C_SIMULATED",
+        "analytics\\report_generator.py": "A_VERIFIED_WORKING",
+        "analytics\\recommendation_system.py": "A_VERIFIED_WORKING",
+        "analytics\\graph_visualization.py": "A_VERIFIED_WORKING",
+        "clae\\quarantine.py": "A_VERIFIED_WORKING",
+        "cognition\\cognitive_state.py": "C_SIMULATED",
+        "cognition\\memory_review_session.py": "A_VERIFIED_WORKING",
+        "cognition\\information_gap_analyzer.py": "A_VERIFIED_WORKING",
+        "cognition\\role_orchestrator.py": "A_VERIFIED_WORKING",
+        "cognition\\v7_skills.py": "A_VERIFIED_WORKING",
+        "cognition\\continuous_learning_engine.py": "A_VERIFIED_WORKING",
+        "cognition\\temporal_memory.py": "A_VERIFIED_WORKING",
+        "cognition\\executive_persona.py": "C_SIMULATED",
+        "cognition\\self_model_engine.py": "A_VERIFIED_WORKING",
+        "cognition\\cognitive_loop.py": "A_VERIFIED_WORKING",
+        "cognition\\cross_modal_linker.py": "A_VERIFIED_WORKING",
+        "cognition\\system_inventory.py": "A_VERIFIED_WORKING",
+        "cognition\\context_builder.py": "C_SIMULATED",
+        "cognition\\collaboration.py": "C_SIMULATED",
+        "cognition\\learning_session.py": "A_VERIFIED_WORKING",
+        "cognition\\logical_reasoning.py": "A_VERIFIED_WORKING",
+        "cognition\\memory_review_cycle.py": "A_VERIFIED_WORKING",
+        "cognition\\self_care_engine.py": "C_SIMULATED",
+        "cognition\\skill_registry.py": "A_VERIFIED_WORKING",
+        "cognition\\improvement_report.py": "A_VERIFIED_WORKING",
+        "cognition\\autonomous_mind.py": "C_SIMULATED",
+        "cognition\\document_rag.py": "A_VERIFIED_WORKING",
+        "cognition\\reflection.py": "A_VERIFIED_WORKING",
+        "cognition\\retrieval.py": "A_VERIFIED_WORKING",
+        "cognition\\task_pipeline.py": "A_VERIFIED_WORKING",
+        "cognition\\vietnamese_conversation.py": "A_VERIFIED_WORKING",
+        "cognition\\capability_registry.py": "A_VERIFIED_WORKING",
+        "cognition\\grounding_facts.py": "A_VERIFIED_WORKING",
+        "cognition\\models.py": "A_VERIFIED_WORKING",
+        "cognition\\session_memory.py": "A_VERIFIED_WORKING",
+        "cognition\\workflow_memory.py": "A_VERIFIED_WORKING",
+        "cognition\\experience_semantic.py": "A_VERIFIED_WORKING",
+        "cognition\\causal_reasoning.py": "A_VERIFIED_WORKING",
+        "cognition\\llm_gap_detector.py": "A_VERIFIED_WORKING",
+        "cognition\\teach_pipeline.py": "A_VERIFIED_WORKING",
+        "cognition\\embedding.py": "A_VERIFIED_WORKING",
+        "contract\\control_plane.py": "C_SIMULATED",
+        "contract\\models.py": "C_SIMULATED",
+        "core\\autonomic.py": "A_VERIFIED_WORKING",
+        "core\\integration.py": "A_VERIFIED_WORKING",
+        "core\\guardrails.py": "A_VERIFIED_WORKING",
+        "core\\redaction.py": "A_VERIFIED_WORKING",
+        "core\\audit.py": "A_VERIFIED_WORKING",
+        "daemon\\health.py": "A_VERIFIED_WORKING",
+        "edge\\transfer_service.py": "A_VERIFIED_WORKING",
+        "edge\\release_manager.py": "A_VERIFIED_WORKING",
+        "edge\\models.py": "A_VERIFIED_WORKING",
+        "execution\\windows_job_object.py": "C_SIMULATED",
+        "execution\\staging.py": "C_SIMULATED",
+        "execution\\process_containment.py": "A_VERIFIED_WORKING",
+        "execution\\resource_budget.py": "A_VERIFIED_WORKING",
+        "gateway\\connectors.py": "C_SIMULATED",
+        "gateway\\api_gateway.py": "A_VERIFIED_WORKING",
+        "gateway\\message_queue.py": "A_VERIFIED_WORKING",
+        "gateway\\versioning.py": "A_VERIFIED_WORKING",
+        "gateway\\webhooks.py": "A_VERIFIED_WORKING",
+        "governance\\state_store.py": "A_VERIFIED_WORKING",
+        "governance\\netchat_approval_adapter.py": "A_VERIFIED_WORKING",
+        "governance\\consultation_inbox.py": "A_VERIFIED_WORKING",
+        "governance\\approval_cards.py": "A_VERIFIED_WORKING",
+        "governance\\netchat_info_gap_adapter.py": "A_VERIFIED_WORKING",
+        "governance\\policy.py": "A_VERIFIED_WORKING",
+        "integration\\web_connector.py": "A_VERIFIED_WORKING",
+        "integration\\email_intelligence.py": "C_SIMULATED",
+        "integration\\connectors\\system_telemetry.py": "A_VERIFIED_WORKING",
+        "integration\\email_intake.py": "C_SIMULATED",
+        "integration\\registry.py": "A_VERIFIED_WORKING",
+        "integration\\proactive.py": "A_VERIFIED_WORKING",
+        "integration\\netchat_bridge.py": "A_VERIFIED_WORKING",
+        "integration\\connectors\\mock_service.py": "C_SIMULATED",
+        "integration\\manifest.py": "A_VERIFIED_WORKING",
+        "integration\\policy.py": "A_VERIFIED_WORKING",
+        "integration\\verifier.py": "A_VERIFIED_WORKING",
+        "integration\\profile.py": "A_VERIFIED_WORKING",
+        "integration\\health.py": "A_VERIFIED_WORKING",
+        "integration\\playbook.py": "A_VERIFIED_WORKING",
+        "integration\\adapter.py": "A_VERIFIED_WORKING",
+        "learning\\periodic_reporter.py": "C_SIMULATED",
+        "learning\\federated_orchestrator.py": "C_SIMULATED",
+        "learning\\federated_learning.py": "A_VERIFIED_WORKING",
+        "learning\\engine.py": "A_VERIFIED_WORKING",
+        "learning\\models.py": "A_VERIFIED_WORKING",
+        "learning\\evaluation.py": "C_SIMULATED",
+        "llm\\netmind_provider.py": "C_SIMULATED",
+        "llm\\client.py": "C_SIMULATED",
+        "llm\\provider.py": "C_SIMULATED",
+        "llm\\router.py": "A_VERIFIED_WORKING",
+        "llm\\mock_provider.py": "C_SIMULATED",
+        "llm\\models.py": "C_SIMULATED",
+        "memory\\deep_memory.py": "A_VERIFIED_WORKING",
+        "memory\\causal_chains.py": "A_VERIFIED_WORKING",
+        "memory\\memory_quality.py": "A_VERIFIED_WORKING",
+        "memory\\sqlite_store.py": "A_VERIFIED_WORKING",
+        "memory\\counterfactual_memory.py": "A_VERIFIED_WORKING",
+        "memory\\privacy_preserving.py": "A_VERIFIED_WORKING",
+        "memory\\knowledge_ingestion.py": "A_VERIFIED_WORKING",
+        "memory\\causal_reasoning.py": "A_VERIFIED_WORKING",
+        "memory\\knowledge_graph.py": "A_VERIFIED_WORKING",
+        "memory\\emotional_memory.py": "A_VERIFIED_WORKING",
+        "memory\\benchmark.py": "A_VERIFIED_WORKING",
+        "memory\\multi_agent_memory.py": "A_VERIFIED_WORKING",
+        "memory\\promotion_policy.py": "A_VERIFIED_WORKING",
+        "memory\\owner_feedback.py": "A_VERIFIED_WORKING",
+        "memory\\knowledge_quality.py": "A_VERIFIED_WORKING",
+        "memory\\experience_consolidation.py": "A_VERIFIED_WORKING",
+        "memory\\experience_retrieval.py": "A_VERIFIED_WORKING",
+        "memory\\models.py": "A_VERIFIED_WORKING",
+        "mobile\\offline_sync.py": "C_SIMULATED",
+        "mobile\\notifications.py": "C_SIMULATED",
+        "nlp\\query_engine.py": "C_SIMULATED",
+        "optimization\\improvement_loop.py": "C_SIMULATED",
+        "optimization\\auto_tuner.py": "A_VERIFIED_WORKING",
+        "optimization\\self_learning_engine.py": "C_SIMULATED",
+        "optimization\\intelligent_cache.py": "C_SIMULATED",
+        "optimization\\performance_optimizer.py": "C_SIMULATED",
+        "optimization\\adaptive_algorithms.py": "C_SIMULATED",
+        "orchestration\\plan_orchestrator.py": "C_SIMULATED",
+        "orchestration\\task_registry.py": "A_VERIFIED_WORKING",
+        "orchestration\\supervisor.py": "C_SIMULATED",
+        "orchestration\\models.py": "A_VERIFIED_WORKING",
+        "planning\\coordinator.py": "C_SIMULATED",
+        "planning\\models.py": "A_VERIFIED_WORKING",
+        "scaling\\horizontal_scaling.py": "C_SIMULATED",
+        "scaling\\monitoring.py": "A_VERIFIED_WORKING",
+        "scaling\\disaster_recovery.py": "C_SIMULATED",
+        "scaling\\performance_optimizer.py": "C_SIMULATED",
+        "scaling\\business_intelligence.py": "A_VERIFIED_WORKING",
+        "security\\authentication.py": "C_SIMULATED",
+        "security\\hardening.py": "C_SIMULATED",
+        "security\\security_monitoring.py": "C_SIMULATED",
+        "security\\rbac.py": "C_SIMULATED",
+        "security\\audit_logging.py": "C_SIMULATED",
+        "security\\data_protection.py": "C_SIMULATED",
+        "security\\_totp.py": "C_SIMULATED",
+        "tools\\sandbox.py": "C_SIMULATED",
+        "tools\\verifier.py": "A_VERIFIED_WORKING",
+        "tools\\external_lookup.py": "A_VERIFIED_WORKING",
+        "tools\\signature.py": "A_VERIFIED_WORKING",
+        "tools\\approval.py": "A_VERIFIED_WORKING",
+        "tools\\delegation.py": "A_VERIFIED_WORKING",
+        "tools\\todo_store.py": "A_VERIFIED_WORKING",
+        "tools\\email_draft.py": "A_VERIFIED_WORKING",
+        "tools\\registry.py": "A_VERIFIED_WORKING",
+        "tools\\ttns_lookup.py": "A_VERIFIED_WORKING",
+        "tools\\path_guard.py": "A_VERIFIED_WORKING",
+        "voice\\tts_config.py": "C_SIMULATED",
+        "voice\\voice_pipeline.py": "A_VERIFIED_WORKING",
+        "voice\\voice_interface.py": "C_SIMULATED",
+        "voice\\mouth_sync.py": "A_VERIFIED_WORKING",
+        "voice\\wake_word_config.py": "A_VERIFIED_WORKING",
+        "voice\\state_machine.py": "A_VERIFIED_WORKING",
+        "web\\server.py": "C_SIMULATED",
+        "web\\edge_monitor.py": "A_VERIFIED_WORKING"
+      }
+    },
+    "dependencies": {
+      "total": 73,
+      "packages": [
+        "Flask",
+        "Flask-SQLAlchemy",
+        "Flask-CORS",
+        "Flask-Migrate",
+        "Flask-Limiter",
+        "Flask-Login",
+        "Flask-JWT-Extended",
+        "Flask-Cache",
+        "SQLAlchemy",
+        "psycopg2-binary",
+        "alembic",
+        "redis",
+        "ollama",
+        "transformers",
+        "torch",
+        "sentence-transformers",
+        "scikit-learn",
+        "numpy",
+        "pandas",
+        "nltk"
+      ]
+    },
+    "documentation": {
+      "total_files": 294,
+      "files": [
+        "24_7_SETUP_INSTRUCTIONS.md",
+        "ANTIGRAVITY_APPLY_PROMPT.md",
+        "ANTIGRAVITY_WORKFLOW.md",
+        "ARCHITECTURE_GAP_ANALYSIS.md",
+        "DEPLOYMENT_GUIDE.md",
+        "DIGITAL_EMPLOYEE_BRAIN_DESIGN.md",
+        "FUNCTIONAL_SPECIFICATIONS.md",
+        "INCIDENT_RESPONSE.md",
+        "NETCHAT_24_7_SETUP.md",
+        "NETCHAT_INTEGRATION_GUIDE.md",
+        "NEXT_STEPS.md",
+        "PERFORMANCE_TUNING.md",
+        "PRODUCTION_DEPLOYMENT.md",
+        "PROJECT_STATUS.md",
+        "QUAN_AI_BRAIN_CONTINUOUS_OPERATIONS_ROADMAP.md",
+        "QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md",
+        "QUAN_AI_BRAIN_PI5_EDGE_ARCHITECTURE.md",
+        "QUAN_AI_BRAIN_VISUAL_COCKPIT_DESIGN.md",
+        "SETUP_24_7_FULL_GUIDE.md",
+        "SETUP_TASK_SCHEDULER_GUIDE.md",
+        "SPRINT4_SECURE_APPROVAL_ARCHITECTURE.md",
+        "SPRINT5_DESIGN_SIGNOFF.md",
+        "SPRINT5_EXECUTOR_STAGING_DESIGN.md",
+        "SPRINT6_DESIGN_SIGNOFF.md",
+        "SPRINT6_EXECUTION_READINESS_DESIGN.md",
+        "SPRINT_5_6_SUMMARY.md",
+        "SYSTEM_BASELINE.md",
+        "TRAINING_MATERIALS.md",
+        "UAT_SCRIPTS.md",
+        "WORKSPACE_MERGE_INSTRUCTIONS.md",
+        "AUDIT_PC_CORE_PI5_AVATAR_20261019.md",
+        "AUDIT_PERFORMANCE_SECURITY_20261028.md",
+        "AUTONOMOUS_PROBLEM_SOLVING_AUDIT.md",
+        "CLO_V1_ACTIVATION_REPORT.md",
+        "CLO_V1_ACTUAL_STATE_AUDIT.md",
+        "CLO_V1_FINAL_STATUS.md",
+        "CLO_V1_IMPLEMENTATION_REPORT.md",
+        "CLO_V1_INTEGRATION_COMPLETE.md",
+        "COGNITIVE_MEMORY_AUDIT.md",
+        "DIGITAL_EMPLOYEE_BRAIN_ARCHITECTURE.md",
+        "DIGITAL_EMPLOYEE_BRAIN_AUDIT.md",
+        "DIGITAL_EMPLOYEE_BRAIN_GAP_REGISTER.md",
+        "DIGITAL_EMPLOYEE_BRAIN_IMPLEMENTATION_PLAN.md",
+        "DIGITAL_EMPLOYEE_BRAIN_TEST_REPORT.md",
+        "HANDOFF_20261017_215302.md",
+        "HANDOFF_20261017_215701.md",
+        "HANDOFF_20261017_215812.md",
+        "HANDOFF_20261017_221041.md",
+        "HANDOFF_20261017_221112.md",
+        "HANDOFF_20261017_222255.md",
+        "HANDOFF_20261017_223420.md",
+        "HANDOFF_20261017_223522.md",
+        "HANDOFF_20261017_223556.md",
+        "HANDOFF_20261017_224522.md",
+        "HANDOFF_20261017_225532.md",
+        "HANDOFF_20261018_091505.md",
+        "HANDOFF_20261018_091556.md",
+        "HANDOFF_20261018_092752.md",
+        "HANDOFF_20261018_093013.md",
+        "HANDOFF_20261018_093105.md",
+        "HANDOFF_20261018_095451.md",
+        "HANDOFF_20261018_100711.md",
+        "HANDOFF_20261018_153031.md",
+        "HANDOFF_20261018_153238.md",
+        "HANDOFF_20261018_154655.md",
+        "HANDOFF_20261019_124402.md",
+        "HANDOFF_20261019_124518.md",
+        "HANDOFF_20261019_130207.md",
+        "HANDOFF_20261019_130305.md",
+        "HANDOFF_20261019_131441.md",
+        "HANDOFF_20261019_131538.md",
+        "HANDOFF_20261019_131739.md",
+        "HANDOFF_20261019_134945.md",
+        "HANDOFF_20261019_135838.md",
+        "HANDOFF_20261019_140053.md",
+        "HANDOFF_20261019_141324.md",
+        "HANDOFF_20261019_151819.md",
+        "HANDOFF_20261019_153754.md",
+        "HANDOFF_20261019_162645.md",
+        "HANDOFF_20261019_162731.md",
+        "HANDOFF_20261019_162815.md",
+        "HANDOFF_20261019_174614.md",
+        "HANDOFF_20261019_174944.md",
+        "HANDOFF_20261019_180020.md",
+        "HANDOFF_20261019_181015.md",
+        "HANDOFF_20261019_183042.md",
+        "HANDOFF_20261019_183115.md",
+        "HANDOFF_20261019_184313.md",
+        "HANDOFF_20261019_190722.md",
+        "HANDOFF_20261019_190806.md",
+        "HANDOFF_20261019_193129.md",
+        "HANDOFF_20261019_193230.md",
+        "HANDOFF_20261019_225222.md",
+        "HANDOFF_20261019_235002.md",
+        "HANDOFF_20261020_000720.md",
+        "HANDOFF_20261020_094543.md",
+        "HANDOFF_20261020_094732.md",
+        "HANDOFF_20261020_095939.md",
+        "HANDOFF_20261020_102209.md",
+        "HANDOFF_20261020_105945.md",
+        "HANDOFF_20261020_112939.md",
+        "HANDOFF_20261020_113156.md",
+        "HANDOFF_20261020_124119.md",
+        "HANDOFF_20261020_131212.md",
+        "HANDOFF_20261020_131331.md",
+        "HANDOFF_20261020_131554.md",
+        "HANDOFF_20261020_140726.md",
+        "HANDOFF_20261020_140920.md",
+        "HANDOFF_20261020_141040.md",
+        "HANDOFF_20261020_143606.md",
+        "HANDOFF_20261020_143722.md",
+        "HANDOFF_20261020_174153.md",
+        "HANDOFF_20261020_220839.md",
+        "HANDOFF_20261020_223437.md",
+        "HANDOFF_20261020_223628.md",
+        "HANDOFF_20261020_231956.md",
+        "HANDOFF_20261020_232220.md",
+        "HANDOFF_20261020_232541.md",
+        "HANDOFF_20261020_232729.md",
+        "HANDOFF_20261020_234819.md",
+        "HANDOFF_20261020_234929.md",
+        "HANDOFF_20261021_195032.md",
+        "HANDOFF_20261021_195416.md",
+        "HANDOFF_20261021_200621.md",
+        "HANDOFF_20261021_204206.md",
+        "HANDOFF_20261021_204340.md",
+        "HANDOFF_20261021_210830.md",
+        "HANDOFF_20261021_211059.md",
+        "HANDOFF_20261021_213908.md",
+        "HANDOFF_20261021_214607.md",
+        "HANDOFF_20261021_220735.md",
+        "HANDOFF_20261021_222746.md",
+        "HANDOFF_20261021_223452.md",
+        "HANDOFF_20261021_225151.md",
+        "HANDOFF_20261021_225312.md",
+        "HANDOFF_20261021_230902.md",
+        "HANDOFF_20261021_234941.md",
+        "HANDOFF_20261021_235131.md",
+        "HANDOFF_20261022_091126.md",
+        "HANDOFF_20261022_091335.md",
+        "HANDOFF_20261022_095029.md",
+        "HANDOFF_20261022_104641.md",
+        "HANDOFF_20261022_104810.md",
+        "HANDOFF_20261022_105740.md",
+        "HANDOFF_20261022_105914.md",
+        "HANDOFF_20261022_111128.md",
+        "HANDOFF_20261022_111719.md",
+        "HANDOFF_20261022_124648.md",
+        "HANDOFF_20261022_133112.md",
+        "HANDOFF_20261022_133250.md",
+        "HANDOFF_20261022_140506.md",
+        "HANDOFF_20261022_140807.md",
+        "HANDOFF_20261022_143002.md",
+        "HANDOFF_20261022_143334.md",
+        "HANDOFF_20261022_143657.md",
+        "HANDOFF_20261022_154022.md",
+        "HANDOFF_20261022_160834.md",
+        "HANDOFF_20261022_161019.md",
+        "HANDOFF_20261023_161148.md",
+        "HANDOFF_20261023_161455.md",
+        "HANDOFF_20261023_193214.md",
+        "HANDOFF_20261024_112355.md",
+        "HANDOFF_20261024_112630.md",
+        "HANDOFF_20261024_115427.md",
+        "HANDOFF_20261024_115703.md",
+        "HANDOFF_20261024_115857.md",
+        "HANDOFF_20261024_143415.md",
+        "HANDOFF_20261024_152731.md",
+        "HANDOFF_20261024_152915.md",
+        "HANDOFF_20261024_154712.md",
+        "HANDOFF_20261025_094810.md",
+        "HANDOFF_20261025_102943.md",
+        "HANDOFF_20261025_201837.md",
+        "HANDOFF_20261027_003641.md",
+        "HANDOFF_20261027_124314.md",
+        "HANDOFF_20261027_130724.md",
+        "HANDOFF_20261027_132040.md",
+        "HANDOFF_20261027_132239.md",
+        "HANDOFF_20261027_144644.md",
+        "HANDOFF_20261027_150157.md",
+        "HANDOFF_20261027_180202.md",
+        "HANDOFF_20261027_182355.md",
+        "HANDOFF_20261027_184155.md",
+        "HANDOFF_20261027_192018.md",
+        "HANDOFF_LATEST.md",
+        "ML_RESEARCH_KIT_20261028.md",
+        "PRODUCTION_READY_REPORT.md",
+        "PROGRESS_REPORT_20261028.md",
+        "QUAN_AI_BRAIN_AUTONOMOUS_COGNITION_AUDIT.md",
+        "QUAN_AI_BRAIN_AUTONOMOUS_OPERATIONS_V1_AUDIT.md",
+        "QUAN_AI_BRAIN_DIGITAL_HUMAN_AVATAR_V2_COMPLETION_REPORT.md",
+        "QUAN_AI_BRAIN_DIGITAL_HUMAN_AVATAR_V2_PROPOSAL.md",
+        "QUAN_AI_BRAIN_DIGITAL_HUMAN_MODEL_A_COMPLETION_REPORT.md",
+        "QUAN_AI_BRAIN_DIGITAL_HUMAN_MODEL_A_PROPOSAL.md",
+        "QUAN_AI_BRAIN_DIGITAL_IDENTITY_V1_PROPOSAL.md",
+        "QUAN_AI_BRAIN_GLM53_SPRINT1_COMPLETION.md",
+        "QUAN_AI_BRAIN_OPERATIONAL_AUDIT_20261019_184000.md",
+        "QUAN_AI_BRAIN_SPRINT0_ARCHITECTURE_AUDIT.md",
+        "QUAN_AI_BRAIN_SPRINT2_AUDIT_REPORT.md",
+        "QUAN_AI_BRAIN_SPRINT2_COMPLETION_FINAL.md",
+        "QUAN_AI_BRAIN_SPRINT2_OPERATIONAL_READINESS_20261020_232100.md",
+        "QUAN_AI_BRAIN_SPRINT3_4_COMPLETION.md",
+        "QUAN_AI_BRAIN_SPRINT3_6_COMPLETION.md",
+        "QUAN_AI_BRAIN_STABILITY_PERFORMANCE_AUDIT_20261024_161500.md",
+        "QUAN_AI_BRAIN_STABILITY_PERFORMANCE_PHASE_D_COMPLETION.md",
+        "QUAN_AI_BRAIN_UNIVERSAL_INTEGRATION_V6_PROPOSAL.md",
+        "QUAN_AI_BRAIN_V4_SPRINT1_COMPLETION_REPORT_20261020_235000.md",
+        "QUAN_AI_BRAIN_V4_WHOLE_CODEBASE_AUDIT_20261020_233000.md",
+        "QUAN_AI_BRAIN_VIETNAMESE_FEMALE_TTS_FIX_20261020_220800.md",
+        "QUAN_AI_BRAIN_VOICE_EDGE_LINK_COMPLETION_20261020_141000.md",
+        "README.md",
+        "SPRINT15_AUDIT.md",
+        "SPRINT15_FINAL_REPORT.md",
+        "SPRINT15_IMPLEMENTATION.md",
+        "SPRINT15_TEST_RESULTS.md",
+        "SPRINT16_FINAL_REPORT.md",
+        "SPRINT2_COMPLETION_SUMMARY.md",
+        "TONY_PHAM_REMOTE_SENSOR_CONTROL_20261023_161500.md",
+        "TOOL_SKILL_FACTORY_DESIGN.md",
+        "TOOL_SKILL_FACTORY_HANDOFF.md",
+        "TOOL_SKILL_FACTORY_IMPLEMENTATION.md",
+        "TOOL_SKILL_FACTORY_IMPLEMENTATION_V2.md",
+        "TOOL_SKILL_FACTORY_TEST_RESULTS.md",
+        "V10_FINAL_HANDOFF.md",
+        "V10_MEMORY_CHANGE_AUDIT.md",
+        "V10_MEMORY_REVIEW_AUDIT.md",
+        "V10_MEMORY_REVIEW_IMPLEMENTATION_PLAN.md",
+        "V10_OWNER_FEEDBACK_TESTS.md",
+        "V10_SAMPLE_REVIEW_RESULTS.md",
+        "V10_TEST_RESULTS.md",
+        "V11_TEMPORAL_MEMORY_STATUS.md",
+        "V12_CROSS_MODAL_STATUS.md",
+        "V13_QUALITY_STATUS.md",
+        "V14_UI_STATUS.md",
+        "V15_GRAPH_STATUS.md",
+        "V16_EMOTIONAL_STATUS.md",
+        "V17_CAUSAL_STATUS.md",
+        "V18_FEDERATED_STATUS.md",
+        "V19_INTEGRATION_STATUS.md",
+        "V20_AI_ML_STATUS.md",
+        "V21_FINAL_STATUS.md",
+        "V22_COMPLETION_REPORT.md",
+        "V22_PRODUCTION_HANDOFF.md",
+        "V23_ADVANCED_ENHANCEMENTS_PLAN.md",
+        "V23_COMPLETION_REPORT.md",
+        "V23_STATUS_REPORT.md",
+        "V24_COMPLETION_REPORT.md",
+        "V24_MOBILE_NLP_PLAN.md",
+        "V24_STATUS_REPORT.md",
+        "V25_ANALYTICS_INSIGHTS_PLAN.md",
+        "V25_COMPLETION_REPORT.md",
+        "V25_STATUS_REPORT.md",
+        "V26_AUTO_OPTIMIZATION_PLAN.md",
+        "V26_COMPLETION_REPORT.md",
+        "V26_STATUS_REPORT.md",
+        "V27_COMPLETION_REPORT.md",
+        "V27_SECURITY_COMPLIANCE_PLAN.md",
+        "V28_COMPLETION_REPORT.md",
+        "V28_ENTERPRISE_INTEGRATION_PLAN.md",
+        "V29_ADVANCED_AI_CAPABILITIES_PLAN.md",
+        "V29_COMPLETION_REPORT.md",
+        "V30_COMPLETION_REPORT.md",
+        "V30_SCALABILITY_PERFORMANCE_PLAN.md",
+        "V4_COGNITIVE_STATE_AUDIT.md",
+        "V5_ACTUAL_STATE_AUDIT.md",
+        "V5_FINAL_REPORT.md",
+        "V5_IMPLEMENTATION_PLAN.md",
+        "V6_BATCH_ARCHIVE_ROOT_CAUSE_20261027.md",
+        "V7_1_VOICE_CONVERSATION_UPGRADE.md",
+        "V7_ACTUAL_STATE_AUDIT.md",
+        "V7_FINAL_HANDOFF.md",
+        "V7_LEVEL1_CAPABILITY_REPORT.md",
+        "V7_LEVEL2_REAL_TASK_REPORT.md",
+        "V7_TEST_RESULTS.md",
+        "V7_THREE_LEVEL_IMPLEMENTATION_PLAN.md",
+        "V8_1_NETCHAT_FILE_ATTACHMENT.md",
+        "V8_BASELINE_RESULTS.md",
+        "V8_CONVERSATION_IMPROVEMENT_PLAN.md",
+        "V8_DIALOGUE_PIPELINE_MAP.md",
+        "V8_FINAL_HANDOFF.md",
+        "V8_IMPLEMENTATION_REPORT.md",
+        "V8_REGRESSION_RESULTS.md",
+        "V8_VIETNAMESE_BENCHMARK.md",
+        "V8_VIETNAMESE_CONVERSATION_AUDIT.md",
+        "V9_DEEP_MEMORY_ACTUAL_STATE_AUDIT.md",
+        "V9_DEEP_MEMORY_IMPLEMENTATION_PLAN.md",
+        "V9_FINAL_HANDOFF.md",
+        "V9_LOGICAL_REASONING_REPORT.md",
+        "V9_MEMORY_DATA_MODEL.md",
+        "V9_MEMORY_REVIEW_RESULTS.md",
+        "V9_OWNER_FEEDBACK_FLOW.md",
+        "V9_TEST_RESULTS.md",
+        "HUONG_DAN_SU_DUNG_VA_QUAN_TRI.md",
+        "README.md"
+      ]
+    }
+  }
+}
