@@ -99,7 +99,7 @@ def search_youtube_music(query: str, max_results: int = 5, timeout: float = 8.0)
     results: list[dict[str, Any]] = []
 
     # Pattern 1: Parse embedded ytInitialData JSON
-    match = re.search(r"var ytInitialData\s*=\s*({.+?});</script>", html)
+    match = re.search(r"var ytInitialData\s*=\s*({.+?});\s*</script>", html, flags=re.DOTALL)
     if match:
         try:
             data = json.loads(match.group(1))

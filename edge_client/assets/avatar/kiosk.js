@@ -428,7 +428,28 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.transcript && transcriptEl && currentAvatarState !== "SPEAKING" && currentAvatarState !== "THINKING") {
           transcriptEl.textContent = `"${data.transcript}"`;
           if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
-            window.digitalHuman.setContextFromText(data.transcript);
+        // Music streaming coordination on Pi 5 Kiosk
+        if (data.music && data.music.playing && data.music.video_id) {
+          if (!window._kioskCurrentVid || window._kioskCurrentVid !== data.music.video_id) {
+            window._kioskCurrentVid = data.music.video_id;
+            let mf = document.getElementById("kiosk-music-frame");
+            if (!mf) {
+              mf = document.createElement("iframe");
+              mf.id = "kiosk-music-frame";
+              mf.style.cssText = "display:none;width:0;height:0;border:none;";
+              mf.allow = "autoplay";
+              document.body.appendChild(mf);
+            }
+            mf.src = `https://www.youtube.com/embed/${data.music.video_id}?autoplay=1&playsinline=1`;
+            if (transcriptEl && currentAvatarState === "IDLE") {
+              transcriptEl.textContent = `🎵 Đang phát: ${data.music.title || "YouTube Music"}`;
+            }
+          }
+        } else if (!data.music || !data.music.playing) {
+          if (window._kioskCurrentVid) {
+            window._kioskCurrentVid = null;
+            const mf = document.getElementById("kiosk-music-frame");
+            if (mf) mf.src = "about:blank";
           }
         }
 

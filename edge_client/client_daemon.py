@@ -145,7 +145,7 @@ def stop_music_stream(daemon_state: Any = None) -> bool:
 
 
 def play_music_stream(url: str, title: str = "", video_id: str = "", daemon_state: Any = None) -> bool:
-    """Phát nhạc trực tiếp qua loa vật lý trên Pi 5 (ưu tiên mpv / cvlc / mpg123)."""
+    """Phát nhạc trực tiếp qua loa vật lý trên Pi 5 (Chromium Kiosk / Headless Chromium / mpv)."""
     global _MUSIC_PROC
     stop_music_stream(daemon_state)
 
@@ -164,20 +164,35 @@ def play_music_stream(url: str, title: str = "", video_id: str = "", daemon_stat
 
     def _worker() -> None:
         global _MUSIC_PROC
-        import shutil, subprocess
-        cmd = None
-        if shutil.which("mpv"):
+        import os, shutil, subprocess
+        # If Chromium Kiosk is not currently displayed, run background headless Chromium for native YouTube audio
+        if not is_kiosk_running() and shutil.which("chromium"):
+            embed_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1"
+            cmd = [
+                "chromium",
+                "--no-sandbox",
+                "--headless=new",
+                "--autoplay-policy=no-user-gesture-required",
+                "--disable-gpu",
+                embed_url,
+            ]
+        elif shutil.which("mpv"):
             cmd = ["mpv", "--no-video", "--really-quiet", url]
         elif shutil.which("cvlc"):
             cmd = ["cvlc", "--no-video", "--play-and-exit", "-q", url]
-        elif shutil.which("mpg123") and (url.endswith(".mp3") or "audio" in url):
-            cmd = ["mpg123", "-q", url]
+        else:
+            cmd = None
 
         if cmd:
             try:
+                env = os.environ.copy()
+                if os.path.exists("/run/user/1000"):
+                    env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+                    env["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
                 with _MUSIC_LOCK:
                     _MUSIC_PROC = subprocess.Popen(
                         cmd,
+                        env=env,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
@@ -187,13 +202,6 @@ def play_music_stream(url: str, title: str = "", video_id: str = "", daemon_stat
             finally:
                 with _MUSIC_LOCK:
                     _MUSIC_PROC = None
-                if daemon_state is not None:
-                    try:
-                        with daemon_state.lock:
-                            if daemon_state.current_music and daemon_state.current_music.get("video_id") == video_id:
-                                daemon_state.current_music = None
-                    except Exception:
-                        pass
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()

@@ -94,6 +94,12 @@ from quan_ai_brain.voice.tts_config import (
     TTSStatus,
     normalize_text_for_vietnamese_tts,
 )
+from quan_ai_brain.media.youtube_music import (
+    search_youtube_music,
+    looks_like_music_request,
+    dispatch_play_music_to_pi5,
+    dispatch_stop_music_to_pi5,
+)
 from quan_ai_brain.voice.voice_pipeline import XiaoZhiVoicePipeline
 from quan_ai_brain.web.edge_monitor import (
     EdgeAlertCode,
@@ -227,8 +233,8 @@ def push_avatar_expression(state: str, transcript: str = "", timeout: float = 1.
         return False
 
 
-def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0) -> bool:
-    """Đẩy lời thoại hiển thị + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
+def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0, synthesize_tts: bool = True) -> bool:
+    """Đẩy lời thoại hiển thị + âm thanh Edge-TTS + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
 
     Cập nhật cả telemetry transcript/state để heartbeat không đè bằng giá trị cũ.
     Sau duration_ms, PC tự đặt IDLE vào telemetry (daemon tự reset phía Pi).
@@ -236,6 +242,17 @@ def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float
     try:
         _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
         _GLOBAL_EDGE_TELEMETRY["transcript"] = text[:300]
+
+        audio_b64 = None
+        if synthesize_tts and text:
+            try:
+                import base64
+                clean_speech = re.sub(r"[\*#_`]", "", text[:300]).strip()
+                audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(clean_speech, voice_id="vi-VN-HoaiMyNeural")
+                if audio_bytes:
+                    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+            except Exception:
+                pass
 
         def _reset_after_speech() -> None:
             import time as _time
@@ -248,7 +265,14 @@ def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float
 
         _threading.Thread(target=_reset_after_speech, daemon=True).start()
 
-        data: dict[str, Any] = {"action": "speak", "text": text[:600], "state": "SPEAKING"}
+        data: dict[str, Any] = {
+            "action": "speak",
+            "text": text[:600],
+            "state": "SPEAKING",
+            "force_hardware": True,
+        }
+        if audio_b64:
+            data["audio_base64"] = audio_b64
         if duration_ms:
             data["duration_ms"] = int(duration_ms)
         resp = _send_edge_request(
@@ -533,6 +557,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Sprint 8 (a): To-do — danh sách việc cần làm (đọc-only)
         if path == "/api/todos":
             self._handle_api_todos_list()
+            return
+
+        if path == "/api/music/status":
+            self._handle_api_music_status()
             return
 
         # Sprint 9 (A): Workbench overview — tổng hợp thật, fail-honest
@@ -836,6 +864,18 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/edge/release/rollback":
             self._handle_api_edge_release_rollback(body)
+            return
+
+        if path == "/api/music/search":
+            self._handle_api_music_search(body)
+            return
+
+        if path == "/api/music/play":
+            self._handle_api_music_play(body)
+            return
+
+        if path == "/api/music/stop":
+            self._handle_api_music_stop()
             return
 
         self.send_error(404, "Endpoint not found")
@@ -1302,6 +1342,47 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as _rag_exc:
                 doc_rag_info["error"] = str(_rag_exc)[:160]
 
+            # 2.85 YouTube Music detection & Pi 5 streaming dispatch
+            music_info: dict[str, Any] = {"requested": False}
+            try:
+                is_music, song_target = looks_like_music_request(query)
+                if is_music:
+                    music_info["requested"] = True
+                    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+                    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                    if song_target == "STOP":
+                        dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+                        music_info["action"] = "stop"
+                        music_block = "[EVIDENCE ÂM NHẠC: Đã gửi lệnh DỪNG PHÁT NHẠC trên loa Raspberry Pi 5 theo yêu cầu của Anh. Hãy thông báo ngắn gọn, xác nhận đã dừng bài hát.]"
+                        context.system_instructions = context.system_instructions + "\n" + music_block
+                    else:
+                        music_info["action"] = "play"
+                        music_info["song_query"] = song_target
+                        yt_results = search_youtube_music(song_target, max_results=3)
+                        if yt_results:
+                            top_track = yt_results[0]
+                            dispatch_play_music_to_pi5(
+                                video_id=top_track["video_id"],
+                                title=top_track["title"],
+                                url=top_track["url"],
+                                edge_ip=edge_ip,
+                                edge_port=edge_port,
+                            )
+                            music_info["track"] = top_track
+                            music_info["playing"] = True
+                            music_block = (
+                                f"[EVIDENCE ÂM NHẠC YOUTUBE — ĐÃ TÌM THẤY VÀ KÍCH HOẠT PHÁT TRÊN PI 5:\n"
+                                f"- Tên bài hát/video: {top_track['title']}\n"
+                                f"- Kênh: {top_track.get('channel', 'YouTube')}\n"
+                                f"- Thời lượng: {top_track.get('duration', '')}\n"
+                                f"- URL: {top_track['url']}\n"
+                                f"- Trạng thái: Lệnh phát nhạc đã gửi tới loa Raspberry Pi 5 thành công qua Wi-Fi.\n"
+                                f"HÃY BÁO CÁO VUI VẺ, LỊCH SỰ XÁC NHẬN BÀI HÁT ĐANG PHÁT TRÊN LOA PI 5 ĐỂ ANH VÀ CHỊ THƯỞNG THỨC.]"
+                            )
+                            context.system_instructions = context.system_instructions + "\n" + music_block
+            except Exception as _m_err:
+                music_info["error"] = str(_m_err)[:120]
+
             # 3. LLM Generation
             req = LLMRequest(
                 prompt=context.rendered_context,
@@ -1556,6 +1637,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
@@ -1663,6 +1745,47 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+            # 2.85 YouTube Music detection & Pi 5 streaming dispatch (stream path)
+            music_info_stream: dict[str, Any] = {"requested": False}
+            try:
+                is_music, song_target = looks_like_music_request(query)
+                if is_music:
+                    music_info_stream["requested"] = True
+                    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+                    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                    if song_target == "STOP":
+                        dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+                        music_info_stream["action"] = "stop"
+                        music_block = "[EVIDENCE ÂM NHẠC: Đã gửi lệnh DỪNG PHÁT NHẠC trên loa Raspberry Pi 5 theo yêu cầu của Anh. Hãy thông báo ngắn gọn, xác nhận đã dừng bài hát.]"
+                        context.system_instructions = context.system_instructions + "\n" + music_block
+                    else:
+                        music_info_stream["action"] = "play"
+                        music_info_stream["song_query"] = song_target
+                        yt_results = search_youtube_music(song_target, max_results=3)
+                        if yt_results:
+                            top_track = yt_results[0]
+                            dispatch_play_music_to_pi5(
+                                video_id=top_track["video_id"],
+                                title=top_track["title"],
+                                url=top_track["url"],
+                                edge_ip=edge_ip,
+                                edge_port=edge_port,
+                            )
+                            music_info_stream["track"] = top_track
+                            music_info_stream["playing"] = True
+                            music_block = (
+                                f"[EVIDENCE ÂM NHẠC YOUTUBE — ĐÃ TÌM THẤY VÀ KÍCH HOẠT PHÁT TRÊN PI 5:\n"
+                                f"- Tên bài hát/video: {top_track['title']}\n"
+                                f"- Kênh: {top_track.get('channel', 'YouTube')}\n"
+                                f"- Thời lượng: {top_track.get('duration', '')}\n"
+                                f"- URL: {top_track['url']}\n"
+                                f"- Trạng thái: Lệnh phát nhạc đã gửi tới loa Raspberry Pi 5 thành công qua Wi-Fi.\n"
+                                f"HÃY BÁO CÁO VUI VẺ, LỊCH SỰ XÁC NHẬN BÀI HÁT ĐANG PHÁT TRÊN LOA PI 5 ĐỂ ANH VÀ CHỊ THƯỞNG THỨC.]"
+                            )
+                            context.system_instructions = context.system_instructions + "\n" + music_block
+            except Exception as _m_err:
+                music_info_stream["error"] = str(_m_err)[:120]
+
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
             req = LLMRequest(
                 prompt=context.rendered_context,
@@ -1720,6 +1843,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "session_id": session_id,
                 "routing": {"tier": decision.tier, "model": decision.model, "is_fallback": decision.is_fallback},
                 "persistence": persistence_info,
+                "music_playback": music_info_stream.get("track") if music_info_stream.get("playing") else ({"action": "stop", "playing": False} if music_info_stream.get("action") == "stop" else None),
             })
             self.wfile.write(_sse(final_event))
             self.wfile.flush()
@@ -3103,6 +3227,47 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _GLOBAL_EDGE_MONITOR.record_mic_fault(resp["error"])
 
         self._send_json(resp)
+
+    def _handle_api_music_search(self, body: dict) -> None:
+        query = str(body.get("query", "")).strip()
+        limit = int(body.get("limit", 5))
+        if not query:
+            self._send_error_json("Missing search query", 400)
+            return
+        results = search_youtube_music(query, max_results=limit)
+        self._send_json({"success": True, "query": query, "count": len(results), "results": results})
+
+    def _handle_api_music_play(self, body: dict) -> None:
+        video_id = str(body.get("video_id", "")).strip()
+        title = str(body.get("title", "")).strip()
+        url = str(body.get("url", "")).strip()
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        if not url and video_id:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        if not url and not video_id:
+            query = str(body.get("query", "")).strip()
+            if query:
+                results = search_youtube_music(query, max_results=1)
+                if results:
+                    video_id = results[0]["video_id"]
+                    title = results[0]["title"]
+                    url = results[0]["url"]
+        if not url:
+            self._send_error_json("Could not find music to play", 400)
+            return
+        res = dispatch_play_music_to_pi5(video_id=video_id, title=title, url=url, edge_ip=edge_ip, edge_port=edge_port)
+        self._send_json({"success": True, "title": title, "url": url, "video_id": video_id, "pi5_response": res})
+
+    def _handle_api_music_stop(self) -> None:
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        res = dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+        self._send_json({"success": True, "playing": False, "pi5_response": res})
+
+    def _handle_api_music_status(self) -> None:
+        res = _send_edge_request("/api/kiosk/music/status", method="GET")
+        self._send_json({"success": True, "edge_music": res.get("music"), "playing": res.get("playing", False)})
 
     def _handle_api_edge_camera_status(self) -> None:
         """Fetch remote camera status from Pi 5."""
