@@ -1,7 +1,7 @@
 # HƯỚNG DẪN SETUP QUAN AI BRAIN 24/7 — NETCHAT AUTO-RESPONDER
 
 ## 🎯 MỤC TIÊU
-Setup bot **Tony Pham Assistant** hoạt động **24/7** trên NetChat kênh `4phc9b1mx78qjq3grccw89u94a`:
+Setup bot **TONY** hoạt động **24/7** trên NetChat kênh `4phc9b1mx78qjq3grccw89u94a`:
 - ✅ Tự động phản hồi tin nhắn
 - ✅ Focus đúng nội dung câu hỏi
 - ✅ Phản hồi nhanh (~5-10 giây)
@@ -16,7 +16,7 @@ Setup bot **Tony Pham Assistant** hoạt động **24/7** trên NetChat kênh `4
 | **Server QUAN AI BRAIN** | ✅ Running | PID 22704, port 8765 |
 | **Auto-responder** | ✅ Running | PID 3260, monitoring kênh |
 | **Bot NetChat** | ✅ Connected | bot_quanpt1 (edojmne9d7gcxx8axu1mzas3pr) |
-| **Channel** | ✅ Active | Trợ lý Tony Pham (4phc9b1mx78qjq3grccw89u94a) |
+| **Channel** | ✅ Active | TONY (4phc9b1mx78qjq3grccw89u94a) |
 | **NETMIND_EXTERNAL_DATA_ALLOWED** | ✅ Enabled | Set trong `start_server_fixed.py` |
 | **reasoning_effort** | ✅ "low" | GLM-5.3-Flash phản hồi nhanh |
 
@@ -123,7 +123,7 @@ tasklist | findstr netchat_auto_responder
   ```
 
 ### **4. Test NetChat:**
-- Mở NetChat → Kênh `Trợ lý Tony Pham`
+- Mở NetChat → Kênh `TONY`
 - Gửi tin nhắn: "Xin chào em!"
 - **Bot sẽ phản hồi trong ~5-10 giây**
 

@@ -36,11 +36,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentKioskAudio = null;
   let wakeEngine = null;
 
-  // Guard chống phát đôi: lưu hash của audio đã phát gần nhất
-  // Mỗi audio_base64 có độ dài khác nhau, dùng length + 8 ký tự đầu/cuối làm fingerprint
-  let _lastPlayedAudioFingerprint = "";
-  let _lastPlayedAt = 0;  // epoch ms
-
   // Initialize Digital Human Engine (Model F) on Raspberry Pi 5
   try {
     if (typeof DigitalHumanAvatar !== "undefined") {
@@ -265,7 +260,9 @@ document.addEventListener("DOMContentLoaded", () => {
           window.digitalHuman.cancelUtterance();
           window.digitalHuman.setState("IDLE");
         }
-        if (wakeEngine) wakeEngine.notifySpeakingEnd();
+        if (wakeEngine) {
+          wakeEngine.notifySpeakingEnd();
+        }
       };
 
       audio.play().catch(e => {
@@ -274,56 +271,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.warn("Exception playing speech on kiosk:", err);
     }
-  }
-
-  // Sprint 2 barge-in: hàm toàn cục — wake_engine gọi khi mic nghe thấy giọng
-  // người trong lúc TTS đang phát. Dừng audio kiosk + avatar về LISTENING.
-  // Trả về true nếu thực sự có audio bị dừng.
-  window.bargeInStopSpeaking = function () {
-    let stopped = false;
-    if (currentKioskAudio) {
-      try {
-        currentKioskAudio.pause();
-        currentKioskAudio.currentTime = 0;
-        stopped = true;
-      } catch (err) {
-        console.warn("[Kiosk] Barge-in stop error:", err);
-      }
-      currentKioskAudio = null;
-    }
-    if (window.digitalHuman && typeof window.digitalHuman.cancelUtterance === "function") {
-      try { window.digitalHuman.cancelUtterance(); stopped = true; } catch (_) {}
-    }
-    if (stopped) {
-      setAvatarState("LISTENING");
-      if (transcriptEl) transcriptEl.textContent = `"Dạ, em dừng lại nghe Anh ạ."`;
-      if (wakeEngine && wakeEngine.notifySpeakingEnd) wakeEngine.notifySpeakingEnd();
-    }
-    return stopped;
-  };
-
-  // Phát một lần duy nhất — dùng trong vòng lặp poll để chống phát đôi
-  function playSpeechOnce(audioBase64, timeline) {
-    if (!audioBase64) return;
-
-    // Tạo fingerprint gọn: độ dài + 12 ký tự đầu + 12 ký tự cuối
-    const fp = audioBase64.length + "|" + audioBase64.slice(0, 12) + "|" + audioBase64.slice(-12);
-    const now = Date.now();
-
-    // Nếu đã phát âm này trong vòng 500ms gần đây, bỏ qua
-    if (fp === _lastPlayedAudioFingerprint && (now - _lastPlayedAt) < 500) {
-      console.log("[Kiosk] Đã phát audio này rồi, bỏ qua trénh chồng lấn.");
-      return;
-    }
-
-    // Nếu đang phát audio và đó là cùng một audio, bỏ qua
-    if (currentKioskAudio && fp === _lastPlayedAudioFingerprint) {
-      return;
-    }
-
-    _lastPlayedAudioFingerprint = fp;
-    _lastPlayedAt = now;
-    playKioskSpeech(audioBase64, timeline);
   }
 
   // Handle User Voice Query -> Send to PC Executive Core
@@ -473,8 +420,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (data.pending_audio_base64) {
-          // Dùng playSpeechOnce() — chống phát đôi khi daemon và Chromium cùng nhận audio
-          playSpeechOnce(data.pending_audio_base64, data.pending_timeline);
+          playKioskSpeech(data.pending_audio_base64, data.pending_timeline);
         } else if (data.avatar_state && currentAvatarState !== "SPEAKING") {
           setAvatarState(data.avatar_state);
         }

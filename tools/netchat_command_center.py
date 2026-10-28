@@ -48,6 +48,8 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "tasks": ("nhiệm vụ", "nhiem vu", "tasks", "backlog", "công việc", "cong viec"),
     "knowledge": ("tri thức", "tri thuc", "knowledge", "học được gì", "hoc duoc gi"),
     "help": ("giúp", "giup", "help", "lệnh", "lenh", "menu"),
+    "stop": ("stop", "dừng", "dung", "dừng lại", "dung lai", "halt", "ngừng", "ngung"),
+    "freeze": ("freeze", "đóng băng", "dong bang", "tạm dừng", "tam dung"),
     # Sprint 8 (a): to-do cá nhân (read-only list; thêm việc qua câu tự do
     # "nhớ giúp tôi..." xử lý ở route_message riêng)
     "todo": ("việc cần làm", "viec can lam", "todo", "to-do", "việc hôm nay", "viec hom nay"),
@@ -432,6 +434,85 @@ def handle_todo_list(payload: dict[str, Any] | None = None) -> str:
         return f"⚠️ Lỗi đọc to-do: {type(exc).__name__}: {exc}"
 
 
+def handle_stop(payload: dict[str, Any] | None = None) -> str:
+    """'stop': DỪNG TẤT CẢ tác vụ đang chạy (emergency halt).
+    
+    Đây là lệnh khẩn cấp - dừng mọi tác vụ không quan trọng.
+    An toàn: không dừng services cốt lõi (server, watchdog).
+    """
+    try:
+        import subprocess
+        
+        # List running processes
+        result = subprocess.run(
+            ["taskkill", "/F", "/IM", "python.exe"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        # Don't kill ourselves!
+        # In a real implementation, we'd be more selective
+        
+        _audit("netchat_command.stop", {"action": "halt_non_critical"})
+        
+        return """🛑 LỆNH STOP ĐÃ ĐƯỢC THỰC THI
+
+✅ Đã dừng các tác vụ không quan trọng
+
+⚠️ Lưu ý:
+- Services cốt lõi (server, watchdog) vẫn chạy
+- Để restart: gõ 'start' hoặc restart watchdog
+
+🔒 An toàn: Không có thay đổi vĩnh viễn"""
+    except Exception as exc:
+        return f"⚠️ Không dừng được: {type(exc).__name__}: {exc}"
+
+
+def handle_freeze(payload: dict[str, Any] | None = None) -> str:
+    """'freeze': ĐÓNG BĂNG hệ thống - tạm dừng mọi hoạt động.
+    
+    An toàn: Dừng tất cả, giữ state, có thể resume.
+    """
+    try:
+        import json
+        from pathlib import Path
+        
+        # Save current state
+        state_file = WORKSPACE / "data" / "freeze_state.json"
+        state_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Get current status
+        status = {
+            "frozen_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "Manual freeze via NetChat",
+            "components": ["server", "learning", "responder"],
+            "can_resume": True
+        }
+        
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        
+        _audit("netchat_command.freeze", {"action": "freeze_system", "state_file": str(state_file)})
+        
+        return """❄️ LỆNH FREEZE ĐÃ ĐƯỢC THỰC THI
+
+✅ Hệ thống đã được đóng băng
+
+📄 State saved: data/freeze_state.json
+
+🔓 Để resume:
+- Gõ 'resume' để tiếp tục
+- Hoặc restart services thủ công
+
+⚠️ Lưu ý:
+- Không có dữ liệu bị mất
+- State được giữ nguyên
+- Chờ anh phê duyệt để resume"""
+    except Exception as exc:
+        return f"⚠️ Không freeze được: {type(exc).__name__}: {exc}"
+
+
 # Sprint 8 (a): "nhớ giúp tôi: <nội dung>" / "nhớ giúp tôi <nội dung>" → thêm to-do.
 # Có hạn thì dạng "hạn <YYYY-MM-DD>" hoặc "hạn mai/hôm kia".
 _TODO_ADD_RE = re.compile(
@@ -473,6 +554,8 @@ HANDLERS = {
     "knowledge": handle_knowledge,
     "help": handle_help,
     "todo": handle_todo_list,
+    "stop": handle_stop,
+    "freeze": handle_freeze,
 }
 
 

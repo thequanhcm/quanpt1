@@ -121,7 +121,7 @@ tools\start_services.bat
 #### Ví dụ tương tác
 
 **User:** "Trạng thái của em thế nào?"  
-**Bot:** "✅ Hệ thống hoạt động bình thường\n- Server: ONLINE (port 8765)\n- Watchdog: ONLINE\n- Learning: ONLINE\n- Responder: ONLINE\n- Dashboard: ONLINE (port 8766)"
+**Bot:** "✅ Hệ thống hoạt động bình thường\n- Server: ONLINE (port 8765)\n- Watchdog: ONLINE\n- Learning: ONLINE\n- Responder: ONLINE\n- Dashboard: ONLINE (port 8766)\n\nEm là **TONY**, trợ lý số của anh!"
 
 **User:** "Dừng tất cả"  
 **Bot:** "🛑 Đã dừng các tác vụ không quan trọng\nServices cốt lõi vẫn hoạt động"
@@ -398,7 +398,7 @@ Mọi hành động được log vào `logs/audit.log`:
 
 - **Developer:** Phạm Thế Quân
 - **Email:** quanpt1@viettel.com.vn
-- **NetChat:** "Trợ lý Tony Pham"
+- **NetChat:** "TONY" channel
 - **Repository:** https://github.com/thequanhcm/quanpt1
 
 ### Documentation

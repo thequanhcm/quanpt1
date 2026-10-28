@@ -1490,7 +1490,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
                     _v7_ws = _find_workspace_root()
                     _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
-                    if any(s.name == "TASK_STATUS_RECONCILIATION for s in _v7_matches):
+                    if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
                         _v7_result = _v7_chain(query or "", _v7_ws)
                         response_data["progress_check"] = {
                             "chain": _v7_result["chain"],

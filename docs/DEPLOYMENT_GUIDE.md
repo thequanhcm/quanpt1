@@ -273,7 +273,7 @@ curl http://localhost:11434/api/tags
 type logs\responder.log | findstr "Monitoring"
 
 # Send test message via NetChat:
-# Channel: "Trợ lý Tony Pham"
+# Channel: "TONY"
 # Message: "trạng thái"
 # Expected: System status response
 ```
@@ -413,7 +413,7 @@ tools\setup_windows_services.bat
 
 ### Contact
 - **Email:** quanpt1@viettel.com.vn
-- **NetChat:** "Trợ lý Tony Pham" channel
+- **NetChat:** "TONY" channel
 - **Logs:** `logs/` directory
 
 ### Emergency Commands

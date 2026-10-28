@@ -116,6 +116,89 @@ def play_audio_on_hardware_speaker(audio_base64: str) -> bool:
 
 
 _KIOSK_PROC = None
+_MUSIC_PROC = None
+_MUSIC_LOCK = threading.Lock()
+
+
+def stop_music_stream(daemon_state: Any = None) -> bool:
+    """Dừng luồng phát nhạc trên Pi 5 nếu đang phát."""
+    global _MUSIC_PROC
+    with _MUSIC_LOCK:
+        if _MUSIC_PROC is not None:
+            try:
+                _MUSIC_PROC.terminate()
+                _MUSIC_PROC.wait(timeout=1.5)
+            except Exception:
+                try:
+                    _MUSIC_PROC.kill()
+                except Exception:
+                    pass
+            _MUSIC_PROC = None
+
+    if daemon_state is not None:
+        try:
+            with daemon_state.lock:
+                daemon_state.current_music = None
+        except Exception:
+            pass
+    return True
+
+
+def play_music_stream(url: str, title: str = "", video_id: str = "", daemon_state: Any = None) -> bool:
+    """Phát nhạc trực tiếp qua loa vật lý trên Pi 5 (ưu tiên mpv / cvlc / mpg123)."""
+    global _MUSIC_PROC
+    stop_music_stream(daemon_state)
+
+    if daemon_state is not None:
+        try:
+            with daemon_state.lock:
+                daemon_state.current_music = {
+                    "title": title or "Bản nhạc YouTube",
+                    "video_id": video_id,
+                    "url": url,
+                    "playing": True,
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }
+        except Exception:
+            pass
+
+    def _worker() -> None:
+        global _MUSIC_PROC
+        import shutil, subprocess
+        cmd = None
+        if shutil.which("mpv"):
+            cmd = ["mpv", "--no-video", "--really-quiet", url]
+        elif shutil.which("cvlc"):
+            cmd = ["cvlc", "--no-video", "--play-and-exit", "-q", url]
+        elif shutil.which("mpg123") and (url.endswith(".mp3") or "audio" in url):
+            cmd = ["mpg123", "-q", url]
+
+        if cmd:
+            try:
+                with _MUSIC_LOCK:
+                    _MUSIC_PROC = subprocess.Popen(
+                        cmd,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                _MUSIC_PROC.wait()
+            except Exception:
+                pass
+            finally:
+                with _MUSIC_LOCK:
+                    _MUSIC_PROC = None
+                if daemon_state is not None:
+                    try:
+                        with daemon_state.lock:
+                            if daemon_state.current_music and daemon_state.current_music.get("video_id") == video_id:
+                                daemon_state.current_music = None
+                    except Exception:
+                        pass
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return True
+
 
 
 def is_kiosk_running() -> bool:
@@ -223,6 +306,9 @@ class EdgeDaemonState:
         self.last_camera_error: str | None = None
         self.camera_device_name: str = "Sirius USB2.0 Camera (/dev/video0)"
 
+        # YouTube Music & Audio Streaming State
+        self.current_music: dict[str, Any] | None = None
+
     def to_kiosk_dict(self) -> dict[str, Any]:
         with self.lock:
             reload_needed = self.need_ui_reload
@@ -249,6 +335,7 @@ class EdgeDaemonState:
                 "need_ui_reload": reload_needed,
                 "pending_audio_base64": audio_b64,
                 "pending_timeline": timeline_obj,
+                "music": self.current_music,
                 "audio": {
                     "mic_enabled": self.mic_enabled,
                     "mic_muted": self.mic_muted,

@@ -257,7 +257,7 @@ type data\uat_logs\uat_*.json
 
 **Contact:**
 - **Email:** quanpt1@viettel.com.vn
-- **NetChat:** "Trợ lý Tony Pham" channel
+- **NetChat:** "TONY" channel
 
 ---
 

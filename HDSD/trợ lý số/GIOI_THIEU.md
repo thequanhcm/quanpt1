@@ -137,7 +137,7 @@ Mọi hành động được log:
 
 - **Developer:** Phạm Thế Quân
 - **Email:** quanpt1@viettel.com.vn
-- **NetChat:** "Trợ lý Tony Pham"
+- **NetChat:** "TONY"
 - **Docs:** `HDSD/trợ lý số/`
 
 ---
