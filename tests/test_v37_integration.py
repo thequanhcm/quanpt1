@@ -177,6 +177,10 @@ class TestTurnController:
         
         controller.on_interrupt(on_interrupt)
         
+        # Must go through proper state transitions
+        controller.start_listening()
+        controller.start_thinking()
+        controller.start_responding()
         controller.start_speaking()
         assert controller.state == TurnState.SPEAKING
         
@@ -276,14 +280,14 @@ class TestIntegrationE2E:
         # This would test: Audio → VAD → ASR → LLM → TTS → Playback
         # For now, just verify all components exist
         
-        from quan_ai_brain.voice.audio_capture import MicrophoneCapture
+        from quan_ai_brain.voice.audio_capture import AudioCapture
         from quan_ai_brain.voice.vad_processor import VADProcessor
         from quan_ai_brain.voice.asr_interface import ASRConfig
         from quan_ai_brain.voice.tts_interface import TTSConfig
         from quan_ai_brain.voice.barge_in_handler import TurnController
         
         # All imports successful
-        assert MicrophoneCapture is not None
+        assert AudioCapture is not None
         assert VADProcessor is not None
         assert ASRConfig is not None
         assert TTSConfig is not None

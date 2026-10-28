@@ -44,6 +44,9 @@ class QuarantinedKnowledge:
     
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> 'QuarantinedKnowledge':
+        # Remove metadata_json if present (it's stored as JSON string in DB)
+        if 'metadata_json' in data:
+            data = {k: v for k, v in data.items() if k != 'metadata_json'}
         return cls(**data)
 
 
