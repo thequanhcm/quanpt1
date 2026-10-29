@@ -234,8 +234,8 @@ class KnowledgeQueryEngine:
             'file_types': {}
         }
         
+        doc_ids = set()
         if all_metadata['metadatas']:
-            doc_ids = set()
             for meta in all_metadata['metadatas']:
                 doc_ids.add(meta.get('doc_id', ''))
                 stats['total_documents'] += 1
