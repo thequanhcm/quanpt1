@@ -28,6 +28,20 @@ if sys.stdout is None or sys.stderr is None:
     except Exception:
         pass
 
+# (29/10/2026) pythonw: responder KHÔNG còn console cha, nên MỖI lần
+# subprocess.run(python.exe netchat_bot.py read ...) (poll mỗi 5s) sẽ tạo một
+# cửa sổ console riêng → cửa sổ Python nháy liên tục trên màn hình.
+# Patch toàn bộ subprocess.run của process này để không bao giờ tạo cửa sổ
+# (CREATE_NO_WINDOW). Bao trùm cả module import vào cùng process
+# (netchat_command_center, info-gap adapter, file extraction...).
+_orig_subprocess_run = subprocess.run
+
+def _subprocess_run_no_window(*args, **kwargs):
+    kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return _orig_subprocess_run(*args, **kwargs)
+
+subprocess.run = _subprocess_run_no_window
+
 # 24/7 reboot-proof (27/10/2026): watchdog giám sát responder qua "heartbeat"
 # — file log được touch mỗi vòng poll. Không có heartbeat => responder chết/stuck
 # và watchdog (check_netchat_bot) sẽ cảnh báo. Đây là file duy nhất responder ghi.
