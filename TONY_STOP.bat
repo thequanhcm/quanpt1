@@ -1,134 +1,84 @@
 @echo off
 REM ============================================
-REM 🛑 TONY STOP - One-Click System Shutdown
+REM TONY STOP - One-Click System Shutdown
 REM ============================================
-REM Dừng toàn bộ hệ thống QUAN AI BRAIN
-REM Ngắt kết nối hình thể Digital Human
-REM Clean shutdown tất cả services
+REM Dung toan bo services QUAN AI BRAIN (TONY)
+REM KHONG dong den process Python cua ung dung khac
+REM (netMind Desktop, Ollama, ... deu an toan)
 REM ============================================
 
-title 🛑 TONY STOP - Stopping QUAN AI BRAIN
+title TONY STOP - Stopping QUAN AI BRAIN
 
 echo.
 echo ============================================
-echo 🛑 TONY STOP - Stopping QUAN AI BRAIN
+echo  TONY STOP - Stopping QUAN AI BRAIN
 echo ============================================
 echo.
 
 cd /d "E:\AI\QUAN AI BRAIN"
 
 REM Confirmation
-echo ⚠️  This will stop ALL TONY services and disconnect Digital Human.
+echo Luu y: Lenh nay se dung TONY (server, bot NetChat, learning, watchdog).
+echo Ollama va cac ung dung khac KHONG bi anh huong.
 echo.
-set /p confirm="Are you sure? (y/n): "
+set /p confirm="Ban chac chan muon dung? (y/n): "
 if /i not "%confirm%"=="y" (
-    echo ❌ Cancelled.
+    echo [x] Da huy.
     pause
     exit /b 0
 )
 
 echo.
 echo ============================================
-echo Step 1: Stopping Services Gracefully
+echo Step 1: Dung services TONY (co muc tieu)
 echo ============================================
 echo.
 
-REM Stop in reverse order of startup
-echo [1/5] Stopping NetChat Responder...
-taskkill /FI "WINDOWTITLE eq TONY*" /F 2>nul
-echo ✅ Responder stopped
+REM (29/10/2026) FIX quan trong: truoc day taskkill blanket TAT CA python.exe /
+REM pythonw.exe tren may -- lam chet ca netMind Desktop va ung dung Python khac.
+REM Gio chi kill process co file thuc thi nam trong thu muc workspace
+REM (E:\AI\QUAN AI BRAIN\.venv\...) -- chinh xac 4 services cua TONY.
+powershell -NoProfile -Command "Get-Process python,pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*QUAN AI BRAIN*' } | ForEach-Object { Write-Host ('   Stopping PID ' + $_.Id + ' [' + $_.Path + ']'); Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }"
 
-echo [2/5] Stopping Dashboard...
-taskkill /FI "WINDOWTITLE eq TONY*" /F 2>nul
-echo ✅ Dashboard stopped
-
-echo [3/5] Stopping Learning Engine...
-taskkill /FI "WINDOWTITLE eq TONY*" /F 2>nul
-echo ✅ Learning stopped
-
-echo [4/5] Stopping Watchdog...
-taskkill /FI "WINDOWTITLE eq TONY*" /F 2>nul
-echo ✅ Watchdog stopped
-
-echo [5/5] Stopping Core Server...
-taskkill /FI "WINDOWTITLE eq TONY*" /F 2>nul
-echo ✅ Server stopped
-
-echo.
-echo ============================================
-echo Step 2: Force Kill Remaining Processes
-echo ============================================
-echo.
-
-REM Force kill any remaining Python processes (both console and hidden pythonw)
-tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
-if %errorLevel% equ 0 (
-    echo [!]  Force killing remaining Python processes...
-    taskkill /FI "IMAGENAME eq python.exe" /F 2>nul
-    taskkill /FI "IMAGENAME eq pythonw.exe" /F 2>nul
-    timeout /t 2 /nobreak >nul
-    
-    REM Check again
-    tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
-    if %errorLevel% equ 0 (
-        echo ❌ Some processes could not be stopped.
-        echo Manual intervention may be required.
-    ) else (
-        echo ✅ All Python processes terminated.
-    )
-) else (
-    echo ✅ No Python processes running.
-)
-
-echo.
-echo ============================================
-echo Step 3: Disconnecting Digital Human
-echo ============================================
-echo.
-
-REM Close WebSocket connections to Digital Human
-echo 📡 Disconnecting TONY Avatar...
-timeout /t 1 /nobreak >nul
-echo ✅ Digital Human disconnected
-
-echo.
-echo ============================================
-echo Step 4: Verification
-echo ============================================
-echo.
-
-REM Wait for cleanup
 timeout /t 2 /nobreak >nul
 
-REM Check ports
-echo Checking service ports...
-netstat -ano | findstr ":8765 :8766 :17236 :7724" >nul 2>&1
+echo.
+echo ============================================
+echo Step 2: Verification
+echo ============================================
+echo.
+
+REM Check TONY ports released
+netstat -ano | findstr ":8765 " | findstr "LISTENING" >nul 2>&1
 if %errorLevel% equ 0 (
-    echo ⚠️  Some ports still in use.
-    netstat -ano | findstr ":8765 :8766 :17236 :7724"
+    echo [!!] Server 8765 van con chay.
 ) else (
-    echo ✅ All ports released.
+    echo [OK] Server 8765 da dung.
 )
 
-REM Check processes
-tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
+netstat -ano | findstr ":8766 " | findstr "LISTENING" >nul 2>&1
 if %errorLevel% equ 0 (
-    echo ⚠️  Some Python processes still running.
+    echo [!!] Dashboard 8766 van con chay.
 ) else (
-    echo ✅ All processes stopped.
+    echo [OK] Dashboard 8766 da dung.
+)
+
+REM Check TONY python processes gone
+powershell -NoProfile -Command "$left = Get-Process python,pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*QUAN AI BRAIN*' }; if ($left) { Write-Host '[!!] Van con TONY process chua dung:' $left.Id } else { Write-Host '[OK] Toan bo TONY process da dung.' }"
+
+REM Ollama status (thong tin, khong dong)
+netstat -ano | findstr ":11434" | findstr "LISTENING" >nul 2>&1
+if %errorLevel% equ 0 (
+    echo [OK] Ollama van dang chay (khong bi anh huong - dung y).
 )
 
 echo.
 echo ============================================
-echo 🛑 TONY SYSTEM STOPPED
+echo  TONY SYSTEM STOPPED
 echo ============================================
 echo.
-echo ✅ All services terminated
-echo ✅ Digital Human disconnected
-echo ✅ All connections closed
-echo ✅ System is offline
-echo.
-echo To restart: Double-click 🚀 START TONY on Desktop
+echo  Bot NetChat se KHONG tra loi khi he thong dung.
+echo  De khoi dong lai: nhan dup START TONY tren Desktop.
 echo.
 echo ============================================
 echo Press any key to close this window...

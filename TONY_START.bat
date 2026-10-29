@@ -27,13 +27,11 @@ if not exist ".venv\Scripts\python.exe" (
     exit /b 1
 )
 
-REM ---- Stop existing processes first (idempotent) ----
-tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
-if %errorLevel% equ 0 (
-    echo [!] Phat hien process cu. Dung lai truoc khi khoi dong...
-    call TONY_STOP.bat
-    ping -n 4 127.0.0.1 >nul
-)
+REM ---- Stop existing TONY processes first (idempotent, co muc tieu) ----
+REM (29/10/2026) FIX: chi dung TONY services (file .venv trong workspace),
+REM KHONG dong den netMind Desktop / ung dung Python khac. Khong goi
+REM TONY_STOP.bat vi no co prompt confirm -> treo start script.
+powershell -NoProfile -Command "Get-Process python,pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*QUAN AI BRAIN*' } | ForEach-Object { Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }"
 
 REM ---- [1/6] Ollama (embedding BGE-M3) ----
 echo [1/6] Kiem tra / khoi dong Ollama (port 11434)...
