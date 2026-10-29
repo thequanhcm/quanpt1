@@ -1,21 +1,25 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-QUAN AI BRAIN — Sprint 7B: Windows Job Object Kernel Integration & Hard OS Resource Containment (27/10/2026, VERIFIED).
-- **Test Suite Status**: **978 PASSED**, **0 FAILED**, **1 SKIPPED** (Physical Pi 5 hardware offline). Exit Code: 0. Total: 979 test items across 84 test files.
-- **Windows Job Object OS Backend (`src/quan_ai_brain/execution/windows_job_object.py`)**: Implemented `WindowsJobObjectBackend` implementing `ProcessBackendInterface` using standard-library `ctypes` bindings to Windows `kernel32.dll` (`CreateJobObjectW`, `SetInformationJobObject`, `AssignProcessToJobObject`, `QueryInformationJobObject`, `CloseHandle`).
-- **Hard Kernel Resource Quotas**: Configures and enforces OS-level constraints via `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` (memory byte ceiling `JOB_OBJECT_LIMIT_JOB_MEMORY`, CPU user time `JOB_OBJECT_LIMIT_PROCESS_TIME`, active process count `JOB_OBJECT_LIMIT_ACTIVE_PROCESS`, die-on-unhandled-exception, and auto-kill on close `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`).
-- **Accounting Telemetry Engine**: Live empirical querying of `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION` extracting `TotalProcesses`, `ActiveProcesses`, `TotalUserTime` (ms), and `TotalKernelTime` (ms) into `JobExecutionResult`.
-- **Fail-Closed Governance Invariants**:
-  - `allow_live_processes: bool = False` by default: All calls to `spawn_process()` strictly raise `ProductionExecutionProhibitedError` unless explicitly enabled in authorized test fixtures.
-  - R5 Hard-Block: Command screening immediately rejects destructive patterns (`rm -rf`, `format`, `del /s`, `diskpart`, etc.) before OS process creation.
-  - PathGuard Confinement: Validates process working directory (`cwd`) strictly within the workspace root.
-  - Zero Secret Leakage: Process output streams (`stdout`, `stderr`) and metadata dictionaries scrubbed via `redact_value()`.
-- **ContainedExecutionRunner Integration**: Added `execute_contained()` in `src/quan_ai_brain/execution/process_containment.py` providing complete end-to-end governance lifecycle (Emergency state check -> Risk Level R4/R5 check -> Budget validation -> Containment mapping -> Sandboxed dispatch).
-- **Comprehensive Verification Suite (`tests/test_windows_job_object.py`)**: 14/14 tests passing covering OS availability, Win32 handle creation, limit flags, fail-closed refusal, authorized live execution, accounting telemetry, R5 block, PathGuard check, context manager cleanup, and runner integration.
-- **Automated Engineering Report**: Generated and verified at `reports/HANDOFF_LATEST.md` and archived at `reports/HANDOFF_20261027_192018.md`.
+QUAN AI BRAIN — Raspberry Pi 5 Physical Audio, Vietnamese TTS & Zero-Dependency YouTube Music Engine (28/10/2026, VERIFIED).
+- **Edge Pi 5 Status**: Live Raspberry Pi 5 (`192.168.1.21:8768`) paired and ONLINE (`READY`), RTT ~28ms, real HMAC-SHA256 heartbeats every 0.6s.
+- **Physical Audio Hardware**: `Jieli Technology UACDemoV1.0 (USB Audio)` USB speaker & microphone active, audio level -18dB.
+- **YouTube Music Engine (`src/quan_ai_brain/media/youtube_music.py`)**: Zero-dependency Python stdlib search and streaming coordination (`looks_like_music_request`, `search_youtube_music`, `dispatch_play_music_to_pi5`, `dispatch_stop_music_to_pi5`).
+- **Edge Kiosk Daemon Endpoints (`edge_client/client_daemon.py`)**: Added `POST /api/kiosk/music/play`, `POST /api/kiosk/music/stop`, `GET /api/kiosk/music/status`, with multi-engine playback (Chromium Kiosk native iframe / headless Chromium / mpv fallback).
+- **Core Chat Integration (`src/quan_ai_brain/web/server.py`)**: Natural language request interception ("em bật bài hát Tàu Anh Qua Núi cho anh", "vợ anh muốn nghe bài...", "dừng nhạc"), injects YouTube evidence blocks into LLM system context, dispatches playback to Pi 5, returns `music_playback` payload for UI widgets.
+- **Web UI & Kiosk Player (`app.js`, `kiosk.js`)**: Interactive music card with Stop button, persistent Edge-TTS Vietnamese voice status badge (`vi-VN (Hoài My - Edge-TTS)`).
+- **Test Suite Status**: 100% pass on all music & edge tests (`tests/test_youtube_music.py`, `tests/test_edge_client.py`, `tests/test_web_executive_endpoints.py`, `tests/test_v8_vietnamese_conversation.py`).
 
 ## Status as implemented and verified by test suite
+- [x] QUAN AI BRAIN — Raspberry Pi 5 Audio/TTS & YouTube Music Engine (28/10/2026, VERIFIED ON LIVE PI 5):
+  - [x] Zero-dependency YouTube search engine (`src/quan_ai_brain/media/youtube_music.py`).
+  - [x] Vietnamese intent extraction ("bật bài...", "nghe bài...", "muốn nghe...", "dừng nhạc").
+  - [x] Live playback and stop dispatch to Raspberry Pi 5 (`192.168.1.21:8768`).
+  - [x] Edge Daemon music control handlers & Chromium audio pipeline (`edge_client/client_daemon.py`).
+  - [x] Living Grounding Fact 5 confirming Pi 5 physical audio hardware and YouTube music capability (`src/quan_ai_brain/cognition/grounding_facts.py`).
+  - [x] Central Server endpoints `/api/music/search`, `/api/music/play`, `/api/music/stop`, `/api/music/status`.
+  - [x] Web UI music player cards with stop controls (`app.js`).
+  - [x] Dedicated test suite (`tests/test_youtube_music.py`): 4/4 passing.
 - [x] QUAN AI BRAIN — Sprint 7B: Windows Job Object Kernel Integration & Hard Resource Containment (27/10/2026, 978 passed, 0 failed, 1 skipped):
   - [x] `WindowsJobObjectBackend` (`src/quan_ai_brain/execution/windows_job_object.py`): Pure ctypes Win32 Job Object adapter implementing `ProcessBackendInterface`.
   - [x] Win32 Ctypes Layouts: `IO_COUNTERS`, `JOBOBJECT_BASIC_LIMIT_INFORMATION`, `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` (144 bytes), `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION`.

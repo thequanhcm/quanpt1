@@ -1707,10 +1707,20 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             selected_model = decision.model
             self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
 
+            # 1.5 Owner teach detection (V8 parity)
+            teach_note = None
+            try:
+                from quan_ai_brain.cognition.owner_teach import detect_teaching
+                teach = detect_teaching(query)
+                if teach:
+                    teach_note = f"Đã ghi nhận kiến thức dạy từ Anh ({teach.content[:80]})."
+            except Exception:
+                pass
+
             # 2. Memory retrieval & session history.
             with MemoryStore(db_path, workspace=workspace) as store:
                 session_mgr = SessionMemoryManager(store)
-                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=6)
                 retriever = CognitiveRetriever(store)
                 m_query = MemoryQuery(query=query, project_scope=scope, top_k=5, max_chars=4000)
                 retrieval = retriever.retrieve(m_query)
@@ -1722,6 +1732,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     project_scope=scope,
                     conversation_history=recent_history,
                 )
+
+            # 2.5 Living Grounding Facts (V8 parity)
+            try:
+                from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
+                grounding_block = render_grounding_block(collect_grounding_facts(current_model=selected_model))
+                context.system_instructions = grounding_block + "\n\n" + context.system_instructions
+            except Exception:
+                pass
 
             # 2.55 Avatar: THINKING ngay khi nhận câu hỏi (stream path).
             try:
@@ -1742,6 +1760,27 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     _stream_researching = True
                     _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "RESEARCHING"
                     push_avatar_expression("RESEARCHING", transcript="Đang tra cứu thông tin ngoài...")
+            except Exception:
+                pass
+
+            # 2.7 TTNS lookup (V8 parity)
+            try:
+                from quan_ai_brain.tools.ttns_lookup import looks_like_ttns_query, ttns_lookup
+                if looks_like_ttns_query(query):
+                    _ttns = ttns_lookup(query)
+                    if _ttns and _ttns.get("answer"):
+                        context.system_instructions += "\n[EVIDENCE TTNS NỘI BỘ]\n" + _ttns["answer"][:6000]
+            except Exception:
+                pass
+
+            # 2.8 Document RAG evidence (V8 parity)
+            try:
+                from quan_ai_brain.cognition.document_rag import DocumentRAG
+                _rag = DocumentRAG(workspace=str(workspace))
+                if _rag.count_chunks() > 0:
+                    _rr = _rag.retrieve(query)
+                    if _rr.has_evidence:
+                        context.system_instructions += "\n" + _rr.render_evidence_block()
             except Exception:
                 pass
 
@@ -1820,6 +1859,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     return
 
             full_text = OutputGuardrails.sanitize("".join(parts))[0]
+            if teach_note:
+                full_text = (teach_note + "\n\n" + full_text)
             grounding_analysis = OutputGuardrails.analyze_grounding(full_text, context=context)
 
             # 4. Persist the COMPLETE answer only after stream completion.
