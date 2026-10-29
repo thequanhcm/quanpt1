@@ -1,591 +1,437 @@
-"""V39.5 Self-Optimization Engine.
+"""Self-Optimizer - Automatic parameter tuning and optimization.
 
-Implements self-optimization capabilities:
-- Parameter tuning (automatic adjustment based on performance)
-- Strategy adaptation (learning from successful approaches)
-- Knowledge refinement (pruning, updating, prioritizing)
-- Skill prioritization (identifying high-impact skills)
-- Performance optimization (resource allocation, caching)
-- Continuous improvement loop
+Provides:
+- Parameter optimization based on feedback
+- Performance-based tuning
+- A/B testing support
+- Optimization history tracking
 """
+from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple, Set
-from enum import Enum
-from datetime import datetime
-from collections import defaultdict
-import math
-
-
-class OptimizationTarget(Enum):
-    """Optimization targets."""
-    SPEED = "speed"
-    ACCURACY = "accuracy"
-    COST = "cost"
-    RESOURCE_USAGE = "resource_usage"
-    USER_SATISFACTION = "user_satisfaction"
-
-
-class AdaptationStrategy(Enum):
-    """Adaptation strategies."""
-    EXPLORATION = "exploration"
-    EXPLOITATION = "exploitation"
-    BALANCED = "balanced"
+import json
+import sqlite3
+import random
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from typing import Any, Callable
+from pathlib import Path
 
 
 @dataclass
 class ParameterConfig:
     """Parameter configuration."""
-    param_name: str
-    current_value: Any
-    optimal_value: Optional[Any]
-    min_value: Any
-    max_value: Any
-    step_size: Any
-    importance: float  # 0-1
-    last_optimized: Optional[datetime] = None
-    improvement_count: int = 0
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "param_name": self.param_name,
-            "current_value": str(self.current_value),
-            "optimal_value": str(self.optimal_value) if self.optimal_value else None,
-            "importance": round(self.importance, 2),
-            "improvement_count": self.improvement_count
-        }
-
-
-@dataclass
-class SkillProfile:
-    """Skill performance profile."""
-    skill_id: str
     name: str
-    usage_frequency: float
-    success_rate: float
-    avg_performance: float
-    improvement_potential: float
-    priority_score: float
-    last_used: Optional[datetime] = None
-    dependencies: List[str] = field(default_factory=list)
+    value: Any
+    min_value: float | None = None
+    max_value: float | None = None
+    step: float | None = None
+    description: str = ""
+    category: str = "general"
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "skill_id": self.skill_id,
-            "name": self.name,
-            "usage_frequency": round(self.usage_frequency, 2),
-            "success_rate": round(self.success_rate, 2),
-            "priority_score": round(self.priority_score, 2),
-            "improvement_potential": round(self.improvement_potential, 2)
-        }
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> 'ParameterConfig':
+        return cls(**data)
 
 
 @dataclass
-class OptimizationResult:
-    """Optimization result."""
-    optimization_id: str
-    target: OptimizationTarget
-    before_value: float
-    after_value: float
-    improvement_pct: float
-    parameters_changed: List[str]
-    strategy_used: AdaptationStrategy
-    timestamp: datetime
-    confidence: float
+class OptimizationRun:
+    """Optimization run record."""
+    id: str
+    start_time: str
+    end_time: str | None
+    parameters_json: str
+    metric_name: str
+    initial_value: float
+    best_value: float | None = None
+    improvement: float | None = None
+    status: str = 'running'  # running, completed, failed
+    metadata_json: str = '{}'
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "optimization_id": self.optimization_id,
-            "target": self.target.value,
-            "before_value": round(self.before_value, 4),
-            "after_value": round(self.after_value, 4),
-            "improvement_pct": round(self.improvement_pct, 2),
-            "parameters_changed": self.parameters_changed,
-            "strategy_used": self.strategy_used.value,
-            "confidence": round(self.confidence, 2)
-        }
-
-
-@dataclass
-class KnowledgeRefinement:
-    """Knowledge refinement result."""
-    refinement_id: str
-    action: str  # prune, update, merge, prioritize
-    knowledge_id: str
-    reason: str
-    impact_score: float
-    confidence: float
-    timestamp: datetime
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "refinement_id": self.refinement_id,
-            "action": self.action,
-            "knowledge_id": self.knowledge_id,
-            "reason": self.reason,
-            "impact_score": round(self.impact_score, 2),
-            "confidence": round(self.confidence, 2)
-        }
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> 'OptimizationRun':
+        return cls(**data)
 
 
 class SelfOptimizer:
-    """Self-optimization engine."""
+    """Self-optimizing system."""
     
-    def __init__(self):
-        """Initialize self optimizer."""
-        self.optimization_counter = 0
-        self.refinement_counter = 0
-        
-        self.parameters: Dict[str, ParameterConfig] = {}
-        self.skills: Dict[str, SkillProfile] = {}
-        self.optimization_history: List[OptimizationResult] = []
-        self.refinements: List[KnowledgeRefinement] = []
-        
-        self._initialized = True
-        
-        print("✅ Self-Optimization Engine initialized")
-        print(f"   - Parameter tuning: Ready")
-        print(f"   - Strategy adaptation: Ready")
-        print(f"   - Knowledge refinement: Ready")
-        print(f"   - Skill prioritization: Ready")
-        print(f"   - Performance optimization: Ready")
+    def __init__(self, db_path: str = "data/brain.db"):
+        self.db_path = Path(db_path)
+        self._init_schema()
+        self._current_config: dict[str, Any] = {}
+        self._optimization_history: list[OptimizationRun] = []
     
-    def tune_parameters(self,
-                       current_params: Dict[str, Any],
-                       performance_metrics: Dict[str, float],
-                       target: OptimizationTarget = OptimizationTarget.ACCURACY) -> Dict[str, Any]:
-        """Automatically tune parameters based on performance.
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get database connection with row factory."""
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+    
+    def _init_schema(self):
+        """Initialize optimization tables."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Args:
-            current_params: Current parameter values
-            performance_metrics: Current performance metrics
-            target: Optimization target
-            
-        Returns:
-            Optimized parameter values
-        """
-        optimized = current_params.copy()
+        # Parameter configurations
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS parameter_configs (
+                name TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                min_value REAL,
+                max_value REAL,
+                step REAL,
+                description TEXT,
+                category TEXT NOT NULL DEFAULT 'general',
+                updated_at TEXT NOT NULL
+            )
+        """)
         
-        # Initialize parameter configs if needed
-        for param_name, value in current_params.items():
-            if param_name not in self.parameters:
-                self.parameters[param_name] = ParameterConfig(
-                    param_name=param_name,
-                    current_value=value,
-                    optimal_value=None,
-                    min_value=0,
-                    max_value=100,
-                    step_size=1,
-                    importance=0.5
-                )
+        # Optimization runs
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS optimization_runs (
+                id TEXT PRIMARY KEY,
+                start_time TEXT NOT NULL,
+                end_time TEXT,
+                parameters_json TEXT NOT NULL,
+                metric_name TEXT NOT NULL,
+                initial_value REAL NOT NULL,
+                best_value REAL,
+                improvement REAL,
+                status TEXT NOT NULL,
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
         
-        # Analyze which parameters to adjust
-        adjustments = self._calculate_parameter_adjustments(
-            current_params, performance_metrics, target
+        # Optimization results
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS optimization_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT NOT NULL,
+                iteration INTEGER NOT NULL,
+                parameters_json TEXT NOT NULL,
+                metric_value REAL NOT NULL,
+                timestamp TEXT NOT NULL,
+                FOREIGN KEY (run_id) REFERENCES optimization_runs(id)
+            )
+        """)
+        
+        # Indexes
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_results_run 
+            ON optimization_results(run_id)
+        """)
+        
+        conn.commit()
+        conn.close()
+    
+    def register_parameter(self, name: str, value: Any,
+                          min_value: float | None = None,
+                          max_value: float | None = None,
+                          step: float | None = None,
+                          description: str = "",
+                          category: str = "general"):
+        """Register a tunable parameter."""
+        now = datetime.now(timezone.utc).isoformat()
+        
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT OR REPLACE INTO parameter_configs 
+            (name, value, min_value, max_value, step, description, category, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            name,
+            json.dumps(value),
+            min_value,
+            max_value,
+            step,
+            description,
+            category,
+            now
+        ))
+        
+        # Update current config
+        self._current_config[name] = value
+        
+        conn.commit()
+        conn.close()
+    
+    def get_parameter(self, name: str) -> Any:
+        """Get current parameter value."""
+        if name in self._current_config:
+            return self._current_config[name]
+        
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT value FROM parameter_configs WHERE name = ?", (name,))
+        row = cursor.fetchone()
+        
+        conn.close()
+        
+        if row:
+            value = json.loads(row['value'])
+            self._current_config[name] = value
+            return value
+        
+        return None
+    
+    def set_parameter(self, name: str, value: Any):
+        """Set parameter value."""
+        now = datetime.now(timezone.utc).isoformat()
+        
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE parameter_configs SET value = ?, updated_at = ? WHERE name = ?
+        """, (json.dumps(value), now, name))
+        
+        self._current_config[name] = value
+        
+        conn.commit()
+        conn.close()
+    
+    def start_optimization(self, metric_name: str,
+                          parameters: dict[str, Any]) -> str:
+        """Start an optimization run."""
+        import uuid
+        now = datetime.now(timezone.utc).isoformat()
+        run_id = str(uuid.uuid4())
+        
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO optimization_runs 
+            (id, start_time, parameters_json, metric_name, initial_value, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            run_id,
+            now,
+            json.dumps(parameters),
+            metric_name,
+            0.0,  # Will be updated
+            'running'
+        ))
+        
+        conn.commit()
+        conn.close()
+        
+        return run_id
+    
+    def record_iteration(self, run_id: str, iteration: int,
+                        parameters: dict[str, Any], metric_value: float):
+        """Record optimization iteration result."""
+        now = datetime.now(timezone.utc).isoformat()
+        
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        # Insert result
+        cursor.execute("""
+            INSERT INTO optimization_results 
+            (run_id, iteration, parameters_json, metric_value, timestamp)
+            VALUES (?, ?, ?, ?, ?)
+        """, (
+            run_id,
+            iteration,
+            json.dumps(parameters),
+            metric_value,
+            now
+        ))
+        
+        # Update best value
+        cursor.execute("""
+            SELECT MIN(metric_value) as best, MAX(metric_value) as worst
+            FROM optimization_results WHERE run_id = ?
+        """, (run_id,))
+        
+        row = cursor.fetchone()
+        best = row['best']
+        
+        if best is not None:
+            cursor.execute("""
+                UPDATE optimization_runs 
+                SET best_value = ?
+                WHERE id = ?
+            """, (best, run_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def complete_optimization(self, run_id: str, improvement: float):
+        """Complete optimization run."""
+        now = datetime.now(timezone.utc).isoformat()
+        
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            UPDATE optimization_runs 
+            SET end_time = ?, status = ?, improvement = ?
+            WHERE id = ?
+        """, (now, 'completed', improvement, run_id))
+        
+        conn.commit()
+        conn.close()
+    
+    def optimize_parameter(self, name: str, metric_function: Callable[[dict], float],
+                          iterations: int = 10,
+                          direction: str = 'minimize') -> dict[str, Any]:
+        """Optimize a single parameter."""
+        # Get parameter constraints
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM parameter_configs WHERE name = ?
+        """, (name,))
+        
+        row = cursor.fetchone()
+        
+        if not row:
+            raise ValueError(f"Parameter {name} not registered")
+        
+        min_val = row['min_value'] or 0
+        max_val = row['max_value'] or 1
+        step = row['step'] or (max_val - min_val) / 100
+        
+        conn.close()
+        
+        # Start optimization
+        run_id = self.start_optimization(
+            f"{name}_optimization",
+            {name: self.get_parameter(name)}
         )
         
-        # Apply adjustments
-        for param_name, adjustment in adjustments.items():
-            if param_name in optimized:
-                current = optimized[param_name]
-                if isinstance(current, (int, float)):
-                    new_value = current + adjustment
-                    # Clamp to reasonable range
-                    new_value = max(0, min(100, new_value))
-                    optimized[param_name] = new_value
-                    
-                    # Update config
-                    if param_name in self.parameters:
-                        self.parameters[param_name].current_value = new_value
-                        self.parameters[param_name].improvement_count += 1
+        best_value = float('inf') if direction == 'minimize' else float('-inf')
+        best_params = {}
         
-        # Record optimization
-        self._record_optimization(
-            target,
-            performance_metrics,
-            {k: optimized.get(k, v) for k, v in performance_metrics.items()},
-            list(adjustments.keys()),
-            AdaptationStrategy.EXPLOITATION
-        )
-        
-        return optimized
-    
-    def adapt_strategy(self,
-                      context: Dict[str, Any],
-                      available_strategies: List[AdaptationStrategy],
-                      historical_performance: Dict[str, float]) -> AdaptationStrategy:
-        """Adapt strategy based on context and history.
-        
-        Args:
-            context: Current context
-            available_strategies: Available strategies
-            historical_performance: Historical performance by strategy
+        for i in range(iterations):
+            # Generate random parameter value
+            value = random.uniform(min_val, max_val)
+            params = {name: value}
             
-        Returns:
-            Recommended strategy
-        """
-        if not available_strategies:
-            return AdaptationStrategy.BALANCED
-        
-        # Score each strategy
-        strategy_scores = {}
-        
-        for strategy in available_strategies:
-            base_score = historical_performance.get(strategy.value, 0.5)
+            # Evaluate metric
+            metric_value = metric_function(params)
             
-            # Adjust based on context
-            context_factor = self._calculate_context_factor(context, strategy)
+            # Record iteration
+            self.record_iteration(run_id, i, params, metric_value)
             
-            # Exploration-exploitation balance
-            if len(self.optimization_history) < 10:
-                # More exploration early on
-                exploration_bonus = 0.2
+            # Update best
+            if direction == 'minimize':
+                if metric_value < best_value:
+                    best_value = metric_value
+                    best_params = params.copy()
             else:
-                exploration_bonus = 0.0
-            
-            strategy_scores[strategy] = base_score * context_factor + exploration_bonus
+                if metric_value > best_value:
+                    best_value = metric_value
+                    best_params = params.copy()
         
-        # Select best strategy
-        best_strategy = max(strategy_scores, key=strategy_scores.get)
-        
-        return best_strategy
-    
-    def refine_knowledge(self,
-                        knowledge_items: List[Dict[str, Any]],
-                        usage_patterns: Dict[str, int],
-                        quality_scores: Dict[str, float]) -> List[KnowledgeRefinement]:
-        """Refine knowledge base based on usage and quality.
-        
-        Args:
-            knowledge_items: List of knowledge items
-            usage_patterns: Usage frequency by item
-            quality_scores: Quality scores by item
-            
-        Returns:
-            List of refinement actions
-        """
-        refinements = []
-        
-        for item in knowledge_items:
-            item_id = item.get("id", "unknown")
-            usage = usage_patterns.get(item_id, 0)
-            quality = quality_scores.get(item_id, 0.5)
-            
-            # Determine action
-            if usage == 0 and quality < 0.3:
-                action = "prune"
-                reason = "Unused and low quality"
-                impact = 0.7
-            elif usage > 100 and quality < 0.7:
-                action = "update"
-                reason = "High usage but quality needs improvement"
-                impact = 0.9
-            elif usage > 50 and quality > 0.8:
-                action = "prioritize"
-                reason = "High usage and quality - prioritize"
-                impact = 0.8
-            else:
-                action = "review"
-                reason = "Needs manual review"
-                impact = 0.5
-            
-            self.refinement_counter += 1
-            
-            refinement = KnowledgeRefinement(
-                refinement_id=f"REFINE_{self.refinement_counter:04d}",
-                action=action,
-                knowledge_id=item_id,
-                reason=reason,
-                impact_score=impact,
-                confidence=0.8,
-                timestamp=datetime.now()
-            )
-            
-            refinements.append(refinement)
-        
-        # Sort by impact
-        refinements.sort(key=lambda x: x.impact_score, reverse=True)
-        
-        return refinements
-    
-    def prioritize_skills(self,
-                         skill_usage: Dict[str, int],
-                         skill_success_rates: Dict[str, float],
-                         business_impact: Dict[str, float]) -> List[SkillProfile]:
-        """Prioritize skills based on usage, success, and impact.
-        
-        Args:
-            skill_usage: Usage frequency by skill
-            skill_success_rates: Success rate by skill
-            business_impact: Business impact score by skill
-            
-        Returns:
-            List of skill profiles sorted by priority
-        """
-        profiles = []
-        
-        all_skills = set(skill_usage.keys()) | set(skill_success_rates.keys()) | set(business_impact.keys())
-        
-        for skill_id in all_skills:
-            usage = skill_usage.get(skill_id, 0)
-            success = skill_success_rates.get(skill_id, 0.5)
-            impact = business_impact.get(skill_id, 0.5)
-            
-            # Calculate priority score
-            # Weighted combination: usage (30%), success (30%), impact (40%)
-            priority_score = (
-                (min(usage / 100, 1.0) * 0.3) +
-                (success * 0.3) +
-                (impact * 0.4)
-            )
-            
-            # Calculate improvement potential
-            improvement_potential = (1.0 - success) * 0.7 + (1.0 - min(usage / 100, 1.0)) * 0.3
-            
-            profile = SkillProfile(
-                skill_id=skill_id,
-                name=skill_id.replace("_", " ").title(),
-                usage_frequency=min(usage / 100, 1.0),
-                success_rate=success,
-                avg_performance=(success + impact) / 2,
-                improvement_potential=improvement_potential,
-                priority_score=priority_score,
-                last_used=datetime.now() if usage > 0 else None
-            )
-            
-            profiles.append(profile)
-        
-        # Sort by priority
-        profiles.sort(key=lambda x: x.priority_score, reverse=True)
-        
-        # Update internal state
-        for profile in profiles:
-            self.skills[profile.skill_id] = profile
-        
-        return profiles
-    
-    def optimize_performance(self,
-                            current_metrics: Dict[str, float],
-                            target_metrics: Dict[str, float],
-                            constraints: Dict[str, Any]) -> OptimizationResult:
-        """Optimize performance to meet targets.
-        
-        Args:
-            current_metrics: Current performance metrics
-            target_metrics: Target metrics
-            constraints: Optimization constraints
-            
-        Returns:
-            Optimization result
-        """
-        self.optimization_counter += 1
-        
-        # Calculate improvement needed
-        improvements = {}
-        for metric, target in target_metrics.items():
-            current = current_metrics.get(metric, 0)
-            if current > 0:
-                improvements[metric] = (target - current) / current * 100
-        
-        # Estimate overall improvement
-        avg_improvement = sum(improvements.values()) / len(improvements) if improvements else 0
-        
-        # Determine strategy
-        if avg_improvement > 20:
-            strategy = AdaptationStrategy.EXPLORATION
-        elif avg_improvement > 5:
-            strategy = AdaptationStrategy.BALANCED
+        # Calculate improvement
+        current_value = self.get_parameter(name)
+        if isinstance(current_value, (int, float)):
+            improvement = abs(float(current_value) - best_value)
         else:
-            strategy = AdaptationStrategy.EXPLOITATION
+            improvement = 0.0
         
-        # Simulate optimization
-        optimized_metrics = {}
-        for metric, target in target_metrics.items():
-            current = current_metrics.get(metric, 0)
-            # Assume 50% of improvement is achieved
-            optimized_metrics[metric] = current + (target - current) * 0.5
+        # Complete optimization
+        self.complete_optimization(run_id, improvement)
         
-        # Calculate actual improvement
-        before = sum(current_metrics.values()) / len(current_metrics) if current_metrics else 0
-        after = sum(optimized_metrics.values()) / len(optimized_metrics) if optimized_metrics else 0
+        # Update parameter if improved
+        if best_params:
+            self.set_parameter(name, best_params[name])
         
-        improvement_pct = ((after - before) / before * 100) if before > 0 else 0
-        
-        result = OptimizationResult(
-            optimization_id=f"OPT_{self.optimization_counter:04d}",
-            target=OptimizationTarget.ACCURACY,  # Default
-            before_value=before,
-            after_value=after,
-            improvement_pct=improvement_pct,
-            parameters_changed=list(target_metrics.keys()),
-            strategy_used=strategy,
-            timestamp=datetime.now(),
-            confidence=0.75
-        )
-        
-        self.optimization_history.append(result)
-        
-        return result
+        return {
+            'run_id': run_id,
+            'best_value': best_value,
+            'best_params': best_params,
+            'improvement': improvement,
+            'iterations': iterations
+        }
     
-    def get_optimization_recommendations(self,
-                                        focus_area: str = "all") -> List[Dict[str, Any]]:
-        """Get optimization recommendations.
+    def get_optimization_history(self, limit: int = 50) -> list[OptimizationRun]:
+        """Get optimization history."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Args:
-            focus_area: Area to focus on (all, parameters, skills, knowledge)
-            
-        Returns:
-            List of recommendations
-        """
-        recommendations = []
+        cursor.execute("""
+            SELECT * FROM optimization_runs 
+            ORDER BY start_time DESC 
+            LIMIT ?
+        """, (limit,))
         
-        if focus_area in ["all", "parameters"]:
-            # Recommend parameter adjustments
-            for param_name, config in self.parameters.items():
-                if config.improvement_count < 3:
-                    recommendations.append({
-                        "type": "parameter",
-                        "item": param_name,
-                        "action": "tune",
-                        "reason": f"Only optimized {config.improvement_count} times",
-                        "priority": "medium"
-                    })
+        runs = []
+        for row in cursor.fetchall():
+            runs.append(OptimizationRun(
+                id=row['id'],
+                start_time=row['start_time'],
+                end_time=row['end_time'],
+                parameters_json=row['parameters_json'],
+                metric_name=row['metric_name'],
+                initial_value=row['initial_value'],
+                best_value=row['best_value'],
+                improvement=row['improvement'],
+                status=row['status'],
+                metadata_json=row['metadata_json']
+            ))
         
-        if focus_area in ["all", "skills"]:
-            # Recommend skill improvements
-            for skill_id, profile in self.skills.items():
-                if profile.improvement_potential > 0.5:
-                    recommendations.append({
-                        "type": "skill",
-                        "item": skill_id,
-                        "action": "improve",
-                        "reason": f"High improvement potential: {profile.improvement_potential:.2f}",
-                        "priority": "high" if profile.improvement_potential > 0.7 else "medium"
-                    })
-        
-        if focus_area in ["all", "knowledge"]:
-            # Recommend knowledge refinements
-            recent_refinements = self.refinements[-10:]
-            for refinement in recent_refinements:
-                if refinement.action in ["prune", "update"]:
-                    recommendations.append({
-                        "type": "knowledge",
-                        "item": refinement.knowledge_id,
-                        "action": refinement.action,
-                        "reason": refinement.reason,
-                        "priority": "high" if refinement.impact_score > 0.8 else "medium"
-                    })
-        
-        # Sort by priority
-        priority_order = {"high": 0, "medium": 1, "low": 2}
-        recommendations.sort(key=lambda x: priority_order.get(x["priority"], 2))
-        
-        return recommendations
+        conn.close()
+        return runs
     
-    def _calculate_parameter_adjustments(self,
-                                        params: Dict[str, Any],
-                                        metrics: Dict[str, float],
-                                        target: OptimizationTarget) -> Dict[str, float]:
-        """Calculate parameter adjustments needed."""
-        adjustments = {}
+    def get_optimization_results(self, run_id: str) -> list[dict[str, Any]]:
+        """Get results for optimization run."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        # Simple heuristic: adjust parameters that correlate with target metric
-        for param_name in params:
-            # Simulate correlation analysis
-            if target == OptimizationTarget.SPEED:
-                if "timeout" in param_name or "delay" in param_name:
-                    adjustments[param_name] = -2  # Reduce timeout/delay
-                elif "batch" in param_name:
-                    adjustments[param_name] = 5  # Increase batch size
-            elif target == OptimizationTarget.ACCURACY:
-                if "threshold" in param_name:
-                    adjustments[param_name] = 1  # Adjust threshold
-                elif "confidence" in param_name:
-                    adjustments[param_name] = 2  # Increase confidence
-            elif target == OptimizationTarget.COST:
-                if "retry" in param_name:
-                    adjustments[param_name] = -1  # Reduce retries
-                elif "parallel" in param_name:
-                    adjustments[param_name] = -2  # Reduce parallelism
+        cursor.execute("""
+            SELECT * FROM optimization_results 
+            WHERE run_id = ?
+            ORDER BY iteration ASC
+        """, (run_id,))
         
-        return adjustments
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                'iteration': row['iteration'],
+                'parameters': json.loads(row['parameters_json']),
+                'metric_value': row['metric_value'],
+                'timestamp': row['timestamp']
+            })
+        
+        conn.close()
+        return results
     
-    def _calculate_context_factor(self,
-                                 context: Dict[str, Any],
-                                 strategy: AdaptationStrategy) -> float:
-        """Calculate context factor for strategy selection."""
-        factor = 1.0
+    def get_statistics(self) -> dict[str, Any]:
+        """Get optimization statistics."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        # Adjust based on context
-        if context.get("urgency", "low") == "high":
-            if strategy == AdaptationStrategy.EXPLOITATION:
-                factor *= 1.2
-            else:
-                factor *= 0.8
+        stats = {}
         
-        if context.get("complexity", "medium") == "high":
-            if strategy == AdaptationStrategy.EXPLORATION:
-                factor *= 1.1
-            else:
-                factor *= 0.9
+        # Total runs
+        cursor.execute("SELECT COUNT(*) FROM optimization_runs")
+        stats['total_runs'] = cursor.fetchone()[0]
         
-        return factor
-    
-    def _record_optimization(self,
-                            target: OptimizationTarget,
-                            before: Dict[str, float],
-                            after: Dict[str, float],
-                            params_changed: List[str],
-                            strategy: AdaptationStrategy):
-        """Record optimization result."""
-        self.optimization_counter += 1
+        # Completed runs
+        cursor.execute("SELECT COUNT(*) FROM optimization_runs WHERE status = 'completed'")
+        stats['completed_runs'] = cursor.fetchone()[0]
         
-        before_avg = sum(before.values()) / len(before) if before else 0
-        after_avg = sum(after.values()) / len(after) if after else 0
+        # Average improvement
+        cursor.execute("SELECT AVG(improvement) FROM optimization_runs WHERE improvement IS NOT NULL")
+        stats['avg_improvement'] = cursor.fetchone()[0] or 0
         
-        improvement = ((after_avg - before_avg) / before_avg * 100) if before_avg > 0 else 0
+        # Total parameters
+        cursor.execute("SELECT COUNT(*) FROM parameter_configs")
+        stats['total_parameters'] = cursor.fetchone()[0]
         
-        result = OptimizationResult(
-            optimization_id=f"OPT_{self.optimization_counter:04d}",
-            target=target,
-            before_value=before_avg,
-            after_value=after_avg,
-            improvement_pct=improvement,
-            parameters_changed=params_changed,
-            strategy_used=strategy,
-            timestamp=datetime.now(),
-            confidence=0.8
-        )
-        
-        self.optimization_history.append(result)
-
-
-# Convenience functions
-def tune_system_params(params: Dict[str, Any], metrics: Dict[str, float]) -> Dict[str, Any]:
-    """Tune system parameters."""
-    optimizer = SelfOptimizer()
-    return optimizer.tune_parameters(params, metrics)
-
-
-def select_strategy(context: Dict[str, Any], strategies: List[str]) -> str:
-    """Select best strategy."""
-    optimizer = SelfOptimizer()
-    strat_objs = [AdaptationStrategy(s) for s in strategies]
-    result = optimizer.adapt_strategy(context, strat_objs, {})
-    return result.value
-
-
-def refine_knowledge_base(items: List[Dict[str, Any]]) -> List[KnowledgeRefinement]:
-    """Refine knowledge base."""
-    optimizer = SelfOptimizer()
-    return optimizer.refine_knowledge(items, {}, {})
-
-
-def prioritize_skill_set(usage: Dict[str, int], success: Dict[str, float]) -> List[SkillProfile]:
-    """Prioritize skills."""
-    optimizer = SelfOptimizer()
-    return optimizer.prioritize_skills(usage, success, {})
+        conn.close()
+        return stats

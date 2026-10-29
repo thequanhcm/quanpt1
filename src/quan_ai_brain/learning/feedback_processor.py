@@ -1,623 +1,559 @@
-"""V39.5 Feedback Processing Engine.
+"""Feedback Processor - Collect and process user feedback.
 
-Implements feedback processing capabilities:
-- User feedback collection (ratings, comments, corrections)
-- Performance metrics tracking (accuracy, latency, satisfaction)
-- Error analysis (categorization, root cause, patterns)
-- Improvement suggestions (prioritization, impact assessment)
-- Feedback loop closure (action tracking, outcome measurement)
+Provides:
+- Multi-scale feedback collection (1-5 stars, thumbs, text)
+- Feedback categorization
+- Sentiment analysis
+- Feedback-driven improvements
 """
+from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Tuple
+import json
+import sqlite3
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from enum import Enum
-from datetime import datetime
-from collections import defaultdict
-import statistics
+from typing import Any
+from pathlib import Path
 
 
-class FeedbackType(Enum):
-    """Feedback types."""
-    RATING = "rating"
-    COMMENT = "comment"
-    CORRECTION = "correction"
-    SUGGESTION = "suggestion"
-    COMPLAINT = "complaint"
-    PRAISE = "praise"
+class FeedbackType(str, Enum):
+    """Type of feedback."""
+    RATING = 'rating'
+    THUMBS = 'thumbs'
+    TEXT = 'text'
+    COMBINED = 'combined'
 
 
-class Sentiment(Enum):
-    """Sentiment analysis results."""
-    POSITIVE = "positive"
-    NEUTRAL = "neutral"
-    NEGATIVE = "negative"
+class FeedbackCategory(str, Enum):
+    """Category of feedback."""
+    QUALITY = 'quality'
+    ACCURACY = 'accuracy'
+    SPEED = 'speed'
+    USABILITY = 'usability'
+    HELPFULNESS = 'helpfulness'
+    RELEVANCE = 'relevance'
+    COMPLETENESS = 'completeness'
+    OTHER = 'other'
 
 
-class Priority(Enum):
-    """Improvement priority."""
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+class Sentiment(str, Enum):
+    """Sentiment of feedback."""
+    POSITIVE = 'positive'
+    NEUTRAL = 'neutral'
+    NEGATIVE = 'negative'
 
 
 @dataclass
 class Feedback:
-    """User feedback record."""
-    feedback_id: str
-    type: FeedbackType
-    sentiment: Sentiment
-    rating: Optional[float]  # 1-5 scale
-    text: str
-    category: str
-    timestamp: datetime
-    user_id: Optional[str]
-    context: Dict[str, Any]
-    resolved: bool = False
-    resolution_action: Optional[str] = None
+    """Single feedback record."""
+    id: str
+    feedback_type: FeedbackType
+    category: FeedbackCategory
+    created_at: str
+    rating: float | None = None
+    thumbs: int | None = None
+    text: str | None = None
+    sentiment: Sentiment | None = None
+    context_json: str = '{}'
+    entity_type: str | None = None
+    entity_id: str | None = None
+    processed: bool = False
+    metadata_json: str = '{}'
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "feedback_id": self.feedback_id,
-            "type": self.type.value,
-            "sentiment": self.sentiment.value,
-            "rating": self.rating,
-            "category": self.category,
-            "resolved": self.resolved,
-            "timestamp": self.timestamp.isoformat()
-        }
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> 'Feedback':
+        return cls(**data)
 
 
 @dataclass
-class PerformanceMetric:
-    """Performance metric tracking."""
-    metric_id: str
-    name: str
-    value: float
-    unit: str
-    timestamp: datetime
-    context: Dict[str, Any]
-    baseline: Optional[float] = None
-    target: Optional[float] = None
+class FeedbackSummary:
+    """Aggregated feedback summary."""
+    entity_type: str
+    entity_id: str
+    total_feedbacks: int
+    avg_rating: float | None
+    thumbs_distribution: dict[str, int]
+    sentiment_distribution: dict[str, int]
+    category_breakdown: dict[str, int]
+    recent_trend: str  # 'improving', 'stable', 'declining'
     
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "metric_id": self.metric_id,
-            "name": self.name,
-            "value": round(self.value, 4),
-            "unit": self.unit,
-            "baseline": self.baseline,
-            "target": self.target,
-            "timestamp": self.timestamp.isoformat()
-        }
-
-
-@dataclass
-class ErrorAnalysis:
-    """Error analysis result."""
-    error_id: str
-    error_type: str
-    description: str
-    frequency: int
-    severity: float  # 1-10
-    root_cause: str
-    affected_components: List[str]
-    pattern: str
-    first_occurrence: datetime
-    last_occurrence: datetime
-    suggested_fix: str
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "error_id": self.error_id,
-            "error_type": self.error_type,
-            "frequency": self.frequency,
-            "severity": round(self.severity, 2),
-            "root_cause": self.root_cause,
-            "pattern": self.pattern,
-            "suggested_fix": self.suggested_fix
-        }
-
-
-@dataclass
-class ImprovementSuggestion:
-    """Improvement suggestion."""
-    suggestion_id: str
-    title: str
-    description: str
-    category: str
-    priority: Priority
-    impact_score: float  # 0-10
-    effort_score: float  # 0-10
-    roi_score: float  # impact/effort
-    source_feedback_ids: List[str]
-    status: str  # proposed, approved, in_progress, completed
-    implementation_notes: str
-    outcome_measured: bool = False
-    outcome_value: Optional[float] = None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary."""
-        return {
-            "suggestion_id": self.suggestion_id,
-            "title": self.title,
-            "category": self.category,
-            "priority": self.priority.value,
-            "impact_score": round(self.impact_score, 2),
-            "effort_score": round(self.effort_score, 2),
-            "roi_score": round(self.roi_score, 2),
-            "status": self.status,
-            "outcome_measured": self.outcome_measured
-        }
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 class FeedbackProcessor:
-    """Feedback processing engine."""
+    """Process and analyze feedback."""
     
-    def __init__(self):
-        """Initialize feedback processor."""
-        self.feedback_counter = 0
-        self.metric_counter = 0
-        self.error_counter = 0
-        self.suggestion_counter = 0
-        
-        self.feedbacks: List[Feedback] = []
-        self.metrics: List[PerformanceMetric] = []
-        self.errors: List[ErrorAnalysis] = []
-        self.suggestions: List[ImprovementSuggestion] = []
-        
-        self._initialized = True
-        
-        print("✅ Feedback Processing Engine initialized")
-        print(f"   - Feedback collection: Ready")
-        print(f"   - Performance tracking: Ready")
-        print(f"   - Error analysis: Ready")
-        print(f"   - Improvement suggestions: Ready")
+    def __init__(self, db_path: str = "data/brain.db"):
+        self.db_path = Path(db_path)
+        self._init_schema()
     
-    def collect_feedback(self, feedback_type: FeedbackType,
-                        text: str,
-                        rating: Optional[float] = None,
-                        category: str = "general",
-                        user_id: Optional[str] = None,
-                        context: Dict[str, Any] = None) -> Feedback:
-        """Collect user feedback.
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get database connection with row factory."""
+        conn = sqlite3.connect(str(self.db_path))
+        conn.row_factory = sqlite3.Row
+        return conn
+    
+    def _init_schema(self):
+        """Initialize feedback tables."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Args:
-            feedback_type: Type of feedback
-            text: Feedback text
-            rating: Optional rating (1-5)
-            category: Feedback category
-            user_id: User identifier
-            context: Additional context
-            
-        Returns:
-            Feedback object
-        """
-        self.feedback_counter += 1
+        # Feedback table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback (
+                id TEXT PRIMARY KEY,
+                feedback_type TEXT NOT NULL,
+                category TEXT NOT NULL,
+                rating REAL,
+                thumbs INTEGER,
+                text TEXT,
+                sentiment TEXT,
+                context_json TEXT NOT NULL DEFAULT '{}',
+                entity_type TEXT,
+                entity_id TEXT,
+                created_at TEXT NOT NULL,
+                processed INTEGER NOT NULL DEFAULT 0,
+                metadata_json TEXT NOT NULL DEFAULT '{}'
+            )
+        """)
         
-        # Analyze sentiment (simplified)
-        sentiment = self._analyze_sentiment(text)
+        # Feedback aggregations
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS feedback_aggregations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                total_count INTEGER NOT NULL,
+                avg_rating REAL,
+                thumbs_positive INTEGER NOT NULL DEFAULT 0,
+                thumbs_neutral INTEGER NOT NULL DEFAULT 0,
+                thumbs_negative INTEGER NOT NULL DEFAULT 0,
+                sentiment_positive INTEGER NOT NULL DEFAULT 0,
+                sentiment_neutral INTEGER NOT NULL DEFAULT 0,
+                sentiment_negative INTEGER NOT NULL DEFAULT 0,
+                updated_at TEXT NOT NULL,
+                UNIQUE(entity_type, entity_id, category)
+            )
+        """)
+        
+        # Indexes
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_feedback_entity 
+            ON feedback(entity_type, entity_id)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_feedback_category 
+            ON feedback(category)
+        """)
+        
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_feedback_sentiment 
+            ON feedback(sentiment)
+        """)
+        
+        conn.commit()
+        conn.close()
+    
+    def submit_feedback(self, feedback_type: FeedbackType, category: FeedbackCategory,
+                       rating: float | None = None, thumbs: int | None = None,
+                       text: str | None = None, context: dict | None = None,
+                       entity_type: str | None = None, entity_id: str | None = None,
+                       metadata: dict | None = None) -> Feedback:
+        """Submit new feedback."""
+        import uuid
+        now = datetime.now(timezone.utc).isoformat()
+        
+        # Determine sentiment
+        sentiment = self._determine_sentiment(rating, thumbs, text)
         
         feedback = Feedback(
-            feedback_id=f"FB_{self.feedback_counter:04d}",
-            type=feedback_type,
-            sentiment=sentiment,
-            rating=rating,
-            text=text,
+            id=str(uuid.uuid4()),
+            feedback_type=feedback_type,
             category=category,
-            timestamp=datetime.now(),
-            user_id=user_id,
-            context=context or {}
+            rating=rating,
+            thumbs=thumbs,
+            text=text,
+            sentiment=sentiment,
+            context_json=json.dumps(context or {}),
+            entity_type=entity_type,
+            entity_id=entity_id,
+            created_at=now,
+            metadata_json=json.dumps(metadata or {})
         )
         
-        self.feedbacks.append(feedback)
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            INSERT INTO feedback 
+            (id, feedback_type, category, rating, thumbs, text, sentiment,
+             context_json, entity_type, entity_id, created_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            feedback.id,
+            feedback.feedback_type.value,
+            feedback.category.value,
+            feedback.rating,
+            feedback.thumbs,
+            feedback.text,
+            feedback.sentiment.value if feedback.sentiment else None,
+            feedback.context_json,
+            feedback.entity_type,
+            feedback.entity_id,
+            feedback.created_at,
+            feedback.metadata_json
+        ))
+        
+        # Update aggregation
+        self._update_aggregation(cursor, feedback)
+        
+        conn.commit()
+        conn.close()
         
         return feedback
     
-    def track_metric(self, metric_name: str,
-                    value: float,
-                    unit: str = "",
-                    baseline: Optional[float] = None,
-                    target: Optional[float] = None,
-                    context: Dict[str, Any] = None) -> PerformanceMetric:
-        """Track performance metric.
+    def _determine_sentiment(self, rating: float | None, thumbs: int | None,
+                            text: str | None) -> Sentiment | None:
+        """Determine sentiment from feedback."""
+        # Priority: rating > thumbs > text analysis
+        if rating is not None:
+            if rating >= 4:
+                return Sentiment.POSITIVE
+            elif rating <= 2:
+                return Sentiment.NEGATIVE
+            else:
+                return Sentiment.NEUTRAL
         
-        Args:
-            metric_name: Name of metric
-            value: Measured value
-            unit: Unit of measurement
-            baseline: Baseline value for comparison
-            target: Target value
-            context: Additional context
+        if thumbs is not None:
+            if thumbs > 0:
+                return Sentiment.POSITIVE
+            elif thumbs < 0:
+                return Sentiment.NEGATIVE
+            else:
+                return Sentiment.NEUTRAL
+        
+        # Simple text analysis
+        if text:
+            text_lower = text.lower()
+            positive_words = ['good', 'great', 'excellent', 'helpful', 'useful', 'perfect']
+            negative_words = ['bad', 'terrible', 'useless', 'wrong', 'failed', 'error']
             
-        Returns:
-            PerformanceMetric object
-        """
-        self.metric_counter += 1
+            pos_count = sum(1 for word in positive_words if word in text_lower)
+            neg_count = sum(1 for word in negative_words if word in text_lower)
+            
+            if pos_count > neg_count:
+                return Sentiment.POSITIVE
+            elif neg_count > pos_count:
+                return Sentiment.NEGATIVE
+            else:
+                return Sentiment.NEUTRAL
         
-        metric = PerformanceMetric(
-            metric_id=f"METRIC_{self.metric_counter:04d}",
-            name=metric_name,
-            value=value,
-            unit=unit,
-            timestamp=datetime.now(),
-            context=context or {},
-            baseline=baseline,
-            target=target
+        return None
+    
+    def _update_aggregation(self, cursor, feedback: Feedback):
+        """Update feedback aggregation."""
+        if not feedback.entity_type or not feedback.entity_id:
+            return
+        
+        # Get current aggregation
+        cursor.execute("""
+            SELECT * FROM feedback_aggregations 
+            WHERE entity_type = ? AND entity_id = ? AND category = ?
+        """, (feedback.entity_type, feedback.entity_id, feedback.category.value))
+        
+        row = cursor.fetchone()
+        
+        if row:
+            # Update existing
+            new_count = row['total_count'] + 1
+            new_avg = self._calculate_new_avg(
+                row['avg_rating'] or 0,
+                row['total_count'],
+                feedback.rating
+            ) if feedback.rating is not None else row['avg_rating']
+            
+            thumbs_pos = row['thumbs_positive']
+            thumbs_neu = row['thumbs_neutral']
+            thumbs_neg = row['thumbs_negative']
+            
+            if feedback.thumbs is not None:
+                if feedback.thumbs > 0:
+                    thumbs_pos += 1
+                elif feedback.thumbs < 0:
+                    thumbs_neg += 1
+                else:
+                    thumbs_neu += 1
+            
+            sent_pos = row['sentiment_positive']
+            sent_neu = row['sentiment_neutral']
+            sent_neg = row['sentiment_negative']
+            
+            if feedback.sentiment == Sentiment.POSITIVE:
+                sent_pos += 1
+            elif feedback.sentiment == Sentiment.NEUTRAL:
+                sent_neu += 1
+            elif feedback.sentiment == Sentiment.NEGATIVE:
+                sent_neg += 1
+            
+            now = datetime.now(timezone.utc).isoformat()
+            
+            cursor.execute("""
+                UPDATE feedback_aggregations 
+                SET total_count = ?, avg_rating = ?,
+                    thumbs_positive = ?, thumbs_neutral = ?, thumbs_negative = ?,
+                    sentiment_positive = ?, sentiment_neutral = ?, sentiment_negative = ?,
+                    updated_at = ?
+                WHERE entity_type = ? AND entity_id = ? AND category = ?
+            """, (
+                new_count, new_avg,
+                thumbs_pos, thumbs_neu, thumbs_neg,
+                sent_pos, sent_neu, sent_neg,
+                now,
+                feedback.entity_type, feedback.entity_id, feedback.category.value
+            ))
+        else:
+            # Create new
+            thumbs_pos = 1 if feedback.thumbs and feedback.thumbs > 0 else 0
+            thumbs_neu = 1 if feedback.thumbs and feedback.thumbs == 0 else 0
+            thumbs_neg = 1 if feedback.thumbs and feedback.thumbs < 0 else 0
+            
+            sent_pos = 1 if feedback.sentiment == Sentiment.POSITIVE else 0
+            sent_neu = 1 if feedback.sentiment == Sentiment.NEUTRAL else 0
+            sent_neg = 1 if feedback.sentiment == Sentiment.NEGATIVE else 0
+            
+            now = datetime.now(timezone.utc).isoformat()
+            
+            cursor.execute("""
+                INSERT INTO feedback_aggregations 
+                (entity_type, entity_id, category, total_count, avg_rating,
+                 thumbs_positive, thumbs_neutral, thumbs_negative,
+                 sentiment_positive, sentiment_neutral, sentiment_negative,
+                 updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                feedback.entity_type,
+                feedback.entity_id,
+                feedback.category.value,
+                1,
+                feedback.rating,
+                thumbs_pos, thumbs_neu, thumbs_neg,
+                sent_pos, sent_neu, sent_neg,
+                now
+            ))
+    
+    def _calculate_new_avg(self, current_avg: float, current_count: int,
+                          new_value: float | None) -> float | None:
+        """Calculate new average with new value."""
+        if new_value is None:
+            return current_avg
+        
+        return ((current_avg * current_count) + new_value) / (current_count + 1)
+    
+    def get_feedback(self, feedback_id: str) -> Feedback | None:
+        """Get feedback by ID."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM feedback WHERE id = ?", (feedback_id,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
+            return None
+        
+        return Feedback(
+            id=row['id'],
+            feedback_type=FeedbackType(row['feedback_type']),
+            category=FeedbackCategory(row['category']),
+            rating=row['rating'],
+            thumbs=row['thumbs'],
+            text=row['text'],
+            sentiment=Sentiment(row['sentiment']) if row['sentiment'] else None,
+            context_json=row['context_json'],
+            entity_type=row['entity_type'],
+            entity_id=row['entity_id'],
+            created_at=row['created_at'],
+            processed=bool(row['processed']),
+            metadata_json=row['metadata_json']
         )
-        
-        self.metrics.append(metric)
-        
-        return metric
     
-    def analyze_errors(self, error_logs: List[Dict[str, Any]]) -> List[ErrorAnalysis]:
-        """Analyze error logs to identify patterns.
+    def get_feedbacks(self, entity_type: str | None = None,
+                     entity_id: str | None = None,
+                     category: FeedbackCategory | None = None,
+                     limit: int = 100) -> list[Feedback]:
+        """Get feedbacks with filters."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Args:
-            error_logs: List of error log entries
-            
-        Returns:
-            List of ErrorAnalysis objects
-        """
-        if not error_logs:
-            return []
+        query = "SELECT * FROM feedback WHERE 1=1"
+        params = []
         
-        # Group errors by type
-        error_groups = defaultdict(list)
-        for log in error_logs:
-            error_type = log.get("type", "unknown")
-            error_groups[error_type].append(log)
+        if entity_type:
+            query += " AND entity_type = ?"
+            params.append(entity_type)
         
-        analyses = []
+        if entity_id:
+            query += " AND entity_id = ?"
+            params.append(entity_id)
         
-        for error_type, logs in error_groups.items():
-            self.error_counter += 1
-            
-            # Calculate frequency
-            frequency = len(logs)
-            
-            # Estimate severity (simplified)
-            severity = min(10, frequency * 0.5 + 3)
-            
-            # Identify pattern
-            pattern = self._identify_error_pattern(logs)
-            
-            # Determine root cause
-            root_cause = self._determine_root_cause(error_type, logs)
-            
-            # Generate suggested fix
-            suggested_fix = self._generate_fix_suggestion(error_type, root_cause)
-            
-            analysis = ErrorAnalysis(
-                error_id=f"ERR_{self.error_counter:04d}",
-                error_type=error_type,
-                description=f"{frequency} occurrences of {error_type}",
-                frequency=frequency,
-                severity=severity,
-                root_cause=root_cause,
-                affected_components=list(set(log.get("component", "unknown") for log in logs)),
-                pattern=pattern,
-                first_occurrence=min(log.get("timestamp", datetime.now()) for log in logs),
-                last_occurrence=max(log.get("timestamp", datetime.now()) for log in logs),
-                suggested_fix=suggested_fix
-            )
-            
-            analyses.append(analysis)
+        if category:
+            query += " AND category = ?"
+            params.append(category.value)
         
-        # Sort by severity
-        analyses.sort(key=lambda x: x.severity, reverse=True)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
         
-        return analyses
+        cursor.execute(query, params)
+        
+        feedbacks = []
+        for row in cursor.fetchall():
+            feedbacks.append(Feedback(
+                id=row['id'],
+                feedback_type=FeedbackType(row['feedback_type']),
+                category=FeedbackCategory(row['category']),
+                rating=row['rating'],
+                thumbs=row['thumbs'],
+                text=row['text'],
+                sentiment=Sentiment(row['sentiment']) if row['sentiment'] else None,
+                context_json=row['context_json'],
+                entity_type=row['entity_type'],
+                entity_id=row['entity_id'],
+                created_at=row['created_at'],
+                processed=bool(row['processed']),
+                metadata_json=row['metadata_json']
+            ))
+        
+        conn.close()
+        return feedbacks
     
-    def generate_improvements(self,
-                             feedbacks: List[Feedback] = None,
-                             errors: List[ErrorAnalysis] = None,
-                             metrics: List[PerformanceMetric] = None) -> List[ImprovementSuggestion]:
-        """Generate improvement suggestions based on feedback, errors, and metrics.
+    def get_aggregation(self, entity_type: str, entity_id: str,
+                       category: FeedbackCategory) -> FeedbackSummary | None:
+        """Get feedback aggregation for entity."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Args:
-            feedbacks: List of feedback to analyze
-            errors: List of error analyses
-            metrics: List of performance metrics
-            
-        Returns:
-            List of ImprovementSuggestion objects
-        """
-        suggestions = []
+        cursor.execute("""
+            SELECT * FROM feedback_aggregations 
+            WHERE entity_type = ? AND entity_id = ? AND category = ?
+        """, (entity_type, entity_id, category.value))
         
-        # Generate from feedback
-        if feedbacks:
-            feedback_suggestions = self._generate_from_feedback(feedbacks)
-            suggestions.extend(feedback_suggestions)
+        row = cursor.fetchone()
+        conn.close()
         
-        # Generate from errors
-        if errors:
-            error_suggestions = self._generate_from_errors(errors)
-            suggestions.extend(error_suggestions)
+        if not row:
+            return None
         
-        # Generate from metrics
-        if metrics:
-            metric_suggestions = self._generate_from_metrics(metrics)
-            suggestions.extend(metric_suggestions)
+        # Determine trend
+        trend = self._calculate_trend(entity_type, entity_id, category)
         
-        # Calculate ROI scores
-        for suggestion in suggestions:
-            suggestion.roi_score = suggestion.impact_score / max(suggestion.effort_score, 1)
-        
-        # Sort by ROI
-        suggestions.sort(key=lambda x: x.roi_score, reverse=True)
-        
-        return suggestions
+        return FeedbackSummary(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            total_feedbacks=row['total_count'],
+            avg_rating=row['avg_rating'],
+            thumbs_distribution={
+                'positive': row['thumbs_positive'],
+                'neutral': row['thumbs_neutral'],
+                'negative': row['thumbs_negative']
+            },
+            sentiment_distribution={
+                'positive': row['sentiment_positive'],
+                'neutral': row['sentiment_neutral'],
+                'negative': row['sentiment_negative']
+            },
+            category_breakdown={category.value: row['total_count']},
+            recent_trend=trend
+        )
     
-    def get_performance_summary(self,
-                               metric_names: List[str] = None,
-                               time_range: Tuple[datetime, datetime] = None) -> Dict[str, Any]:
-        """Get performance summary.
+    def _calculate_trend(self, entity_type: str, entity_id: str,
+                        category: FeedbackCategory) -> str:
+        """Calculate feedback trend."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Args:
-            metric_names: Specific metrics to include
-            time_range: Time range for analysis
-            
-        Returns:
-            Performance summary dictionary
-        """
-        # Filter metrics
-        metrics = self.metrics
-        if metric_names:
-            metrics = [m for m in metrics if m.name in metric_names]
+        # Get last 10 feedbacks
+        cursor.execute("""
+            SELECT rating, sentiment, created_at FROM feedback
+            WHERE entity_type = ? AND entity_id = ? AND category = ?
+            AND rating IS NOT NULL
+            ORDER BY created_at DESC
+            LIMIT 10
+        """, (entity_type, entity_id, category.value))
         
-        if time_range:
-            start, end = time_range
-            metrics = [m for m in metrics if start <= m.timestamp <= end]
+        rows = cursor.fetchall()
+        conn.close()
         
-        if not metrics:
-            return {"message": "No metrics found"}
+        if len(rows) < 2:
+            return 'stable'
         
-        # Calculate statistics
-        summary = {}
-        metrics_by_name = defaultdict(list)
+        # Compare first half vs second half
+        first_half = rows[len(rows)//2:]
+        second_half = rows[:len(rows)//2]
         
-        for metric in metrics:
-            metrics_by_name[metric.name].append(metric.value)
+        first_avg = sum(r['rating'] for r in first_half if r['rating']) / len(first_half)
+        second_avg = sum(r['rating'] for r in second_half if r['rating']) / len(second_half)
         
-        for name, values in metrics_by_name.items():
-            summary[name] = {
-                "current": values[-1] if values else 0,
-                "average": statistics.mean(values) if values else 0,
-                "min": min(values) if values else 0,
-                "max": max(values) if values else 0,
-                "count": len(values)
-            }
+        diff = second_avg - first_avg
         
-        # Calculate overall trends
-        trends = {}
-        for name, values in metrics_by_name.items():
-            if len(values) >= 2:
-                change = values[-1] - values[0]
-                change_pct = (change / values[0] * 100) if values[0] != 0 else 0
-                trends[name] = {
-                    "direction": "up" if change > 0 else "down" if change < 0 else "stable",
-                    "change": round(change, 2),
-                    "change_pct": round(change_pct, 2)
-                }
-        
-        return {
-            "metrics": summary,
-            "trends": trends,
-            "total_data_points": len(metrics),
-            "time_range": {
-                "start": metrics[0].timestamp.isoformat() if metrics else None,
-                "end": metrics[-1].timestamp.isoformat() if metrics else None
-            }
-        }
+        if diff > 0.5:
+            return 'improving'
+        elif diff < -0.5:
+            return 'declining'
+        else:
+            return 'stable'
     
-    def get_feedback_statistics(self) -> Dict[str, Any]:
-        """Get feedback statistics.
+    def mark_processed(self, feedback_id: str):
+        """Mark feedback as processed."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        Returns:
-            Feedback statistics dictionary
-        """
-        if not self.feedbacks:
-            return {"message": "No feedback collected"}
+        cursor.execute("""
+            UPDATE feedback SET processed = 1 WHERE id = ?
+        """, (feedback_id,))
         
-        # Count by type
-        type_counts = defaultdict(int)
-        for fb in self.feedbacks:
-            type_counts[fb.type.value] += 1
+        conn.commit()
+        conn.close()
+    
+    def get_statistics(self) -> dict[str, Any]:
+        """Get feedback statistics."""
+        conn = self._get_connection()
+        cursor = conn.cursor()
         
-        # Count by sentiment
-        sentiment_counts = defaultdict(int)
-        for fb in self.feedbacks:
-            sentiment_counts[fb.sentiment.value] += 1
+        stats = {}
+        
+        # Total feedbacks
+        cursor.execute("SELECT COUNT(*) FROM feedback")
+        stats['total_feedbacks'] = cursor.fetchone()[0]
+        
+        # By type
+        cursor.execute("""
+            SELECT feedback_type, COUNT(*) FROM feedback GROUP BY feedback_type
+        """)
+        stats['by_type'] = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        # By category
+        cursor.execute("""
+            SELECT category, COUNT(*) FROM feedback GROUP BY category
+        """)
+        stats['by_category'] = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        # By sentiment
+        cursor.execute("""
+            SELECT sentiment, COUNT(*) FROM feedback WHERE sentiment IS NOT NULL GROUP BY sentiment
+        """)
+        stats['by_sentiment'] = {row[0]: row[1] for row in cursor.fetchall()}
         
         # Average rating
-        ratings = [fb.rating for fb in self.feedbacks if fb.rating is not None]
-        avg_rating = statistics.mean(ratings) if ratings else None
+        cursor.execute("SELECT AVG(rating) FROM feedback WHERE rating IS NOT NULL")
+        stats['avg_rating'] = cursor.fetchone()[0] or 0
         
-        # Resolution rate
-        resolved = sum(1 for fb in self.feedbacks if fb.resolved)
-        resolution_rate = (resolved / len(self.feedbacks) * 100) if self.feedbacks else 0
-        
-        return {
-            "total_feedback": len(self.feedbacks),
-            "by_type": dict(type_counts),
-            "by_sentiment": dict(sentiment_counts),
-            "average_rating": round(avg_rating, 2) if avg_rating else None,
-            "resolution_rate": round(resolution_rate, 2),
-            "unresolved_count": len(self.feedbacks) - resolved
-        }
-    
-    def _analyze_sentiment(self, text: str) -> Sentiment:
-        """Analyze sentiment of text (simplified)."""
-        text_lower = text.lower()
-        
-        positive_words = ["good", "great", "excellent", "amazing", "perfect", "love", "happy"]
-        negative_words = ["bad", "terrible", "awful", "horrible", "worst", "hate", "angry"]
-        
-        positive_count = sum(1 for word in positive_words if word in text_lower)
-        negative_count = sum(1 for word in negative_words if word in text_lower)
-        
-        if positive_count > negative_count:
-            return Sentiment.POSITIVE
-        elif negative_count > positive_count:
-            return Sentiment.NEGATIVE
-        else:
-            return Sentiment.NEUTRAL
-    
-    def _identify_error_pattern(self, logs: List[Dict[str, Any]]) -> str:
-        """Identify error pattern from logs."""
-        # Simple pattern detection
-        if len(logs) > 10:
-            return "Frequent recurring error"
-        elif len(logs) > 5:
-            return "Moderate frequency error"
-        else:
-            return "Occasional error"
-    
-    def _determine_root_cause(self, error_type: str, logs: List[Dict[str, Any]]) -> str:
-        """Determine root cause of error."""
-        # Simplified root cause analysis
-        causes = {
-            "timeout": "Network latency or resource contention",
-            "null_pointer": "Missing null checks in code",
-            "validation": "Input validation logic incomplete",
-            "authentication": "Token expiration or invalid credentials",
-            "database": "Connection pool exhaustion or query optimization needed"
-        }
-        
-        return causes.get(error_type.lower(), "Unknown root cause - requires investigation")
-    
-    def _generate_fix_suggestion(self, error_type: str, root_cause: str) -> str:
-        """Generate fix suggestion for error."""
-        fixes = {
-            "timeout": "Implement retry logic with exponential backoff",
-            "null_pointer": "Add comprehensive null checks and optional chaining",
-            "validation": "Enhance input validation with schema validation",
-            "authentication": "Implement token refresh mechanism",
-            "database": "Optimize queries and increase connection pool size"
-        }
-        
-        return fixes.get(error_type.lower(), f"Address: {root_cause}")
-    
-    def _generate_from_feedback(self, feedbacks: List[Feedback]) -> List[ImprovementSuggestion]:
-        """Generate suggestions from feedback."""
-        suggestions = []
-        
-        # Group by category
-        by_category = defaultdict(list)
-        for fb in feedbacks:
-            by_category[fb.category].append(fb)
-        
-        for category, category_feedbacks in by_category.items():
-            self.suggestion_counter += 1
-            
-            # Calculate average rating
-            ratings = [fb.rating for fb in category_feedbacks if fb.rating]
-            avg_rating = statistics.mean(ratings) if ratings else 3.0
-            
-            # Determine priority and impact
-            if avg_rating < 2.5:
-                priority = Priority.HIGH
-                impact = 8.0
-            elif avg_rating < 3.5:
-                priority = Priority.MEDIUM
-                impact = 6.0
-            else:
-                priority = Priority.LOW
-                impact = 4.0
-            
-            suggestion = ImprovementSuggestion(
-                suggestion_id=f"SUGGEST_{self.suggestion_counter:04d}",
-                title=f"Improve {category.title()}",
-                description=f"Based on {len(category_feedbacks)} feedback items",
-                category=category,
-                priority=priority,
-                impact_score=impact,
-                effort_score=5.0,
-                roi_score=impact / 5.0,
-                source_feedback_ids=[fb.feedback_id for fb in category_feedbacks],
-                status="proposed"
-            )
-            
-            suggestions.append(suggestion)
-        
-        return suggestions
-    
-    def _generate_from_errors(self, errors: List[ErrorAnalysis]) -> List[ImprovementSuggestion]:
-        """Generate suggestions from error analyses."""
-        suggestions = []
-        
-        for error in errors:
-            self.suggestion_counter += 1
-            
-            priority = Priority.CRITICAL if error.severity > 7 else Priority.HIGH if error.severity > 5 else Priority.MEDIUM
-            
-            suggestion = ImprovementSuggestion(
-                suggestion_id=f"SUGGEST_{self.suggestion_counter:04d}",
-                title=f"Fix {error.error_type} errors",
-                description=error.suggested_fix,
-                category="reliability",
-                priority=priority,
-                impact_score=error.severity,
-                effort_score=6.0,
-                roi_score=error.severity / 6.0,
-                source_feedback_ids=[error.error_id],
-                status="proposed"
-            )
-            
-            suggestions.append(suggestion)
-        
-        return suggestions
-    
-    def _generate_from_metrics(self, metrics: List[PerformanceMetric]) -> List[ImprovementSuggestion]:
-        """Generate suggestions from performance metrics."""
-        suggestions = []
-        
-        for metric in metrics:
-            if metric.target and metric.value < metric.target:
-                self.suggestion_counter += 1
-                
-                suggestion = ImprovementSuggestion(
-                    suggestion_id=f"SUGGEST_{self.suggestion_counter:04d}",
-                    title=f"Improve {metric.name}",
-                    description=f"Current: {metric.value} {metric.unit}, Target: {metric.target} {metric.unit}",
-                    category="performance",
-                    priority=Priority.MEDIUM,
-                    impact_score=7.0,
-                    effort_score=5.0,
-                    roi_score=1.4,
-                    source_feedback_ids=[metric.metric_id],
-                    status="proposed"
-                )
-                
-                suggestions.append(suggestion)
-        
-        return suggestions
-
-
-# Convenience functions
-def collect_user_feedback(text: str, rating: float = None, category: str = "general") -> Feedback:
-    """Collect user feedback."""
-    processor = FeedbackProcessor()
-    return processor.collect_feedback(FeedbackType.COMMENT, text, rating, category)
-
-
-def track_performance(name: str, value: float, unit: str = "") -> PerformanceMetric:
-    """Track performance metric."""
-    processor = FeedbackProcessor()
-    return processor.track_metric(name, value, unit)
-
-
-def analyze_system_errors(logs: List[Dict[str, Any]]) -> List[ErrorAnalysis]:
-    """Analyze system errors."""
-    processor = FeedbackProcessor()
-    return processor.analyze_errors(logs)
-
-
-def suggest_improvements() -> List[ImprovementSuggestion]:
-    """Suggest improvements."""
-    processor = FeedbackProcessor()
-    return processor.generate_improvements(processor.feedbacks, processor.errors, processor.metrics)
+        conn.close()
+        return stats
