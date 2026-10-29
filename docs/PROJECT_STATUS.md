@@ -11,6 +11,12 @@ QUAN AI BRAIN — Raspberry Pi 5 Physical Audio, Vietnamese TTS & Zero-Dependenc
 - **Test Suite Status**: 100% pass on all music & edge tests (`tests/test_youtube_music.py`, `tests/test_edge_client.py`, `tests/test_web_executive_endpoints.py`, `tests/test_v8_vietnamese_conversation.py`).
 
 ## Status as implemented and verified by test suite
+- [x] QUAN AI BRAIN — DB Browser for SQLite 3.13.1-win64 Integration & Deep Memory Engine (29/10/2026, VERIFIED):
+  - [x] Official DB Browser for SQLite 3.13.1 win64 portable deployed to tools/DBBrowser/.
+  - [x] One-click desktop launcher MO_TRAP_TRI_NHO_SQLITE.bat created for direct visual exploration of data/brain.db.
+  - [x] Deep Memory Schema & Database Integrity verified on data/brain.db (91.4 MB, 2,180 episodes, 3,454 candidate knowledge records, 1,842 semantic memories, 2,269 memories, 150 knowledge units, 210 knowledge relations).
+  - [x] Candidate knowledge quarantine isolation confirmed compliant with AGENTS.md.
+  - [x] Verification test suite (tests/test_sqlite_browser_deep_memory.py): 6/6 PASSED (100%).
 - [x] QUAN AI BRAIN — Raspberry Pi 5 Audio/TTS & YouTube Music Engine (28/10/2026, VERIFIED ON LIVE PI 5):
   - [x] Zero-dependency YouTube search engine (`src/quan_ai_brain/media/youtube_music.py`).
   - [x] Vietnamese intent extraction ("bật bài...", "nghe bài...", "muốn nghe...", "dừng nhạc").

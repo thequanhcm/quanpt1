@@ -5,13 +5,13 @@
 > bảo đảm tính minh bạch, độc lập và khả năng phục hồi phiên làm việc cho ChatGPT.
 
 ## 1. Thông tin phiên làm việc (Session Metadata)
-- **Mã phiên (UTC):** `2026-10-28T16:30:42.082766+00:00`
-- **Thời gian máy chủ:** `2026-10-28 23:30:42` (Local Time)
+- **Mã phiên (UTC):** `2026-10-29T09:23:23.490901+00:00`
+- **Thời gian máy chủ:** `2026-10-29 16:23:23` (Local Time)
 - **Workspace root:** `E:/AI/QUAN AI BRAIN`
-- **Python Runtime:** `3.14.7` (64bit)
+- **Python Runtime:** `3.11.9` (64bit)
 - **Hệ điều hành:** `Windows-10-10.0.19045-SP0`
 - **Phiên bản ứng dụng:** `0.2.0` (Foundation Evolution — Phase A)
-- **Git Branch:** `feature/cognitive-state-integration` | **Commit:** `a192eaa`
+- **Git Branch:** `feature/cognitive-state-integration` | **Commit:** `77e484d`
 - **Trạng thái Working Tree:** Có thay đổi chưa commit
 
 ## 2. Tóm tắt điều hành (Executive Summary)
@@ -21,7 +21,7 @@
   2. Hiện thực `SessionMemoryManager` (`src/quan_ai_brain/cognition/session_memory.py`) trích xuất sự thật người dùng và lưu trữ phiên hội thoại bền vững vào `data/brain.db`.
   3. Cài đặt `OutputGuardrails` (`src/quan_ai_brain/core/guardrails.py`) lọc rò rỉ credential, script tag injection và che giấu đường dẫn tệp nhạy cảm.
   4. Mở rộng `PromptContextBuilder` và API `/api/chat`, `/api/chat/history` trên Web Server phục vụ hội thoại đa lượt liên tục có trí nhớ.
-  5. Kết quả kiểm thử tự động phiên hiện tại: 2525 PASSED, 16 FAILED, 32 SKIPPED (Tổng: 2573 bài test, FAIL (16 test(s) failed)).
+  5. Kết quả kiểm thử tự động phiên hiện tại: 0 PASSED, 0 FAILED, 0 SKIPPED (Tổng: 0 bài test, BLOCKED (exit code 124)).
 - **Các hạng mục đã hoàn thành:**
   - [x] Bộ định tuyến mô hình động `LLMRouter` với phân tầng fast / reasoning và fallback tin cậy.
   - [x] Quản lý bộ nhớ phiên `SessionMemoryManager` và trích xuất tự động danh tính, sở thích, chỉ thị của chủ sở hữu.
@@ -30,7 +30,7 @@
   - [x] Tích hợp lịch sử hội thoại gần nhất `[RECENT CONVERSATION HISTORY]` vào ngữ cảnh suy luận của LLM.
   - [x] Endpoint `GET /api/chat/history` và nâng cấp toàn diện `POST /api/chat` trên `BrainAPIHandler`.
   - [x] 5 bài kiểm thử E2E đầu cuối (`tests/test_end_to_end_chat.py`) xác minh đa lượt đàm thoại và trí nhớ dài hạn.
-  - [x] Kiểm thử tự động: 2525 bài PASS, 32 bài SKIP (Phần cứng Pi 5 offline), 16 bài FAIL (FAIL (16 test(s) failed)).
+  - [x] Kiểm thử tự động: 0 bài PASS, 0 bài SKIP (Phần cứng Pi 5 offline), 0 bài FAIL (BLOCKED (exit code 124)).
 - **Các hạng mục tiếp theo (Sprint 2):**
   - Kết nối TaskPlan vào `DurableTaskRegistry` (`data/tasks.db`) và xây dựng vòng lặp thực thi có kiểm soát an toàn (Inert Sandbox).
 - **Lưu ý kỹ thuật quan trọng cho kỹ sư tiếp theo:**
@@ -41,7 +41,15 @@
 ## 3. Thay đổi mã nguồn (Code Changes & Working Tree)
 - **Git Status:**
 ```text
+M .gitignore
 m Skill/SKILL_BAT_AI
+M docs/PROJECT_STATUS.md
+?? MO_TRAP_TRI_NHO_SQLITE.bat
+?? "kho_tai_lieu/Train AI course/"
+?? "kho_tai_lieu/T\303\240i li\341\273\207u h\341\273\215c t\341\272\255p/"
+?? nul
+?? tests/test_sqlite_browser_deep_memory.py
+?? tools/install_sqlite_browser.py
 ```
 - **Tệp mã nguồn cốt lõi trong Sprint 7A:**
   - `src/quan_ai_brain/execution/process_containment.py`: Hợp đồng `ProcessBackendInterface`, `ProcessContainmentConfig`, `InertProcessBackend`, `ContainedExecutionRunner`.
@@ -68,102 +76,48 @@ m Skill/SKILL_BAT_AI
   - `tests/test_edge_client.py`: 6 bài test xác thực HMAC, nonce anti-replay, kiosk HTTP endpoints, fail-safe disconnect.
 
 ## 4. Kết quả kiểm thử (Test Verification)
-- **Kết luận kiểm thử:** **FAIL (16 test(s) failed)**
-- **Lệnh thực thi:** `C:\Python314\python.exe -m pytest -q tests`
-- **Tổng số bài test:** `2573` | **Passed:** `2525` | **Failed:** `16` | **Skipped:** `32`
-- **Thời gian chạy:** `101.97s`
-- **Exit Code:** `1`
+- **Kết luận kiểm thử:** **BLOCKED (exit code 124)**
+- **Lệnh thực thi:** `E:\AI\QUAN AI BRAIN\.venv\Scripts\python.exe -m pytest -q tests`
+- **Tổng số bài test:** `0` | **Passed:** `0` | **Failed:** `0` | **Skipped:** `0`
+- **Thời gian chạy:** `N/As`
+- **Exit Code:** `124`
 
-- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `2573` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
+- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `0` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
 - **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.
-- **Trạng thái xác minh (`verification_status`):** `FAIL (16 test(s) failed)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
+- **Trạng thái xác minh (`verification_status`):** `BLOCKED (exit code 124)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
 
 ```text
-g.py::TestCacheAdaptiveCapacity::test_force_adjust_shrink
-  E:\AI\QUAN AI BRAIN\src\quan_ai_brain\optimization\intelligent_cache.py:375: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    'timestamp': datetime.utcnow().isoformat(),
-
-tests/test_v26_self_learning.py::TestV26Integration::test_cooldown_gates_improvement_loop_reapply
-  E:\AI\QUAN AI BRAIN\tests\test_v26_self_learning.py:1634: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    t0 = datetime.utcnow()
-
-tests/test_v27_security_modules.py: 44 warnings
-  E:\AI\QUAN AI BRAIN\src\quan_ai_brain\security\audit_logging.py:132: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    ts = timestamp or datetime.utcnow()
-
-tests/test_v27_security_modules.py::TestAuditLogging::test_gdpr_export_contains_all_subject_entries
-  E:\AI\QUAN AI BRAIN\src\quan_ai_brain\security\audit_logging.py:220: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    "exported_at": datetime.utcnow().isoformat(),
-
-tests/test_v27_security_modules.py::TestSecurityMonitoring::test_manual_quarantine_and_release
-  E:\AI\QUAN AI BRAIN\src\quan_ai_brain\security\security_monitoring.py:252: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
-    timestamp=datetime.utcnow(),
-
--- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
-=========================== short test summary info ===========================
-SKIPPED [1] tests\test_v14_ui_integration.py:23: API integration pending - placeholder test
-SKIPPED [1] tests\test_v14_ui_integration.py:27: API integration pending - placeholder test
-SKIPPED [1] tests\test_v14_ui_integration.py:31: API integration pending - placeholder test
-SKIPPED [1] tests\test_v15_knowledge_graph.py:182: Database lock issue - fix pending
-SKIPPED [1] tests\test_v17_causal_counterfactual.py:80: Complex test - fix pending
-SKIPPED [1] tests\test_v17_causal_counterfactual.py:261: Complex test - fix pending
-SKIPPED [1] tests\test_v17_causal_counterfactual.py:317: Complex test - fix pending
-SKIPPED [1] tests\test_v17_causal_counterfactual.py:321: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:92: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:109: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:113: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:121: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:125: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:129: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:133: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:158: Complex test - fix pending
-SKIPPED [1] tests\test_v18_federated_privacy.py:166: Complex test - fix pending
-SKIPPED [1] tests\test_v21_final_integration.py:46: Integration test - manual verification
-SKIPPED [1] tests\test_v21_final_integration.py:50: Integration test - manual verification
-SKIPPED [1] tests\test_v21_final_integration.py:54: Integration test - manual verification
-SKIPPED [1] tests\test_v21_final_integration.py:62: Module dependency issue - manual test
-SKIPPED [1] tests\test_v21_final_integration.py:73: Module dependency issue - manual test
-SKIPPED [1] tests\test_v21_final_integration.py:153: Performance test - manual run only
-SKIPPED [1] tests\test_v21_final_integration.py:157: Performance test - manual run only
-SKIPPED [1] tests\test_v25_analytics.py:109: Complex dataclass test - manual verification
-SKIPPED [1] tests\test_v25_analytics.py:251: Complex integration test - manual verification
-SKIPPED [1] tests\test_v25_analytics.py:372: Complex integration test - manual verification
-SKIPPED [1] tests\test_v25_analytics.py:383: Complex integration test - manual verification
-SKIPPED [1] tests\test_v25_analytics.py:449: Complex integration test - manual verification
-SKIPPED [1] tests\test_v25_analytics.py:460: Complex integration test - manual verification
-SKIPPED [1] tests\test_v36_asr.py:256: Azure Speech SDK not installed
-SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Raspberry Pi 5 th\u1ef1c t\u1ebf ch\u01b0a k\u1ebft n\u1ed1i m\u1ea1ng trong phi\xean ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng n\xe0y. PC Core \u0111\xe3 \u0111\u01b0\u1ee3c x\xe1c th\u1ef1c ho\xe0n ch\u1ec9nh.
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_store_initialization
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_add_single_memory
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_add_batch_memories
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_semantic_search
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_search_with_filters
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_search_user_provided
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_get_stats
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_delete_chunk
-ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_export_import
-ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_tier_to_long_term
-ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_tier_to_verified
-ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_retrieve_with_tiering
-ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_retrieve_all_tiers
-ERROR tests/test_v37_2_vector_memory.py::TestIntegration::test_full_ingestion_pipeline
-FAILED tests/test_v11_temporal_memory.py::test_find_duplicates_similar - asse...
-FAILED tests/test_v11_temporal_memory.py::test_summarize_group - ValueError: ...
-FAILED tests/test_v11_temporal_memory.py::test_merge_duplicates_combined - Ty...
-FAILED tests/test_v11_temporal_memory.py::test_consolidate_memory - assert 0 ...
-FAILED tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_search_user_provided
-FAILED tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_get_stats
-FAILED tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_export_import
-FAILED tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_retrieve_all_tiers
-FAILED tests/test_v37_2_vector_memory.py::TestIntegration::test_full_ingestion_pipeline
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupBMultiTurn::test_stream_history_depth_is_6
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupBMultiTurn::test_chat_history_depth_also_raised_for_parity
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupCWorkParity::test_evidence_layers_present_in_stream[detect_teaching]
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupCWorkParity::test_evidence_layers_present_in_stream[collect_grounding_facts]
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupCWorkParity::test_evidence_layers_present_in_stream[looks_like_ttns_query]
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupCWorkParity::test_evidence_layers_present_in_stream[DocumentRAG]
-FAILED tests/test_v8_vietnamese_conversation.py::TestGroupCWorkParity::test_teach_note_wired_in_stream
-16 failed, 2525 passed, 32 skipped, 764 warnings, 14 errors in 101.97s (0:01:41)
+TEST TIMEOUT sau 180 giây. Output: ........................................................................ [  2%]
+........................................................................ [  5%]
+........................................................................ [  8%]
+........................................................................ [ 10%]
+....................[16:21:26] 127.0.0.1 - "POST /api/chat HTTP/1.1" 200 -
+[16:21:26] 127.0.0.1 - "POST /api/chat HTTP/1.1" 500 -
+F................................................... [ 13%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 21%]
+.....F.................................................................. [ 24%]
+........................................................................ [ 26%]
+...........F.F.F...F.............................................sss.... [ 29%]
+......................s...................................s...........s. [ 32%]
+..ss....s.ssssss.ss..................................................... [ 34%]
+.ssss.s.....ss.......................................................... [ 37%]
+........................................................................ [ 40%]
+........................................................................ [ 42%]
+.................................................................s...... [ 45%]
+..s........s.s....s.s................................................... [ 48%]
+........................................................................ [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 56%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 72%]
+.................................................s...................... [ 75%]
+...........................................E.E.E.E.EFEFE.E
 ```
 
 ## 5. Danh mục module & Trạng thái hiện tại
@@ -237,7 +191,7 @@ FAILED tests/test_v8_vietnamese_conversation.py::TestGroupCWorkParity::test_teac
 - **Bảo vệ bí mật:** Tự động che giấu token, mật khẩu, api_key trước khi ghi vào log hoặc CSDL.
 
 ## 8. Danh mục tài liệu ngữ cảnh an toàn
-- `docs/PROJECT_STATUS.md` (81951 bytes) â *QUAN AI BRAIN — Project Status*
+- `docs/PROJECT_STATUS.md` (82109 bytes) â *QUAN AI BRAIN — Project Status*
 - `docs/SYSTEM_BASELINE.md` (8796 bytes) â *SYSTEM BASELINE: QUAN AI BRAIN*
 - `docs/ARCHITECTURE_GAP_ANALYSIS.md` (11037 bytes) â *ARCHITECTURE GAP ANALYSIS: QUAN AI BRAIN*
 - `docs/NEXT_STEPS.md` (8247 bytes) â *NEXT STEPS ROADMAP: QUAN AI BRAIN*
@@ -271,11 +225,11 @@ WORKSPACE: E:\AI\QUAN AI BRAIN
 CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object
 PYTHON_VERSION: 3.11.9 x64
 TEST_SUMMARY:
-  verdict: FAIL (16 test(s) failed)
-  total_tests: 2573
-  passed: 2525
-  failed: 16
-  skipped: 32
+  verdict: BLOCKED (exit code 124)
+  total_tests: 0
+  passed: 0
+  failed: 0
+  skipped: 0
 CORE_CAPABILITIES_IMPLEMENTED:
   - Self-Learning & Self-Upgrade Engine V1 (src/quan_ai_brain/learning)
   - Learning Observer (observe_task extracting LearningGap on failure/uncertainty)
@@ -336,5 +290,5 @@ PROTECTED_EXTERNAL_PROJECTS:
   - E:\AI\battery-ai-\BATTERY_AI_V4 (Battery Intelligence Brain)
   - E:\AI\BOT (Active production bots)
 INSTRUCTION_FOR_NEXT_SESSION:
-  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (2573 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
+  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (0 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
 ```
