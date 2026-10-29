@@ -60,15 +60,16 @@ echo Step 2: Force Kill Remaining Processes
 echo ============================================
 echo.
 
-REM Force kill any remaining Python processes
-tasklist | findstr "python.exe" >nul 2>&1
+REM Force kill any remaining Python processes (both console and hidden pythonw)
+tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
 if %errorLevel% equ 0 (
-    echo ⚠️  Force killing remaining Python processes...
+    echo [!]  Force killing remaining Python processes...
     taskkill /FI "IMAGENAME eq python.exe" /F 2>nul
+    taskkill /FI "IMAGENAME eq pythonw.exe" /F 2>nul
     timeout /t 2 /nobreak >nul
     
     REM Check again
-    tasklist | findstr "python.exe" >nul 2>&1
+    tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
     if %errorLevel% equ 0 (
         echo ❌ Some processes could not be stopped.
         echo Manual intervention may be required.
@@ -110,7 +111,7 @@ if %errorLevel% equ 0 (
 )
 
 REM Check processes
-tasklist | findstr "python.exe" >nul 2>&1
+tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
 if %errorLevel% equ 0 (
     echo ⚠️  Some Python processes still running.
 ) else (

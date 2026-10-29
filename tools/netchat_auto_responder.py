@@ -16,6 +16,18 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+# (29/10/2026) pythonw windowless mode: sys.stdout/sys.stderr là None khi chạy
+# dưới pythonw.exe — mọi print() sẽ raise AttributeError và giết service im lặng.
+# Redirect toàn bộ output ra log file.
+if sys.stdout is None or sys.stderr is None:
+    _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        sys.stdout = open(_LOG_DIR / "netchat_auto_responder_stdout.log", "a", buffering=1, encoding="utf-8", errors="replace")
+        sys.stderr = sys.stdout
+    except Exception:
+        pass
+
 # 24/7 reboot-proof (27/10/2026): watchdog giám sát responder qua "heartbeat"
 # — file log được touch mỗi vòng poll. Không có heartbeat => responder chết/stuck
 # và watchdog (check_netchat_bot) sẽ cảnh báo. Đây là file duy nhất responder ghi.
@@ -553,26 +565,31 @@ def main():
 
                 if first_poll:
                     now_ms = time.time() * 1000
+                    # (29/10/2026) FIX bug catch-up: phải lọc fresh (kể cả loại
+                    # tin đã trả lời ở lần chạy trước) TRƯỚC khi mark-all-seen.
+                    # Code cũ mark TẤT CẢ seen trước → 100% tin mới bị loại ở
+                    # bước seen-filter sau đó → catch-up sau restart KHÔNG BAO GIỜ
+                    # trả lời tin nào (sự cố 29/10: 3 tin "Chào em" bị bỏ qua).
                     fresh = [
                         m for m in messages
                         if m.get("user_id") != BOT_USER_ID
                         and now_ms - m.get("create_at", 0) <= catchup_window_ms
+                        and m.get("id") not in seen_ids
                     ]
                     for m in messages:
                         seen_ids.add(m.get("id"))
                     first_poll = False
+                    # trùng nội dung trong catch-up (vd "Chào em" x3): trả lời
+                    # 1 tin MỚI NHẤT duy nhất; tin không có text (file) không dedupe
+                    dedup: dict[str, dict] = {}
+                    for m in fresh:
+                        _key = (m.get("message") or "").strip() or m.get("id", "")
+                        dedup[_key] = m
+                    fresh = list(dedup.values())
                     # answer at most the 5 newest fresh messages after restart
                     fresh = sorted(fresh, key=lambda x: x.get("create_at", 0))[-5:]
                     if fresh:
-                        # (27/10/2026) KHÔNG discard khỏi seen_ids nữa: tin đã
-                        # trả lời ở lần chạy trước (state file) phải ở lại seen
-                        # → restart không trả lời trùng. Chỉ tin CHƯA hề thấy
-                        # mới được trả lời.
-                        fresh = [m for m in fresh if m.get("id") not in seen_ids]
-                        if fresh:
-                            print(f"[STARTUP] {len(fresh)} tin nhắn mới trong {CATCHUP_WINDOW_MIN} phút qua — sẽ trả lời.")
-                        else:
-                            print("[STARTUP] Không có tin mới nào cần trả lời (đã trả lời hết ở lần chạy trước).")
+                        print(f"[STARTUP] {len(fresh)} tin nhắn mới trong {CATCHUP_WINDOW_MIN} phút qua — sẽ trả lời.")
                     else:
                         print("[STARTUP] Không có tin mới nào cần trả lời.")
                 else:
@@ -580,6 +597,14 @@ def main():
                         m for m in messages
                         if m.get("id") not in seen_ids and m.get("user_id") != BOT_USER_ID
                     ]
+                    # (29/10/2026) trùng nội dung trong cùng 1 vòng poll → trả
+                    # lời 1 lần (tin mới nhất); tin file (không text) giữ nguyên
+                    if len(fresh) > 1:
+                        _dedup: dict[str, dict] = {}
+                        for m in fresh:
+                            _key = (m.get("message") or "").strip() or m.get("id", "")
+                            _dedup[_key] = m
+                        fresh = sorted(_dedup.values(), key=lambda x: x.get("create_at", 0))
 
                 for msg in fresh:
                     msg_id = msg.get("id")

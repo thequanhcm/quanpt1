@@ -7,8 +7,20 @@ Run each in its own thread and block forever. Use start_server_fixed.py if
 only the 8765 dashboard is needed.
 """
 import os
+import sys
 import threading
 import time
+
+# (29/10/2026) pythonw windowless mode: sys.stdout là None dưới pythonw.exe —
+# print() sẽ crash. Redirect ra log file.
+if sys.stdout is None or sys.stderr is None:
+    _LOG_DIR = __import__("pathlib").Path(__file__).resolve().parent.parent / "logs"
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        sys.stdout = open(_LOG_DIR / "dual_servers_stdout.log", "a", buffering=1, encoding="utf-8", errors="replace")
+        sys.stderr = sys.stdout
+    except Exception:
+        pass
 
 # Set env var BEFORE importing server
 os.environ["NETMIND_EXTERNAL_DATA_ALLOWED"] = "true"

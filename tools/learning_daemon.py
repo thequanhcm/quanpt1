@@ -30,6 +30,17 @@ import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+# (29/10/2026) pythonw windowless mode: sys.stdout là None dưới pythonw.exe —
+# print() sẽ crash service im lặng. Redirect ra log file.
+if sys.stdout is None or sys.stderr is None:
+    _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        sys.stdout = open(_LOG_DIR / "learning_daemon_stdout.log", "a", buffering=1, encoding="utf-8", errors="replace")
+        sys.stderr = sys.stdout
+    except Exception:
+        pass
 from typing import Any
 
 sys.path.insert(0, "src")

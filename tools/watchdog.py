@@ -226,6 +226,7 @@ def start_daemon(script_name: str, window_title: str):
             stdout=out_handle,
             stderr=subprocess.STDOUT,
             text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         _daemon_log_handles.append(out_handle)
         logger.info(f"Daemon {script_name} started (PID: {process.pid})")
@@ -291,6 +292,7 @@ def start_server() -> Optional[subprocess.Popen]:
             stdout=out_handle,
             stderr=subprocess.STDOUT,
             text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         _server_log_handles.append(out_handle)  # closed on stop_server
         logger.info(f"Servers started (PID: {process.pid})")

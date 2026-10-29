@@ -28,7 +28,7 @@ if not exist ".venv\Scripts\python.exe" (
 )
 
 REM ---- Stop existing processes first (idempotent) ----
-tasklist | findstr /I "python.exe ollama.exe" >nul 2>&1
+tasklist | findstr /I "python.exe pythonw.exe" >nul 2>&1
 if %errorLevel% equ 0 (
     echo [!] Phat hien process cu. Dung lai truoc khi khoi dong...
     call TONY_STOP.bat
@@ -46,26 +46,26 @@ echo     (chi tiet: logs\khoi_dong_ollama.log)
 
 REM ---- [2/6] Dual Web Servers 8765 + 8766 ----
 echo [2/6] Khoi dong Dual Servers (8765 UI + 8766 Dashboard)...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "start_dual_servers" >nul
-if errorlevel 1 start "TONY - DualServers" /MIN ".venv\Scripts\python.exe" start_dual_servers.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "start_dual_servers" >nul
+if errorlevel 1 start "TONY - DualServers" /MIN ".venv\Scripts\pythonw.exe" start_dual_servers.py
 ping -n 6 127.0.0.1 >nul
 
 REM ---- [3/6] NetChat Auto-Responder (bot TONY) ----
 echo [3/6] Khoi dong NetChat Auto-Responder (bot_quanpt1)...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "netchat_auto_responder" >nul
-if errorlevel 1 start "TONY - Responder" /MIN ".venv\Scripts\python.exe" tools\netchat_auto_responder.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "netchat_auto_responder" >nul
+if errorlevel 1 start "TONY - Responder" /MIN ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [4/6] Learning Daemon (tu hoc moi 5 phut) ----
 echo [4/6] Khoi dong Learning Daemon...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "learning_daemon" >nul
-if errorlevel 1 start "TONY - Learning" /MIN ".venv\Scripts\python.exe" tools\learning_daemon.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "learning_daemon" >nul
+if errorlevel 1 start "TONY - Learning" /MIN ".venv\Scripts\pythonw.exe" tools\learning_daemon.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [5/6] Watchdog (tu restart, gioi han 5/gio) ----
 echo [5/6] Khoi dong Watchdog...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "tools\watchdog" >nul
-if errorlevel 1 start "TONY - Watchdog" /MIN ".venv\Scripts\python.exe" tools\watchdog.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "tools\watchdog" >nul
+if errorlevel 1 start "TONY - Watchdog" /MIN ".venv\Scripts\pythonw.exe" tools\watchdog.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [6/6] Health check ----

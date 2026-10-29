@@ -31,26 +31,26 @@ REM ---- [1/5] Dual Web Servers ----
 echo [1/5] Khoi dong Dual Servers (8765 + 8766)...
 REM 28/10/2026: guard chong khoi dong trung — tim theo command-line python
 REM (dung ca window 'start' lan tien trinh tay), idempotent tuyet doi.
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "start_dual_servers" >nul
-if errorlevel 1 start "QAB-DualServers" /MIN ".venv\Scripts\python.exe" start_dual_servers.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "start_dual_servers" >nul
+if errorlevel 1 start "QAB-DualServers" /MIN ".venv\Scripts\pythonw.exe" start_dual_servers.py
 ping -n 9 127.0.0.1 >nul
 
 REM ---- [2/5] NetChat Auto-Responder ----
 echo [2/5] Khoi dong NetChat Auto-Responder (bot_quanpt1)...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "netchat_auto_responder" >nul
-if errorlevel 1 start "QAB-NetChatBot" /MIN ".venv\Scripts\python.exe" tools\netchat_auto_responder.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "netchat_auto_responder" >nul
+if errorlevel 1 start "QAB-NetChatBot" /MIN ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
 ping -n 4 127.0.0.1 >nul
 
 REM ---- [3/5] Learning Daemon ----
 echo [3/5] Khoi dong Learning Daemon (tu hoc moi 5 phut)...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "learning_daemon" >nul
-if errorlevel 1 start "QAB-Learning" /MIN ".venv\Scripts\python.exe" tools\learning_daemon.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "learning_daemon" >nul
+if errorlevel 1 start "QAB-Learning" /MIN ".venv\Scripts\pythonw.exe" tools\learning_daemon.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [4/5] Watchdog ----
 echo [4/5] Khoi dong Watchdog (tu restart, cap 5/gio)...
-wmic process where "name='python.exe'" get commandline 2>nul | find /I "tools\watchdog" >nul
-if errorlevel 1 start "QAB-Watchdog" /MIN ".venv\Scripts\python.exe" tools\watchdog.py
+wmic process where "name='python.exe' or name='pythonw.exe'" get commandline 2>nul | find /I "tools\watchdog" >nul
+if errorlevel 1 start "QAB-Watchdog" /MIN ".venv\Scripts\pythonw.exe" tools\watchdog.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [5/5] Backup 2AM (QUAN_AI_BRAIN_BACKUP_2AM) + Report 8AM (Task Scheduler, idempotent) ----
