@@ -24,10 +24,19 @@ from typing import Optional
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
+# Add project root to path (handle both module and script execution)
+if __name__ == "__main__":
+    project_root = Path(__file__).resolve().parent.parent.parent
+else:
+    project_root = Path(__file__).parent.parent.parent
+
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
+
+# Ensure src directory is in path
+src_dir = project_root / "src"
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
 
 from quan_ai_brain.llm.llm_service import LLMService
 from quan_ai_brain.memory.memory_service import MemoryService
