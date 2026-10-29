@@ -248,6 +248,46 @@ def read_channel_messages(count=10):
         print(f"Error reading messages: {e}")
     return []
 
+def send_greeting_message():
+    """Send welcome message when system starts or restarts."""
+    greeting = f"""👋 **XIN CHÀO ANH QUANPT1!**
+
+Em là **TONY** - Trợ lý số thông minh của anh!
+
+**📊 Hệ thống đã khởi động thành công:**
+✅ Server QUAN AI BRAIN đang chạy
+✅ Watchdog giám sát hoạt động
+✅ Learning engine sẵn sàng
+✅ NetChat auto-responder online
+✅ Dashboard phòng điều hành: http://127.0.0.1:8766/
+
+**🧠 Trí nhớ:**
+• 150+ kiến thức đã được embedding
+• 2127 episodes trong brain.db
+• 3-tier memory: Short-term → Long-term → Verified
+
+**🎯 Sẵn sàng hỗ trợ:**
+• Tra cứu thông tin
+• Quản lý công việc
+• Phân tích dữ liệu
+• Tự động hóa tác vụ
+• Kết nối với Digital Human Avatar
+
+Anh cần em giúp gì hôm nay ạ? 🚀"""
+
+    print("\n" + "="*60)
+    print("👋 Sending greeting message to NetChat...")
+    print("="*60)
+    
+    result = send_message(greeting)
+    if "error" in result:
+        print(f"   ❌ Error sending greeting: {result['error']}")
+        return False
+    else:
+        print("   ✅ Greeting message sent successfully!")
+        return True
+
+
 def send_message(text, confirmed_token=None):
     """Send message to the channel."""
     def _parse(stdout):
@@ -486,6 +526,11 @@ def main():
     print(f"Started: {datetime.now(timezone.utc).isoformat()}")
     print("=" * 70)
     print("\nMonitoring for new messages... (Ctrl+C to stop)\n")
+    
+    # Send greeting message on startup/restart
+    print("🚀 System starting up...")
+    send_greeting_message()
+    print()
 
     seen_ids: set[str] = set()
     answered_state = _load_seen_state()
