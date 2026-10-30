@@ -43,7 +43,16 @@ class SearchResult:
     file_type: str
     file_size: int
     page_number: Optional[int] = None
-    
+    # V41: nhãn trang thay thế (tên sheet Excel) khi không có số trang
+    page_label: Optional[str] = None
+
+    def citation(self) -> str:
+        """V41: chuỗi trích dẫn 'tài liệu nào, trang nào' cho evidence block."""
+        loc = f"trang {self.page_number}" if self.page_number else (
+            f"sheet '{self.page_label}'" if self.page_label else "vị trí không xác định"
+        )
+        return f"{self.filename} ({loc})"
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -144,13 +153,15 @@ class KnowledgeQueryEngine:
                         category=metadata.get('category', 'unknown'),
                         subcategory=metadata.get('subcategory', 'unknown'),
                         file_type=metadata.get('file_type', ''),
-                        file_size=metadata.get('file_size', 0)
+                        file_size=metadata.get('file_size', 0),
+                        page_number=metadata.get('page_number'),
+                        page_label=metadata.get('page_label'),
                     ))
-        
+
         # Sort by score and return top_k
         search_results.sort(key=lambda x: x.score, reverse=True)
         return search_results[:top_k]
-    
+
     def search_by_keyword(
         self,
         keyword: str,
@@ -188,12 +199,14 @@ class KnowledgeQueryEngine:
                         category=metadata.get('category', 'unknown'),
                         subcategory=metadata.get('subcategory', 'unknown'),
                         file_type=metadata.get('file_type', ''),
-                        file_size=metadata.get('file_size', 0)
+                        file_size=metadata.get('file_size', 0),
+                        page_number=metadata.get('page_number'),
+                        page_label=metadata.get('page_label'),
                     ))
-        
+
         search_results.sort(key=lambda x: x.score, reverse=True)
         return search_results[:top_k]
-    
+
     def ingest_documents(self, documents) -> Dict[str, int]:
         """Store parsed KnowledgeDocument chunks into ChromaDB.
 
@@ -332,26 +345,45 @@ class KnowledgeQueryEngine:
         """Format search results for display."""
         if not results:
             return "❌ Không tìm thấy kết quả phù hợp."
-        
+
         output = []
         output.append(f"\n📊 **Tìm thấy {len(results)} kết quả:**\n")
-        
+
         for i, result in enumerate(results, 1):
             file_size_mb = result.file_size / (1024 * 1024)
-            
+
             output.append(f"**{i}. {result.filename}**")
+            # V41: hiện số trang / sheet trong kết quả
+            output.append(f"   📍 Vị trí: {result.citation()}")
             output.append(f"   📁 Industry: `{result.industry}` | Category: `{result.category}` | Subcategory: `{result.subcategory}`")
             output.append(f"   📄 Type: `{result.file_type}` | Size: `{file_size_mb:.2f} MB`")
             output.append(f"   ⭐ Relevance: `{result.score:.2%}`")
-            
+
             if show_content:
                 content_preview = result.content[:300] + "..." if len(result.content) > 300 else result.content
                 output.append(f"   💬 **Nội dung:** {content_preview}")
-            
+
             output.append("")
-        
+
         return "\n".join(output)
-    
+
+    def render_evidence_block(self, results: List[SearchResult]) -> str:
+        """V41: evidence block đưa vào system prompt của chat flow.
+
+        Mọi khẳng định trong câu trả lời PHẢI dẫn nguồn [tài liệu, trang];
+        không đủ căn cứ phải nói rõ — cùng chuẩn fail-closed với bước 2.8.
+        """
+        if not results:
+            return ""
+        parts = [
+            "[EVIDENCE KHO TRI THỨC (kho_tai_lieu) — chỉ trả lời dựa trên các đoạn dưới đây; "
+            "mỗi khẳng định phải dẫn nguồn dạng [tên_tài_liệu, trang N hoặc sheet 'X']; "
+            "nếu không đủ căn cứ phải nói rõ 'chưa tìm thấy căn cứ trong kho tài liệu']"
+        ]
+        for c in results:
+            parts.append(f"— [{c.citation()} | điểm tương đồng {c.score:.2f}]\n{c.content[:1200]}")
+        return "\n\n".join(parts)
+
     def answer_question(
         self,
         question: str,
@@ -375,7 +407,8 @@ class KnowledgeQueryEngine:
         # Build answer from results
         context_parts = []
         for i, result in enumerate(results, 1):
-            context_parts.append(f"[{i}] Từ file: {result.filename} ({result.industry}/{result.category})")
+            # V41: dẫn chứng đầy đủ tài liệu + trang
+            context_parts.append(f"[{i}] Nguồn: {result.citation()} ({result.industry}/{result.category})")
             context_parts.append(result.content)
             context_parts.append("")
         

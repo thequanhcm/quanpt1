@@ -1347,6 +1347,33 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as _rag_exc:
                 doc_rag_info["error"] = str(_rag_exc)[:160]
 
+            # 2.9 Knowledge Base RAG (V41, 30/10/2026) — câu hỏi tri thức chuyên môn
+            # → retrieve từ kho kho_tai_lieu (34k+ chunks: AI course, RAN, VT-CNTT...),
+            # đưa bằng chứng CÓ DẪN CHỨNG [tài liệu, trang] vào context.
+            # Fail-closed: lỗi/không đủ score → không evidence, không giết chat.
+            kb_rag_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.knowledge.knowledge_query import KnowledgeQueryEngine
+                from pathlib import Path as _KBPath
+
+                _kb_engine = KnowledgeQueryEngine(
+                    db_path=_KBPath(str(workspace)) / "data" / "knowledge_db"
+                )
+                _kb_results = _kb_engine.search(query, top_k=5, min_score=0.55)
+                kb_rag_info["attempted"] = True
+                if _kb_results:
+                    kb_rag_info["chunks"] = len(_kb_results)
+                    kb_rag_info["best_score"] = _kb_results[0].score
+                    kb_rag_info["citations"] = [r.citation() for r in _kb_results[:3]]
+                    _kb_block = _kb_engine.render_evidence_block(_kb_results)
+                    context.system_instructions = (
+                        context.system_instructions + "\n" + _kb_block
+                    )
+                else:
+                    kb_rag_info["note"] = "không tìm thấy bằng chứng đủ tốt trong kho tri thức"
+            except Exception as _kb_exc:
+                kb_rag_info["error"] = str(_kb_exc)[:160]
+
             # 2.85 YouTube Music detection & Pi 5 streaming dispatch
             music_info: dict[str, Any] = {"requested": False}
             try:

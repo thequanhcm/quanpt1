@@ -39,6 +39,30 @@ try:
 except ImportError:
     PDF_SUPPORT = False
 
+# V41.3: OCR support — đọc text từ file ảnh (png/jpg/jpeg)
+try:
+    import pytesseract
+    from PIL import Image
+    OCR_SUPPORT = True
+except ImportError:
+    OCR_SUPPORT = False
+
+# Đường dẫn tesseract.exe trên Windows (cài qua UB-Mannheim installer);
+# trên Pi/Linux tesseract có sẵn trong PATH.
+TESSERACT_CMD_CANDIDATES = [
+    r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+    str(Path.home() / "Programs" / "Tesseract-OCR" / "tesseract.exe"),
+    "/usr/bin/tesseract",
+]
+
+
+def _resolve_tesseract_cmd() -> Optional[str]:
+    for candidate in TESSERACT_CMD_CANDIDATES:
+        if Path(candidate).exists():
+            return candidate
+    return None
+
+
 try:
     from docx import Document
     DOCX_SUPPORT = True
@@ -83,8 +107,10 @@ class FileScanner:
     """Recursively scan directory for supported files."""
     
     SUPPORTED_EXTENSIONS = {
-        '.pdf', '.docx', '.xlsx', '.xls', '.txt', '.md', 
-        '.csv', '.ipynb', '.json', '.xml', '.html', '.htm'
+        '.pdf', '.docx', '.xlsx', '.xls', '.txt', '.md',
+        '.csv', '.ipynb', '.json', '.xml', '.html', '.htm',
+        # V41.3: file ảnh qua OCR
+        '.png', '.jpg', '.jpeg', '.bmp',
     }
     
     def __init__(self, root_path: Path):
@@ -130,6 +156,13 @@ class FormatParser:
             '.html': self._parse_html,
             '.htm': self._parse_html,
         }
+        # V41.3: file ảnh qua OCR (đăng ký động — không phá dict khi thiếu pytesseract)
+        if OCR_SUPPORT:
+            self.supported['.png'] = self._parse_image
+            self.supported['.jpg'] = self._parse_image
+            self.supported['.jpeg'] = self._parse_image
+            self.supported['.bmp'] = self._parse_image
+        self._tesseract_cmd = _resolve_tesseract_cmd() if OCR_SUPPORT else None
     
     def parse(self, filepath: Path) -> str:
         """Parse file and extract text content."""
@@ -142,37 +175,52 @@ class FormatParser:
         return parser(filepath)
     
     def _parse_pdf(self, filepath: Path) -> str:
+        """V41: extract theo TỪNG TRANG với marker <<<PAGE N>>> để chunker
+        gắn page_number vào metadata — phục vụ trích dẫn 'tài liệu nào, trang nào'."""
         if not PDF_SUPPORT:
             return "[PDF parsing not available - install pypdf]"
-        
+
         try:
             reader = PdfReader(str(filepath))
-            text = ""
-            for page in reader.pages:
-                text += page.extract_text() or ""
-            return text
+            parts = []
+            for page_num, page in enumerate(reader.pages, start=1):
+                page_text = page.extract_text() or ""
+                if page_text.strip():
+                    parts.append(f"<<<PAGE {page_num}>>>\n{page_text}")
+            return "\n".join(parts)
         except Exception as e:
             return f"[PDF parse error: {e}]"
-    
+
     def _parse_docx(self, filepath: Path) -> str:
+        """V41: đọc CẢ paragraphs VÀ tables — trước đây bỏ sót toàn bộ bảng
+        (Sổ tay VT-CNTT 2026: 70 bảng = 544k ký tự bị mất, chiếm 97% nội dung)."""
         if not DOCX_SUPPORT:
             return "[DOCX parsing not available - install python-docx]"
-        
+
         try:
             doc = Document(str(filepath))
-            return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
+            lines = [para.text for para in doc.paragraphs if para.text.strip()]
+            # Tables: mỗi bảng một marker, cells nối bằng " | " giữ cấu trúc
+            for table_idx, table in enumerate(doc.tables, start=1):
+                lines.append(f"[BẢNG {table_idx}]")
+                for row in table.rows:
+                    cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if cells:
+                        lines.append(" | ".join(cells))
+            return "\n".join(lines)
         except Exception as e:
             return f"[DOCX parse error: {e}]"
-    
+
     def _parse_xlsx(self, filepath: Path) -> str:
+        """V41: marker <<<SHEET name>>> để chunker gắn page_label = tên sheet."""
         if not PANDAS_SUPPORT:
             return "[Excel parsing not available - install pandas/openpyxl]"
-        
+
         try:
             xls = pd.read_excel(str(filepath), sheet_name=None)
             text_parts = []
             for sheet_name, df in xls.items():
-                text_parts.append(f"=== Sheet: {sheet_name} ===")
+                text_parts.append(f"<<<SHEET {sheet_name}>>>")
                 text_parts.append(df.to_string())
             return "\n\n".join(text_parts)
         except Exception as e:
@@ -225,6 +273,34 @@ class FormatParser:
             return re.sub(r'\s+', ' ', text).strip()
         except Exception as e:
             return f"[HTML parse error: {e}]"
+
+    def _parse_image(self, filepath: Path) -> str:
+        """V41.3: OCR file ảnh (png/jpg/jpeg/bmp) qua Tesseract vie+eng.
+
+        Trả về header ghi rõ nguồn OCR + nội dung; nếu không đọc được chữ
+        (ảnh đồ họa thuần) trả marker rỗng để pipeline skip — fail-honest.
+        """
+        if not OCR_SUPPORT:
+            return "[OCR not available - install pytesseract + Pillow]"
+        try:
+            if self._tesseract_cmd:
+                pytesseract.pytesseract.tesseract_cmd = self._tesseract_cmd
+            img = Image.open(str(filepath))
+            # Ảnh lớn: thu nhỏ về <=2000px cạnh dài để OCR nhanh, giữ chi tiết
+            max_side = max(img.size)
+            if max_side > 2000:
+                ratio = 2000 / max_side
+                img = img.resize((int(img.width * ratio), int(img.height * ratio)))
+            if img.mode not in ("L", "RGB"):
+                img = img.convert("RGB")
+            text = pytesseract.image_to_string(img, lang="vie+eng", timeout=90)
+            text = text.strip()
+            if not text:
+                # ảnh đồ họa/icon không có chữ — báo rõ để pipeline bỏ qua
+                return ""
+            return f"[NỘI DUNG ẢNH — OCR từ {filepath.name}]\n{text}"
+        except Exception as e:
+            return f"[OCR parse error: {e}]"
 
 
 class DomainClassifier:
@@ -325,11 +401,39 @@ class ChunkingEngine:
     def __init__(self, chunk_size: int = 1000, overlap: int = 200):
         self.chunk_size = chunk_size
         self.overlap = overlap
-    
+
+    # V41: marker trang/sheet do FormatParser chèn — regex phải khớp chuỗi
+    # thực tế trong content (trên một dòng riêng).
+    _PAGE_MARKER_RE = re.compile(r"<<<PAGE (\d+)>>>")
+    _SHEET_MARKER_RE = re.compile(r"<<<SHEET (.+?)>>>")
+
+    @classmethod
+    def _strip_marker(cls, text: str) -> tuple[str, Optional[int], Optional[str]]:
+        """Trích + loại marker trang/sheet khỏi text chunk.
+
+        Trả về (content_sạch, page_number | None, page_label | None).
+        """
+        page_num: Optional[int] = None
+        page_label: Optional[str] = None
+        m = cls._PAGE_MARKER_RE.search(text)
+        if m:
+            page_num = int(m.group(1))
+        m2 = cls._SHEET_MARKER_RE.search(text)
+        if m2:
+            page_label = m2.group(1).strip()
+        clean = cls._PAGE_MARKER_RE.sub("", cls._SHEET_MARKER_RE.sub("", text))
+        clean = re.sub(r"\n{3,}", "\n\n", clean).strip()
+        return clean, page_num, page_label
+
     def chunk(self, content: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Split content into overlapping chunks (word-boundary aware)."""
+        """Split content into overlapping chunks (word-boundary aware).
+
+        V41: sau khi chia xong, mỗi chunk được gắn metadata['page_number'] /
+        metadata['page_label'] dựa trên marker <<<PAGE N>>>/<<<SHEET ...>>>
+        nằm trong nội dung chunk — phục vụ citation 'tài liệu nào, trang nào'.
+        """
         chunks = []
-        
+
         # Split by paragraphs first
         paragraphs = re.split(r'\n\s*\n', content)
         
@@ -384,17 +488,39 @@ class ChunkingEngine:
             chunks.append(self._create_chunk(
                 current_chunk.strip(), chunk_id, metadata
             ))
-        
+
+        # V41: gắn page_number/page_label vào metadata từng chunk từ marker.
+        # Marker có thể bị overlap cắt mất ở chunk sau → chunk không có marker
+        # THỪA HƯỚNG page của chunk trước liền kề (cùng tài liệu, đọc liên tục).
+        current_page: Optional[int] = None
+        current_label: Optional[str] = None
+        for chunk in chunks:
+            clean, page_num, page_label = self._strip_marker(chunk['content'])
+            chunk['content'] = clean
+            if page_num is not None:
+                current_page = page_num
+            if page_label is not None:
+                current_label = page_label
+            if current_page is not None:
+                chunk['metadata']['page_number'] = current_page
+            if current_label is not None:
+                chunk['metadata']['page_label'] = current_label
+
         return chunks
     
     def _create_chunk(self, content: str, chunk_id: int, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Create a chunk with metadata."""
+        """Create a chunk with metadata.
+
+        V41 FIX (30/10/2026): phải copy metadata dict — trước đây dùng chung
+        reference, khi gắn page_number cho từng chunk thì mọi chunk đều nhận
+        giá trị của chunk cuối (page đè lẫn nhau, citation sai trang).
+        """
         return {
             'id': f"{metadata['doc_id']}_chunk_{chunk_id}",
             'content': content,
             'chunk_id': chunk_id,
             'total_chunks': 0,  # Will be updated later
-            'metadata': metadata
+            'metadata': dict(metadata)
         }
 
 
