@@ -123,7 +123,7 @@ _GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
     "pending_commands": [],
     "target_avatar_state": "IDLE",
     "transcript": "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.",
-    "face_only_mode": True,
+    "face_only_mode": False,
 }
 _GLOBAL_ROLE_ORCHESTRATOR = ExecutiveRoleOrchestrator(edge_telemetry=_GLOBAL_EDGE_TELEMETRY)
 _GLOBAL_VOICE_PIPELINE = XiaoZhiVoicePipeline(

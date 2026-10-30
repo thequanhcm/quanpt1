@@ -428,6 +428,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.transcript && transcriptEl && currentAvatarState !== "SPEAKING" && currentAvatarState !== "THINKING") {
           transcriptEl.textContent = `"${data.transcript}"`;
           if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
+            window.digitalHuman.setContextFromText(data.transcript);
+          }
+        }
+
         // Music streaming coordination on Pi 5 Kiosk
         if (data.music && data.music.playing && data.music.video_id) {
           if (!window._kioskCurrentVid || window._kioskCurrentVid !== data.music.video_id) {

@@ -210,13 +210,34 @@ def play_music_stream(url: str, title: str = "", video_id: str = "", daemon_stat
 
 
 def is_kiosk_running() -> bool:
-    """Kiểm tra xem tiến trình Chromium Kiosk hiển thị hình thể có đang chạy hay không."""
+    """Kiểm tra xem tiến trình Chromium Kiosk hiển thị hình thể có đang chạy hay không.
+
+    (29/10/2026) FIX: pgrep -f "chromium" khớp MỌI process chromium — bao gồm
+    headless Chromium worker phát nhạc YouTube (_worker trong stop_music /
+    play_music khởi chạy chromium --headless=new). Khi đó hàm trả True dù kiosk
+    hiển thị KHÔNG tồn tại → nút BẬT HÌNH THỂ bị skip ("đang chạy rồi") và
+    dashboard báo ACTIVE sai trong khi màn DSI trắng. Giờ chỉ tính các process
+    chromium KHÔNG headless (kiosk thật có cờ --kiosk hoặc không có --headless).
+    """
     global _KIOSK_PROC
     try:
         import subprocess, shutil, os
         if shutil.which("pgrep"):
             res = subprocess.run(["pgrep", "-f", "chromium"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=1.0)
-            return bool(res.stdout.strip())
+            pids = [p for p in res.stdout.split() if p.strip()]
+            for pid in pids:
+                try:
+                    with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                        cmdline = fh.read().decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                # headless chromium (nhạc/background) KHÔNG phải kiosk hiển thị
+                if "--headless" in cmdline:
+                    continue
+                # helper processes (zygote/crashpad/renderer) kế thừa cmdline gốc;
+                # chỉ cần 1 process chromium không-headless tồn tại = kiosk thật
+                return True
+            return False
         elif os.name == "nt":
             return _KIOSK_PROC is not None and _KIOSK_PROC.poll() is None
     except Exception:
@@ -258,12 +279,17 @@ def launch_kiosk_process() -> bool:
                 "--touch-events=enabled",
                 "--disable-pinch",
                 "--overscroll-history-navigation=0",
-                "--window-size=1280,720",
+                # V40 (30/10): màn DSI Pi 5 = 800x480 — 1280,720 làm khung UI lệch/tràn
+                "--window-size=800,480",
                 "--window-position=0,0",
                 "--enable-features=OverlayScrollbar",
                 "--autoplay-policy=no-user-gesture-required",
                 "--use-fake-ui-for-media-stream",
                 "--password-store=basic",
+                # V40 (30/10): Wayland renderer bị treo trên Pi 5 (0 CPU) — X11 + SwiftShader ổn định
+                "--ozone-platform=x11",
+                "--use-gl=angle",
+                "--use-angle=swiftshader",
                 "--disable-session-crashed-bubble",
                 "--disable-features=Translate",
                 "http://127.0.0.1:8768/"
