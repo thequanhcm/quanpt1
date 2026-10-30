@@ -786,6 +786,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_edge_heartbeat(body)
             return
 
+        # V41: Edge Agent gửi events tự thu thập lên Brain
+        if path == "/api/executive/edge/events":
+            self._handle_api_edge_events(body)
+            return
+
         if path == "/api/executive/edge/mouth-sync":
             self._handle_api_edge_mouth_sync(body)
             return
@@ -2822,6 +2827,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         )
         _GLOBAL_EDGE_TELEMETRY["packets_out"] += 1
         cmd = _GLOBAL_EDGE_TELEMETRY["pending_commands"].pop(0) if _GLOBAL_EDGE_TELEMETRY["pending_commands"] else None
+        # V41: lưu telemetry Edge Agent nếu heartbeat có kèm (5 năng lực chủ động)
+        agent_payload = body.get("edge_agent")
+        if isinstance(agent_payload, dict):
+            _GLOBAL_EDGE_TELEMETRY["last_edge_agent"] = agent_payload
         self._send_json({
             "success": True,
             "edge_status": status,
@@ -2830,6 +2839,44 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
             "remote_command": cmd,
         })
+
+    def _handle_api_edge_events(self, body: dict) -> None:
+        """V41: nhận batch events Edge Agent tự thu thập (tự phối hợp năng lực 4).
+
+        Lưu vào edge monitor alert history (severity CRITICAL/WARNING → alert record
+        ghi nhận; INFO chỉ đếm). Fail-closed: lỗi không giết server.
+        """
+        try:
+            device_id = str(body.get("device_id", "EDGE-UNKNOWN")).strip()
+            events = body.get("events", [])
+            if not isinstance(events, list):
+                events = []
+            accepted = 0
+            for ev in events[:50]:  # giới hạn batch
+                if not isinstance(ev, dict):
+                    continue
+                accepted += 1
+                etype = str(ev.get("type", "UNKNOWN"))
+                severity = str(ev.get("severity", "INFO")).upper()
+                details = ev.get("details", {})
+                if severity in ("CRITICAL", "WARNING"):
+                    _GLOBAL_EDGE_MONITOR._trigger_alert(  # noqa: SLF001 — internal API
+                        code=(
+                            EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT
+                            if etype == "BRAIN_CONNECTION_LOST"
+                            else EdgeAlertCode.ALERT_C_CHANNEL_DEGRADED
+                        ),
+                        title=f"Edge Agent: {etype}",
+                        message=str(details.get("desc", etype)),
+                        severity="CRITICAL" if severity == "CRITICAL" else "WARNING",
+                        metadata={"agent_event": ev, "device_id": device_id},
+                    )
+            _GLOBAL_EDGE_TELEMETRY["edge_events_received"] = (
+                _GLOBAL_EDGE_TELEMETRY.get("edge_events_received", 0) + accepted
+            )
+            self._send_json({"success": True, "accepted": accepted})
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)})
 
     def _handle_api_edge_mouth_sync(self, body: dict) -> None:
         action = str(body.get("action", "generate")).strip().lower()

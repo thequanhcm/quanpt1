@@ -36,6 +36,12 @@ except ImportError:
     from auth import EdgeHMACAuth  # type: ignore
     from config import EdgeConfig  # type: ignore
 
+# V41 EDGE AGENT: 5 năng lực chủ động (30/10/2026, duyệt bởi Quanpt1)
+try:
+    from edge_client.edge_agent import EdgeAgent
+except ImportError:
+    from edge_agent import EdgeAgent  # type: ignore
+
 STATIC_DIR = Path(__file__).resolve().parent
 
 # ============================================================
@@ -343,6 +349,9 @@ class EdgeDaemonState:
         # YouTube Music & Audio Streaming State
         self.current_music: dict[str, Any] | None = None
 
+        # V41 EDGE AGENT — 5 năng lực chủ động (tự phản ứng/quản lý/thu thập/phối hợp/cải tiến)
+        self.edge_agent = EdgeAgent(config)
+
     def to_kiosk_dict(self) -> dict[str, Any]:
         with self.lock:
             reload_needed = self.need_ui_reload
@@ -444,6 +453,30 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
         if path == "/api/kiosk/status":
             data = self.daemon_state.to_kiosk_dict()
             self._send_json(data)
+            return
+
+        # V41: trạng thái Edge Agent (5 năng lực chủ động)
+        if path == "/api/kiosk/agent/status":
+            try:
+                self._send_json({
+                    "success": True,
+                    "agent": self.daemon_state.edge_agent.get_status_summary(),
+                })
+            except Exception as exc:
+                self._send_error_json(f"AGENT_STATUS_ERROR: {exc}", 500)
+            return
+
+        # V41: đề xuất cải tiến (chỉ đọc — áp dụng cần duyệt của Quanpt1)
+        if path == "/api/kiosk/agent/suggestions":
+            try:
+                limit = 20
+                self._send_json({
+                    "success": True,
+                    "suggestions": self.daemon_state.edge_agent.get_suggestions(limit),
+                    "note": "Đề xuất CHƯA được áp dụng — chờ duyệt của Quanpt1",
+                })
+            except Exception as exc:
+                self._send_error_json(f"AGENT_SUGGESTIONS_ERROR: {exc}", 500)
             return
 
         if path == "/api/kiosk/files":
@@ -1290,6 +1323,8 @@ class EdgeClientDaemon:
             secret=self.config.shared_secret,
         )
         self.state = EdgeDaemonState(self.config)
+        # V41: trạng thái kết nối trước đó cho phát hiện mất kết nối
+        self._was_core_connected = False
         self._server: ThreadedKioskServer | None = None
         self._stop_event = threading.Event()
         self._heartbeat_thread: threading.Thread | None = None
@@ -1315,6 +1350,12 @@ class EdgeClientDaemon:
         self._heartbeat_thread = threading.Thread(target=self._run_heartbeat_loop, daemon=True)
         self._heartbeat_thread.start()
 
+        # V41: khởi động 2 luồng Edge Agent (metrics + health-check)
+        try:
+            self.state.edge_agent.start_background_loops()
+        except Exception:
+            pass  # fail-closed
+
         # Check if assets exist; if not, trigger background initial sync
         portrait_file = STATIC_DIR / "assets" / "avatar" / "model_f_portrait.png"
         if not portrait_file.exists():
@@ -1332,6 +1373,11 @@ class EdgeClientDaemon:
     def stop(self) -> None:
         """Stop all background workers and shutdown local server."""
         self._stop_event.set()
+        # V41: dừng Edge Agent loops
+        try:
+            self.state.edge_agent.stop_background_loops()
+        except Exception:
+            pass
         if self._server:
             try:
                 self._server.shutdown()
@@ -1427,6 +1473,8 @@ class EdgeClientDaemon:
                     "screen_height": self.config.screen_height,
                     "model_f_active": True,
                 },
+                # V41: telemetry Edge Agent (tự quản lý + tự phối hợp)
+                "edge_agent": self.state.edge_agent.get_status_summary(),
             }).encode("utf-8")
             headers = self.auth.create_signed_headers(payload)
             headers["Content-Type"] = "application/json"
@@ -1448,9 +1496,38 @@ class EdgeClientDaemon:
 
     def _run_heartbeat_loop(self) -> None:
         """Continuous background heartbeat loop."""
+        # V41: tự phản ứng lúc khởi động — chào + camera auto-on (chỉ khi có /dev/video0)
+        try:
+            camera_available = Path("/dev/video0").exists() and sys.platform != "win32"
+            boot_actions = self.state.edge_agent.maybe_autoreact_on_boot(camera_available)
+            if boot_actions.get("greeted"):
+                with self.state.lock:
+                    self.state.transcript = "Chào Anh Quân! TONY online, tất cả hệ thống sẵn sàng."
+                    self.state.avatar_state = "SPEAKING"
+        except Exception:
+            pass  # fail-closed: lỗi agent không được giết heartbeat
+
         while not self._stop_event.is_set():
             self.check_core_connection()
             self._send_dedicated_heartbeat()
+
+            # V41: phát hiện mất kết nối (CONNECTED → LOST)
+            try:
+                with self.state.lock:
+                    now_connected = self.state.core_connected
+                self.state.edge_agent.detect_connection_lost(now_connected, self._was_core_connected)
+                self._was_core_connected = now_connected
+            except Exception:
+                pass
+
+            # V41: gửi events lên Brain (tự phối hợp)
+            try:
+                headers = self.auth.create_signed_headers()
+                self.state.edge_agent.send_events_to_brain(
+                    self.config.core_base_url, headers,
+                )
+            except Exception:
+                pass
 
             # Poll consultations if connected
             if self.state.core_connected:
