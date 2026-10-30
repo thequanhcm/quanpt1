@@ -204,11 +204,27 @@ class KnowledgeQueryEngine:
         """
         added = 0
         skipped = 0
+        unchanged = 0
+        # V40.1: idempotent fast-resume — bỏ qua chunk đã lưu với nội dung giống
+        # hệt để chạy lại pipeline chỉ embed phần mới (tiết kiệm hàng giờ BGE-M3).
+        existing_docs: dict[str, str] = {}
+        try:
+            _got = self.collection.get(include=["documents"])
+            if _got and _got.get("ids"):
+                existing_docs = dict(zip(_got["ids"], _got["documents"] or []))
+        except Exception:
+            existing_docs = {}
         for doc in documents:
             for chunk in doc.chunks:
                 content = chunk.get("content", "").strip()
                 if not content:
                     skipped += 1
+                    continue
+                chunk_id = chunk.get("id", f"{doc.id}_{chunk.get('chunk_id', 0)}")
+                if chunk_id in existing_docs and existing_docs[chunk_id] == content:
+                    unchanged += 1
+                    if (added + unchanged) % 2000 == 0:
+                        print(f"   ... resume: đã kiểm tra {added + unchanged} chunks")
                     continue
                 try:
                     vector = self.embedding_service.embed_text(content)
@@ -219,7 +235,7 @@ class KnowledgeQueryEngine:
                     continue
 
                 meta = dict(chunk.get("metadata") or {})
-                meta["chunk_id"] = chunk.get("id", f"{doc.id}_{chunk.get('chunk_id', 0)}")
+                meta["chunk_id"] = chunk_id
                 meta["chunk_seq"] = chunk.get("chunk_id", 0)
                 meta["doc_id"] = doc.id
                 meta["filename"] = doc.filename
@@ -240,7 +256,7 @@ class KnowledgeQueryEngine:
                     added += 1
                 except Exception:
                     skipped += 1
-        return {"added": added, "skipped": skipped}
+        return {"added": added, "skipped": skipped, "unchanged": unchanged}
 
     def get_document_info(self, doc_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a specific document."""

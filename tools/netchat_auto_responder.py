@@ -10,6 +10,7 @@ Run continuously to enable 24/7 auto-response.
 """
 import json
 import re
+import os
 import subprocess
 import sys
 import time
@@ -36,8 +37,17 @@ if sys.stdout is None or sys.stderr is None:
 # (netchat_command_center, info-gap adapter, file extraction...).
 _orig_subprocess_run = subprocess.run
 
+# (30/10/2026) FIX TỔNG LỚP LỖI UTF-8: mọi process con (netchat_bot.py banner
+# tiếng Việt, learning engine, pypdf/docx extract...) chạy dưới pythonw không
+# console → Windows cp1252 → UnicodeEncodeError giết im lặng toàn bộ pipeline
+# (TONY câm từ 18:09). Ép UTF-8 cho MỌI subprocess.run() của process này.
+_UTF8_ENV = {"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+
 def _subprocess_run_no_window(*args, **kwargs):
     kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    _env = dict(os.environ)
+    _env.update(_UTF8_ENV)
+    kwargs.setdefault("env", _env)
     return _orig_subprocess_run(*args, **kwargs)
 
 subprocess.run = _subprocess_run_no_window

@@ -220,12 +220,17 @@ def start_daemon(script_name: str, window_title: str):
             return None
         out_path = Path(CONFIG["log_dir"]) / f"{script_name}.log"
         out_handle = open(out_path, "a", encoding="utf-8", buffering=1)
+        # (30/10/2026) FIX UTF-8 tổng lớp — như start_server() bên dưới.
+        _env = dict(os.environ)
+        _env["PYTHONUTF8"] = "1"
+        _env["PYTHONIOENCODING"] = "utf-8"
         process = subprocess.Popen(
             [CONFIG["venv_python"], str(script_path)],
             cwd=CONFIG["workdir"],
             stdout=out_handle,
             stderr=subprocess.STDOUT,
             text=True,
+            env=_env,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         _daemon_log_handles.append(out_handle)
@@ -286,12 +291,18 @@ def start_server() -> Optional[subprocess.Popen]:
         logger.info(f"Starting servers via {os.path.basename(CONFIG['server_script'])} on ports {CONFIG['port']}+{CONFIG['second_port']}...")
         out_path = Path(CONFIG["log_dir"]) / "dual_servers_watchdog.log"
         out_handle = open(out_path, "a", encoding="utf-8", buffering=1)
+        # (30/10/2026) FIX UTF-8 tổng lớp: daemon windowless không có console →
+        # cp1252 giết mọi print() tiếng Việt. Ép UTF-8 cho toàn bộ process con.
+        _env = dict(os.environ)
+        _env["PYTHONUTF8"] = "1"
+        _env["PYTHONIOENCODING"] = "utf-8"
         process = subprocess.Popen(
             [CONFIG["venv_python"], CONFIG["server_script"]],
             cwd=CONFIG["workdir"],
             stdout=out_handle,
             stderr=subprocess.STDOUT,
             text=True,
+            env=_env,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         _server_log_handles.append(out_handle)  # closed on stop_server
