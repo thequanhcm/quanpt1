@@ -105,7 +105,7 @@ class TestKnowledgeQueryEngine:
         formatted = query_engine.format_results(results)
         assert "test.pdf" in formatted
         assert "engineering" in formatted
-        assert "85%" in formatted
+        assert "85.00%" in formatted
 
 
 class TestFileScanner:

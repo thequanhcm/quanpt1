@@ -91,15 +91,21 @@ class FileScanner:
         self.root_path = root_path
     
     def scan(self) -> List[Path]:
-        """Scan all supported files recursively."""
-        files = []
+        """Scan all supported files recursively (deduplicated)."""
+        candidates = []
         for ext in self.SUPPORTED_EXTENSIONS:
-            files.extend(self.root_path.rglob(f"*{ext}"))
-            files.extend(self.root_path.rglob(f"*{ext.upper()}"))
+            candidates.extend(self.root_path.rglob(f"*{ext}"))
+            candidates.extend(self.root_path.rglob(f"*{ext.upper()}"))
         
-        # Filter out large files (>50MB) and temporary files
+        # Filter out large files (>50MB) and temporary files.
+        # Dedupe: Windows rglob is case-insensitive, so lower/upper patterns
+        # yield the same file twice.
         valid_files = []
-        for f in files:
+        seen = set()
+        for f in candidates:
+            if f in seen:
+                continue
+            seen.add(f)
             if f.is_file() and f.stat().st_size < 50 * 1024 * 1024:
                 if not f.name.startswith('~') and not f.suffix == '.bak':
                     valid_files.append(f)
@@ -289,14 +295,15 @@ class DomainClassifier:
         """Extract subcategory from path or content."""
         path_str = str(filepath).lower()
         
-        # Check path segments
-        if 'co dien' in path_str or 'cơ điện' in path_str:
+        # Check path segments (normalize: lowercase + underscores->spaces)
+        path_norm = path_str.replace('_', ' ').replace('-', ' ')
+        if 'co dien' in path_norm or 'cơ điện' in path_norm:
             return 'electrical'
-        elif 'machine learning' in path_str or 'ml' in path_str:
+        elif 'machine learning' in path_norm or 'ml' in path_norm:
             return 'machine_learning'
-        elif 'nlp' in path_str:
+        elif 'nlp' in path_norm:
             return 'nlp'
-        elif 'computer vision' in path_str or 'cv' in path_str:
+        elif 'computer vision' in path_norm or 'cv' in path_norm:
             return 'computer_vision'
         elif 'alarm' in path_str:
             return 'alarm_systems'
@@ -320,7 +327,7 @@ class ChunkingEngine:
         self.overlap = overlap
     
     def chunk(self, content: str, metadata: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Split content into overlapping chunks."""
+        """Split content into overlapping chunks (word-boundary aware)."""
         chunks = []
         
         # Split by paragraphs first
@@ -328,6 +335,23 @@ class ChunkingEngine:
         
         current_chunk = ""
         chunk_id = 0
+        
+        def _split_long_paragraph(text: str) -> List[str]:
+            """Split an oversized paragraph at word boundaries into <=chunk_size pieces."""
+            pieces = []
+            words = text.split()
+            current = ""
+            for word in words:
+                if current and len(current) + 1 + len(word) > self.chunk_size:
+                    pieces.append(current)
+                    # carry overlap tail into next piece for continuity
+                    tail = current[-self.overlap:] if self.overlap > 0 else ""
+                    current = (tail + " " + word).strip() if tail else word
+                else:
+                    current = f"{current} {word}".strip()
+            if current.strip():
+                pieces.append(current)
+            return pieces
         
         for para in paragraphs:
             para = para.strip()
@@ -346,15 +370,12 @@ class ChunkingEngine:
                 
                 # Start new chunk with overlap
                 if len(para) > self.chunk_size:
-                    # Split long paragraph
-                    words = para.split()
+                    for piece in _split_long_paragraph(para):
+                        chunks.append(self._create_chunk(
+                            piece.strip(), chunk_id, metadata
+                        ))
+                        chunk_id += 1
                     current_chunk = ""
-                    for word in words:
-                        if len(current_chunk) + len(word) <= self.overlap:
-                            current_chunk += word + " "
-                        else:
-                            break
-                    current_chunk += " ".join(words[len(current_chunk.split()):])
                 else:
                     current_chunk = para + "\n\n"
         

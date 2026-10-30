@@ -53,7 +53,9 @@ class KnowledgeQueryEngine:
     
     def __init__(self, db_path: Path = None):
         if db_path is None:
-            db_path = Path(__file__).parent.parent.parent / "data" / "knowledge_db"
+            # __file__ = src/quan_ai_brain/knowledge/knowledge_query.py
+            # 4 parents: knowledge -> quan_ai_brain -> src -> project root
+            db_path = Path(__file__).parent.parent.parent.parent / "data" / "knowledge_db"
         
         self.db_path = db_path
         self.db_path.mkdir(parents=True, exist_ok=True)
@@ -65,9 +67,14 @@ class KnowledgeQueryEngine:
         )
         
         # Get or create collection
+        # V40 fix: dùng cosine space — BGE-M3 vectors là cosine similarity;
+        # mặc định L2 của ChromaDB làm công thức score = 1 - distance/2 sai hoàn toàn.
         self.collection = self.client.get_or_create_collection(
             name="knowledge_base",
-            metadata={"description": "Multi-domain knowledge base"}
+            metadata={
+                "description": "Multi-domain knowledge base",
+                "hnsw:space": "cosine",
+            }
         )
         
         # Initialize embedding service
@@ -89,8 +96,10 @@ class KnowledgeQueryEngine:
     ) -> List[SearchResult]:
         """Search knowledge base with filters."""
         
-        # Generate embedding for query
-        query_embedding = self.embedding_service.get_embedding(query)
+        # Generate embedding for query (BGEEmbeddingService API = embed_text)
+        query_embedding = self.embedding_service.embed_text(query)
+        if not query_embedding:
+            return []
         
         # Build where clause for filtering
         where_clause = {}
@@ -185,6 +194,54 @@ class KnowledgeQueryEngine:
         search_results.sort(key=lambda x: x.score, reverse=True)
         return search_results[:top_k]
     
+    def ingest_documents(self, documents) -> Dict[str, int]:
+        """Store parsed KnowledgeDocument chunks into ChromaDB.
+
+        V40 fix: pipeline calls vector_store.ingest_documents() but this method
+        was missing. Embeds each chunk via BGE-M3 (Ollama) and adds to the
+        knowledge_base collection with full metadata. Skips chunks that fail
+        to embed (fail-honest, no fake vectors).
+        """
+        added = 0
+        skipped = 0
+        for doc in documents:
+            for chunk in doc.chunks:
+                content = chunk.get("content", "").strip()
+                if not content:
+                    skipped += 1
+                    continue
+                try:
+                    vector = self.embedding_service.embed_text(content)
+                except Exception:
+                    vector = []
+                if not vector:
+                    skipped += 1
+                    continue
+
+                meta = dict(chunk.get("metadata") or {})
+                meta["chunk_id"] = chunk.get("id", f"{doc.id}_{chunk.get('chunk_id', 0)}")
+                meta["chunk_seq"] = chunk.get("chunk_id", 0)
+                meta["doc_id"] = doc.id
+                meta["filename"] = doc.filename
+                meta["filepath"] = doc.filepath
+                meta["file_type"] = doc.file_type
+                meta["file_size"] = doc.file_size
+                meta["industry"] = doc.industry
+                meta["category"] = doc.category
+                meta["subcategory"] = doc.subcategory
+
+                try:
+                    self.collection.upsert(
+                        ids=[meta["chunk_id"]],
+                        embeddings=[vector],
+                        documents=[content],
+                        metadatas=[meta],
+                    )
+                    added += 1
+                except Exception:
+                    skipped += 1
+        return {"added": added, "skipped": skipped}
+
     def get_document_info(self, doc_id: str) -> Optional[Dict[str, Any]]:
         """Get information about a specific document."""
         results = self.collection.get(
