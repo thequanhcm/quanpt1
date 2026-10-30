@@ -1,0 +1,549 @@
+<!-- KNOWLEDGE DASHBOARD V37.1 - Tab Content -->
+<!-- Add this as a new tab in the executive dashboard at http://127.0.0.1:8766/ -->
+
+<!-- Add to navigation tabs: -->
+<!-- <button class="nav-tab" data-tab="tab-knowledge" onclick="switchTab('tab-knowledge')">
+    📚 Kiến Thức
+</button> -->
+
+<!-- Add this section after other tab sections: -->
+<section id="tab-knowledge" class="tab-content">
+    <div class="knowledge-dashboard-container">
+        
+        <!-- ==================== OVERVIEW METRICS ==================== -->
+        <div class="knowledge-overview">
+            <h2>📊 Tổng Quan Tri Thức</h2>
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-value" id="overview-total">0</div>
+                    <div class="metric-label">Tổng Kiến Thức</div>
+                    <div class="metric-sublabel">Trong database</div>
+                </div>
+                
+                <div class="metric-card metric-primary">
+                    <div class="metric-value" id="overview-user-provided">0</div>
+                    <div class="metric-label">"Anh Dạy"</div>
+                    <div class="metric-sublabel">USER_PROVIDED</div>
+                </div>
+                
+                <div class="metric-card metric-warning">
+                    <div class="metric-value" id="overview-pending">0</div>
+                    <div class="metric-label">Chờ Duyệt</div>
+                    <div class="metric-sublabel">Cần anh quyết định</div>
+                    <span class="notification-badge" id="knowledge-pending-badge" style="display:none">0</span>
+                </div>
+                
+                <div class="metric-card metric-success">
+                    <div class="metric-value" id="overview-approved-week">0</div>
+                    <div class="metric-label">Đã Duyệt (Tuần)</div>
+                    <div class="metric-sublabel">7 ngày qua</div>
+                </div>
+                
+                <div class="metric-card metric-success">
+                    <div class="metric-value" id="overview-approved-month">0</div>
+                    <div class="metric-label">Đã Duyệt (Tháng)</div>
+                    <div class="metric-sublabel">30 ngày qua</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ==================== GROWTH CHART ==================== -->
+        <div class="growth-chart-section">
+            <h2>📈 Biểu Đồ Trưởng Thành</h2>
+            <canvas id="growth-chart-canvas" width="800" height="300"></canvas>
+            <p class="chart-note">
+                <small>Đường tăng trưởng số kiến thức theo thời gian - Giúp anh nhìn thấy em "học" nhanh hay chậm</small>
+            </p>
+        </div>
+        
+        <!-- ==================== TABS ==================== -->
+        <div class="knowledge-tabs">
+            <button class="knowledge-tab-btn active" onclick="switchKnowledgeTab('user-provided')">
+                📖 Anh Dạy
+            </button>
+            <button class="knowledge-tab-btn" onclick="switchKnowledgeTab('quarantine')">
+                ⏳ Chờ Duyệt
+                <span class="tab-badge" id="quarantine-badge">0</span>
+            </button>
+            <button class="knowledge-tab-btn" onclick="switchKnowledgeTab('approved')">
+                ✅ Đã Duyệt
+            </button>
+            <button class="knowledge-tab-btn" onclick="switchKnowledgeTab('weekly-report')">
+                📊 Báo Cáo Tuần
+            </button>
+        </div>
+        
+        <!-- ==================== TAB: ANH DẠY (USER_PROVIDED) ==================== -->
+        <div id="knowledge-tab-user-provided" class="knowledge-tab-content active">
+            <h3>📖 Kiến Thức "Anh Dạy"</h3>
+            <p class="tab-description">
+                Danh sách kiến thức anh cung cấp trực tiếp qua chat. Đây là tri thức gốc từ kinh nghiệm và hướng dẫn của anh.
+            </p>
+            <div id="user-provided-list" class="knowledge-list">
+                <div class="loading-state">Đang tải...</div>
+            </div>
+        </div>
+        
+        <!-- ==================== TAB: CHỜ DUYỆT (QUARANTINE) ==================== -->
+        <div id="knowledge-tab-quarantine" class="knowledge-tab-content">
+            <h3>⏳ Kiến Thức Chờ Duyệt</h3>
+            <p class="tab-description">
+                Các mục kiến thức em tự nghiên cứu đang chờ anh duyệt. Anh có thể duyệt hoặc từ chối ngay tại đây.
+            </p>
+            <div id="quarantine-list" class="knowledge-list">
+                <div class="loading-state">Đang tải...</div>
+            </div>
+        </div>
+        
+        <!-- ==================== TAB: ĐÃ DUYỆT (APPROVED) ==================== -->
+        <div id="knowledge-tab-approved" class="knowledge-tab-content">
+            <h3>✅ Kiến Thức Đã Duyệt</h3>
+            <p class="tab-description">
+                Kiến thức đã được anh phê duyệt và nhập vào hệ thống chính thức.
+            </p>
+            <div id="approved-list" class="knowledge-list">
+                <div class="loading-state">Đang tải...</div>
+            </div>
+        </div>
+        
+        <!-- ==================== TAB: BÁO CÁO TUẦN ==================== -->
+        <div id="knowledge-tab-weekly-report" class="knowledge-tab-content">
+            <h3>📊 Báo Cáo Định Kỳ (DIR-04)</h3>
+            <p class="tab-description">
+                Tự động tổng hợp mỗi tuần những gì em đã học mới.
+            </p>
+            <div id="weekly-report-content" class="weekly-report-container">
+                <div class="loading-state">Đang tải...</div>
+            </div>
+        </div>
+        
+    </div>
+</section>
+
+<!-- ==================== CSS STYLES ==================== -->
+<style>
+/* Knowledge Dashboard Styles */
+.knowledge-dashboard-container {
+    padding: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+/* Overview Metrics */
+.knowledge-overview {
+    margin-bottom: 30px;
+}
+
+.knowledge-overview h2 {
+    font-size: 24px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 20px;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+}
+
+.metric-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 12px;
+    padding: 20px;
+    color: white;
+    position: relative;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+}
+
+.metric-card.metric-primary {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.metric-card.metric-warning {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.metric-card.metric-success {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.metric-value {
+    font-size: 36px;
+    font-weight: 700;
+    margin-bottom: 5px;
+}
+
+.metric-label {
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+.metric-sublabel {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.notification-badge {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    background: #ef4444;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+/* Growth Chart */
+.growth-chart-section {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.growth-chart-section h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+#growth-chart-canvas {
+    width: 100%;
+    height: 300px;
+}
+
+.chart-note {
+    margin-top: 10px;
+    color: #666;
+}
+
+/* Knowledge Tabs */
+.knowledge-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 10px;
+}
+
+.knowledge-tab-btn {
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.knowledge-tab-btn:hover {
+    background: #f3f4f6;
+}
+
+.knowledge-tab-btn.active {
+    background: #667eea;
+    color: white;
+}
+
+.tab-badge {
+    background: #ef4444;
+    color: white;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 11px;
+    margin-left: 5px;
+}
+
+/* Tab Content */
+.knowledge-tab-content {
+    display: none;
+}
+
+.knowledge-tab-content.active {
+    display: block;
+}
+
+.knowledge-tab-content h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
+.tab-description {
+    color: #666;
+    margin-bottom: 20px;
+    font-size: 14px;
+}
+
+/* Knowledge List */
+.knowledge-list {
+    display: grid;
+    gap: 15px;
+}
+
+.knowledge-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid #667eea;
+}
+
+.knowledge-card.quarantine-card {
+    border-left-color: #f59e0b;
+}
+
+.knowledge-card.approved-card {
+    border-left-color: #10b981;
+}
+
+.knowledge-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.knowledge-type-badge {
+    background: #e0e7ff;
+    color: #4338ca;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.knowledge-source {
+    color: #666;
+    font-size: 13px;
+}
+
+.status-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-left: auto;
+}
+
+.status-badge.pending {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.status-badge.approved {
+    background: #d1fae5;
+    color: #059669;
+}
+
+.knowledge-content {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #333;
+    margin-bottom: 12px;
+}
+
+.knowledge-references {
+    background: #f9fafb;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
+.knowledge-references ul {
+    margin: 5px 0 0 20px;
+    padding: 0;
+}
+
+.knowledge-references li {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 3px;
+}
+
+.knowledge-meta {
+    display: flex;
+    gap: 15px;
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 12px;
+}
+
+.knowledge-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-approve {
+    background: #10b981;
+    color: white;
+}
+
+.btn-approve:hover {
+    background: #059669;
+}
+
+.btn-reject {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-reject:hover {
+    background: #dc2626;
+}
+
+/* Loading & Empty States */
+.loading-state,
+.empty-state {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+    font-size: 14px;
+}
+
+/* Weekly Report */
+.weekly-report-container {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.weekly-report h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    color: #1a1a1a;
+}
+
+.report-section {
+    margin-bottom: 20px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.report-section:last-child {
+    border-bottom: none;
+}
+
+.report-section h4 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.report-section ul {
+    margin: 10px 0;
+    padding-left: 20px;
+}
+
+.report-section li {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.report-footer {
+    text-align: right;
+    color: #999;
+    font-size: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .knowledge-tabs {
+        flex-wrap: wrap;
+    }
+    
+    .knowledge-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .status-badge {
+        margin-left: 0;
+    }
+}
+</style>
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script>
+// Knowledge Tab Switching
+function switchKnowledgeTab(tabName) {
+    // Hide all tab contents
+    document.querySelectorAll('.knowledge-tab-content').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Remove active class from all buttons
+    document.querySelectorAll('.knowledge-tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // Show selected tab
+    document.getElementById(`knowledge-tab-${tabName}`).classList.add('active');
+    
+    // Add active class to button
+    event.target.classList.add('active');
+    
+    // Load data if needed
+    if (tabName === 'user-provided') {
+        fetchUserProvided();
+    } else if (tabName === 'quarantine') {
+        fetchQuarantine();
+    } else if (tabName === 'approved') {
+        fetchApproved();
+    } else if (tabName === 'weekly-report') {
+        fetchWeeklyReport();
+    }
+}
+
+// Auto-refresh quarantine badge every 30 seconds
+setInterval(() => {
+    if (knowledgeState.overview) {
+        const badge = document.getElementById('knowledge-pending-badge');
+        const tabBadge = document.getElementById('quarantine-badge');
+        const count = knowledgeState.overview.pending_approval || 0;
+        
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+        
+        if (tabBadge) {
+            tabBadge.textContent = count;
+            tabBadge.style.display = count > 0 ? 'inline-block' : 'none';
+        }
+    }
+}, 30000);
+</script>

@@ -1,7 +1,7 @@
 {
   "device_id": "EDGE-PI5-DESK-01",
   "device_label": "Bàn Làm Việc Quanpt1 (Màn hình 7 inch 1280x720)",
-  "core_host": "192.168.1.17",
+  "core_host": "192.168.1.10",
   "core_port": 8766,
   "kiosk_host": "0.0.0.0",
   "kiosk_port": 8768,
@@ -14,7 +14,7 @@
   "display_orientation": "landscape",
   "screen_width": 1280,
   "screen_height": 720,
-  "wake_word": "Tony ơi",
+  "wake_word": "TONY ơi",
   "follow_up_window_sec": 15.0,
   "core_version": "0.2.0",
   "edge_client_version": "0.2.0",

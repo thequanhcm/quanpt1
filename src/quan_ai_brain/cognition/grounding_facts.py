@@ -164,8 +164,9 @@ def render_grounding_block(facts: dict[str, Any]) -> str:
         f"2. Suy luận LLM: {facts.get('llm', {}).get('model', '?')} — {facts.get('llm', {}).get('runs_on', '?')}.",
         f"3. Ollama local: {comp.get('ollama_local', '?')} | Core server: {comp.get('core_server', '?')} | Executive: {comp.get('executive_server', '?')}.",
         f"4. Hình thể Pi 5: {pi5_line}",
-        "5. Khi Anh hỏi 'em ở đâu/ chạy ở đâu': trả lời theo mục 1-3 ở trên. Khi mô tả năng lực, chỉ nêu những gì ONLINE hoặc đã kiểm chứng; cái chưa xác minh thì nói thẳng.",
-        "6. Avatar hiển thị trong dashboard là giao diện 2D trên PC, KHÔNG phải phần cứng Pi 5.",
-        "7. Anh NÓI một thành phần đã bật/online → tin Anh (Anh là nguồn sự thật tối cao) + kiểm tra lại mục 3-4 để xác nhận; KHÔNG bao giờ argued lại bằng dữ liệu cũ.",
+        "5. Âm thanh & Phát nhạc: Loa USB và Microphone trên Pi 5 ĐANG ONLINE. Module đọc thoại tiếng Việt (Edge-TTS Hoài My) và công cụ tìm kiếm/phát nhạc YouTube (youtube_music) ĐÃ ĐƯỢC KÍCH HOẠT VÀ KIỂM CHỨNG. Khi Anh yêu cầu bật bài hát (ví dụ: 'bật bài hát Tàu Anh Qua Núi', 'mở nhạc...'), hệ thống TỰ ĐỘNG tìm kiếm YouTube và phát qua loa Raspberry Pi 5. TUYỆT ĐỐI KHÔNG từ chối hay nói 'chưa có công cụ phát nhạc'.",
+        "6. Khi Anh hỏi 'em ở đâu/ chạy ở đâu': trả lời theo mục 1-3 ở trên. Khi mô tả năng lực, chỉ nêu những gì ONLINE hoặc đã kiểm chứng; cái chưa xác minh thì nói thẳng.",
+        "7. Avatar hiển thị trong dashboard là giao diện 2D trên PC, KHÔNG phải phần cứng Pi 5.",
+        "8. Anh NÓI một thành phần đã bật/online → tin Anh (Anh là nguồn sự thật tối cao) + kiểm tra lại mục 3-4 để xác nhận; KHÔNG bao giờ argued lại bằng dữ liệu cũ.",
     ]
     return "\n".join(lines)

@@ -296,6 +296,11 @@
         <span class="tab-text">Workbench — Môi Trường Làm Việc</span>
         <span class="tab-badge" id="badge-workbench-overview" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">—</span>
       </button>
+      <button class="nav-tab" data-tab="tab-deep-memory" id="nav-btn-deep-memory">
+        <span class="tab-icon">🧠</span>
+        <span class="tab-text">Trí Nhớ Chuyên Sâu (V9)</span>
+        <span class="tab-badge" id="badge-deep-memory-questions" style="background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3);">—</span>
+      </button>
     </nav>
 
     <!-- Content Area: Dedicated Sections -->
@@ -608,6 +613,7 @@
             <div class="dialogue-tools">
               <span class="wake-badge" id="dialogue-wake-badge" title="Trạng thái lắng nghe từ khóa">🎙️ Đánh thức: TẮT</span>
               <button class="btn btn-sm btn-outline" id="btn-dialogue-tts-toggle" title="Bật/Tắt đọc thành tiếng (TTS)">🔊 Đọc: BẬT</button>
+              <button class="btn btn-sm btn-outline" id="btn-conv-mode" title="Hội thoại liên tục: nói → nghe trả lời → tự nghe tiếp, không cần bấm mic hay gọi wake word">💬 Hội thoại: TẮT</button>
               <button class="btn btn-sm btn-outline" id="btn-clear-dialogue">🗑️ Xóa hội thoại</button>
             </div>
           </div>
@@ -1491,6 +1497,71 @@
         </div>
       </section>
 
+      <!-- ================= TAB: DEEP MEMORY (V9) ================= -->
+      <section id="tab-deep-memory" class="tab-content">
+        <div class="section-intro flex-between">
+          <div>
+            <h2>🧠 Trí Nhớ Chuyên Sâu — Deep Cognitive Memory (V9)</h2>
+            <p>Tri thức có nguồn gốc, quan hệ có căn cứ, suy luận có bằng chứng. Mỗi kết luận truy vết được về nguồn; mâu thuẫn không tự chọn phía.</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" id="btn-deep-extract">⏬ Trích Xuất Tri Thức</button>
+            <button class="btn btn-primary" id="btn-deep-review">🔄 Chạy Sàng Lọc</button>
+          </div>
+        </div>
+
+        <div id="deep-overview" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:16px;">
+          <!-- Số liệu thật từ /api/memory/deep/stats -->
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+          <div class="card" style="padding:14px;">
+            <div class="card-header flex-between">
+              <h3 style="margin:0; font-size:0.95rem;">📚 Knowledge Explorer</h3>
+              <select id="deep-units-filter" style="background:rgba(15,23,42,0.6); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
+                <option value="">Mọi trạng thái</option>
+                <option value="EXTRACTED">EXTRACTED</option>
+                <option value="VERIFIED">VERIFIED</option>
+                <option value="INFERRED">INFERRED</option>
+                <option value="CONFLICTED">CONFLICTED</option>
+                <option value="NEEDS_OWNER_REVIEW">NEEDS_OWNER_REVIEW</option>
+                <option value="SUPERSEDED">SUPERSEDED</option>
+                <option value="CANDIDATE">CANDIDATE</option>
+              </select>
+            </div>
+            <div id="deep-units-list" style="font-size:0.78rem; color:#cbd5e1; max-height:360px; overflow-y:auto; margin-top:8px;">đang tải…</div>
+          </div>
+
+          <div class="card" style="padding:14px;">
+            <div class="card-header">
+              <h3 style="margin:0; font-size:0.95rem;">❓ Memory Review Center — Câu Hỏi Chờ Anh</h3>
+            </div>
+            <div id="deep-questions-list" style="font-size:0.78rem; color:#cbd5e1; max-height:360px; overflow-y:auto; margin-top:8px;">đang tải…</div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px; margin-top:14px;">
+          <h3 style="margin:0 0 8px 0; font-size:0.95rem;">🕐 Memory Timeline</h3>
+          <div id="deep-timeline" style="font-size:0.75rem; color:#94a3b8; max-height:220px; overflow-y:auto;">đang tải…</div>
+        </div>
+
+        <!-- V10: Owner-Gated Memory Review — đợt sàng lọc mẫu theo lệnh SÀNG LỌC -->
+        <div class="card" style="padding:14px; margin-top:14px; border-color: rgba(147, 197, 253, 0.35);">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <h3 style="margin:0; font-size:0.95rem;">🔎 Sàng Lọc Trí Nhớ (Owner-Gated)</h3>
+            <button class="btn btn-primary" id="btn-deep-owner-review">+ Sàng Lọc Trí Nhớ</button>
+          </div>
+          <p style="margin:6px 0 10px 0; font-size:0.72rem; color:#94a3b8;">
+            Lệnh <b>SÀNG LỌC</b> (chat hoặc nút) tạo đợt mẫu giới hạn: phân tích CHỈ ĐỌC → hiển thị 4 nhóm
+            (tri thức · quan hệ/mâu thuẫn · suy luận+bằng chứng · câu hỏi cần anh) → anh phản hồi từng mục →
+            xác nhận lần 2 trước khi ghi → lịch sử trước–sau + hoàn tác. Không tự sửa toàn bộ trí nhớ.
+          </p>
+          <div id="deep-review-panel" style="max-height:520px; overflow-y:auto; font-size:0.75rem;">
+            <div style="color:#64748b;">IDLE — chưa có đợt sàng lọc.</div>
+          </div>
+        </div>
+      </section>
+
     </main>
   </div>
 
@@ -1535,6 +1606,6 @@
 
   <script src="/static/wake_engine.js?v=4.0"></script>
   <script src="/static/avatar_engine.js?v=4.0"></script>
-  <script src="/static/executive.js?v=4.0"></script>
+  <script src="/static/executive.js?v=4.3"></script>
 </body>
 </html>

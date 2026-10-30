@@ -36,6 +36,12 @@ except ImportError:
     from auth import EdgeHMACAuth  # type: ignore
     from config import EdgeConfig  # type: ignore
 
+# V41 EDGE AGENT: 5 năng lực chủ động (30/10/2026, duyệt bởi Quanpt1)
+try:
+    from edge_client.edge_agent import EdgeAgent
+except ImportError:
+    from edge_agent import EdgeAgent  # type: ignore
+
 STATIC_DIR = Path(__file__).resolve().parent
 
 # ============================================================
@@ -116,16 +122,128 @@ def play_audio_on_hardware_speaker(audio_base64: str) -> bool:
 
 
 _KIOSK_PROC = None
+_MUSIC_PROC = None
+_MUSIC_LOCK = threading.Lock()
+
+
+def stop_music_stream(daemon_state: Any = None) -> bool:
+    """Dừng luồng phát nhạc trên Pi 5 nếu đang phát."""
+    global _MUSIC_PROC
+    with _MUSIC_LOCK:
+        if _MUSIC_PROC is not None:
+            try:
+                _MUSIC_PROC.terminate()
+                _MUSIC_PROC.wait(timeout=1.5)
+            except Exception:
+                try:
+                    _MUSIC_PROC.kill()
+                except Exception:
+                    pass
+            _MUSIC_PROC = None
+
+    if daemon_state is not None:
+        try:
+            with daemon_state.lock:
+                daemon_state.current_music = None
+        except Exception:
+            pass
+    return True
+
+
+def play_music_stream(url: str, title: str = "", video_id: str = "", daemon_state: Any = None) -> bool:
+    """Phát nhạc trực tiếp qua loa vật lý trên Pi 5 (Chromium Kiosk / Headless Chromium / mpv)."""
+    global _MUSIC_PROC
+    stop_music_stream(daemon_state)
+
+    if daemon_state is not None:
+        try:
+            with daemon_state.lock:
+                daemon_state.current_music = {
+                    "title": title or "Bản nhạc YouTube",
+                    "video_id": video_id,
+                    "url": url,
+                    "playing": True,
+                    "started_at": datetime.now(timezone.utc).isoformat(),
+                }
+        except Exception:
+            pass
+
+    def _worker() -> None:
+        global _MUSIC_PROC
+        import os, shutil, subprocess
+        # If Chromium Kiosk is not currently displayed, run background headless Chromium for native YouTube audio
+        if not is_kiosk_running() and shutil.which("chromium"):
+            embed_url = f"https://www.youtube.com/embed/{video_id}?autoplay=1"
+            cmd = [
+                "chromium",
+                "--no-sandbox",
+                "--headless=new",
+                "--autoplay-policy=no-user-gesture-required",
+                "--disable-gpu",
+                embed_url,
+            ]
+        elif shutil.which("mpv"):
+            cmd = ["mpv", "--no-video", "--really-quiet", url]
+        elif shutil.which("cvlc"):
+            cmd = ["cvlc", "--no-video", "--play-and-exit", "-q", url]
+        else:
+            cmd = None
+
+        if cmd:
+            try:
+                env = os.environ.copy()
+                if os.path.exists("/run/user/1000"):
+                    env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+                    env["PULSE_SERVER"] = "unix:/run/user/1000/pulse/native"
+                with _MUSIC_LOCK:
+                    _MUSIC_PROC = subprocess.Popen(
+                        cmd,
+                        env=env,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                _MUSIC_PROC.wait()
+            except Exception:
+                pass
+            finally:
+                with _MUSIC_LOCK:
+                    _MUSIC_PROC = None
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    return True
+
 
 
 def is_kiosk_running() -> bool:
-    """Kiểm tra xem tiến trình Chromium Kiosk hiển thị hình thể có đang chạy hay không."""
+    """Kiểm tra xem tiến trình Chromium Kiosk hiển thị hình thể có đang chạy hay không.
+
+    (29/10/2026) FIX: pgrep -f "chromium" khớp MỌI process chromium — bao gồm
+    headless Chromium worker phát nhạc YouTube (_worker trong stop_music /
+    play_music khởi chạy chromium --headless=new). Khi đó hàm trả True dù kiosk
+    hiển thị KHÔNG tồn tại → nút BẬT HÌNH THỂ bị skip ("đang chạy rồi") và
+    dashboard báo ACTIVE sai trong khi màn DSI trắng. Giờ chỉ tính các process
+    chromium KHÔNG headless (kiosk thật có cờ --kiosk hoặc không có --headless).
+    """
     global _KIOSK_PROC
     try:
         import subprocess, shutil, os
         if shutil.which("pgrep"):
             res = subprocess.run(["pgrep", "-f", "chromium"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, timeout=1.0)
-            return bool(res.stdout.strip())
+            pids = [p for p in res.stdout.split() if p.strip()]
+            for pid in pids:
+                try:
+                    with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                        cmdline = fh.read().decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                # headless chromium (nhạc/background) KHÔNG phải kiosk hiển thị
+                if "--headless" in cmdline:
+                    continue
+                # helper processes (zygote/crashpad/renderer) kế thừa cmdline gốc;
+                # chỉ cần 1 process chromium không-headless tồn tại = kiosk thật
+                return True
+            return False
         elif os.name == "nt":
             return _KIOSK_PROC is not None and _KIOSK_PROC.poll() is None
     except Exception:
@@ -167,12 +285,17 @@ def launch_kiosk_process() -> bool:
                 "--touch-events=enabled",
                 "--disable-pinch",
                 "--overscroll-history-navigation=0",
-                "--window-size=1280,720",
+                # V40 (30/10): màn DSI Pi 5 = 800x480 — 1280,720 làm khung UI lệch/tràn
+                "--window-size=800,480",
                 "--window-position=0,0",
                 "--enable-features=OverlayScrollbar",
                 "--autoplay-policy=no-user-gesture-required",
                 "--use-fake-ui-for-media-stream",
                 "--password-store=basic",
+                # V40 (30/10): Wayland renderer bị treo trên Pi 5 (0 CPU) — X11 + SwiftShader ổn định
+                "--ozone-platform=x11",
+                "--use-gl=angle",
+                "--use-angle=swiftshader",
                 "--disable-session-crashed-bubble",
                 "--disable-features=Translate",
                 "http://127.0.0.1:8768/"
@@ -223,6 +346,12 @@ class EdgeDaemonState:
         self.last_camera_error: str | None = None
         self.camera_device_name: str = "Sirius USB2.0 Camera (/dev/video0)"
 
+        # YouTube Music & Audio Streaming State
+        self.current_music: dict[str, Any] | None = None
+
+        # V41 EDGE AGENT — 5 năng lực chủ động (tự phản ứng/quản lý/thu thập/phối hợp/cải tiến)
+        self.edge_agent = EdgeAgent(config)
+
     def to_kiosk_dict(self) -> dict[str, Any]:
         with self.lock:
             reload_needed = self.need_ui_reload
@@ -249,6 +378,7 @@ class EdgeDaemonState:
                 "need_ui_reload": reload_needed,
                 "pending_audio_base64": audio_b64,
                 "pending_timeline": timeline_obj,
+                "music": self.current_music,
                 "audio": {
                     "mic_enabled": self.mic_enabled,
                     "mic_muted": self.mic_muted,
@@ -325,6 +455,30 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._send_json(data)
             return
 
+        # V41: trạng thái Edge Agent (5 năng lực chủ động)
+        if path == "/api/kiosk/agent/status":
+            try:
+                self._send_json({
+                    "success": True,
+                    "agent": self.daemon_state.edge_agent.get_status_summary(),
+                })
+            except Exception as exc:
+                self._send_error_json(f"AGENT_STATUS_ERROR: {exc}", 500)
+            return
+
+        # V41: đề xuất cải tiến (chỉ đọc — áp dụng cần duyệt của Quanpt1)
+        if path == "/api/kiosk/agent/suggestions":
+            try:
+                limit = 20
+                self._send_json({
+                    "success": True,
+                    "suggestions": self.daemon_state.edge_agent.get_suggestions(limit),
+                    "note": "Đề xuất CHƯA được áp dụng — chờ duyệt của Quanpt1",
+                })
+            except Exception as exc:
+                self._send_error_json(f"AGENT_SUGGESTIONS_ERROR: {exc}", 500)
+            return
+
         if path == "/api/kiosk/files":
             self._handle_api_kiosk_list_files()
             return
@@ -343,6 +497,12 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/kiosk/camera/stream":
             self._handle_api_kiosk_camera_stream()
+            return
+
+        if path == "/api/kiosk/music/status":
+            with self.daemon_state.lock:
+                m = self.daemon_state.current_music
+            self._send_json({"success": True, "music": m, "playing": m is not None})
             return
 
         self.send_error(404, "File Not Found")
@@ -395,6 +555,14 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/kiosk/camera/capture":
             self._handle_api_kiosk_camera_capture(body)
+            return
+
+        if path == "/api/kiosk/music/play":
+            self._handle_api_kiosk_music_play(body)
+            return
+
+        if path == "/api/kiosk/music/stop":
+            self._handle_api_kiosk_music_stop()
             return
 
         self.send_error(404, "Endpoint Not Found")
@@ -557,7 +725,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                 audio_b64 and (
                     AUDIO_PLAYBACK_MODE in ("HARDWARE_ONLY", "DUAL")
                     or not is_kiosk_running()
-                    or body.get("force_hardware")
+                    or body.get("force_hardware", True)
                 )
             )
             if should_play_hardware:
@@ -710,6 +878,34 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                 return
         except Exception as e:
             self._send_json({"success": False, "error": str(e), "local_safety": "ENGAGED"})
+
+    def _handle_api_kiosk_music_play(self, body: dict[str, Any]) -> None:
+        video_id = str(body.get("video_id", "")).strip()
+        url = str(body.get("url", "")).strip()
+        title = str(body.get("title", "")).strip() or "Bản nhạc YouTube"
+        if not url and video_id:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        if not url:
+            self._send_error_json("Missing url or video_id for music playback", 400)
+            return
+
+        play_music_stream(url=url, title=title, video_id=video_id, daemon_state=self.daemon_state)
+        self._send_json({
+            "success": True,
+            "playing": True,
+            "title": title,
+            "video_id": video_id,
+            "url": url,
+            "message": f"Đang phát bài hát '{title}' trên loa Raspberry Pi 5.",
+        })
+
+    def _handle_api_kiosk_music_stop(self) -> None:
+        stop_music_stream(self.daemon_state)
+        self._send_json({
+            "success": True,
+            "playing": False,
+            "message": "Đã dừng phát nhạc trên Raspberry Pi 5.",
+        })
 
     # =========================================================================
     # AUDIO & MICROPHONE ENDPOINTS (ADDENDUM V2.1)
@@ -1127,6 +1323,8 @@ class EdgeClientDaemon:
             secret=self.config.shared_secret,
         )
         self.state = EdgeDaemonState(self.config)
+        # V41: trạng thái kết nối trước đó cho phát hiện mất kết nối
+        self._was_core_connected = False
         self._server: ThreadedKioskServer | None = None
         self._stop_event = threading.Event()
         self._heartbeat_thread: threading.Thread | None = None
@@ -1152,6 +1350,12 @@ class EdgeClientDaemon:
         self._heartbeat_thread = threading.Thread(target=self._run_heartbeat_loop, daemon=True)
         self._heartbeat_thread.start()
 
+        # V41: khởi động 2 luồng Edge Agent (metrics + health-check)
+        try:
+            self.state.edge_agent.start_background_loops()
+        except Exception:
+            pass  # fail-closed
+
         # Check if assets exist; if not, trigger background initial sync
         portrait_file = STATIC_DIR / "assets" / "avatar" / "model_f_portrait.png"
         if not portrait_file.exists():
@@ -1169,6 +1373,11 @@ class EdgeClientDaemon:
     def stop(self) -> None:
         """Stop all background workers and shutdown local server."""
         self._stop_event.set()
+        # V41: dừng Edge Agent loops
+        try:
+            self.state.edge_agent.stop_background_loops()
+        except Exception:
+            pass
         if self._server:
             try:
                 self._server.shutdown()
@@ -1264,6 +1473,8 @@ class EdgeClientDaemon:
                     "screen_height": self.config.screen_height,
                     "model_f_active": True,
                 },
+                # V41: telemetry Edge Agent (tự quản lý + tự phối hợp)
+                "edge_agent": self.state.edge_agent.get_status_summary(),
             }).encode("utf-8")
             headers = self.auth.create_signed_headers(payload)
             headers["Content-Type"] = "application/json"
@@ -1285,9 +1496,38 @@ class EdgeClientDaemon:
 
     def _run_heartbeat_loop(self) -> None:
         """Continuous background heartbeat loop."""
+        # V41: tự phản ứng lúc khởi động — chào + camera auto-on (chỉ khi có /dev/video0)
+        try:
+            camera_available = Path("/dev/video0").exists() and sys.platform != "win32"
+            boot_actions = self.state.edge_agent.maybe_autoreact_on_boot(camera_available)
+            if boot_actions.get("greeted"):
+                with self.state.lock:
+                    self.state.transcript = "Chào Anh Quân! TONY online, tất cả hệ thống sẵn sàng."
+                    self.state.avatar_state = "SPEAKING"
+        except Exception:
+            pass  # fail-closed: lỗi agent không được giết heartbeat
+
         while not self._stop_event.is_set():
             self.check_core_connection()
             self._send_dedicated_heartbeat()
+
+            # V41: phát hiện mất kết nối (CONNECTED → LOST)
+            try:
+                with self.state.lock:
+                    now_connected = self.state.core_connected
+                self.state.edge_agent.detect_connection_lost(now_connected, self._was_core_connected)
+                self._was_core_connected = now_connected
+            except Exception:
+                pass
+
+            # V41: gửi events lên Brain (tự phối hợp)
+            try:
+                headers = self.auth.create_signed_headers()
+                self.state.edge_agent.send_events_to_brain(
+                    self.config.core_base_url, headers,
+                )
+            except Exception:
+                pass
 
             # Poll consultations if connected
             if self.state.core_connected:

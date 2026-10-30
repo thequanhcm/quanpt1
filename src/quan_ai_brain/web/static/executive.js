@@ -10,6 +10,26 @@ document.addEventListener("DOMContentLoaded", () => {
   let isListening = false;
   let wakeEngine = null;
   let isTtsEnabled = true;
+  // Speech lifecycle counters for the continuous conversation loop
+  let convTtsSeq = 0;
+  let convTtsLeakTimer = null;
+  // ===== Continuous Conversation Mode (V7.1 voice upgrade, 27/10/2026) =====
+  // Speech flow: STT -> /api/chat/stream -> edge-tts -> auto re-listen (no mic
+  // button, no wake word needed). isAwaitingReply keeps the loop honest: only
+  // re-arm listening AFTER a real reply (or error) — never on a dead stream.
+  let convMode = false;
+  let convWakeOnEntry = false; // wake word state before entering conv mode
+  let isAwaitingReply = false;
+  let convTtsPlaying = 0; // in-flight TTS count (0 = nothing playing)
+  let convPendingAfterSpeech = null; // callback to run once TTS finishes
+  function onConversationTtsDone() {
+    if (convTtsPlaying > 0) convTtsPlaying--;
+    if (convTtsPlaying === 0 && convMode && !isAwaitingReply && convPendingAfterSpeech) {
+      const cb = convPendingAfterSpeech;
+      convPendingAfterSpeech = null;
+      cb();
+    }
+  }
   let currentAvatarState = "IDLE";
   let setAvatarState = function(state) {};
 
@@ -554,9 +574,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
           window.digitalHuman.setContextFromText(finalText);
         }
-        speakText(finalText);   // TTS only AFTER the complete answer arrives
+        speakText(finalText, function () { resumeConvListeningAfterReply(); });   // TTS only AFTER the complete answer arrives
       } else {
         appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI.", "assistant");
+        finishConvTurn();
       }
     } catch (err) {
       // Streaming path failed — fall back to the legacy non-streaming endpoint.
@@ -574,9 +595,10 @@ document.addEventListener("DOMContentLoaded", () => {
           if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
             window.digitalHuman.setContextFromText(data.reply);
           }
-          speakText(data.reply);
+          speakText(data.reply, function () { resumeConvListeningAfterReply(); });
         } else {
           appendMessage("QUAN AI BRAIN — BẢN SAO SỐ", "Xin lỗi Anh, không nhận được phản hồi từ mô hình AI cục bộ.", "assistant");
+          finishConvTurn();
         }
       } catch (err2) {
         const removed = document.getElementById(streamId);
@@ -668,6 +690,156 @@ document.addEventListener("DOMContentLoaded", () => {
           if (wakeEngine) wakeEngine.notifySpeakingEnd();
         }
       });
+    }
+
+    // ===== Continuous Conversation Mode (V7.1 voice upgrade) =====
+    // One click = full speech conversation loop without wake words:
+    // speak -> AI replies aloud -> listens again automatically -> repeat.
+    const btnConvMode = document.getElementById("btn-conv-mode");
+    if (btnConvMode) {
+      btnConvMode.addEventListener("click", async () => {
+        if (!convMode) {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (!SpeechRecognition) {
+            appendMessage("HỆ THỐNG", "⚠️ Trình duyệt không hỗ trợ Web Speech API — cần Google Chrome hoặc Edge.", "system");
+            return;
+          }
+          try {
+            // Pre-request mic permission so the loop never dies silently on denial
+            await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (err) {
+            appendMessage("HỆ THỐNG", "⚠️ Quyền truy cập Microphone bị từ chối — không thể bật hội thoại liên tục.", "system");
+            return;
+          }
+          convMode = true;
+          convWakeOnEntry = wakeEngine && wakeEngine.state !== "DISABLED";
+          if (convWakeOnEntry && wakeEngine) wakeEngine.stop();
+          btnConvMode.textContent = "💬 Hội thoại: BẬT";
+          btnConvMode.classList.add("active");
+          appendMessage("HỆ THỐNG", "💬 Chế độ hội thoại liên tục ĐÃ BẬT — Anh cứ nói thẳng, không cần gọi 'Tony ơi'. Em trả lời xong sẽ tự nghe tiếp. Nói 'dừng hội thoại' để tắt.", "system");
+          updateWakeWordUI("LISTENING");
+          startConvListening();
+        } else {
+          stopConvMode("Đã tắt chế độ hội thoại liên tục.");
+        }
+      });
+    }
+
+    function startConvListening() {
+      if (!convMode) return;
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) { stopConvMode("Trình duyệt không hỗ trợ Web Speech API."); return; }
+      try {
+        if (recognition) { try { recognition.onend = null; recognition.onresult = null; recognition.abort(); } catch (_) {} }
+        recognition = new SpeechRecognition();
+        recognition.lang = "vi-VN";
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onstart = () => {
+          isListening = true;
+          const voiceBtn = document.getElementById("btn-dialogue-voice");
+          if (voiceBtn) voiceBtn.classList.add("listening");
+          updateWakeWordUI("LISTENING");
+        };
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          handleConvUtterance(transcript);
+        };
+        recognition.onerror = (ev) => {
+          // no-speech / aborted are normal pauses in a live conversation — keep
+          // the loop alive; only hard errors end the turn.
+          if (ev.error === "no-speech" || ev.error === "aborted") {
+            if (convMode) startConvListening();
+            return;
+          }
+          isListening = false;
+          const voiceBtn = document.getElementById("btn-dialogue-voice");
+          if (voiceBtn) voiceBtn.classList.remove("listening");
+          if (convMode) {
+            updateWakeWordUI("ERROR");
+            finishConvTurn();
+          }
+        };
+        recognition.onend = () => {
+          isListening = false;
+          const voiceBtn = document.getElementById("btn-dialogue-voice");
+          if (voiceBtn) voiceBtn.classList.remove("listening");
+          // no-speech pauses: recognition ends without result — re-arm if idle
+          if (convMode && !isAwaitingReply && convTtsPlaying === 0) startConvListening();
+        };
+        try { recognition.start(); } catch (e) { /* already started */ }
+      } catch (err) {
+        stopConvMode("Không thể khởi động microphone: " + (err.message || err));
+      }
+    }
+
+    function handleConvUtterance(transcript) {
+      const t = (transcript || "").trim();
+      if (!t) { if (convMode) startConvListening(); return; }
+      const lower = t.toLowerCase();
+      // Voice control: end the continuous conversation
+      if (lower === "dừng hội thoại" || lower.includes("dừng hội thoại") || lower.includes("tắt hội thoại") || lower === "stop conversation") {
+        stopConvMode("Đã tắt chế độ hội thoại liên tục theo yêu cầu bằng giọng nói.");
+        return;
+      }
+      if (isAwaitingReply) return; // debounce: one reply at a time
+      isAwaitingReply = true;
+      updateWakeWordUI("THINKING");
+      const input = document.getElementById("dialogue-input");
+      if (input) {
+        input.value = t;
+        sendDialogueMessage();
+      } else {
+        finishConvTurn();
+      }
+    }
+
+    function finishConvTurn() {
+      isAwaitingReply = false;
+      if (convMode) {
+        updateWakeWordUI("LISTENING");
+        startConvListening();
+      }
+    }
+
+    function resumeConvListeningAfterReply() {
+      isAwaitingReply = false;
+      if (!convMode) return;
+      // If audio already finished before this callback, re-arm now; otherwise
+      // onConversationTtsDone will call us when the last audio ends.
+      if (convTtsPlaying === 0) {
+        updateWakeWordUI("LISTENING");
+        startConvListening();
+      } else {
+        convPendingAfterSpeech = function () {
+          updateWakeWordUI("LISTENING");
+          startConvListening();
+        };
+      }
+    }
+
+    function stopConvMode(reason) {
+      convMode = false;
+      isAwaitingReply = false;
+      convPendingAfterSpeech = null;
+      convTtsPlaying = 0;
+      try { if (recognition) { recognition.onend = null; recognition.onresult = null; recognition.abort(); } } catch (_) {}
+      const voiceBtn = document.getElementById("btn-dialogue-voice");
+      if (voiceBtn) voiceBtn.classList.remove("listening");
+      const btnConvMode = document.getElementById("btn-conv-mode");
+      if (btnConvMode) {
+        btnConvMode.textContent = "💬 Hội thoại: TẮT";
+        btnConvMode.classList.remove("active");
+      }
+      // Restore wake word if it was active before entering conv mode
+      if (convWakeOnEntry && wakeEngine) {
+        wakeEngine.start();
+        convWakeOnEntry = false;
+      }
+      if (typeof setAvatarState === "function") setAvatarState("IDLE");
+      if (reason) appendMessage("HỆ THỐNG", reason, "system");
+      updateWakeWordUI("DISABLED");
     }
 
     // Manual Mic button fallback
@@ -792,10 +964,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (wakeEngine) wakeEngine.notifySpeakingEnd();
   }
 
-  async function speakText(text) {
-    if (!isTtsEnabled) return;
+  async function speakText(text, onDone) {
+    if (!isTtsEnabled) {
+      // V7.1 fix: TTS disabled — still close the speech cycle so wake engine
+      // and avatar never stick in THINKING/SPEAKING after a text-only reply.
+      stopExecutiveAudio();
+      if (typeof setAvatarState === "function") setAvatarState("IDLE");
+      if (wakeEngine) wakeEngine.notifySpeakingEnd();
+      onConversationTtsDone();
+      if (typeof onDone === "function") { try { onDone(); } catch (_) {} }
+      return;
+    }
     stopExecutiveAudio();
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim()) {
+      onConversationTtsDone();
+      if (typeof onDone === "function") { try { onDone(); } catch (_) {} }
+      return;
+    }
 
     // Clean up markers preserving Vietnamese diacritics
     const clean = text.replace(/```[\s\S]*?```/g, " [Khối mã nguồn] ")
@@ -811,6 +996,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (wakeEngine) wakeEngine.notifySpeakingStart();
     if (typeof setAvatarState === "function") setAvatarState("SPEAKING");
+    // Track in-flight audio so the conversation loop knows when speech ends.
+    // Leak self-heal: if a count never drains (network stall), force-close
+    // after 120s so listening always re-arms.
+    convTtsPlaying++;
+    const mySeq = ++convTtsSeq;
+    const convDone = (() => {
+      let fired = false;
+      return () => {
+        if (fired) return;
+        fired = true;
+        clearTimeout(convTtsLeakTimer);
+        onConversationTtsDone();
+        if (typeof onDone === "function") { try { onDone(); } catch (_) {} }
+      };
+    })();
+    convTtsLeakTimer = setTimeout(() => { convTtsPlaying = 0; convDone(); }, 120000);
     if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
       window.digitalHuman.setContextFromText(clean);
     }
@@ -836,19 +1037,23 @@ document.addEventListener("DOMContentLoaded", () => {
           if (window.digitalHuman) window.digitalHuman.cancelUtterance();
           if (typeof setAvatarState === "function") setAvatarState("IDLE");
           if (wakeEngine) wakeEngine.notifySpeakingEnd();
+          convDone();
         };
         audio.onerror = () => {
           currentExecutiveAudio = null;
+          convDone();
           fallbackExecutiveBrowserTTS(clean);
         };
         await audio.play();
         return;
       } else {
         console.warn("Core TTS synthesize failed, checking browser voices:", data.error);
+        convDone();
         fallbackExecutiveBrowserTTS(clean);
       }
     } catch (err) {
       console.warn("Error calling /api/voice/tts-synthesize:", err);
+      convDone();
       fallbackExecutiveBrowserTTS(clean);
     }
   }
@@ -879,6 +1084,14 @@ document.addEventListener("DOMContentLoaded", () => {
       utter.voice = viVoice;
       utter.lang = viVoice.lang || "vi-VN";
       utter.rate = 1.0;
+      // Keep the loop honest: browser TTS counts as in-flight speech too.
+      convTtsPlaying++;
+      let fbDone = false;
+      const fbConvDone = () => {
+        if (fbDone) return;
+        fbDone = true;
+        onConversationTtsDone();
+      };
       utter.onstart = () => {
         if (typeof setAvatarState === "function") setAvatarState("SPEAKING");
         if (window.digitalHuman) window.digitalHuman.startSpeaking(3000);
@@ -887,11 +1100,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.digitalHuman) window.digitalHuman.cancelUtterance();
         if (typeof setAvatarState === "function") setAvatarState("IDLE");
         if (wakeEngine) wakeEngine.notifySpeakingEnd();
+        fbConvDone();
       };
       utter.onerror = () => {
         if (window.digitalHuman) window.digitalHuman.cancelUtterance();
         if (typeof setAvatarState === "function") setAvatarState("IDLE");
         if (wakeEngine) wakeEngine.notifySpeakingEnd();
+        fbConvDone();
       };
       window.speechSynthesis.speak(utter);
     } catch (e) {
@@ -3920,4 +4135,374 @@ document.addEventListener("DOMContentLoaded", () => {
   } else {
     initWorkbench();
   }
+})();
+
+/* ================= V9 — DEEP MEMORY (Trí Nhớ Chuyên Sâu) ================= */
+(function initDeepMemory() {
+  "use strict";
+  if (!document.getElementById("tab-deep-memory")) return;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  const STATUS_COLORS = {
+    EXTRACTED: "#93c5fd", VERIFIED: "#4ade80", INFERRED: "#c4b5fd",
+    CONFLICTED: "#f87171", NEEDS_OWNER_REVIEW: "#fbbf24",
+    SUPERSEDED: "#94a3b8", CANDIDATE: "#7dd3fc", REJECTED: "#fca5a5",
+  };
+
+  function fmtStatus(status) {
+    const c = STATUS_COLORS[status] || "#94a3b8";
+    return `<span style="color:${c}; font-weight:600;">${esc(status)}</span>`;
+  }
+
+  async function loadDeepStats() {
+    try {
+      const res = await fetch("/api/memory/deep/stats");
+      const data = await res.json();
+      if (!data.success) throw new Error("stats fail");
+      const s = data.stats;
+      const cells = [
+        ["Tri thức", s.knowledge_units_total],
+        ["Đã xác minh", s.units_by_status.VERIFIED || 0],
+        ["Candidate", s.units_by_status.CANDIDATE || 0],
+        ["Mâu thuẫn chờ", s.units_by_status.CONFLICTED || 0],
+        ["Quan hệ", s.relations_total],
+        ["Câu hỏi chờ anh", s.owner_questions_open],
+        ["Sàng lọc gần nhất", s.last_review_run ? s.last_review_run.started_at_utc.slice(0, 16).replace("T", " ") : "chưa chạy"],
+      ];
+      $("deep-overview").innerHTML = cells.map(([label, val]) => `
+        <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(59,130,246,0.2); border-radius:10px; padding:10px 12px;">
+          <div style="font-size:1.3rem; font-weight:700; color:#93c5fd;">${esc(val)}</div>
+          <div style="font-size:0.72rem; color:#94a3b8;">${esc(label)}</div>
+        </div>`).join("");
+      const badge = $("badge-deep-memory-questions");
+      if (badge) badge.textContent = s.owner_questions_open > 0 ? `${s.owner_questions_open} chờ` : "0";
+    } catch (err) {
+      $("deep-overview").innerHTML = `<div style="color:#f87171; font-size:0.8rem;">Lỗi tải số liệu: ${esc(err.message)}</div>`;
+    }
+  }
+
+  async function loadDeepUnits() {
+    try {
+      const status = $("deep-units-filter").value;
+      const res = await fetch(`/api/memory/deep/units?limit=60${status ? `&status=${encodeURIComponent(status)}` : ""}`);
+      const data = await res.json();
+      if (!data.success) throw new Error("units fail");
+      if (!data.units.length) {
+        $("deep-units-list").innerHTML = `<em style="color:#64748b;">Chưa có tri thức — bấm "Trích Xuất Tri Thức" để bắt đầu.</em>`;
+        return;
+      }
+      $("deep-units-list").innerHTML = data.units.map((u) => {
+        const rels = (u.relations || []).slice(0, 3).map((r) => {
+          const dir = r.from_id === u.knowledge_id ? `→ ${r.to_id.slice(0, 10)}` : `← ${r.from_id.slice(0, 10)}`;
+          return `<span title="${esc(r.basis)}" style="color:${r.is_speculative ? "#fbbf24" : "#64748b"};">${esc(r.relation_type)}${r.is_speculative ? "?" : ""} ${dir}</span>`;
+        }).join(" · ");
+        return `<div style="border-bottom:1px solid rgba(148,163,184,0.12); padding:6px 0;">
+          <div>${fmtStatus(u.status)} <span style="color:#64748b;">v${u.version} · ${esc(u.knowledge_type)} · conf ${u.confidence}</span></div>
+          <div style="color:#e2e8f0; margin:2px 0;">${esc(u.statement.slice(0, 130))}</div>
+          <div style="font-size:0.7rem;">${rels || "<span style='color:#475569;'>chưa có quan hệ</span>"}</div>
+        </div>`;
+      }).join("");
+    } catch (err) {
+      $("deep-units-list").innerHTML = `<span style="color:#f87171;">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function loadDeepQuestions() {
+    try {
+      const res = await fetch("/api/memory/deep/questions?status=OPEN");
+      const data = await res.json();
+      if (!data.success) throw new Error("questions fail");
+      if (!data.questions.length) {
+        $("deep-questions-list").innerHTML = `<em style="color:#64748b;">Không có câu hỏi nào chờ anh. 🎉</em>`;
+        return;
+      }
+      $("deep-questions-list").innerHTML = data.questions.map((q) => `
+        <div style="border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:8px; margin-bottom:8px;">
+          <div style="color:#fbbf24; font-weight:600; margin-bottom:3px;">⚠ ${esc(q.problem.slice(0, 100))}</div>
+          <div style="color:#cbd5e1; margin-bottom:3px;">${esc(q.question)}</div>
+          <details style="margin-bottom:5px;">
+            <summary style="cursor:pointer; color:#64748b; font-size:0.7rem;">Bằng chứng &amp; các cách hiểu</summary>
+            <div style="color:#94a3b8; margin:4px 0; font-size:0.72rem;">${esc(q.evidence.slice(0, 220))}</div>
+            <div style="color:#94a3b8; font-size:0.72rem;">${esc(q.current_view.slice(0, 150))}</div>
+          </details>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="deep-ans-${esc(q.question_id)}" placeholder="Câu trả lời của anh (kèm phạm vi nếu có)…"
+              style="flex:1; background:rgba(15,23,42,0.6); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.75rem;" />
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:0.72rem;" onclick="window.__deepAnswer('${esc(q.question_id)}')">Gửi</button>
+          </div>
+        </div>`).join("");
+    } catch (err) {
+      $("deep-questions-list").innerHTML = `<span style="color:#f87171;">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  async function loadDeepTimeline() {
+    try {
+      const res = await fetch("/api/memory/deep/timeline");
+      const data = await res.json();
+      if (!data.success) throw new Error("timeline fail");
+      $("deep-timeline").innerHTML = data.events.map((e) => `
+        <div style="padding:3px 0; border-bottom:1px solid rgba(148,163,184,0.08);">
+          <span style="color:#64748b;">${esc(e.at.slice(0, 16).replace("T", " "))}</span>
+          <span style="color:${e.kind === "review_run" ? "#7dd3fc" : "#93c5fd"}; margin:0 6px;">${e.kind === "review_run" ? "🔄" : "📘"}</span>
+          ${esc(e.detail)}
+        </div>`).join("") || "<em style='color:#64748b;'>Chưa có sự kiện.</em>";
+    } catch (err) {
+      $("deep-timeline").innerHTML = `<span style="color:#f87171;">Lỗi: ${esc(err.message)}</span>`;
+    }
+  }
+
+  window.__deepAnswer = async function (questionId) {
+    const input = $(`deep-ans-${questionId}`);
+    if (!input || !input.value.trim()) return;
+    try {
+      const res = await fetch("/api/memory/deep/answer", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_id: questionId, answer: input.value.trim() }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || "answer fail");
+      await Promise.all([loadDeepQuestions(), loadDeepStats(), loadDeepUnits(), loadDeepTimeline()]);
+    } catch (err) {
+      alert("Không gửi được câu trả lời: " + err.message);
+    }
+  };
+
+  $("btn-deep-extract")?.addEventListener("click", async () => {
+    const btn = $("btn-deep-extract");
+    btn.disabled = true; btn.textContent = "⏳ Đang trích xuất…";
+    try {
+      const res = await fetch("/api/memory/deep/extract", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 30 }),
+      });
+      const data = await res.json();
+      btn.textContent = data.success ? `✅ +${data.extraction.units_created} tri thức` : "❌ Lỗi";
+    } catch { btn.textContent = "❌ Lỗi"; }
+    setTimeout(() => { btn.disabled = false; btn.textContent = "⏬ Trích Xuất Tri Thức"; }, 2500);
+    await Promise.all([loadDeepStats(), loadDeepUnits()]);
+  });
+
+  $("btn-deep-review")?.addEventListener("click", async () => {
+    const btn = $("btn-deep-review");
+    btn.disabled = true; btn.textContent = "⏳ Đang sàng lọc…";
+    try {
+      const res = await fetch("/api/memory/deep/review", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batch_limit: 20 }),
+      });
+      const data = await res.json();
+      btn.textContent = data.success ? "✅ Hoàn tất" : "❌ Lỗi";
+    } catch { btn.textContent = "❌ Lỗi"; }
+    setTimeout(() => { btn.disabled = false; btn.textContent = "🔄 Chạy Sàng Lọc"; }, 2500);
+    await Promise.all([loadDeepStats(), loadDeepUnits(), loadDeepQuestions(), loadDeepTimeline()]);
+  });
+
+  $("deep-units-filter")?.addEventListener("change", loadDeepUnits);
+
+  function loadAllDeep() {
+    loadDeepStats(); loadDeepUnits(); loadDeepQuestions(); loadDeepTimeline();
+  }
+
+  document.querySelectorAll(".nav-tab").forEach((btn) =>
+    btn.addEventListener("click", () => { if (btn.dataset.tab === "tab-deep-memory") loadAllDeep(); }));
+  if (document.querySelector(".nav-tab.active")?.dataset.tab === "tab-deep-memory") loadAllDeep();
+})();
+
+/* ================= V10 — OWNER-GATED MEMORY REVIEW (Sàng Lọc) ================= */
+(function initOwnerReview() {
+  "use strict";
+  if (!document.getElementById("deep-review-panel")) return;
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  let currentSession = null;
+
+  const KINDS = [
+    ["CLARIFY", "Xác nhận cách hiểu"], ["ADD_FACT", "Bổ sung diễn giải"],
+    ["CORRECTION", "Sửa lại nội dung"], ["SCOPE_LIMIT", "Giới hạn phạm vi"],
+    ["NO_DECISION", "Giữ nguyên — chưa đủ căn cứ"], ["REJECT", "Bác bỏ đề xuất"],
+    ["NEEDS_MORE_CHECK", "Cần kiểm tra thêm"],
+  ];
+
+  function respondForm(targetType, targetId) {
+    const opts = KINDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
+    return `<div class="review-respond" style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+      <select data-tt="${targetType}" data-tid="${targetId}" style="flex:1; min-width:140px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px; font-size:0.75rem;">${opts}</select>
+      <input placeholder="Nội dung phản hồi…" data-tt="${targetType}" data-tid="${targetId}" style="flex:2; min-width:160px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px; font-size:0.75rem;">
+      <button class="review-send-btn" data-tt="${targetType}" data-tid="${targetId}" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">Gửi</button>
+    </div>`;
+  }
+
+  function renderGroups(data) {
+    const s = data.session || {};
+    const st = s.stats || {};
+    const head = `<div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; font-size:0.75rem; color:#94a3b8;">
+      <span>🆔 <b style="color:#e2e8f0;">${esc(s.session_id || "—")}</b></span>
+      <span>Trạng thái: <b style="color:#93c5fd;">${esc(s.status || "—")}</b></span>
+      <span>Phạm vi: <b style="color:#e2e8f0;">${st.scope_size ?? "—"}</b></span>
+      <span>Phát hiện: <b style="color:#e2e8f0;">${st.findings ?? "—"}</b></span>
+      <span>Suy luận: <b style="color:#e2e8f0;">${st.inferences ?? "—"}</b></span>
+      <span>Câu hỏi: <b style="color:#e2e8f0;">${st.questions ?? "—"}</b></span>
+      <span>Chờ duyệt: <b style="color:#fbbf24;">${st.changes_pending ?? "—"}</b></span>
+      <span>Đã áp dụng: <b style="color:#4ade80;">${st.changes_applied ?? "—"}</b></span>
+    </div>`;
+
+    // Nhóm 1 — tri thức đang lưu
+    const units = (data.units || []).map((u) => `
+      <div style="border:1px solid #1e293b; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.78rem; color:#e2e8f0;"><b style="color:#93c5fd;">${esc(u.knowledge_id)}</b> [${esc(u.knowledge_type)}] ${esc(u.statement)}</div>
+        <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">trạng thái ${esc(u.status)} · nguồn ${(u.source_refs || []).join(", ") || "—"} · lý do chọn: ${esc(u.selection_reason || "—")}</div>
+        ${respondForm("unit", u.knowledge_id)}
+      </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Không có tri thức nào trong phạm vi.</div>`;
+
+    // Nhóm 2 — quan hệ & mâu thuẫn
+    const findings = (data.findings || []).map((f) => `
+      <div style="border:1px solid #1e293b; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.78rem; color:#e2e8f0;"><b style="color:${f.finding_type === "CONTRADICTION" ? "#f87171" : "#93c5fd"};">${esc(f.finding_type)}</b> ${esc(f.ku_a)} ↔ ${esc(f.ku_b)}</div>
+        <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">bằng chứng: ${esc(f.evidence)}</div>
+        <div style="font-size:0.7rem; color:#64748b;">đề xuất: ${esc(f.proposed_action)} · chắc chắn ${Math.round((f.confidence ?? 0) * 100)}%</div>
+        ${respondForm("finding", f.finding_id)}
+      </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Không có phát hiện nào.</div>`;
+
+    // Nhóm 3 — suy luận & bằng chứng
+    const infs = (data.inferences || []).map((i) => `
+      <div style="border:1px solid #1e293b; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.78rem; color:#e2e8f0;"><b style="color:#a78bfa;">${esc(i.certainty)}</b> ${esc(i.question)}</div>
+        <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">kết luận đề xuất: ${esc(i.proposed_conclusion)}</div>
+        <div style="font-size:0.7rem; color:#64748b;">bằng chứng: ${(JSON.parse(i.evidence_refs_json || "[]")).join(", ") || "—"}</div>
+        ${respondForm("unit", JSON.parse(i.input_kus_json || "[]")[0] || "")}
+      </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Không có suy luận nào.</div>`;
+
+    // Nhóm 4 — câu hỏi dành cho chủ
+    const qs = (data.questions || []).map((q) => `
+      <div style="border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:6px; background:#0f172a;">
+        <div style="font-size:0.78rem; color:#fbbf24;"><b>${esc(q.question_id)}</b> [${esc(q.status)}] ${esc(q.question)}</div>
+        <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">vấn đề: ${esc(q.problem)}</div>
+        <div style="font-size:0.7rem; color:#64748b;">phương án: ${(JSON.parse(q.interpretations_json || "[]")).map((x) => esc(x.view)).join(" · ") || "—"}</div>
+        ${q.status !== "ANSWERED" ? respondForm("question", q.question_id) : `<div style="font-size:0.72rem; color:#4ade80; margin-top:4px;">✔ ${esc(q.answer_text || "đã trả lời")}</div>`}
+      </div>`).join("") || `<div style="color:#4ade80; font-size:0.75rem;">Trong phạm vi đợt sàng lọc này, chưa phát hiện câu hỏi bắt buộc cần Quanpt1 xác nhận.</div>`;
+
+    // Thay đổi đã tạo
+    const changes = (data.changes || []).map((c) => `
+      <div style="border:1px dashed #475569; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.75rem; color:#e2e8f0;"><b>${esc(c.change_id)}</b> [${esc(c.change_kind)}] → ${esc(c.target_ku)} — trạng thái <b style="color:${c.confirm_state === "APPLIED" ? "#4ade80" : "#fbbf24"};">${esc(c.confirm_state)}</b></div>
+        ${c.confirm_state === "PENDING" ? `<div style="display:flex; gap:6px; margin-top:6px;">
+          <button class="review-preview-btn" data-cid="${esc(c.change_id)}" style="background:#475569; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer;">👁 Xem trước</button>
+          <button class="review-confirm-btn" data-cid="${esc(c.change_id)}" style="background:#16a34a; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer;">✅ Xác nhận áp dụng</button>
+          <button class="review-abandon-btn" data-cid="${esc(c.change_id)}" style="background:#7f1d1d; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer;">✖ Bỏ</button>
+        </div>` : ""}
+        ${c.confirm_state === "APPLIED" ? `<button class="review-undo-btn" data-cid="${esc(c.change_id)}" style="background:#b45309; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer; margin-top:6px;">↩ Hoàn tác</button>` : ""}
+      </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Chưa có thay đổi nào được đề xuất.</div>`;
+
+    return head + `
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#93c5fd;">1 · Tri thức đang lưu</div>${units}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#93c5fd;">2 · Quan hệ và mâu thuẫn</div>${findings}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#93c5fd;">3 · Suy luận và bằng chứng</div>${infs}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#fbbf24;">4 · Câu hỏi dành cho Quanpt1</div>${qs}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#4ade80;">Thay đổi (chờ xác nhận lần 2 trước khi áp dụng)</div>${changes}`;
+  }
+
+  async function loadCurrent() {
+    const box = $("deep-review-panel");
+    try {
+      const res = await fetch("/api/memory/review/current");
+      const data = await res.json();
+      if (!data.session) {
+        box.innerHTML = `<div style="color:#64748b; font-size:0.8rem;">IDLE — chưa có đợt sàng lọc. Bấm <b>+ Sàng Lọc Trí Nhớ</b> hoặc nhắn <b>SÀNG LỌC</b> trong khung chat để bắt đầu.</div>`;
+        return;
+      }
+      currentSession = data.session.session_id;
+      const full = await fetch(`/api/memory/review/session?session_id=${encodeURIComponent(currentSession)}`);
+      const fullData = await full.json();
+      if (fullData.success) box.innerHTML = renderGroups(fullData);
+      else box.innerHTML = `<div style="color:#f87171; font-size:0.8rem;">Lỗi: ${esc(fullData.error || "?")}</div>`;
+    } catch (err) {
+      box.innerHTML = `<div style="color:#f87171; font-size:0.8rem;">Lỗi tải: ${esc(err.message)}</div>`;
+    }
+  }
+
+  async function startReview() {
+    const btn = $("btn-deep-owner-review");
+    if (btn) { btn.disabled = true; btn.textContent = "⏳ Đang phân tích (chỉ đọc)…"; }
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "SÀNG LỌC", session_id: "executive_review_ui" }),
+      });
+      const data = await res.json();
+      if (btn) btn.textContent = data.success ? "✅ Đã có kết quả" : "❌ Lỗi";
+    } catch { if (btn) btn.textContent = "❌ Lỗi"; }
+    if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = "+ Sàng Lọc Trí Nhớ"; }, 2500);
+    await loadCurrent();
+  }
+
+  function wirePanel() {
+    const box = $("deep-review-panel");
+    box.addEventListener("click", async (ev) => {
+      const t = ev.target;
+      const cls = t.classList;
+      try {
+        if (cls.contains("review-send-btn")) {
+          const wrap = t.closest(".review-respond");
+          const kind = wrap.querySelector("select").value;
+          const text = wrap.querySelector("input").value.trim();
+          if (!text) return;
+          const res = await fetch("/api/memory/review/respond", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: currentSession, target_type: t.dataset.tt, target_id: t.dataset.tid, kind, text }),
+          });
+          const d = await res.json();
+          if (!d.success) alert(d.error || "Lỗi phản hồi");
+          await loadCurrent();
+        } else if (cls.contains("review-preview-btn")) {
+          const res = await fetch("/api/memory/review/confirm", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: currentSession, change_id: t.dataset.cid, preview_only: true }),
+          });
+          const d = await res.json();
+          if (d.success && d.preview) {
+            const p = d.preview;
+            alert(`TRƯỚC: ${p.before?.statement ?? "?"}\n\nSAU: ${p.after?.statement ?? "?"}\n\nPhạm vi: ${p.after?.scope ?? "?"}\nLý do: ${p.reason ?? "?"}\n\n→ Bấm "Xác nhận áp dụng" để ghi; "Hoàn tác" khả dụng sau khi áp dụng.`);
+          } else alert(d.error || "Lỗi preview");
+        } else if (cls.contains("review-confirm-btn")) {
+          if (!confirm("Xác nhận áp dụng thay đổi tri thức này? (đã xem trước, còn hoàn tác được)")) return;
+          const res = await fetch("/api/memory/review/confirm", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: currentSession, change_id: t.dataset.cid, confirm: true }),
+          });
+          const d = await res.json();
+          if (!d.success) alert(d.error || "Lỗi xác nhận");
+          await loadCurrent();
+        } else if (cls.contains("review-abandon-btn")) {
+          await fetch("/api/memory/review/undo", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: currentSession, change_id: t.dataset.cid }),
+          });
+          await loadCurrent();
+        } else if (cls.contains("review-undo-btn")) {
+          if (!confirm("Hoàn tác thay đổi đã áp dụng?")) return;
+          const res = await fetch("/api/memory/review/undo", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ session_id: currentSession, change_id: t.dataset.cid }),
+          });
+          const d = await res.json();
+          if (!d.success) alert(d.error || "Lỗi hoàn tác");
+          await loadCurrent();
+        }
+      } catch (err) { alert("Lỗi: " + err.message); }
+    });
+  }
+
+  $("btn-deep-owner-review")?.addEventListener("click", startReview);
+  wirePanel();
+
+  document.querySelectorAll(".nav-tab").forEach((btn) =>
+    btn.addEventListener("click", () => { if (btn.dataset.tab === "tab-deep-memory") setTimeout(loadCurrent, 150); }));
+  if (document.querySelector(".nav-tab.active")?.dataset.tab === "tab-deep-memory") setTimeout(loadCurrent, 150);
 })();

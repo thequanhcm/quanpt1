@@ -94,6 +94,12 @@ from quan_ai_brain.voice.tts_config import (
     TTSStatus,
     normalize_text_for_vietnamese_tts,
 )
+from quan_ai_brain.media.youtube_music import (
+    search_youtube_music,
+    looks_like_music_request,
+    dispatch_play_music_to_pi5,
+    dispatch_stop_music_to_pi5,
+)
 from quan_ai_brain.voice.voice_pipeline import XiaoZhiVoicePipeline
 from quan_ai_brain.web.edge_monitor import (
     EdgeAlertCode,
@@ -117,7 +123,7 @@ _GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
     "pending_commands": [],
     "target_avatar_state": "IDLE",
     "transcript": "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.",
-    "face_only_mode": True,
+    "face_only_mode": False,
 }
 _GLOBAL_ROLE_ORCHESTRATOR = ExecutiveRoleOrchestrator(edge_telemetry=_GLOBAL_EDGE_TELEMETRY)
 _GLOBAL_VOICE_PIPELINE = XiaoZhiVoicePipeline(
@@ -227,8 +233,8 @@ def push_avatar_expression(state: str, transcript: str = "", timeout: float = 1.
         return False
 
 
-def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0) -> bool:
-    """Đẩy lời thoại hiển thị + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
+def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0, synthesize_tts: bool = True) -> bool:
+    """Đẩy lời thoại hiển thị + âm thanh Edge-TTS + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
 
     Cập nhật cả telemetry transcript/state để heartbeat không đè bằng giá trị cũ.
     Sau duration_ms, PC tự đặt IDLE vào telemetry (daemon tự reset phía Pi).
@@ -236,6 +242,17 @@ def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float
     try:
         _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
         _GLOBAL_EDGE_TELEMETRY["transcript"] = text[:300]
+
+        audio_b64 = None
+        if synthesize_tts and text:
+            try:
+                import base64
+                clean_speech = re.sub(r"[\*#_`]", "", text[:300]).strip()
+                audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(clean_speech, voice_id="vi-VN-HoaiMyNeural")
+                if audio_bytes:
+                    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+            except Exception:
+                pass
 
         def _reset_after_speech() -> None:
             import time as _time
@@ -248,7 +265,14 @@ def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float
 
         _threading.Thread(target=_reset_after_speech, daemon=True).start()
 
-        data: dict[str, Any] = {"action": "speak", "text": text[:600], "state": "SPEAKING"}
+        data: dict[str, Any] = {
+            "action": "speak",
+            "text": text[:600],
+            "state": "SPEAKING",
+            "force_hardware": True,
+        }
+        if audio_b64:
+            data["audio_base64"] = audio_b64
         if duration_ms:
             data["duration_ms"] = int(duration_ms)
         resp = _send_edge_request(
@@ -265,6 +289,14 @@ def push_avatar_thinking(context_note: str = "") -> None:
 
 
 def _find_workspace_root() -> Path:
+    # V6 hotfix (27/10/2026): env override cho test isolation — không cho
+    # test suite ghi task thật vào data/tasks.db của production (nguồn gốc
+    # 294 task trùng lặp 'năng lượng' — daemon chạy pytest mỗi cycle).
+    override = os.environ.get("QUAN_AI_BRAIN_WORKSPACE", "").strip()
+    if override:
+        candidate = Path(override).resolve()
+        if candidate.exists():
+            return candidate
     current = Path.cwd().resolve()
     if (current / "src" / "quan_ai_brain").exists():
         return current
@@ -375,6 +407,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/capabilities":
             self._handle_api_executive_capabilities()
+            return
+
+        # V6: Skill Registry — read-only listing (GET)
+        if path == "/api/skills":
+            self._handle_api_skills()
             return
 
         if path == "/api/executive/consultations":
@@ -520,6 +557,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Sprint 8 (a): To-do — danh sách việc cần làm (đọc-only)
         if path == "/api/todos":
             self._handle_api_todos_list()
+            return
+
+        if path == "/api/music/status":
+            self._handle_api_music_status()
             return
 
         # Sprint 9 (A): Workbench overview — tổng hợp thật, fail-honest
@@ -745,6 +786,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_edge_heartbeat(body)
             return
 
+        # V41: Edge Agent gửi events tự thu thập lên Brain
+        if path == "/api/executive/edge/events":
+            self._handle_api_edge_events(body)
+            return
+
         if path == "/api/executive/edge/mouth-sync":
             self._handle_api_edge_mouth_sync(body)
             return
@@ -823,6 +869,18 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/edge/release/rollback":
             self._handle_api_edge_release_rollback(body)
+            return
+
+        if path == "/api/music/search":
+            self._handle_api_music_search(body)
+            return
+
+        if path == "/api/music/play":
+            self._handle_api_music_play(body)
+            return
+
+        if path == "/api/music/stop":
+            self._handle_api_music_stop()
             return
 
         self.send_error(404, "Endpoint not found")
@@ -1289,6 +1347,74 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as _rag_exc:
                 doc_rag_info["error"] = str(_rag_exc)[:160]
 
+            # 2.9 Knowledge Base RAG (V41, 30/10/2026) — câu hỏi tri thức chuyên môn
+            # → retrieve từ kho kho_tai_lieu (34k+ chunks: AI course, RAN, VT-CNTT...),
+            # đưa bằng chứng CÓ DẪN CHỨNG [tài liệu, trang] vào context.
+            # Fail-closed: lỗi/không đủ score → không evidence, không giết chat.
+            kb_rag_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.knowledge.knowledge_query import KnowledgeQueryEngine
+                from pathlib import Path as _KBPath
+
+                _kb_engine = KnowledgeQueryEngine(
+                    db_path=_KBPath(str(workspace)) / "data" / "knowledge_db"
+                )
+                _kb_results = _kb_engine.search(query, top_k=5, min_score=0.55)
+                kb_rag_info["attempted"] = True
+                if _kb_results:
+                    kb_rag_info["chunks"] = len(_kb_results)
+                    kb_rag_info["best_score"] = _kb_results[0].score
+                    kb_rag_info["citations"] = [r.citation() for r in _kb_results[:3]]
+                    _kb_block = _kb_engine.render_evidence_block(_kb_results)
+                    context.system_instructions = (
+                        context.system_instructions + "\n" + _kb_block
+                    )
+                else:
+                    kb_rag_info["note"] = "không tìm thấy bằng chứng đủ tốt trong kho tri thức"
+            except Exception as _kb_exc:
+                kb_rag_info["error"] = str(_kb_exc)[:160]
+
+            # 2.85 YouTube Music detection & Pi 5 streaming dispatch
+            music_info: dict[str, Any] = {"requested": False}
+            try:
+                is_music, song_target = looks_like_music_request(query)
+                if is_music:
+                    music_info["requested"] = True
+                    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+                    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                    if song_target == "STOP":
+                        dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+                        music_info["action"] = "stop"
+                        music_block = "[EVIDENCE ÂM NHẠC: Đã gửi lệnh DỪNG PHÁT NHẠC trên loa Raspberry Pi 5 theo yêu cầu của Anh. Hãy thông báo ngắn gọn, xác nhận đã dừng bài hát.]"
+                        context.system_instructions = context.system_instructions + "\n" + music_block
+                    else:
+                        music_info["action"] = "play"
+                        music_info["song_query"] = song_target
+                        yt_results = search_youtube_music(song_target, max_results=3)
+                        if yt_results:
+                            top_track = yt_results[0]
+                            dispatch_play_music_to_pi5(
+                                video_id=top_track["video_id"],
+                                title=top_track["title"],
+                                url=top_track["url"],
+                                edge_ip=edge_ip,
+                                edge_port=edge_port,
+                            )
+                            music_info["track"] = top_track
+                            music_info["playing"] = True
+                            music_block = (
+                                f"[EVIDENCE ÂM NHẠC YOUTUBE — ĐÃ TÌM THẤY VÀ KÍCH HOẠT PHÁT TRÊN PI 5:\n"
+                                f"- Tên bài hát/video: {top_track['title']}\n"
+                                f"- Kênh: {top_track.get('channel', 'YouTube')}\n"
+                                f"- Thời lượng: {top_track.get('duration', '')}\n"
+                                f"- URL: {top_track['url']}\n"
+                                f"- Trạng thái: Lệnh phát nhạc đã gửi tới loa Raspberry Pi 5 thành công qua Wi-Fi.\n"
+                                f"HÃY BÁO CÁO VUI VẺ, LỊCH SỰ XÁC NHẬN BÀI HÁT ĐANG PHÁT TRÊN LOA PI 5 ĐỂ ANH VÀ CHỊ THƯỞNG THỨC.]"
+                            )
+                            context.system_instructions = context.system_instructions + "\n" + music_block
+            except Exception as _m_err:
+                music_info["error"] = str(_m_err)[:120]
+
             # 3. LLM Generation
             req = LLMRequest(
                 prompt=context.rendered_context,
@@ -1395,8 +1521,101 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     except Exception as clo_err:
                         # Non-blocking: log but don't fail the request
                         all_warnings.append(f"CLO session trigger: {str(clo_err)[:100]}")
+
+                    # V6: TaskPipeline evidence trail — pipeline gắn với task vừa đăng ký
+                    try:
+                        from quan_ai_brain.cognition.task_pipeline import (
+                            TaskPipelineEngine,
+                            PipelineStage,
+                        )
+
+                        _tp_engine = TaskPipelineEngine()
+                        _tp = _tp_engine.create_pipeline(
+                            owner_request=query,
+                            task_goal=task_rec.goal if hasattr(task_rec, "goal") else query,
+                            acceptance_criteria=[
+                                "Task đã đăng ký vào DurableTaskRegistry với task_id hợp lệ",
+                            ],
+                            risk_level=str(task_rec.risk_level),
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.DECOMPOSE,
+                            notes=f"Decomposed by ExecutiveCoordinator.plan() ({len(task_rec.approved_scope)} DAG steps)",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.DISCOVER,
+                            notes="Existing tools reused: ExecutiveCoordinator, PlanOrchestrator, DurableTaskRegistry",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.PLAN,
+                            notes=f"Plan registered with risk {task_rec.risk_level}",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        for _s in (PipelineStage.LEARN, PipelineStage.BUILD, PipelineStage.TEST):
+                            _tp_engine.advance(_tp, _s, notes="", skipped_reason="registration path — execution handled by durable task runner")
+                        _tp_engine.advance(
+                            _tp, PipelineStage.ANALYZE,
+                            notes=f"Task {task_rec.task_id} registered; awaiting execution evidence",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        # VERIFY fail-honest: chưa có bằng chứng thực thi → NOT_VERIFIED
+                        _crit = _tp.spec.acceptance_criteria[0]
+                        _tp_engine.advance(
+                            _tp, PipelineStage.VERIFY,
+                            notes="Task registered but not yet executed — honest not_verified",
+                            validation={"criteria": {
+                                _crit: {"passed": False, "not_verified": True,
+                                        "reason": "durable task execution pending"},
+                            }},
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        # ADVISE + REUSE — ghi khuyến nghị trung thực
+                        _tp_engine.advance(
+                            _tp, PipelineStage.ADVISE,
+                            notes=f"Task {task_rec.task_id} chờ thực thi theo DAG đã duyệt; theo dõi tại /api/executive/tasks",
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.REUSE,
+                            notes="", skipped_reason="no reusable asset generated at registration time",
+                        )
+                        # Gắn pipeline vào response (truy vết bằng chứng)
+                        if isinstance(durable_task_dict, dict):
+                            durable_task_dict["task_pipeline"] = {
+                                "pipeline_id": _tp.pipeline_id,
+                                "stages_completed": len(_tp.stage_history),
+                                "final_recommendation": _tp.final_recommendation,
+                                "verify_status": "NOT_VERIFIED (execution pending)",
+                            }
+                    except Exception as tp_err:
+                        # Non-blocking: pipeline chỉ là evidence trail, không chặn chat
+                        all_warnings.append(f"TaskPipeline trail: {str(tp_err)[:100]}")
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
+
+                # V7 Cấp 2: chain skill kiểm tra tiến độ — chạy khi query khớp
+                # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
+                # fail-honest, không chặn chat (lỗi chỉ append warning).
+                try:
+                    from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
+                    from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
+
+                    _v7_ws = _find_workspace_root()
+                    _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
+                    if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
+                        _v7_result = _v7_chain(query or "", _v7_ws)
+                        response_data["progress_check"] = {
+                            "chain": _v7_result["chain"],
+                            "conclusion": _v7_result["reconciliation"]["conclusion"],
+                            "records_matched": _v7_result["reconciliation"]["records_matched"],
+                            "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
+                            "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
+                            "risk_summary": _v7_result["risk_summary"],
+                            "report_md": _v7_result["report_md"],
+                        }
+                except Exception as v7_err:
+                    all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
@@ -1450,6 +1669,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
@@ -1519,10 +1739,20 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             selected_model = decision.model
             self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
 
+            # 1.5 Owner teach detection (V8 parity)
+            teach_note = None
+            try:
+                from quan_ai_brain.cognition.owner_teach import detect_teaching
+                teach = detect_teaching(query)
+                if teach:
+                    teach_note = f"Đã ghi nhận kiến thức dạy từ Anh ({teach.content[:80]})."
+            except Exception:
+                pass
+
             # 2. Memory retrieval & session history.
             with MemoryStore(db_path, workspace=workspace) as store:
                 session_mgr = SessionMemoryManager(store)
-                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=6)
                 retriever = CognitiveRetriever(store)
                 m_query = MemoryQuery(query=query, project_scope=scope, top_k=5, max_chars=4000)
                 retrieval = retriever.retrieve(m_query)
@@ -1534,6 +1764,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     project_scope=scope,
                     conversation_history=recent_history,
                 )
+
+            # 2.5 Living Grounding Facts (V8 parity)
+            try:
+                from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
+                grounding_block = render_grounding_block(collect_grounding_facts(current_model=selected_model))
+                context.system_instructions = grounding_block + "\n\n" + context.system_instructions
+            except Exception:
+                pass
 
             # 2.55 Avatar: THINKING ngay khi nhận câu hỏi (stream path).
             try:
@@ -1556,6 +1794,68 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     push_avatar_expression("RESEARCHING", transcript="Đang tra cứu thông tin ngoài...")
             except Exception:
                 pass
+
+            # 2.7 TTNS lookup (V8 parity)
+            try:
+                from quan_ai_brain.tools.ttns_lookup import looks_like_ttns_query, ttns_lookup
+                if looks_like_ttns_query(query):
+                    _ttns = ttns_lookup(query)
+                    if _ttns and _ttns.get("answer"):
+                        context.system_instructions += "\n[EVIDENCE TTNS NỘI BỘ]\n" + _ttns["answer"][:6000]
+            except Exception:
+                pass
+
+            # 2.8 Document RAG evidence (V8 parity)
+            try:
+                from quan_ai_brain.cognition.document_rag import DocumentRAG
+                _rag = DocumentRAG(workspace=str(workspace))
+                if _rag.count_chunks() > 0:
+                    _rr = _rag.retrieve(query)
+                    if _rr.has_evidence:
+                        context.system_instructions += "\n" + _rr.render_evidence_block()
+            except Exception:
+                pass
+
+            # 2.85 YouTube Music detection & Pi 5 streaming dispatch (stream path)
+            music_info_stream: dict[str, Any] = {"requested": False}
+            try:
+                is_music, song_target = looks_like_music_request(query)
+                if is_music:
+                    music_info_stream["requested"] = True
+                    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+                    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                    if song_target == "STOP":
+                        dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+                        music_info_stream["action"] = "stop"
+                        music_block = "[EVIDENCE ÂM NHẠC: Đã gửi lệnh DỪNG PHÁT NHẠC trên loa Raspberry Pi 5 theo yêu cầu của Anh. Hãy thông báo ngắn gọn, xác nhận đã dừng bài hát.]"
+                        context.system_instructions = context.system_instructions + "\n" + music_block
+                    else:
+                        music_info_stream["action"] = "play"
+                        music_info_stream["song_query"] = song_target
+                        yt_results = search_youtube_music(song_target, max_results=3)
+                        if yt_results:
+                            top_track = yt_results[0]
+                            dispatch_play_music_to_pi5(
+                                video_id=top_track["video_id"],
+                                title=top_track["title"],
+                                url=top_track["url"],
+                                edge_ip=edge_ip,
+                                edge_port=edge_port,
+                            )
+                            music_info_stream["track"] = top_track
+                            music_info_stream["playing"] = True
+                            music_block = (
+                                f"[EVIDENCE ÂM NHẠC YOUTUBE — ĐÃ TÌM THẤY VÀ KÍCH HOẠT PHÁT TRÊN PI 5:\n"
+                                f"- Tên bài hát/video: {top_track['title']}\n"
+                                f"- Kênh: {top_track.get('channel', 'YouTube')}\n"
+                                f"- Thời lượng: {top_track.get('duration', '')}\n"
+                                f"- URL: {top_track['url']}\n"
+                                f"- Trạng thái: Lệnh phát nhạc đã gửi tới loa Raspberry Pi 5 thành công qua Wi-Fi.\n"
+                                f"HÃY BÁO CÁO VUI VẺ, LỊCH SỰ XÁC NHẬN BÀI HÁT ĐANG PHÁT TRÊN LOA PI 5 ĐỂ ANH VÀ CHỊ THƯỞNG THỨC.]"
+                            )
+                            context.system_instructions = context.system_instructions + "\n" + music_block
+            except Exception as _m_err:
+                music_info_stream["error"] = str(_m_err)[:120]
 
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
             req = LLMRequest(
@@ -1591,6 +1891,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     return
 
             full_text = OutputGuardrails.sanitize("".join(parts))[0]
+            if teach_note:
+                full_text = (teach_note + "\n\n" + full_text)
             grounding_analysis = OutputGuardrails.analyze_grounding(full_text, context=context)
 
             # 4. Persist the COMPLETE answer only after stream completion.
@@ -1614,6 +1916,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "session_id": session_id,
                 "routing": {"tier": decision.tier, "model": decision.model, "is_fallback": decision.is_fallback},
                 "persistence": persistence_info,
+                "music_playback": music_info_stream.get("track") if music_info_stream.get("playing") else ({"action": "stop", "playing": False} if music_info_stream.get("action") == "stop" else None),
             })
             self.wfile.write(_sse(final_event))
             self.wfile.flush()
@@ -1856,6 +2159,22 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
     def _handle_api_executive_capabilities(self) -> None:
         caps = CapabilityRegistry().list_capabilities()
         self._send_json({"success": True, "capabilities": [c.to_dict() for c in caps]})
+
+    def _handle_api_skills(self) -> None:
+        """V6: GET /api/skills — danh sách Skill trong registry (read-only)."""
+        try:
+            from quan_ai_brain.cognition.skill_registry import SkillRegistry
+
+            workspace = _find_workspace_root()
+            registry = SkillRegistry(workspace / "data" / "skill_registry.json")
+            skills = registry.list_skills()
+            self._send_json({
+                "success": True,
+                "total": len(skills),
+                "skills": [s.to_dict() for s in skills],
+            })
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]})
 
     def _handle_api_executive_consultations(self, query_str: str) -> None:
         workspace = _find_workspace_root()
@@ -2535,6 +2854,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         )
         _GLOBAL_EDGE_TELEMETRY["packets_out"] += 1
         cmd = _GLOBAL_EDGE_TELEMETRY["pending_commands"].pop(0) if _GLOBAL_EDGE_TELEMETRY["pending_commands"] else None
+        # V41: lưu telemetry Edge Agent nếu heartbeat có kèm (5 năng lực chủ động)
+        agent_payload = body.get("edge_agent")
+        if isinstance(agent_payload, dict):
+            _GLOBAL_EDGE_TELEMETRY["last_edge_agent"] = agent_payload
         self._send_json({
             "success": True,
             "edge_status": status,
@@ -2543,6 +2866,44 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
             "remote_command": cmd,
         })
+
+    def _handle_api_edge_events(self, body: dict) -> None:
+        """V41: nhận batch events Edge Agent tự thu thập (tự phối hợp năng lực 4).
+
+        Lưu vào edge monitor alert history (severity CRITICAL/WARNING → alert record
+        ghi nhận; INFO chỉ đếm). Fail-closed: lỗi không giết server.
+        """
+        try:
+            device_id = str(body.get("device_id", "EDGE-UNKNOWN")).strip()
+            events = body.get("events", [])
+            if not isinstance(events, list):
+                events = []
+            accepted = 0
+            for ev in events[:50]:  # giới hạn batch
+                if not isinstance(ev, dict):
+                    continue
+                accepted += 1
+                etype = str(ev.get("type", "UNKNOWN"))
+                severity = str(ev.get("severity", "INFO")).upper()
+                details = ev.get("details", {})
+                if severity in ("CRITICAL", "WARNING"):
+                    _GLOBAL_EDGE_MONITOR._trigger_alert(  # noqa: SLF001 — internal API
+                        code=(
+                            EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT
+                            if etype == "BRAIN_CONNECTION_LOST"
+                            else EdgeAlertCode.ALERT_C_CHANNEL_DEGRADED
+                        ),
+                        title=f"Edge Agent: {etype}",
+                        message=str(details.get("desc", etype)),
+                        severity="CRITICAL" if severity == "CRITICAL" else "WARNING",
+                        metadata={"agent_event": ev, "device_id": device_id},
+                    )
+            _GLOBAL_EDGE_TELEMETRY["edge_events_received"] = (
+                _GLOBAL_EDGE_TELEMETRY.get("edge_events_received", 0) + accepted
+            )
+            self._send_json({"success": True, "accepted": accepted})
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)})
 
     def _handle_api_edge_mouth_sync(self, body: dict) -> None:
         action = str(body.get("action", "generate")).strip().lower()
@@ -2981,6 +3342,47 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _GLOBAL_EDGE_MONITOR.record_mic_fault(resp["error"])
 
         self._send_json(resp)
+
+    def _handle_api_music_search(self, body: dict) -> None:
+        query = str(body.get("query", "")).strip()
+        limit = int(body.get("limit", 5))
+        if not query:
+            self._send_error_json("Missing search query", 400)
+            return
+        results = search_youtube_music(query, max_results=limit)
+        self._send_json({"success": True, "query": query, "count": len(results), "results": results})
+
+    def _handle_api_music_play(self, body: dict) -> None:
+        video_id = str(body.get("video_id", "")).strip()
+        title = str(body.get("title", "")).strip()
+        url = str(body.get("url", "")).strip()
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        if not url and video_id:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        if not url and not video_id:
+            query = str(body.get("query", "")).strip()
+            if query:
+                results = search_youtube_music(query, max_results=1)
+                if results:
+                    video_id = results[0]["video_id"]
+                    title = results[0]["title"]
+                    url = results[0]["url"]
+        if not url:
+            self._send_error_json("Could not find music to play", 400)
+            return
+        res = dispatch_play_music_to_pi5(video_id=video_id, title=title, url=url, edge_ip=edge_ip, edge_port=edge_port)
+        self._send_json({"success": True, "title": title, "url": url, "video_id": video_id, "pi5_response": res})
+
+    def _handle_api_music_stop(self) -> None:
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        res = dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+        self._send_json({"success": True, "playing": False, "pi5_response": res})
+
+    def _handle_api_music_status(self) -> None:
+        res = _send_edge_request("/api/kiosk/music/status", method="GET")
+        self._send_json({"success": True, "edge_music": res.get("music"), "playing": res.get("playing", False)})
 
     def _handle_api_edge_camera_status(self) -> None:
         """Fetch remote camera status from Pi 5."""

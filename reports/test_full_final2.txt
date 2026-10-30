@@ -1,0 +1,87 @@
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+.................................................................sss.... [ 27%]
+......................s...................................s...........s. [ 29%]
+..ss....s.ssssss.ss..................................................... [ 32%]
+.ssss.s.....ss.......................................................... [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+.................................................................s...... [ 42%]
+..s........s.s....s.s................................................... [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+.................................................s...................... [ 69%]
+........................................................................ [ 72%]
+......................................................s..............s.. [ 74%]
+.........................ss..........s...s.............................. [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+....................................................................s... [ 97%]
+........................................................................ [ 99%]
+....                                                                     [100%]
+============================== warnings summary ===============================
+src\quan_ai_brain\analytics\statistical_engine.py:20
+  E:\AI\QUAN AI BRAIN\src\quan_ai_brain\analytics\statistical_engine.py:20: PytestCollectionWarning: cannot collect test class 'TestType' because it has a __init__ constructor (from: tests/test_v39_analytics_engine.py)
+    class TestType(Enum):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_v14_ui_integration.py:23: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:27: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:31: API integration pending - placeholder test
+SKIPPED [1] tests\test_v15_knowledge_graph.py:182: Database lock issue - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:80: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:261: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:317: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:321: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:92: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:109: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:113: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:121: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:125: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:129: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:133: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:158: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:166: Complex test - fix pending
+SKIPPED [1] tests\test_v21_final_integration.py:46: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:50: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:54: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:62: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:73: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:153: Performance test - manual run only
+SKIPPED [1] tests\test_v21_final_integration.py:157: Performance test - manual run only
+SKIPPED [1] tests\test_v25_analytics.py:109: Complex dataclass test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:251: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:372: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:383: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:449: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:460: Complex integration test - manual verification
+SKIPPED [1] tests\test_v36_asr.py:256: Azure Speech SDK not installed
+SKIPPED [1] tests\test_v39_analytics_engine.py:686: Small sample regression handled separately
+SKIPPED [1] tests\test_v39_creativity_engine.py:224: Domain synthesis tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:258: Solution generation tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:263: Troubleshooting workflow tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:459: Problem solving pipeline tested in unit tests
+SKIPPED [1] tests\test_v39_decision_engine.py:516: Zero cost edge case handled separately
+SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+2846 passed, 38 skipped, 1 warning in 185.74s (0:03:05)

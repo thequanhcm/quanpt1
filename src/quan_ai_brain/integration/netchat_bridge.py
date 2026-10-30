@@ -63,13 +63,32 @@ def _run_script(args: list[str], timeout: float = 25.0) -> tuple[int, str, str]:
 
 
 def _parse_json_or_raise(stdout: str, stderr: str) -> Any:
+    """Parse JSON from script stdout, tolerating human-readable noise lines.
+
+    netchat_bot.py prints 'BOT: ...' / 'TARGET: ...' headers before the JSON
+    payload (confirmed-send path) — parse the LAST balanced JSON object line
+    instead of the whole stdout (root cause of 'Unparseable NetChat response'
+    on the dashboard send, 27/10/2026 — the post actually was sent).
+    """
     text = (stdout or "").strip()
     if not text:
         raise NetChatBridgeError((stderr or "Empty response from NetChat script")[:300])
     try:
         return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise NetChatBridgeError(f"Unparseable NetChat response: {text[:200]}") from exc
+    except json.JSONDecodeError:
+        pass
+    # Fallback: scan lines bottom-up for a balanced JSON object/array
+    decoder = json.JSONDecoder()
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line or not (line.startswith("{") or line.startswith("[")):
+            continue
+        try:
+            obj, _end = decoder.raw_decode(line)
+            return obj
+        except json.JSONDecodeError:
+            continue
+    raise NetChatBridgeError(f"Unparseable NetChat response: {text[:200]}")
 
 
 def get_status(channel_id: str = DEFAULT_CHANNEL_ID) -> dict[str, Any]:

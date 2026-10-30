@@ -1,0 +1,750 @@
+# QUAN AI BRAIN - OpenAPI Specification
+# Version: V21 (Final)
+# Generated: 2024-10-28
+
+openapi: 3.0.3
+info:
+  title: QUAN AI BRAIN Memory System API
+  description: |
+    Comprehensive memory system with temporal, cross-modal, quality, emotional, 
+    causal, counterfactual, federated, privacy-preserving, and AI/ML-enhanced features.
+    
+    ## Features (V11-V20)
+    - **V11**: Temporal Memory & Automatic Consolidation
+    - **V12**: Cross-Modal Linking & Contextual Retrieval
+    - **V13**: Quality Scoring & Automated Maintenance
+    - **V14**: UI Integration & Visualization Dashboard
+    - **V15**: Knowledge Graph & Multi-Agent Memory
+    - **V16**: Emotional Memory & Sentiment Analysis
+    - **V17**: Causal Reasoning & Counterfactual Memory
+    - **V18**: Federated Learning & Privacy-Preserving Memory
+    - **V19**: System Integration & Production Readiness
+    - **V20**: AI/ML Enhancements & Auto-Optimization
+    
+    ## Authentication
+    All endpoints require Bearer token authentication.
+    
+    ## Rate Limiting
+    - Standard: 100 requests/minute
+    - Premium: 1000 requests/minute
+    
+    ## Error Handling
+    All errors return JSON with `error`, `code`, and `details` fields.
+  version: 21.0.0
+  contact:
+    email: quanpt1@viettel.com.vn
+  license:
+    name: Proprietary
+    url: https://viettel.com.vn/license
+
+servers:
+  - url: https://api.quan-ai-brain.vn/v1
+    description: Production
+  - url: https://staging-api.quan-ai-brain.vn/v1
+    description: Staging
+  - url: http://localhost:8080/v1
+    description: Local Development
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    KnowledgeUnit:
+      type: object
+      properties:
+        knowledge_id:
+          type: string
+          description: Unique identifier
+        knowledge_type:
+          type: string
+          enum: [FACT, QUESTION, ANSWER, SUMMARY, OPINION, EVENT]
+        subject:
+          type: string
+        predicate:
+          type: string
+        object:
+          type: string
+        statement:
+          type: string
+        scope:
+          type: string
+        status:
+          type: string
+          enum: [EXTRACTED, VERIFIED, REJECTED, ARCHIVED]
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        created_at_utc:
+          type: string
+          format: date-time
+        updated_at_utc:
+          type: string
+          format: date-time
+    
+    MemoryQuery:
+      type: object
+      properties:
+        query:
+          type: string
+        filters:
+          type: object
+        context:
+          type: object
+        top_k:
+          type: integer
+          default: 10
+    
+    SearchResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/KnowledgeUnit'
+        total:
+          type: integer
+        latency_ms:
+          type: number
+        cached:
+          type: boolean
+    
+    HealthStatus:
+      type: object
+      properties:
+        overall_status:
+          type: string
+          enum: [healthy, degraded, unhealthy]
+        modules:
+          type: object
+        timestamp:
+          type: string
+          format: date-time
+    
+    Anomaly:
+      type: object
+      properties:
+        anomaly_id:
+          type: string
+        anomaly_type:
+          type: string
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        timestamp:
+          type: string
+          format: date-time
+        description:
+          type: string
+        acknowledged:
+          type: boolean
+    
+    Recommendation:
+      type: object
+      properties:
+        item_id:
+          type: string
+        score:
+          type: number
+        reason:
+          type: string
+        metadata:
+          type: object
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==================== V11: Temporal Memory ====================
+  /memory/temporal/stats:
+    get:
+      summary: Get temporal statistics
+      tags: [Temporal Memory]
+      responses:
+        '200':
+          description: Temporal statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_kus:
+                    type: integer
+                  avg_freshness:
+                    type: number
+                  avg_confidence:
+                    type: number
+                  expired_count:
+                    type: integer
+
+  /memory/temporal/scores:
+    get:
+      summary: Get freshness scores
+      tags: [Temporal Memory]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Freshness scores
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  scores:
+                    type: array
+                    items:
+                      type: object
+
+  # ==================== V12: Cross-Modal ====================
+  /memory/context/current:
+    get:
+      summary: Get current context
+      tags: [Cross-Modal]
+      responses:
+        '200':
+          description: Current context
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  context:
+                    type: object
+                    properties:
+                      project:
+                        type: string
+                      task:
+                        type: string
+                      user:
+                        type: string
+
+  /memory/context/set:
+    post:
+      summary: Set context
+      tags: [Cross-Modal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                project:
+                  type: string
+                task:
+                  type: string
+                user:
+                  type: string
+      responses:
+        '200':
+          description: Context set successfully
+
+  /memory/retrieve/contextual:
+    get:
+      summary: Contextual retrieval
+      tags: [Cross-Modal]
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: top_k
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Contextual results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+  # ==================== V13: Quality ====================
+  /memory/quality/metrics:
+    get:
+      summary: Get quality metrics
+      tags: [Quality]
+      responses:
+        '200':
+          description: Quality metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metrics:
+                    type: object
+                    properties:
+                      total_kus:
+                        type: integer
+                      high_quality_count:
+                        type: integer
+                      medium_quality_count:
+                        type: integer
+                      low_quality_count:
+                        type: integer
+                      average_quality:
+                        type: number
+
+  /memory/quality/low-quality:
+    get:
+      summary: Get low quality KUs
+      tags: [Quality]
+      parameters:
+        - name: threshold
+          in: query
+          schema:
+            type: number
+            default: 0.4
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Low quality KUs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  kus:
+                    type: array
+
+  /memory/maintenance/run:
+    post:
+      summary: Run maintenance
+      tags: [Quality]
+      responses:
+        '200':
+          description: Maintenance result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  result:
+                    type: object
+                    properties:
+                      archived_count:
+                        type: integer
+                      decayed_count:
+                        type: integer
+
+  # ==================== V15: Knowledge Graph ====================
+  /memory/graph/entities:
+    get:
+      summary: Get graph entities
+      tags: [Knowledge Graph]
+      responses:
+        '200':
+          description: Graph entities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities:
+                    type: array
+
+  /memory/graph/relationships:
+    get:
+      summary: Get graph relationships
+      tags: [Knowledge Graph]
+      responses:
+        '200':
+          description: Graph relationships
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  relationships:
+                    type: array
+
+  /memory/graph/metrics:
+    get:
+      summary: Get graph metrics
+      tags: [Knowledge Graph]
+      responses:
+        '200':
+          description: Graph metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  num_nodes:
+                    type: integer
+                  num_edges:
+                    type: integer
+                  density:
+                    type: number
+                  avg_degree:
+                    type: number
+
+  # ==================== V16: Emotional ====================
+  /memory/emotional/timeline/{user_id}:
+    get:
+      summary: Get emotion timeline
+      tags: [Emotional]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 30
+      responses:
+        '200':
+          description: Emotion timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timeline:
+                    type: array
+
+  /memory/emotional/peaks:
+    get:
+      summary: Get emotional peaks
+      tags: [Emotional]
+      parameters:
+        - name: threshold
+          in: query
+          schema:
+            type: number
+            default: 0.8
+      responses:
+        '200':
+          description: Emotional peaks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  peaks:
+                    type: array
+
+  /memory/retrieve/emotion/{emotion_type}:
+    get:
+      summary: Retrieve by emotion
+      tags: [Emotional]
+      parameters:
+        - name: emotion_type
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: top_k
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Results by emotion
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+  # ==================== V17: Causal ====================
+  /memory/causal/causes/{event_id}:
+    get:
+      summary: Find causes of event
+      tags: [Causal]
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 3
+      responses:
+        '200':
+          description: Causes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  causes:
+                    type: array
+
+  /memory/causal/effects/{event_id}:
+    get:
+      summary: Find effects of event
+      tags: [Causal]
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 3
+      responses:
+        '200':
+          description: Effects
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  effects:
+                    type: array
+
+  /memory/causal/root-cause:
+    post:
+      summary: Identify root cause
+      tags: [Causal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                effect_id:
+                  type: string
+      responses:
+        '200':
+          description: Root cause
+          content:
+            application/json:
+              schema:
+                type: object
+
+  # ==================== V18: Federated ====================
+  /federated/register:
+    post:
+      summary: Register federated node
+      tags: [Federated]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                node_id:
+                  type: string
+                role:
+                  type: string
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Node registered
+
+  /federated/start-training:
+    post:
+      summary: Start federated training
+      tags: [Federated]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rounds:
+                  type: integer
+                clients_per_round:
+                  type: integer
+      responses:
+        '200':
+          description: Training started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id:
+                    type: string
+
+  # ==================== V19: Health & Integration ====================
+  /memory/health:
+    get:
+      summary: Check system health
+      tags: [Integration]
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /memory/metrics:
+    get:
+      summary: Get system metrics
+      tags: [Integration]
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  performance:
+                    type: object
+                  cache:
+                    type: object
+                  modules:
+                    type: object
+
+  /memory/unified/search:
+    post:
+      summary: Unified search across all modules
+      tags: [Integration]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryQuery'
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResult'
+
+  # ==================== V20: AI/ML ====================
+  /ai/tune/cache:
+    post:
+      summary: Auto-tune cache size
+      tags: [AI/ML]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                current_size:
+                  type: integer
+                memory_available:
+                  type: integer
+      responses:
+        '200':
+          description: Tuning suggestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  optimal_size:
+                    type: integer
+                  expected_improvement:
+                    type: number
+
+  /ai/anomalies:
+    get:
+      summary: Get detected anomalies
+      tags: [AI/ML]
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, critical]
+      responses:
+        '200':
+          description: Anomalies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anomalies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Anomaly'
+
+  /ai/recommend/{user_id}:
+    get:
+      summary: Get recommendations for user
+      tags: [AI/ML]
+      parameters:
+        - name: user_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: top_k
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Recommendations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recommendations:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Recommendation'
+
+tags:
+  - name: Temporal Memory
+    description: V11 - Temporal memory and consolidation
+  - name: Cross-Modal
+    description: V12 - Cross-modal linking and contextual retrieval
+  - name: Quality
+    description: V13 - Quality scoring and automated maintenance
+  - name: Knowledge Graph
+    description: V15 - Knowledge graph and multi-agent memory
+  - name: Emotional
+    description: V16 - Emotional memory and sentiment analysis
+  - name: Causal
+    description: V17 - Causal reasoning and counterfactual memory
+  - name: Federated
+    description: V18 - Federated learning and privacy-preserving memory
+  - name: Integration
+    description: V19 - System integration and production readiness
+  - name: AI/ML
+    description: V20 - AI/ML enhancements and auto-optimization

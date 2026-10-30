@@ -88,6 +88,7 @@ class TaskPlan:
     memory_refs: list[str] = field(default_factory=list)
     validation_errors: list[str] = field(default_factory=list)
     created_at_utc: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    cognitive_state: Any = None
 
     def validate(self) -> None:
         """Thoroughly validate structure, risk boundaries, and dependency integrity."""
@@ -211,6 +212,25 @@ class TaskPlan:
             for ref in self.memory_refs:
                 lines.append(f"- 📚 ID: `{ref}`")
 
+        if self.cognitive_state is not None and hasattr(self.cognitive_state, "evaluate_metacognition"):
+            meta = self.cognitive_state.evaluate_metacognition()
+            lines.extend([
+                "",
+                "## Trạng thái nhận thức & Bằng chứng (Cognitive & Metacognitive State)",
+                f"- **Khả năng kết luận:** `{'ĐỦ ĐIỀU KIỆN KẾT LUẬN' if meta.can_conclude else 'TỪ CHỐI KẾT LUẬN (ABSTAIN)'}`",
+                f"- **Tỷ lệ neo bằng chứng (Grounding Score):** {meta.grounding_score * 100:.1f}%",
+            ])
+            if meta.abstention_reason:
+                lines.append(f"- ⚠️ **Lý do từ chối:** {meta.abstention_reason}")
+                lines.append(f"- 🔍 **Kiến nghị bước tiếp theo:** {meta.recommended_next_step}")
+            if hasattr(self.cognitive_state, "beliefs") and self.cognitive_state.beliefs:
+                verified_b = sum(1 for b in self.cognitive_state.beliefs if hasattr(b, "is_verified_fact") and b.is_verified_fact())
+                lines.append(f"- **Nhận định (Beliefs):** {len(self.cognitive_state.beliefs)} tổng số (Đã xác minh: {verified_b})")
+            if hasattr(self.cognitive_state, "contradictions") and self.cognitive_state.contradictions:
+                lines.append(f"- ⚡ **Mâu thuẫn nguồn (Contradictions):** {len(self.cognitive_state.contradictions)} trường hợp")
+            if hasattr(self.cognitive_state, "uncertainties") and self.cognitive_state.uncertainties:
+                lines.append(f"- ❓ **Khoảng trống tri thức (Uncertainties):** {len(self.cognitive_state.uncertainties)} điểm chưa biết")
+
         lines.extend([
             "",
             "> **LƯU Ý QUẢN TRỊ:** Kế hoạch này được lập phục vụ xem xét đánh giá; không có hành động thực tế nào được thực thi trong phiên lập kế hoạch này.",
@@ -219,7 +239,7 @@ class TaskPlan:
         return "\n".join(lines)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "plan_id": self.plan_id,
             "goal": redact_text(self.goal),
             "summary": redact_text(self.summary),
@@ -234,3 +254,6 @@ class TaskPlan:
             "steps": [s.to_dict() for s in self.steps],
             "metadata": redact_value(self.metadata),
         }
+        if self.cognitive_state is not None and hasattr(self.cognitive_state, "to_dict"):
+            data["cognitive_state"] = self.cognitive_state.to_dict()
+        return data

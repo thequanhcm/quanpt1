@@ -55,7 +55,7 @@ def main() -> int:
     # 1. Kiểm tra kết nối hiện tại
     print("[1/5] Kiểm tra kết nối tới Pi 5 daemon...")
     try:
-        with urllib.request.urlopen(f"http://{PI5_IP}:{PI5_PORT}/api/kiosk/status", timeout=4.0) as resp:
+        with urllib.request.urlopen(f"http://{PI5_IP}:{PI5_PORT}/api/kiosk/status", timeout=10.0) as resp:
             st = json.loads(resp.read().decode("utf-8"))
             print(f"  ✅ Kết nối thành công! Thiết bị: {st.get('device_id')}, Core: {st.get('core_host')}")
     except Exception as exc:
@@ -99,7 +99,7 @@ echo "=== TÁI KHỞI ĐỘNG CLIENT DAEMON STANDBY ===" > "$SCRIPT_DIR/assets/a
 CUR_PIDS=$(pgrep -f "python3.*(client_daemon|main).py" || true)
 
 # Khởi chạy main.py mới trong background (ở chế độ Standby - không tự mở trình duyệt)
-nohup python3 "$SCRIPT_DIR/main.py" --core-host 192.168.1.17 --core-port 8766 > "$SCRIPT_DIR/daemon.log" 2>&1 &
+nohup python3 "$SCRIPT_DIR/main.py" --core-host 192.168.1.10 --core-port 8766 > "$SCRIPT_DIR/daemon.log" 2>&1 &
 NEW_PID=$!
 echo "Đã khởi chạy daemon mới (PID: $NEW_PID)" >> "$SCRIPT_DIR/assets/avatar/restart_log.txt"
 

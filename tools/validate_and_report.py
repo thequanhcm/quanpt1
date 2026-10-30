@@ -151,7 +151,10 @@ def git_info() -> dict[str, Any]:
 
 
 def run_tests() -> tuple[int, str, str]:
-    command = [sys.executable, "-m", "pytest", "-q", "tests"]
+    python_exe = ROOT / ".venv" / "Scripts" / "python.exe"
+    if not python_exe.exists():
+        python_exe = Path(sys.executable)
+    command = [str(python_exe), "-m", "pytest", "-q", "tests"]
     try:
         result = subprocess.run(
             command, cwd=ROOT, capture_output=True, text=True,

@@ -1,13 +1,53 @@
 # QUAN AI BRAIN — Project Status
 
 ## Current milestone
-QUAN AI BRAIN — V3 Sprint 3: Information Gap Awareness Engine (27/10/2026, ĐÃ TEST — chờ duyệt TASK-V3-SPRINT3 trước khi commit).
-Owner Approval Status: hồ sơ TASK-V3-SPRINT3 đang PENDING_APPROVAL trên kênh NetChat (approval_cards + approval_requests, consume-once). Trước đó: Sprint 2 V3 Approval Orchestrator đã duyệt 27/10; Sprint 2 GLM Streaming đã duyệt 25/10.
-Test Suite: 717 PASSED, 2 SKIPPED, 1 FAILED (Ollama OFFLINE — fail môi trường cũ, không liên quan Sprint 3; đã verify fail cả khi gỡ code Sprint 3).
-Sprint 3 additions: information_gap_analyzer.py (Task Spec 15 trường, 9 nhóm thiếu A–I, READY/NEEDS_OWNER_INPUT/NEEDS_VERIFICATION), CognitiveLoop.submit_task gap_check (thiếu thông tin → NOT_SUBMITTED, 0 hành động), netchat_info_gap_adapter.py (tin [CẦN ANH QUANPT1 BỔ SUNG THÔNG TIN] V3 §7, trả lời ≠ phê duyệt), persistence information_gaps.db + phục hồi restart, nhắc ≤5 lần/12h; 33 test mới (23 info-gap + 10 routing); chỉ số §13: hành động khi thiếu điều kiện = 0, tự suy đoán = 0.
+QUAN AI BRAIN — Raspberry Pi 5 Physical Audio, Vietnamese TTS & Zero-Dependency YouTube Music Engine (28/10/2026, VERIFIED).
+- **Edge Pi 5 Status**: Live Raspberry Pi 5 (`192.168.1.21:8768`) paired and ONLINE (`READY`), RTT ~28ms, real HMAC-SHA256 heartbeats every 0.6s.
+- **Physical Audio Hardware**: `Jieli Technology UACDemoV1.0 (USB Audio)` USB speaker & microphone active, audio level -18dB.
+- **YouTube Music Engine (`src/quan_ai_brain/media/youtube_music.py`)**: Zero-dependency Python stdlib search and streaming coordination (`looks_like_music_request`, `search_youtube_music`, `dispatch_play_music_to_pi5`, `dispatch_stop_music_to_pi5`).
+- **Edge Kiosk Daemon Endpoints (`edge_client/client_daemon.py`)**: Added `POST /api/kiosk/music/play`, `POST /api/kiosk/music/stop`, `GET /api/kiosk/music/status`, with multi-engine playback (Chromium Kiosk native iframe / headless Chromium / mpv fallback).
+- **Core Chat Integration (`src/quan_ai_brain/web/server.py`)**: Natural language request interception ("em bật bài hát Tàu Anh Qua Núi cho anh", "vợ anh muốn nghe bài...", "dừng nhạc"), injects YouTube evidence blocks into LLM system context, dispatches playback to Pi 5, returns `music_playback` payload for UI widgets.
+- **Web UI & Kiosk Player (`app.js`, `kiosk.js`)**: Interactive music card with Stop button, persistent Edge-TTS Vietnamese voice status badge (`vi-VN (Hoài My - Edge-TTS)`).
+- **Test Suite Status**: 100% pass on all music & edge tests (`tests/test_youtube_music.py`, `tests/test_edge_client.py`, `tests/test_web_executive_endpoints.py`, `tests/test_v8_vietnamese_conversation.py`).
 
 ## Status as implemented and verified by test suite
-- [x] QUAN AI BRAIN — V3 Sprint 3: Information Gap Awareness Engine (27/10/2026, tested, chờ owner duyệt commit):
+- [x] QUAN AI BRAIN — DB Browser for SQLite 3.13.1-win64 Integration & Deep Memory Engine (29/10/2026, VERIFIED):
+  - [x] Official DB Browser for SQLite 3.13.1 win64 portable deployed to tools/DBBrowser/.
+  - [x] One-click desktop launcher MO_TRAP_TRI_NHO_SQLITE.bat created for direct visual exploration of data/brain.db.
+  - [x] Deep Memory Schema & Database Integrity verified on data/brain.db (91.4 MB, 2,180 episodes, 3,454 candidate knowledge records, 1,842 semantic memories, 2,269 memories, 150 knowledge units, 210 knowledge relations).
+  - [x] Candidate knowledge quarantine isolation confirmed compliant with AGENTS.md.
+  - [x] Verification test suite (tests/test_sqlite_browser_deep_memory.py): 6/6 PASSED (100%).
+- [x] QUAN AI BRAIN — Raspberry Pi 5 Audio/TTS & YouTube Music Engine (28/10/2026, VERIFIED ON LIVE PI 5):
+  - [x] Zero-dependency YouTube search engine (`src/quan_ai_brain/media/youtube_music.py`).
+  - [x] Vietnamese intent extraction ("bật bài...", "nghe bài...", "muốn nghe...", "dừng nhạc").
+  - [x] Live playback and stop dispatch to Raspberry Pi 5 (`192.168.1.21:8768`).
+  - [x] Edge Daemon music control handlers & Chromium audio pipeline (`edge_client/client_daemon.py`).
+  - [x] Living Grounding Fact 5 confirming Pi 5 physical audio hardware and YouTube music capability (`src/quan_ai_brain/cognition/grounding_facts.py`).
+  - [x] Central Server endpoints `/api/music/search`, `/api/music/play`, `/api/music/stop`, `/api/music/status`.
+  - [x] Web UI music player cards with stop controls (`app.js`).
+  - [x] Dedicated test suite (`tests/test_youtube_music.py`): 4/4 passing.
+- [x] QUAN AI BRAIN — Sprint 7B: Windows Job Object Kernel Integration & Hard Resource Containment (27/10/2026, 978 passed, 0 failed, 1 skipped):
+  - [x] `WindowsJobObjectBackend` (`src/quan_ai_brain/execution/windows_job_object.py`): Pure ctypes Win32 Job Object adapter implementing `ProcessBackendInterface`.
+  - [x] Win32 Ctypes Layouts: `IO_COUNTERS`, `JOBOBJECT_BASIC_LIMIT_INFORMATION`, `JOBOBJECT_EXTENDED_LIMIT_INFORMATION` (144 bytes), `JOBOBJECT_BASIC_ACCOUNTING_INFORMATION`.
+  - [x] Kernel Resource Quotas: Memory ceiling, CPU user time, active process limits, auto-kill on close.
+  - [x] Accounting & Telemetry: Real-time query of process counts, user CPU time, and kernel CPU time.
+  - [x] Fail-Closed Staging Gate: `allow_live_processes=False` default refusing execution with `ProductionExecutionProhibitedError`.
+  - [x] Destructive Command Screening: R5 commands (`rm -rf`, `del /s`, etc.) permanently blocked.
+  - [x] ContainedExecutionRunner: `execute_contained()` verified with both inert staging and authorized live sandbox dispatch.
+  - [x] Verification Test Suite (`tests/test_windows_job_object.py`): 14/14 tests passing.
+- [x] QUAN AI BRAIN — Master Implementation V4: Evidence-Driven Cognitive State & Verification (27/10/2026, 960 passed, 0 failed, 1 skipped):
+  - [x] CognitiveClaim & BeliefItem (`src/quan_ai_brain/cognition/cognitive_state.py`): Triples, multi-source provenance, version lineage, and timestamp tracking.
+  - [x] Freshness Evaluation (`src/quan_ai_brain/cognition/cognitive_state.py`): Ephemeral, session, daily, long-term, and immutable policies.
+  - [x] Context-Aware Contradiction Engine: Auto-detection of context differences vs direct contradictions.
+  - [x] State Reconciliation Engine: Non-destructive updating, version bumping, and supporting/opposing source tracking.
+  - [x] Cognitive Self-Assessment Engine: 6-tier evidence evaluation, truthful reporting, and strict production gating.
+  - [x] V4 Verification Suite (`tests/test_cognitive_state_v4.py`): 20/20 tests passing covering all Section 9 requirements.
+- [x] QUAN AI BRAIN — Cognitive Operating Intelligence V3: Cognitive State, Metacognitive Abstention & Adversarial Testing (27/10/2026, 927 passed, 0 failed, 1 skipped):
+  - [x] CognitiveState Model (`src/quan_ai_brain/cognition/cognitive_state.py`): Segregation of knowledge into 8 `BeliefKind` categories, tracking hypotheses, uncertainties, alternatives, and contradictions.
+  - [x] TaskPlan Integration (`src/quan_ai_brain/planning/models.py`): Added `cognitive_state` field, serialize via `to_dict()`, and explainable markdown output via `explain()`.
+  - [x] ExecutiveCoordinator Integration (`src/quan_ai_brain/planning/coordinator.py`): Connects `CognitiveState`, maps user goal to `FACT_USER`, maps memories to `FACT_RETRIEVED`/`HYPOTHESIS`/`UNKNOWN`, detects contradictions and stale state, enforces approval on adversarial injection or contradictions.
+  - [x] Adversarial Cognition Test Suite (`tests/test_adversarial_cognition.py`): 12/12 tests passing covering all Master Prompt V3 Section X mandatory groups.
+  - [x] Unit Test Suites (`tests/test_cognitive_state.py`, `tests/test_planning.py`): 100% pass rate.
   - [x] InformationGapAnalyzer (`src/quan_ai_brain/cognition/information_gap_analyzer.py`): 18/18 tình huống bắt buộc V3 §12 đạt; im lặng ≠ đồng ý; nguồn mâu thuẫn → NEEDS_VERIFICATION không tự chọn; VERIFIED/OWNER_PROVIDED không hỏi lại (V3 §4).
   - [x] CognitiveLoop integration: submit_task gap_check ON — NOT_SUBMITTED khi thiếu thông tin thiết yếu; TaskSpec.validate fail-closed giữ nguyên.
   - [x] NetChat: route_message bước 0.5 (info_gap_reply) + approval adapter nhường tin info-gap; E2E TASK-E2E99 qua route_message thật.

@@ -10,7 +10,15 @@ import json
 from pathlib import Path
 import re
 from typing import Any
+import uuid
 
+from quan_ai_brain.cognition.cognitive_state import (
+    BeliefItem,
+    BeliefKind,
+    CognitiveState,
+    ContradictionRecord,
+    UncertaintyItem,
+)
 from quan_ai_brain.cognition.context_builder import PromptContextBuilder
 from quan_ai_brain.cognition.models import BuiltContext, MemoryQuery
 from quan_ai_brain.cognition.retrieval import CognitiveRetriever
@@ -34,6 +42,14 @@ _R4_KEYWORDS = (
 
 _R2_KEYWORDS = (
     "write file", "save report", "create file", "export json", "write log",
+)
+
+# Adversarial prompt injection keywords (Master Prompt V3 §X)
+_ADVERSARIAL_INJECTION_KEYWORDS = (
+    "bỏ qua quy tắc an toàn", "ignore safety", "override policy",
+    "giả lập approval", "fake approval", "bypass governance",
+    "tự cấp quyền", "disable guardrails", "ignore previous instructions",
+    "bypass safety", "bỏ qua hàng rào", "bỏ qua kiểm tra",
 )
 
 
@@ -93,6 +109,33 @@ class ExecutiveCoordinator:
         clean_goal = redact_text(goal.strip())
         memory_refs: list[str] = []
         context_text = ""
+        plan_warnings: list[str] = []
+
+        # 0. Initialize CognitiveState model & Epistemic Grounding
+        cog_state = CognitiveState(
+            task_id=f"plan-cog-{uuid.uuid4().hex[:8]}",
+            goal=clean_goal,
+        )
+        cog_state.add_belief(
+            statement=f"Mục tiêu do người dùng chỉ định: {clean_goal}",
+            kind=BeliefKind.FACT_USER,
+            source_ref="user_request",
+            confidence=1.0,
+            verification_status="user_provided",
+        )
+
+        # Detect adversarial injection keywords in goal (Master Prompt V3 §X)
+        goal_lower = clean_goal.lower()
+        adversarial_flag = any(kw in goal_lower for kw in _ADVERSARIAL_INJECTION_KEYWORDS)
+        if adversarial_flag:
+            cog_state.add_uncertainty(
+                unknown_key="adversarial_instruction_detected",
+                description="Phát hiện dấu hiệu chỉ thị đối kháng (adversarial prompt) nhằm can thiệp quy tắc an toàn.",
+                why_critical="Chính sách an toàn QUAN AI BRAIN cấm can thiệp hoặc ghi đè quy tắc an toàn qua prompt.",
+                suggested_verification_action="Từ chối nâng quyền và yêu cầu thẩm định phê duyệt tường minh từ Anh Quân.",
+                requires_owner_input=True,
+            )
+            plan_warnings.append("CẢNH BÁO: Phát hiện chỉ thị có dấu hiệu bypass an toàn; lập kế hoạch yêu cầu phê duyệt bảo mật nghiêm ngặt.")
 
         # 1. Retrieve cognitive memory if retriever is available
         if self.retriever is not None:
@@ -104,6 +147,74 @@ class ExecutiveCoordinator:
             )
             retrieval_res = self.retriever.retrieve(retrieval_query)
             memory_refs = [m.memory_id for m in retrieval_res.memories]
+
+            stale_mems: list[str] = []
+            seen_topics: dict[str, Any] = {}
+            for rm in retrieval_res.memories:
+                m_meta = getattr(rm, "metadata", {}) or {}
+                rm_tags = getattr(rm, "tags", []) or []
+                is_stale = bool(m_meta.get("is_stale") or m_meta.get("expired") or ("stale" in rm_tags))
+                if is_stale:
+                    stale_mems.append(rm.memory_id)
+                    b_kind = BeliefKind.UNKNOWN
+                    conf = 0.1
+                elif rm.verification_status in ("verified", "observed"):
+                    b_kind = BeliefKind.FACT_RETRIEVED
+                    conf = max(0.6, rm.score)
+                elif rm.verification_status == "candidate":
+                    # Master Prompt V3 §X.7: CANDIDATE knowledge must never be treated as verified fact
+                    b_kind = BeliefKind.HYPOTHESIS
+                    conf = 0.3
+                else:
+                    b_kind = BeliefKind.INFERENCE
+                    conf = 0.5
+
+                cog_state.add_belief(
+                    statement=rm.content,
+                    kind=b_kind,
+                    source_ref=f"memory:{rm.memory_id}",
+                    confidence=conf,
+                    verification_status=rm.verification_status,
+                )
+
+                # Check topic contradictions
+                topic_key = m_meta.get("topic") or m_meta.get("subject") or (rm_tags[0] if rm_tags else None)
+                if topic_key:
+                    if topic_key in seen_topics:
+                        prev_rm = seen_topics[topic_key]
+                        if prev_rm.content != rm.content:
+                            cog_state.record_contradiction(
+                                topic=str(topic_key),
+                                claim_a=prev_rm.content,
+                                source_a=f"memory:{prev_rm.memory_id}",
+                                status_a=prev_rm.verification_status,
+                                claim_b=rm.content,
+                                source_b=f"memory:{rm.memory_id}",
+                                status_b=rm.verification_status,
+                                notes="Phát hiện mâu thuẫn giữa 2 bản ghi tri thức cùng chủ đề.",
+                            )
+                    else:
+                        seen_topics[topic_key] = rm
+
+            if stale_mems:
+                plan_warnings.append(
+                    f"CẢNH BÁO DỮ LIỆU CŨ (Stale State): {len(stale_mems)} bản ghi tri thức đã cũ; kết luận cần được làm mới trước khi thực thi."
+                )
+                cog_state.add_uncertainty(
+                    unknown_key="stale_knowledge_retrieved",
+                    description=f"Tri thức {', '.join(stale_mems)} đã hết hạn hoặc bị đánh dấu cũ.",
+                    why_critical="Dữ liệu cũ có thể làm sai lệch kế hoạch so với hiện trạng thực tế.",
+                    suggested_verification_action="Đọc dữ liệu hiện hành trực tiếp qua thao tác R0.",
+                )
+
+            if not memory_refs:
+                cog_state.add_uncertainty(
+                    unknown_key="no_context_found",
+                    description="Không tìm thấy tri thức hoặc kinh nghiệm đã lưu liên quan đến mục tiêu.",
+                    why_critical="Kế hoạch được lập chủ yếu dựa trên suy diễn mô hình, thiếu căn cứ dữ liệu cục bộ.",
+                    suggested_verification_action="Thu thập dữ liệu hoặc xác nhận lại yêu cầu.",
+                )
+
             built_ctx = self.context_builder.build(
                 user_query=clean_goal,
                 retrieval=retrieval_res,
@@ -165,6 +276,7 @@ class ExecutiveCoordinator:
                 warnings=[llm_resp.warning or "LLM request failed"],
                 validation_errors=[llm_resp.error_message or "Unknown LLM failure"],
                 memory_refs=memory_refs,
+                cognitive_state=cog_state,
             )
 
         # 5. Parse JSON proposal
@@ -180,6 +292,7 @@ class ExecutiveCoordinator:
                 warnings=["LLM response was not valid JSON; manual review required."],
                 validation_errors=[f"JSON parse error: {exc}"],
                 memory_refs=memory_refs,
+                cognitive_state=cog_state,
             )
 
         summary = str(plan_data.get("summary", "")).strip() or f"Plan for: {clean_goal}"
@@ -192,11 +305,11 @@ class ExecutiveCoordinator:
                 source="mock" if llm_resp.is_mock else llm_resp.provider,
                 validation_errors=["Plan must contain at least one step"],
                 memory_refs=memory_refs,
+                cognitive_state=cog_state,
             )
 
         # 6. Process each step and perform INDEPENDENT GOVERNANCE VERIFICATION
         processed_steps: list[TaskStep] = []
-        plan_warnings: list[str] = []
         if llm_resp.is_mock:
             plan_warnings.append("MOCK MODE — Plan generated via synthetic mock, not actual LLM inference.")
 
@@ -279,7 +392,16 @@ class ExecutiveCoordinator:
             )
             processed_steps.append(step_obj)
 
-        # 7. Construct TaskPlan
+        # 7. Metacognitive Evaluation & Decision Dossier
+        metacog = cog_state.evaluate_metacognition()
+        if not metacog.can_conclude:
+            if metacog.abstention_reason:
+                plan_warnings.append(f"CẢNH BÁO NHẬN THỨC (Metacognitive Abstention): {metacog.abstention_reason}")
+
+        # If adversarial flag or unresolved contradiction, enforce approval
+        requires_approval_forced = adversarial_flag or (metacog.unresolved_contradiction_count > 0)
+
+        # Construct TaskPlan
         task_plan = TaskPlan(
             goal=clean_goal,
             steps=processed_steps,
@@ -287,6 +409,8 @@ class ExecutiveCoordinator:
             source="mock" if llm_resp.is_mock else llm_resp.provider,
             warnings=plan_warnings,
             memory_refs=memory_refs,
+            requires_approval=requires_approval_forced,
+            cognitive_state=cog_state,
         )
 
         # 8. Validate plan integrity
@@ -295,6 +419,10 @@ class ExecutiveCoordinator:
         except ValueError as exc:
             task_plan.status = TaskStatus.FAILED
             task_plan.validation_errors.append(str(exc))
+
+        # If metacognition abstained due to critical unknowns or contradictions, ensure plan stays in WAITING_APPROVAL
+        if not metacog.can_conclude and task_plan.status == TaskStatus.READY_FOR_REVIEW:
+            task_plan.status = TaskStatus.WAITING_APPROVAL
 
         return task_plan
 

@@ -98,20 +98,25 @@ class TestEnsureDaemonAlive:
 
 class TestCheckLearningDaemon:
     def test_missing_log_is_offline(self, wd, tmp_path, monkeypatch):
+        # 28/10/2026: check tra cả 3 vị trí log — cách ly BASE_DIR về tmp_path
+        # để các file log thật của workspace không can thiệp.
+        monkeypatch.setattr(wd, "BASE_DIR", str(tmp_path))
         wd.CONFIG["learning_daemon_log"] = str(tmp_path / "khongtontai.log")
         alive = wd.check_learning_daemon()
         assert alive is False
 
-    def test_fresh_log_is_alive(self, wd, tmp_path):
+    def test_fresh_log_is_alive(self, wd, tmp_path, monkeypatch):
+        monkeypatch.setattr(wd, "BASE_DIR", str(tmp_path))
         log = tmp_path / "learning_daemon.log"
         log.write_text("iteration 1", encoding="utf-8")  # mtime = bây giờ
         wd.CONFIG["learning_daemon_log"] = str(log)
         alive = wd.check_learning_daemon()
         assert alive is True
 
-    def test_stale_log_is_dead(self, wd, tmp_path):
+    def test_stale_log_is_dead(self, wd, tmp_path, monkeypatch):
         import os
 
+        monkeypatch.setattr(wd, "BASE_DIR", str(tmp_path))
         log = tmp_path / "learning_daemon.log"
         log.write_text("iteration 1", encoding="utf-8")
         old_ts = __import__("time").time() - 2000  # 33 phút trước (>15 phút)
@@ -119,3 +124,19 @@ class TestCheckLearningDaemon:
         wd.CONFIG["learning_daemon_log"] = str(log)
         alive = wd.check_learning_daemon()
         assert alive is False
+
+    def test_fresh_alt_log_is_alive(self, wd, tmp_path, monkeypatch):
+        """28/10/2026: daemon ghi learning_daemon.py.log (watchdog redirect) →
+        phải được nhận là ALIVE dù learning_daemon.log cũ/không có."""
+        import os
+
+        monkeypatch.setattr(wd, "BASE_DIR", str(tmp_path))
+        stale = tmp_path / "learning_daemon.log"
+        stale.write_text("old", encoding="utf-8")
+        old_ts = __import__("time").time() - 4000
+        os.utime(stale, (old_ts, old_ts))
+        fresh = tmp_path / "logs" / "learning_daemon.py.log"
+        fresh.parent.mkdir(parents=True, exist_ok=True)
+        fresh.write_text("iteration mới", encoding="utf-8")
+        wd.CONFIG["learning_daemon_log"] = str(stale)
+        assert wd.check_learning_daemon() is True

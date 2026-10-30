@@ -30,6 +30,27 @@ import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+# (29/10/2026) pythonw windowless mode: sys.stdout là None dưới pythonw.exe —
+# print() sẽ crash service im lặng. Redirect ra log file.
+if sys.stdout is None or sys.stderr is None:
+    _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        sys.stdout = open(_LOG_DIR / "learning_daemon_stdout.log", "a", buffering=1, encoding="utf-8", errors="replace")
+        sys.stderr = sys.stdout
+    except Exception:
+        pass
+
+# (29/10/2026) pythonw: không còn console cha — mỗi subprocess.run sẽ tạo cửa
+# sổ console riêng (nháy). Patch toàn bộ subprocess.run của process này.
+_orig_subprocess_run = subprocess.run
+
+def _subprocess_run_no_window(*args, **kwargs):
+    kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return _orig_subprocess_run(*args, **kwargs)
+
+subprocess.run = _subprocess_run_no_window
 from typing import Any
 
 sys.path.insert(0, "src")

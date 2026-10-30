@@ -41,3 +41,8 @@ crash_dumps/
 Thumbs.db
 .vscode/
 .idea/
+kho_tai_lieu/Toeic.pdf
+
+# Tools & External Binaries
+tools/DBBrowser/
+
