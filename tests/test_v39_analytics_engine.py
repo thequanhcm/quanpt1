@@ -26,7 +26,7 @@ from quan_ai_brain.analytics.statistical_engine import (
     CorrelationMethod,
     RegressionType,
     calculate_descriptive_stats,
-    test_correlation,
+    check_correlation,
     fit_linear_model,
     analyze_trend
 )
@@ -218,7 +218,7 @@ class TestStatisticalEngine:
         # Correlation
         x = [1, 2, 3, 4, 5]
         y = [2, 4, 6, 8, 10]
-        corr = test_correlation(x, y)
+        corr = check_correlation(x, y)
         assert corr is not None
         assert corr.correlation_coefficient > 0
         

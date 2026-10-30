@@ -593,10 +593,19 @@ def calculate_descriptive_stats(data: List[Union[int, float]]) -> DescriptiveSta
     return engine.describe(data)
 
 
-def test_correlation(x: List[float], y: List[float]) -> CorrelationResult:
-    """Test correlation between two variables."""
+def check_correlation(x: List[float], y: List[float]) -> CorrelationResult:
+    """Statistical significance test for correlation between two variables.
+
+    (30/10/2026) Đổi tên từ `test_correlation` → `check_correlation`: tên cũ
+    khiến pytest thu thập nhầm thành test case (fixture 'x' not found) và làm
+    ERROR cả suite. API thực tế chỉ dùng qua StatisticalEngine.correlation().
+    """
     engine = StatisticalEngine()
     return engine.correlation(x, y)
+
+
+# Backward-compatible alias (không để pytest thu thập)
+correlation_test = check_correlation
 
 
 def fit_linear_model(x: List[float], y: List[float]) -> RegressionResult:

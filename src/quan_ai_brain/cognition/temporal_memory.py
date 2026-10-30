@@ -308,10 +308,13 @@ class MemoryConsolidator:
             summary = f"[SUMMARY of {len(statements)} items] " + " | ".join(statements[:5])
         
         # Lưu summary như 1 KU mới
+        # (30/10/2026) FIX: 'SUMMARY' không nằm trong KNOWLEDGE_TYPES của
+        # deep_memory → ValueError giết summarize_group + consolidate_memory.
+        # Dùng 'CONCLUSION' (đúng semantics: tóm tắt suy ra từ các FACT).
         subject, predicate, obj = self._store._decompose(summary, 'FACT')
-        
+
         summary_id = self._store._insert_unit(
-            knowledge_type='SUMMARY',
+            knowledge_type='CONCLUSION',
             subject=subject,
             predicate=predicate,
             object=obj,
@@ -319,7 +322,7 @@ class MemoryConsolidator:
             source_refs=[f"consolidation:{','.join(ku_ids)}"],
             evidence_refs=ku_ids,
             scope=units[0].get('scope', 'general'),
-            status='VERIFIED',
+            status='INFERRED',
             confidence=0.85,
             meta={
                 'summary_type': summary_type,
@@ -375,22 +378,35 @@ class MemoryConsolidator:
             # Kết hợp cả 2
             new_statement = f"{unit_a['statement']} | {unit_b['statement']}"
             subject, predicate, obj = self._store._decompose(new_statement, unit_a.get('knowledge_type', 'FACT'))
-            
+
+            # (30/10/2026) FIX: _insert_unit nhận meta= dict, KHÔNG có kwarg
+            # extraction_meta → TypeError giết merge_duplicates(keep='combined').
+            # source_refs/evidence_refs cũng phải là list, không phải JSON string.
+            try:
+                src_a = json.loads(unit_a.get('source_refs_json', '[]') or '[]')
+                src_b = json.loads(unit_b.get('source_refs_json', '[]') or '[]')
+            except (ValueError, TypeError):
+                src_a, src_b = [], []
+            if not isinstance(src_a, list):
+                src_a = [src_a]
+            if not isinstance(src_b, list):
+                src_b = [src_b]
+
             merged_id = self._store._insert_unit(
                 knowledge_type=unit_a.get('knowledge_type', 'FACT'),
                 subject=subject,
                 predicate=predicate,
                 object=obj,
                 statement=new_statement,
-                source_refs=json.dumps([unit_a.get('source_refs_json', '[]'), unit_b.get('source_refs_json', '[]')]),
-                evidence_refs=json.dumps([ku_a, ku_b]),
+                source_refs=src_a + src_b,
+                evidence_refs=[ku_a, ku_b],
                 scope=unit_a.get('scope', unit_b.get('scope', 'general')),
                 status='VERIFIED',
                 confidence=max(unit_a.get('confidence', 0.5), unit_b.get('confidence', 0.5)),
-                extraction_meta=json.dumps({
+                meta={
                     'merged_from': [ku_a, ku_b],
                     'merge_type': 'combined'
-                })
+                }
             )
             
             # Supersede cả 2

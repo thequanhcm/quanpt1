@@ -121,6 +121,7 @@ class LongTermMemoryStore:
                 allow_reset=True  # For development/testing
             )
         )
+        self.collection_name = collection_name
         
         # Get or create collection
         self.collection = self.client.get_or_create_collection(
@@ -319,27 +320,32 @@ class LongTermMemoryStore:
     def get_stats(self) -> dict:
         """Get memory store statistics."""
         total_chunks = self.collection.count()
-        
+
         # Count by verification status
+        # (30/10/2026) FIX chroma 1.5.9: collection.get(where=...) KHÔNG trả
+        # key 'count' (chỉ ids/embeddings/documents/metadatas) → mọi count
+        # rơi vào except → 0. Đếm bằng len(ids).
         verification_counts = {}
         for status in VerificationStatus:
             try:
-                count = self.collection.get(
+                res = self.collection.get(
                     where={"verification_status": status.value}
-                )["count"]
-                verification_counts[status.value] = count
-            except:
+                )
+                ids = res.get("ids") or []
+                verification_counts[status.value] = len(ids) if not isinstance(ids, int) else ids
+            except Exception:
                 verification_counts[status.value] = 0
-        
+
         # Count by memory type
         type_counts = {}
         for mtype in MemoryType:
             try:
-                count = self.collection.get(
+                res = self.collection.get(
                     where={"memory_type": mtype.value}
-                )["count"]
-                type_counts[mtype.value] = count
-            except:
+                )
+                ids = res.get("ids") or []
+                type_counts[mtype.value] = len(ids) if not isinstance(ids, int) else ids
+            except Exception:
                 type_counts[mtype.value] = 0
         
         return {
@@ -361,7 +367,14 @@ class LongTermMemoryStore:
     
     def reset(self):
         """Reset the entire memory store (for development/testing)."""
+        # (30/10/2026) FIX chroma 1.5.9: client.reset() xóa CẢ database →
+        # collection handle cũ trở thành NotFound (mọi thao tác sau crash).
+        # Sau reset phải get_or_create lại collection.
         self.client.reset()
+        self.collection = self.client.get_or_create_collection(
+            name=self.collection_name,
+            metadata={"description": "QUAN AI BRAIN long-term memory"}
+        )
         print("⚠️ Memory store reset")
     
     def export_to_json(self, output_path: str):
@@ -456,8 +469,25 @@ class MemoryTieringEngine:
             return self.long_term.search_by_verification(query, n_results=n_results)
         else:
             # Search all, but rank verified higher
-            all_results = self.long_term.search(query, n_results=n_results * 2)
-            
+            # (30/10/2026) FIX: search() trả dict chroma thô (ids/embeddings/
+            # documents/metadatas/distances), KHÔNG phải list các record —
+            # sort trên str gây AttributeError. Chuẩn hóa trước khi xếp hạng.
+            raw = self.long_term.search(query, n_results=n_results * 2)
+            ids = raw.get("ids") or [[]]
+            metas = (raw.get("metadatas") or [[]])[0] if raw.get("metadatas") else []
+            docs = (raw.get("documents") or [[]])[0] if raw.get("documents") else []
+            dists = (raw.get("distances") or [[]])[0] if raw.get("distances") else []
+
+            all_results = []
+            for i, cid in enumerate(ids[0] if ids else []):
+                meta = metas[i] if i < len(metas) and isinstance(metas[i], dict) else {}
+                all_results.append({
+                    "id": cid,
+                    "content": docs[i] if i < len(docs) else "",
+                    "similarity": 1.0 - float(dists[i]) if i < len(dists) else 0.0,
+                    **meta,
+                })
+
             # Sort by verification status (VERIFIED > USER_PROVIDED > others)
             status_priority = {
                 VerificationStatus.VERIFIED.value: 3,

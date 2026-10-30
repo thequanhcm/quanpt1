@@ -22,10 +22,24 @@ from quan_ai_brain.memory.models import MemoryType, VerificationStatus, Lifecycl
 
 
 @pytest.fixture
-def temp_db_path():
-    """Create temporary database path for testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        yield Path(tmpdir) / "test_vector_db"
+def temp_db_path(tmp_path_factory):
+    """Create temporary database path for testing.
+
+    (30/10/2026) FIX Windows: chromadb 1.5.9 (rust bindings) giữ sqlite
+    connection pool đến khi GC hủy toàn bộ reference — pytest fixture cache
+    giữ store alive nên TemporaryDirectory cleanup crash PermissionError
+    WinError 32. Chiến lược: dùng tmp_path (pytest tự quản, không rmtree
+    ngay) + ignore cleanup errors — temp dir được OS dọn theo Temp cleanup,
+    test không còn ERROR teardown. Best-effort clear cache + GC sau mỗi test.
+    """
+    tmpdir = tmp_path_factory.mktemp("v37_2_chroma")
+    yield tmpdir / "test_vector_db"
+    from chromadb.api.shared_system_client import SharedSystemClient
+    SharedSystemClient.clear_system_cache()
+    import gc
+    gc.collect()
+    import shutil
+    shutil.rmtree(tmpdir, ignore_errors=True)  # best-effort, không raise
 
 
 @pytest.fixture
@@ -51,8 +65,13 @@ def memory_store(temp_db_path, mock_embedding_service):
         collection_name="test_memory"
     )
     yield store
-    # Cleanup
-    store.reset()
+    # (30/10/2026) Cleanup: drop references TRƯỚC khi temp dir bị xóa —
+    # chroma client phải được GC/clear cache trước TemporaryDirectory exit.
+    del store
+    from chromadb.api.shared_system_client import SharedSystemClient
+    SharedSystemClient.clear_system_cache()
+    import gc
+    gc.collect()
 
 
 class TestMemoryChunk:
@@ -221,20 +240,24 @@ class TestLongTermMemoryStore:
     
     def test_search_user_provided(self, memory_store):
         """Test searching USER_PROVIDED knowledge."""
+        # (30/10/2026) FIX: MemoryType KHÔNG có RULE (enum: EPISODIC/SEMANTIC/
+        # PROCEDURAL/DECISION/PREFERENCE/CANDIDATE) → test lỗi AttributeError
+        # ngay khi tạo chunk. Dùng DECISION (ngữ nghĩa gần nhất: owner quyết
+        # định/luật vận hành).
         chunk = MemoryChunk(
             id="user_knowledge",
             content="Anh dạy: ATS chuyển nguồn khi điện áp dưới 180V.",
-            memory_type=MemoryType.RULE.value,
+            memory_type=MemoryType.DECISION.value,
             source_ref="owner_chat",
             verification_status=VerificationStatus.USER_PROVIDED.value,
             tags=["ats", "owner"],
             metadata={}
         )
-        
+
         memory_store.add_memory(chunk)
-        
+
         results = memory_store.search_user_provided("ATS voltage threshold")
-        
+
         assert len(results) > 0
         assert results[0]["verification_status"] == VerificationStatus.USER_PROVIDED.value
     
@@ -430,10 +453,11 @@ class TestIntegration:
         engine = MemoryTieringEngine(store)
         
         # Simulate owner providing knowledge
+        # (30/10/2026) FIX: MemoryType KHÔNG có RULE → dùng DECISION.
         owner_knowledge = {
             "id": "owner_123",
             "content": "ATS should switch to backup when voltage drops below 180V for more than 5 seconds.",
-            "memory_type": MemoryType.RULE.value,
+            "memory_type": MemoryType.DECISION.value,
             "source_ref": "owner_chat_2026-10-28",
             "verification_status": VerificationStatus.USER_PROVIDED.value,
             "tags": ["ats", "rule", "owner"],
