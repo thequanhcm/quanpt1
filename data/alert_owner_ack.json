@@ -2,5 +2,13 @@
   "bt_speaker_connected": {
     "reason": "owner DM 14:21 01/11: 'Tiếp tục giữ tắt' — giữ loa TẮT là CỐ Ý; 4 cảnh báo 14:24-14:44 là spam sau quyết định. ACK ngay (TONY, 16:10)",
     "ack_at": "2026-11-01T09:07:25.527513+00:00"
+  },
+  "ram_percent": {
+    "reason": "owner DM 02/11 02:45: 'anh đã biết, tắt hết cảnh báo này' — RAM pc_host 86-96% là trạng thái anh chấp nhận; TONY ACK cả WARNING+CRITICAL (02:50)",
+    "ack_at": "2026-11-01T19:41:05.485383+00:00"
+  },
+  "selfcare:pi5:connectivity": {
+    "reason": "owner DM 02/11 02:45: 'anh đã biết, tắt hết cảnh báo này' — Pi5 offline (ping 100% loss, 8768/22 timeout) là trạng thái anh đã biết; TONY ACK (02:50)",
+    "ack_at": "2026-11-01T19:41:05.490500+00:00"
   }
 }
