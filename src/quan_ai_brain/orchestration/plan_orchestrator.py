@@ -353,8 +353,26 @@ class PlanOrchestrator:
             }
             self.task_registry.update_task_status(
                 task_id,
-                TaskStatus.COMPLETED,
+                TaskStatus.VERIFYING,
                 result_payload=summary_payload,
+                evidence_ref=f"evidence:plan_execution_{task_id}",
+            )
+            # DEOM M2 — Task Verifier: tất cả step COMPLETED + evidence → COMPLETED_VERIFIED,
+            # ngược lại COMPLETED_UNVERIFIED (fail-honest, không tự phong VERIFIED).
+            evidence_ok = all(
+                (bool(s.verification_method) or bool(s.expected_output))
+                and s.result_payload.get("status") == "success"
+                for s in refreshed_steps
+            )
+            self.task_registry.verify_task(
+                task_id,
+                evidence_ok=evidence_ok,
+                note=(
+                    "mọi step có verification_method + result_payload"
+                    if evidence_ok
+                    else "thiếu verification_method/result_payload ở ít nhất 1 step"
+                ),
+                actor="plan_orchestrator",
                 evidence_ref=f"evidence:plan_execution_{task_id}",
             )
 
@@ -483,6 +501,20 @@ class PlanOrchestrator:
             TaskStatus.CANCELLED: TaskState.CANCELLED,
             TaskStatus.OUTCOME_UNKNOWN: TaskState.OUTCOME_UNKNOWN,
             TaskStatus.BLOCKED: TaskState.BLOCKED,
+            # DEOM M2: các trạng thái mới map về state tương đương có sẵn
+            TaskStatus.RECEIVED: TaskState.RECEIVED,
+            TaskStatus.UNDERSTANDING: TaskState.RECEIVED,
+            TaskStatus.ANALYZING: TaskState.RECEIVED,
+            TaskStatus.PLANNING: TaskState.RECEIVED,
+            TaskStatus.READY: TaskState.AUTHORIZED,
+            TaskStatus.VERIFYING: TaskState.RUNNING,
+            TaskStatus.NEEDS_INFORMATION: TaskState.WAITING_FOR_APPROVAL,
+            TaskStatus.PAUSED: TaskState.RUNNING,
+            TaskStatus.EXPIRED: TaskState.CANCELLED,
+            TaskStatus.REJECTED: TaskState.CANCELLED,
+            TaskStatus.COMPLETED_VERIFIED: TaskState.SUCCEEDED,
+            TaskStatus.COMPLETED_PARTIALLY: TaskState.SUCCEEDED,
+            TaskStatus.COMPLETED_UNVERIFIED: TaskState.SUCCEEDED,
         }
         state = state_map.get(task.status, TaskState.OUTCOME_UNKNOWN)
 

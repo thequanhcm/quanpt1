@@ -89,6 +89,12 @@ TERMINAL_STATUSES = {
     TaskStatus.FAILED,
     TaskStatus.CANCELLED,
     TaskStatus.BLOCKED,
+    # DEOM M2 (01/11/2026): các trạng thái kết thúc mới
+    TaskStatus.COMPLETED_VERIFIED,
+    TaskStatus.COMPLETED_PARTIALLY,
+    TaskStatus.COMPLETED_UNVERIFIED,
+    TaskStatus.EXPIRED,
+    TaskStatus.REJECTED,
 }
 
 # Backlog policy (GAP-R7): PENDING tasks older than this are expired.
@@ -424,6 +430,20 @@ class CognitiveLoop:
             TaskStatus.CANCELLED: "CANCELLED",
             TaskStatus.BLOCKED: "BLOCKED",
             TaskStatus.OUTCOME_UNKNOWN: "VERIFYING",
+            # DEOM M2 (01/11/2026): trạng thái mới → lifecycle gộp tương đương
+            TaskStatus.RECEIVED: "PLANNING",
+            TaskStatus.UNDERSTANDING: "PLANNING",
+            TaskStatus.ANALYZING: "PLANNING",
+            TaskStatus.PLANNING: "PLANNING",
+            TaskStatus.READY: "EXECUTING",
+            TaskStatus.VERIFYING: "VERIFYING",
+            TaskStatus.NEEDS_INFORMATION: "WAITING_APPROVAL",
+            TaskStatus.PAUSED: "EXECUTING",
+            TaskStatus.EXPIRED: "CANCELLED",
+            TaskStatus.REJECTED: "CANCELLED",
+            TaskStatus.COMPLETED_VERIFIED: "COMPLETED",
+            TaskStatus.COMPLETED_PARTIALLY: "COMPLETED",
+            TaskStatus.COMPLETED_UNVERIFIED: "COMPLETED",
         }.get(status, "UNKNOWN")
 
     def _snapshot(

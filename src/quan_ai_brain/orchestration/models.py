@@ -15,7 +15,18 @@ class AutonomyLevel(str, Enum):
 
 
 class TaskStatus(str, Enum):
-    """Durable lifecycle states of tasks in QUAN AI BRAIN."""
+    """Durable lifecycle states of tasks in QUAN AI BRAIN.
+
+    DEOM M2 (01/11/2026): mở rộng theo Master Prompt V3.0 §4.3-4.4.
+    - Nhóm intake mới: RECEIVED → UNDERSTANDING → ANALYZING → PLANNING → READY
+    - Hoàn tất tách 3 mức: COMPLETED_VERIFIED / COMPLETED_PARTIALLY / COMPLETED_UNVERIFIED
+      (chỉ TaskVerifier được gán COMPLETED_VERIFIED — có bằng chứng acceptance criteria)
+    - Điều hành: VERIFYING, NEEDS_INFORMATION, PAUSED, EXPIRED, REJECTED
+    - Nhóm legacy (giữ nguyên cho tương thích): PENDING, IN_PROGRESS, WAITING_APPROVAL,
+      APPROVED, COMPLETED, FAILED, CANCELLED, OUTCOME_UNKNOWN, BLOCKED
+    """
+
+    # --- legacy (giữ nguyên) ---
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     WAITING_APPROVAL = "WAITING_APPROVAL"
@@ -25,6 +36,50 @@ class TaskStatus(str, Enum):
     CANCELLED = "CANCELLED"
     OUTCOME_UNKNOWN = "OUTCOME_UNKNOWN"
     BLOCKED = "BLOCKED"
+    # --- DEOM M2: intake pipeline ---
+    RECEIVED = "RECEIVED"
+    UNDERSTANDING = "UNDERSTANDING"
+    ANALYZING = "ANALYZING"
+    PLANNING = "PLANNING"
+    READY = "READY"
+    # --- DEOM M2: điều hành + kết quả có kiểm chứng ---
+    VERIFYING = "VERIFYING"
+    NEEDS_INFORMATION = "NEEDS_INFORMATION"
+    PAUSED = "PAUSED"
+    EXPIRED = "EXPIRED"
+    REJECTED = "REJECTED"
+    COMPLETED_VERIFIED = "COMPLETED_VERIFIED"
+    COMPLETED_PARTIALLY = "COMPLETED_PARTIALLY"
+    COMPLETED_UNVERIFIED = "COMPLETED_UNVERIFIED"
+
+
+# Trạng thái coi là "đã kết thúc có kết quả" (dùng cho thống kê + completed_at)
+TERMINAL_OK_STATES = (
+    TaskStatus.COMPLETED,
+    TaskStatus.COMPLETED_VERIFIED,
+    TaskStatus.COMPLETED_PARTIALLY,
+    TaskStatus.COMPLETED_UNVERIFIED,
+)
+
+TERMINAL_STATES = (
+    TaskStatus.COMPLETED,
+    TaskStatus.COMPLETED_VERIFIED,
+    TaskStatus.COMPLETED_PARTIALLY,
+    TaskStatus.COMPLETED_UNVERIFIED,
+    TaskStatus.CANCELLED,
+    TaskStatus.REJECTED,
+    TaskStatus.EXPIRED,
+)
+
+# Nhóm priority DEOM §7.2 (1=Critical chạy trước, 5=Background)
+PRIORITY_CRITICAL = 1
+PRIORITY_HIGH = 2
+PRIORITY_NORMAL = 3
+PRIORITY_LOW = 4
+PRIORITY_BACKGROUND = 5
+
+# Nguồn task (source) hợp lệ
+VALID_SOURCES = ("owner", "proactive", "learning", "system")
 
 
 class SupervisorState(str, Enum):
@@ -49,7 +104,11 @@ class SupervisorState(str, Enum):
 
 @dataclass
 class TaskRecord:
-    """Durable task representation persisted across process restarts."""
+    """Durable task representation persisted across process restarts.
+
+    DEOM M2: bổ sung priority/deadline/parent/dependencies/required_tools/
+    assigned_agents/permission_scope/progress_weight/source theo §4.3.
+    """
     task_id: str
     correlation_id: str
     idempotency_key: str
@@ -69,12 +128,37 @@ class TaskRecord:
     evidence_refs: list[str] = field(default_factory=list)
     result_payload: dict[str, Any] = field(default_factory=dict)
     checkpoint_data: dict[str, Any] = field(default_factory=dict)
+    # --- DEOM M2 fields (mặc định an toàn, nullable — không phá 578 records cũ) ---
+    priority: int = PRIORITY_NORMAL
+    deadline_utc: str | None = None
+    parent_task_id: str | None = None
+    dependencies: list[str] = field(default_factory=list)
+    required_tools: list[str] = field(default_factory=list)
+    assigned_agents: list[str] = field(default_factory=list)
+    permission_scope: list[str] = field(default_factory=list)
+    progress_weight: dict[str, Any] = field(default_factory=dict)
+    source: str = "owner"
 
     def to_dict(self) -> dict[str, Any]:
         res = asdict(self)
         res["autonomy_level"] = self.autonomy_level.value
         res["status"] = self.status.value
         return res
+
+
+@dataclass
+class TaskTransition:
+    """DEOM §4.4 — transition log bắt buộc: ai đổi trạng thái, khi nào, vì sao, bằng chứng gì."""
+    task_id: str
+    from_status: str | None
+    to_status: str
+    actor: str  # 'tony' | 'owner' | 'system' | agent id
+    reason: str = ""
+    evidence_ref: str = ""
+    at_utc: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass

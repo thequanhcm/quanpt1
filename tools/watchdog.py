@@ -306,6 +306,36 @@ def check_clo_stall() -> None:
         logger.warning(f"CLO stall check error (fail-honest, bỏ qua): {e}")
 
 
+def check_task_deadlines() -> None:
+    """(01/11/2026, DEOM M2, owner blanket approval) Task có deadline_utc đã qua
+    mà chưa kết thúc → EXPIRED qua DurableTaskRegistry.expire_overdue() chuẩn.
+
+    Fail-honest: lỗi chỉ log, không giết watchdog. Rate-limit 10 phút qua marker
+    để không query DB quá dày.
+    """
+    marker = Path(CONFIG["log_dir"]) / "task_deadline_last.txt"
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        if marker.exists() and (time.time() - marker.stat().st_mtime) < 600:
+            return
+    except OSError:
+        pass
+    try:
+        from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+        ws = Path(BASE_DIR)
+        registry = DurableTaskRegistry(ws / "data" / "tasks.db", workspace=ws)
+        expired = registry.expire_overdue()
+        if expired:
+            logger.warning(
+                f"DEOM deadline guard: {len(expired)} task quá hạn → EXPIRED "
+                f"({[t.task_id for t in expired[:5]]})"
+            )
+        marker.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Task deadline check error (fail-honest, bỏ qua): {e}")
+
+
 def check_disk_space() -> bool:
     """GAP-R3: workspace drive free-space guard (fail before DB corruption)."""
     try:
@@ -482,6 +512,10 @@ def main() -> int:
             # (01/11/2026, CLO-UNSTICK) Tự chủ học kẹt >24h → advance session
             # qua engine chuẩn (fail-honest, max 1 lần/giờ)
             check_clo_stall()
+
+            # (01/11/2026, DEOM M2, owner duyệt blanket) Task quá deadline chưa
+            # kết thúc → EXPIRED qua registry chuẩn (transition log đầy đủ).
+            check_task_deadlines()
 
             # Check if server is running
             if both_servers_healthy():

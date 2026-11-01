@@ -15,10 +15,13 @@ import uuid
 
 from quan_ai_brain.core.redaction import redact_text
 from quan_ai_brain.orchestration.models import (
+    TERMINAL_STATES,
     AutonomyLevel,
     TaskRecord,
     TaskStatus,
     TaskStepRecord,
+    TaskTransition,
+    VALID_SOURCES,
 )
 
 
@@ -106,6 +109,55 @@ class DurableTaskRegistry:
             self._conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_steps_task ON durable_task_steps (task_id)"
             )
+            self._migrate_deom_schema()
+
+    # ------------------------------------------------------------------
+    # DEOM M2 (01/11/2026) — schema mở rộng AN TOÀN: ADD COLUMN nullable +
+    # bảng transition log. Idempotent (chạy an toàn mỗi lần khởi tạo).
+    # Backup trước migration đã làm ở tools (tasks_backup_20261101_2300.db).
+    # ------------------------------------------------------------------
+    _DEOM_COLUMNS: dict[str, str] = {
+        "priority": "INTEGER NOT NULL DEFAULT 3",           # 1=Critical..5=Background
+        "deadline_utc": "TEXT",                             # phát hiện quá hạn
+        "parent_task_id": "TEXT",                           # task nhóm / milestone
+        "dependencies_json": "TEXT NOT NULL DEFAULT '[]'",  # task phải xong trước
+        "required_tools_json": "TEXT NOT NULL DEFAULT '[]'",
+        "assigned_agents_json": "TEXT NOT NULL DEFAULT '[]'",
+        "permission_scope_json": "TEXT NOT NULL DEFAULT '[]'",
+        "progress_weight_json": "TEXT NOT NULL DEFAULT '{}'",
+        "source": "TEXT NOT NULL DEFAULT 'owner'",          # owner|proactive|learning|system
+        "verified_at_utc": "TEXT",                          # TaskVerifier xác nhận lúc nào
+        "verification_note": "TEXT",                        # kết quả kiểm chứng / lý do PARTIALLY
+    }
+
+    def _migrate_deom_schema(self) -> None:
+        """ADD COLUMN idempotent + tạo task_transitions. Không sửa/xoá cột cũ."""
+        with self._lock, self._conn:
+            existing = {row[1] for row in self._conn.execute("PRAGMA table_info(durable_tasks)")}
+            for col, decl in self._DEOM_COLUMNS.items():
+                if col not in existing:
+                    self._conn.execute(f"ALTER TABLE durable_tasks ADD COLUMN {col} {decl}")
+            self._conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS task_transitions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    task_id TEXT NOT NULL,
+                    from_status TEXT,
+                    to_status TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    reason TEXT NOT NULL DEFAULT '',
+                    evidence_ref TEXT NOT NULL DEFAULT '',
+                    at_utc TEXT NOT NULL
+                )
+                """
+            )
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_transitions_task ON task_transitions (task_id)"
+            )
+            # Work queue index: chọn task READY theo priority + deadline nhanh
+            self._conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_queue ON durable_tasks (status, priority, deadline_utc)"
+            )
 
     def register_task(
         self,
@@ -118,8 +170,22 @@ class DurableTaskRegistry:
         acceptance_criteria: list[str] | None = None,
         resource_budget: dict[str, Any] | None = None,
         approved_scope: list[str] | None = None,
+        priority: int = 3,
+        deadline_utc: str | None = None,
+        parent_task_id: str | None = None,
+        dependencies: list[str] | None = None,
+        required_tools: list[str] | None = None,
+        assigned_agents: list[str] | None = None,
+        permission_scope: list[str] | None = None,
+        progress_weight: dict[str, Any] | None = None,
+        source: str = "owner",
+        initial_status: TaskStatus = TaskStatus.PENDING,
     ) -> TaskRecord:
-        """Register a new task or return existing task if idempotency_key matches."""
+        """Register a new task or return existing task if idempotency_key matches.
+
+        DEOM M2: nhận priority/deadline/dependencies/... + initial_status cho
+        intake pipeline (RECEIVED thay vì PENDING nếu qua NL intake).
+        """
         clean_goal = redact_text(goal.strip())
         key = idempotency_key or f"idem_{uuid.uuid4().hex}"
         corr_id = correlation_id or f"corr_{uuid.uuid4().hex[:12]}"
@@ -128,6 +194,9 @@ class DurableTaskRegistry:
         if existing:
             return existing
 
+        if source not in VALID_SOURCES:
+            source = "owner"
+        priority = max(1, min(5, int(priority)))
         task_id = f"task_{uuid.uuid4().hex[:12]}"
         now_utc = datetime.now(timezone.utc).isoformat()
         record = TaskRecord(
@@ -137,12 +206,21 @@ class DurableTaskRegistry:
             goal=clean_goal,
             risk_level=risk_level,
             autonomy_level=autonomy_level,
-            status=TaskStatus.PENDING,
+            status=initial_status,
             acceptance_criteria=acceptance_criteria or [],
             approved_scope=approved_scope or [],
             created_at_utc=now_utc,
             updated_at_utc=now_utc,
             resource_budget=resource_budget or {"max_steps": 10, "max_time_sec": 300},
+            priority=priority,
+            deadline_utc=deadline_utc,
+            parent_task_id=parent_task_id,
+            dependencies=dependencies or [],
+            required_tools=required_tools or [],
+            assigned_agents=assigned_agents or [],
+            permission_scope=permission_scope or [],
+            progress_weight=progress_weight or {},
+            source=source,
         )
 
         with self._lock, self._conn:
@@ -153,8 +231,11 @@ class DurableTaskRegistry:
                     autonomy_level, status, acceptance_criteria_json, approved_scope_json,
                     created_at_utc, updated_at_utc, completed_at_utc, resource_budget_json,
                     retry_count, max_retries, error_message, evidence_refs_json,
-                    result_payload_json, checkpoint_data_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    result_payload_json, checkpoint_data_json,
+                    priority, deadline_utc, parent_task_id, dependencies_json,
+                    required_tools_json, assigned_agents_json, permission_scope_json,
+                    progress_weight_json, source
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.task_id,
@@ -176,9 +257,23 @@ class DurableTaskRegistry:
                     json.dumps(record.evidence_refs),
                     json.dumps(record.result_payload),
                     json.dumps(record.checkpoint_data),
+                    record.priority,
+                    record.deadline_utc,
+                    record.parent_task_id,
+                    json.dumps(record.dependencies),
+                    json.dumps(record.required_tools),
+                    json.dumps(record.assigned_agents),
+                    json.dumps(record.permission_scope),
+                    json.dumps(record.progress_weight),
+                    record.source,
                 ),
             )
             self._conn.commit()
+        # Transition log khai sinh (DEOM §4.4)
+        self._log_transition(
+            task_id, None, record.status.value, actor="system",
+            reason=f"task registered (source={record.source}, priority={record.priority})",
+        )
         return record
 
     def get_task(self, task_id: str) -> TaskRecord | None:
@@ -218,13 +313,17 @@ class DurableTaskRegistry:
         checkpoint_data: dict[str, Any] | None = None,
         result_payload: dict[str, Any] | None = None,
         evidence_ref: str | None = None,
+        actor: str = "tony",
+        reason: str = "",
     ) -> TaskRecord:
         existing = self.get_task(task_id)
         if not existing:
             raise KeyError(f"Task {task_id} not found")
 
         now_utc = datetime.now(timezone.utc).isoformat()
-        completed_at = now_utc if status in (TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.CANCELLED) else existing.completed_at_utc
+        terminal_ok = status in (TaskStatus.COMPLETED, TaskStatus.COMPLETED_VERIFIED, TaskStatus.COMPLETED_PARTIALLY, TaskStatus.COMPLETED_UNVERIFIED)
+        terminal = terminal_ok or status in (TaskStatus.FAILED, TaskStatus.CANCELLED, TaskStatus.REJECTED, TaskStatus.EXPIRED)
+        completed_at = now_utc if terminal else existing.completed_at_utc
 
         checkpoints = dict(existing.checkpoint_data)
         if checkpoint_data:
@@ -262,6 +361,164 @@ class DurableTaskRegistry:
                     task_id,
                 ),
             )
+        # Transition log (DEOM §4.4) — sau khi UPDATE thành công
+        self._log_transition(
+            task_id,
+            existing.status.value,
+            status.value,
+            actor=actor,
+            reason=reason,
+            evidence_ref=evidence_ref or "",
+        )
+        return self.get_task(task_id)  # type: ignore[return-value]
+
+    # ------------------------------------------------------------------
+    # DEOM M2 — transition log + work queue + verifier + deadline
+    # ------------------------------------------------------------------
+
+    def _log_transition(
+        self,
+        task_id: str,
+        from_status: str | None,
+        to_status: str,
+        *,
+        actor: str = "tony",
+        reason: str = "",
+        evidence_ref: str = "",
+    ) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                INSERT INTO task_transitions (task_id, from_status, to_status, actor, reason, evidence_ref, at_utc)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    task_id,
+                    from_status,
+                    to_status,
+                    actor,
+                    reason,
+                    evidence_ref,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+            self._conn.commit()
+
+    def list_transitions(self, task_id: str, limit: int = 100) -> list[TaskTransition]:
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                """
+                SELECT task_id, from_status, to_status, actor, reason, evidence_ref, at_utc
+                FROM task_transitions WHERE task_id = ? ORDER BY id ASC LIMIT ?
+                """,
+                (task_id, limit),
+            )
+            return [
+                TaskTransition(
+                    task_id=r["task_id"],
+                    from_status=r["from_status"],
+                    to_status=r["to_status"],
+                    actor=r["actor"],
+                    reason=r["reason"],
+                    evidence_ref=r["evidence_ref"],
+                    at_utc=r["at_utc"],
+                )
+                for r in cur.fetchall()
+            ]
+
+    def work_queue(self, limit: int = 20, include_learning: bool = True) -> list[TaskRecord]:
+        """Work Queue 4 bậc DEOM §7.2 — READY/PENDING theo priority, deadline, tuổi.
+
+        Chống learning chiếm tài nguyên: task source='learning' chỉ được vào
+        queue khi không có task của owner chờ (caller kiểm tra qua has_owner_tasks).
+        """
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                """
+                SELECT * FROM durable_tasks
+                WHERE status IN ('READY', 'PENDING', 'APPROVED', 'RECEIVED', 'UNDERSTANDING',
+                                 'ANALYZING', 'PLANNING')
+                ORDER BY priority ASC,
+                         CASE WHEN deadline_utc IS NULL THEN 1 ELSE 0 END ASC,
+                         deadline_utc ASC,
+                         created_at_utc ASC
+                LIMIT ?
+                """,
+                (limit * 2,),
+            )
+            records = [self._row_to_record(r) for r in cur.fetchall()]
+        if not include_learning:
+            records = [r for r in records if r.source != "learning"]
+        owner_pending = any(r.source == "owner" for r in records)
+        if owner_pending:
+            records = [r for r in records if r.source != "learning"]
+        return records[:limit]
+
+    def has_owner_tasks(self) -> bool:
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                "SELECT 1 FROM durable_tasks WHERE source='owner' AND status IN ('READY','PENDING','APPROVED') LIMIT 1"
+            )
+            return cur.fetchone() is not None
+
+    def expire_overdue(self) -> list[TaskRecord]:
+        """Deadline đã qua mà chưa kết thúc → EXPIRED (chạy trong watchdog loop)."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                """
+                SELECT task_id FROM durable_tasks
+                WHERE deadline_utc IS NOT NULL AND deadline_utc < ?
+                  AND status NOT IN ('COMPLETED','COMPLETED_VERIFIED','COMPLETED_PARTIALLY',
+                                     'COMPLETED_UNVERIFIED','CANCELLED','REJECTED','EXPIRED')
+                """,
+                (now_iso,),
+            )
+            overdue = [r["task_id"] for r in cur.fetchall()]
+        expired: list[TaskRecord] = []
+        for tid in overdue:
+            expired.append(
+                self.update_task_status(
+                    tid, TaskStatus.EXPIRED, actor="system", reason=f"deadline passed ({now_iso})"
+                )
+            )
+        return expired
+
+    def verify_task(
+        self,
+        task_id: str,
+        *,
+        evidence_ok: bool,
+        note: str = "",
+        actor: str = "task_verifier",
+        evidence_ref: str = "",
+    ) -> TaskRecord:
+        """Task Verifier DEOM §4.3 — COMPLETED chỉ thành COMPLETED_VERIFIED khi có
+        bằng chứng acceptance criteria. Không verifier/bằng chứng → COMPLETED_UNVERIFIED
+        (fail-honest, không bao giờ tự phong VERIFIED)."""
+        existing = self.get_task(task_id)
+        if not existing:
+            raise KeyError(f"Task {task_id} not found")
+        now_utc = datetime.now(timezone.utc).isoformat()
+        if existing.status not in (TaskStatus.VERIFYING, TaskStatus.COMPLETED, TaskStatus.COMPLETED_UNVERIFIED):
+            raise ValueError(
+                f"verify_task requires task in VERIFYING/COMPLETED/COMPLETED_UNVERIFIED, got {existing.status.value}"
+            )
+        target = TaskStatus.COMPLETED_VERIFIED if evidence_ok else TaskStatus.COMPLETED_UNVERIFIED
+        with self._lock, self._conn:
+            self._conn.execute(
+                """
+                UPDATE durable_tasks SET status = ?, verified_at_utc = ?, verification_note = ?,
+                                         updated_at_utc = ?, completed_at_utc = COALESCE(completed_at_utc, ?)
+                WHERE task_id = ?
+                """,
+                (target.value, now_utc, note, now_utc, now_utc, task_id),
+            )
+        self._log_transition(
+            task_id, existing.status.value, target.value, actor=actor,
+            reason=note or ("evidence ok" if evidence_ok else "missing/insufficient evidence"),
+            evidence_ref=evidence_ref,
+        )
         return self.get_task(task_id)  # type: ignore[return-value]
 
     def recover_in_flight_tasks(self) -> list[TaskRecord]:
@@ -316,6 +573,16 @@ class DurableTaskRegistry:
             evidence_refs=json.loads(row["evidence_refs_json"]),
             result_payload=json.loads(row["result_payload_json"]),
             checkpoint_data=json.loads(row["checkpoint_data_json"]),
+            # DEOM M2 columns (row keys exist sau migration idempotent)
+            priority=row["priority"] if "priority" in row.keys() else 3,
+            deadline_utc=row["deadline_utc"] if "deadline_utc" in row.keys() else None,
+            parent_task_id=row["parent_task_id"] if "parent_task_id" in row.keys() else None,
+            dependencies=json.loads(row["dependencies_json"]) if "dependencies_json" in row.keys() else [],
+            required_tools=json.loads(row["required_tools_json"]) if "required_tools_json" in row.keys() else [],
+            assigned_agents=json.loads(row["assigned_agents_json"]) if "assigned_agents_json" in row.keys() else [],
+            permission_scope=json.loads(row["permission_scope_json"]) if "permission_scope_json" in row.keys() else [],
+            progress_weight=json.loads(row["progress_weight_json"]) if "progress_weight_json" in row.keys() else {},
+            source=row["source"] if "source" in row.keys() else "owner",
         )
 
     def save_step(self, step: TaskStepRecord) -> TaskStepRecord:

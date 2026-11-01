@@ -59,10 +59,15 @@ class ReflectionLoop:
         now = datetime.now(timezone.utc).isoformat()
         terminal = task.status in (
             TaskStatus.COMPLETED,
+            TaskStatus.COMPLETED_VERIFIED,
+            TaskStatus.COMPLETED_PARTIALLY,
+            TaskStatus.COMPLETED_UNVERIFIED,
             TaskStatus.FAILED,
             TaskStatus.CANCELLED,
             TaskStatus.BLOCKED,
             TaskStatus.OUTCOME_UNKNOWN,
+            TaskStatus.EXPIRED,
+            TaskStatus.REJECTED,
         )
 
         answers: dict[str, Any] = {
@@ -116,7 +121,7 @@ class ReflectionLoop:
                     for s in steps
                     if s.requires_approval and s.status != TaskStatus.COMPLETED
                 ]
-                + (["promotion_of_lessons_to_semantic_memory"] if task.status == TaskStatus.COMPLETED else [])
+                + (["promotion_of_lessons_to_semantic_memory"] if ReflectionLoop._is_completed(task.status) else [])
             ),
         }
 
@@ -247,8 +252,18 @@ class ReflectionLoop:
             return 0
 
     @staticmethod
+    def _is_completed(status: Any) -> bool:
+        """DEOM M2: COMPLETED* (VERIFIED/PARTIALLY/UNVERIFIED) đều là hoàn tất."""
+        return status in (
+            TaskStatus.COMPLETED,
+            TaskStatus.COMPLETED_VERIFIED,
+            TaskStatus.COMPLETED_PARTIALLY,
+            TaskStatus.COMPLETED_UNVERIFIED,
+        )
+
+    @staticmethod
     def _effective_decisions(task: Any, steps: list[Any]) -> list[str] | str:
-        if task.status == TaskStatus.COMPLETED and steps:
+        if ReflectionLoop._is_completed(task.status) and steps:
             return [f"step '{s.name}' verified OK" for s in steps if s.status == TaskStatus.COMPLETED]
         return "CHƯA CÓ DỮ LIỆU ĐỦ"
 
@@ -276,7 +291,7 @@ class ReflectionLoop:
     @staticmethod
     def _lessons(task: Any, steps: list[Any]) -> list[str]:
         lessons: list[str] = []
-        if task.status == TaskStatus.COMPLETED:
+        if ReflectionLoop._is_completed(task.status):
             lessons.append(
                 f"Task '{task.goal}' completed with {len(steps)} verified steps in inert sandbox."
             )
@@ -290,7 +305,7 @@ class ReflectionLoop:
     @staticmethod
     def _hypotheses(task: Any, steps: list[Any]) -> list[str]:
         hyps: list[str] = []
-        if task.status == TaskStatus.COMPLETED:
+        if ReflectionLoop._is_completed(task.status):
             hyps.append(
                 "Same plan shape will succeed for similar goals (UNPROVEN — requires more samples)."
             )

@@ -745,6 +745,19 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_executive_task_duplicates()
             return
 
+        # DEOM M2 (01/11/2026): NL task intake + transition log + work queue (GET, read-only)
+        if path == "/api/executive/tasks/intake":
+            self._handle_api_task_intake(parsed.query)
+            return
+
+        if path == "/api/executive/tasks/transitions":
+            self._handle_api_task_transitions(parsed.query)
+            return
+
+        if path == "/api/executive/work-queue":
+            self._handle_api_work_queue(parsed.query)
+            return
+
         if path == "/api/executive/supervisor":
             self._handle_api_executive_supervisor()
             return
@@ -3092,6 +3105,82 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Error triggering learning cycle: {exc}", 500)
         finally:
             reporter.close()
+
+    # ------------------------------------------------------------------
+    # DEOM M2 (01/11/2026) — NL intake + transition log + work queue
+    # ------------------------------------------------------------------
+
+    def _handle_api_task_intake(self, query) -> None:
+        """GET /api/executive/tasks/intake?text=... — parse câu giao việc tiếng Việt
+        thành task RECEIVED (không tự chạy). Owner-intake only, R1."""
+        from urllib.parse import parse_qs, unquote
+
+        params = parse_qs(query)
+        text = unquote(params.get("text", [""])[0]).strip()
+        if not text:
+            self._send_error_json("Thiếu text câu giao việc", 400)
+            return
+        try:
+            from quan_ai_brain.orchestration.nl_intake import intake_task
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            workspace = _find_workspace_root()
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            result = intake_task(registry, text)
+            self._send_json({"success": True, "intake": result.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Lỗi intake: {exc}", 500)
+
+    def _handle_api_task_transitions(self, query) -> None:
+        """GET /api/executive/tasks/transitions?task_id=... — log chuyển trạng thái."""
+        from urllib.parse import parse_qs
+
+        params = parse_qs(query)
+        task_id = params.get("task_id", [""])[0].strip()
+        if not task_id:
+            self._send_error_json("Thiếu task_id", 400)
+            return
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            workspace = _find_workspace_root()
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            task = registry.get_task(task_id)
+            if task is None:
+                self._send_error_json("Không tìm thấy task", 404)
+                return
+            transitions = registry.list_transitions(task_id)
+            self._send_json({
+                "success": True,
+                "task_id": task_id,
+                "current_status": task.status.value,
+                "transitions": [t.to_dict() for t in transitions],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi đọc transition log: {exc}", 500)
+
+    def _handle_api_work_queue(self, query) -> None:
+        """GET /api/executive/work-queue — hàng đợi 4 bậc ưu tiên DEOM §7.2."""
+        from urllib.parse import parse_qs
+
+        params = parse_qs(query)
+        try:
+            limit = max(1, min(50, int(params.get("limit", ["20"])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            workspace = _find_workspace_root()
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            queue = registry.work_queue(limit=limit)
+            self._send_json({
+                "success": True,
+                "count": len(queue),
+                "queue": [t.to_dict() for t in queue],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi đọc work queue: {exc}", 500)
 
     def _handle_api_executive_task_create(self, body: dict) -> None:
         goal = str(body.get("goal", "")).strip()
