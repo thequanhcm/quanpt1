@@ -117,8 +117,13 @@ class PermissionResolver:
         environment_attrs: dict[str, Any] | None = None,
         approval_id: str | None = None,
         target_path: str | None = None,
+        action_fingerprint: str | None = None,
     ) -> ResolverDecision:
-        """Resolve một permission. Lớp 1→4 fail-closed. KHÔNG có lối tắt."""
+        """Resolve một permission. Lớp 1→4 fail-closed. KHÔNG có lối tắt.
+
+        DEOM V4 §6.2: `action_fingerprint` (khi cung cấp) bắt buộc khớp fingerprint
+        đã lưu trong card trước khi consume — hành động đổi sau duyệt → BLOCKED.
+        """
         subject = subject_id or self.subject_id
         perm = next((p for p in PERMISSION_CATALOG if p[0] == permission_id), None)
         if perm is None:
@@ -190,9 +195,23 @@ class PermissionResolver:
             return ResolverDecision("BLOCKED", "card already consumed — one-time use enforced", layers)
         if card.state != "APPROVED":
             return ResolverDecision("APPROVAL_REQUIRED", f"card state is {card.state}", layers)
+        # DEOM V4 §6.2 — đối chiếu fingerprint trước khi consume (fail-closed)
+        if action_fingerprint is not None:
+            stored = getattr(card, "action_fingerprint", None)
+            if not stored:
+                layers.append({"layer": "fingerprint", "result": "NO_BINDING"})
+                return ResolverDecision(
+                    "BLOCKED", "card has no action_fingerprint binding — request a new card", layers
+                )
+            if stored != action_fingerprint:
+                layers.append({"layer": "fingerprint", "result": "MISMATCH"})
+                return ResolverDecision(
+                    "BLOCKED", "action fingerprint mismatch — action changed after approval", layers
+                )
+            layers.append({"layer": "fingerprint", "result": "MATCH"})
         # Consume 1 lần (nonce)
         try:
-            self.approvals.consume(approval_id, actor="permission_resolver")
+            self.approvals.consume(approval_id, actor="permission_resolver", action_fingerprint=action_fingerprint)
         except ApprovalCardError as exc:
             return ResolverDecision("BLOCKED", f"consume failed: {exc}", layers)
         layers.append({"layer": "approval", "approval_id": approval_id, "consumed": True})

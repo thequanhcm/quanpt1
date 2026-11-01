@@ -419,6 +419,16 @@ class PlanOrchestrator:
     # Private Helpers
     # -------------------------------------------------------------------------
 
+    def step_action_fingerprint(self, step: TaskStepRecord, task_id: str) -> str:
+        """DEOM V4 §6.2 — vân tay nội dung bước R4; nguồn duy nhất cho card + consume."""
+        from quan_ai_brain.governance.approval_service import compute_action_fingerprint
+
+        return compute_action_fingerprint(
+            action_summary=step.name,
+            scope=[step.description or ""],
+            params={"task_id": task_id, "step_id": step.step_id},
+        )
+
     def _check_step_approval(self, step: TaskStepRecord, task: TaskRecord) -> bool:
         """Checks if a valid, unconsumed approval exists in ConsultationStore or ApprovalGate."""
         # 1. Check ConsultationStore if ticket was approved by owner
@@ -434,14 +444,19 @@ class PlanOrchestrator:
         # 1.5. DEOM M4: ApprovalCardService — card APPROVED + chưa consumed
         # được tạo bởi TONY (requested_by) và owner duyệt (decided_by=quanpt1).
         # One-time use: consume ngay khi xác nhận hợp lệ.
+        # DEOM V4 §6.2: consume kèm fingerprint nội dung bước — hành động đổi
+        # sau khi duyệt → consume bị từ chối, bước giữ WAITING_APPROVAL.
         if self.approval_cards is not None:
             try:
+                step_fingerprint = self.step_action_fingerprint(step, task.task_id)
                 for card in self.approval_cards.list_cards(state="APPROVED", limit=200):
                     if card.task_id != task.task_id or card.consumed_at_utc:
                         continue
                     if getattr(card, "risk_level", "") != "R4":
                         continue
-                    self.approval_cards.consume(card.approval_id, actor="plan_orchestrator")
+                    self.approval_cards.consume(
+                        card.approval_id, actor="plan_orchestrator", action_fingerprint=step_fingerprint
+                    )
                     return True
             except Exception:
                 pass

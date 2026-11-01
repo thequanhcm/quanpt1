@@ -77,12 +77,15 @@ class TestR4StepWithApprovedCard:
         task = orch.submit_plan(_plan_with_r4_step())
         tid = task.task_id
 
-        # TONY tạo card đề xuất → owner duyệt (tách đề xuất/phê duyệt)
+        # TONY tạo card đề xuất (binding fingerprint NỘI DUNG BƯỚC) → owner duyệt
+        step_record = registry.list_steps_for_task(tid)[0]
+        fp = orch.step_action_fingerprint(step_record, tid)
         card = cards.create_card(
             task_id=tid,
             action_summary="Cho phép bước system_change của task",
             risk_level="R4",
             requested_by="tony",
+            action_fingerprint=fp,
         )
         cards.approve(card.approval_id, decided_by=OWNER_ID, approval_evidence="dm://ok-m4")
 
@@ -101,8 +104,13 @@ class TestR4StepWithApprovedCard:
     def test_consumed_card_cannot_unlock_other_task(self, make_orchestrator, cards):
         orch, registry = make_orchestrator()
         task1 = orch.submit_plan(_plan_with_r4_step())
+        step_record = registry.list_steps_for_task(task1.task_id)[0]
+        fp = orch.step_action_fingerprint(step_record, task1.task_id)
         card = cards.create_card(
-            task_id=task1.task_id, action_summary="duyet lan 1", requested_by="tony"
+            task_id=task1.task_id,
+            action_summary="duyet lan 1",
+            requested_by="tony",
+            action_fingerprint=fp,
         )
         cards.approve(card.approval_id, decided_by=OWNER_ID, approval_evidence="dm://ok")
         orch.execute_lifecycle(task1.task_id, dry_run=True)
@@ -113,3 +121,27 @@ class TestR4StepWithApprovedCard:
         orch.execute_lifecycle(task2.task_id, dry_run=True)
         refreshed2 = registry.get_task(task2.task_id)
         assert refreshed2.status == TaskStatus.WAITING_APPROVAL
+
+    def test_fingerprint_mismatch_keeps_step_waiting(self, make_orchestrator, cards):
+        """DEOM V4 §6.2 — card APPROVED nhưng fingerprint không khớp nội dung bước
+        → consume bị từ chối, bước giữ WAITING_APPROVAL (hành động đổi sau duyệt)."""
+        orch, registry = make_orchestrator()
+        task = orch.submit_plan(_plan_with_r4_step())
+        tid = task.task_id
+
+        card = cards.create_card(
+            task_id=tid,
+            action_summary="Cho phép bước system_change của task",
+            risk_level="R4",
+            requested_by="tony",
+            action_fingerprint="0" * 64,  # fingerprint KHÔNG khớp bước thật
+        )
+        cards.approve(card.approval_id, decided_by=OWNER_ID, approval_evidence="dm://mismatch")
+
+        outcome = orch.execute_lifecycle(tid, dry_run=True)
+        refreshed = registry.get_task(tid)
+        assert refreshed.status == TaskStatus.WAITING_APPROVAL
+        # card còn nguyên (không bị tiêu bởi mismatch)
+        intact = cards.get_card(card.approval_id)
+        assert intact.consumed_at_utc is None
+        assert intact.state == "APPROVED"

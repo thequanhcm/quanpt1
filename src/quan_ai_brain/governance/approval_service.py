@@ -9,6 +9,7 @@ Thiết kế: reports/DEOM_M4_DESIGN.md (§3). Nguyên tắc bất di bất dị
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import threading
@@ -41,7 +42,7 @@ class ApprovalCardError(Exception):
 
 @dataclass
 class ApprovalCard:
-    """Thẻ phê duyệt 12 trường DEOM §5.3."""
+    """Thẻ phê duyệt 12 trường DEOM §5.3 + action_fingerprint (DEOM V4 §6.2)."""
 
     approval_id: str
     task_id: str
@@ -56,6 +57,7 @@ class ApprovalCard:
     decided_by: str | None = None
     decided_at_utc: str | None = None
     consumed_at_utc: str | None = None
+    action_fingerprint: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -72,11 +74,33 @@ class ApprovalCard:
             "decided_by": self.decided_by,
             "decided_at_utc": self.decided_at_utc,
             "consumed_at_utc": self.consumed_at_utc,
+            "action_fingerprint": self.action_fingerprint,
         }
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def compute_action_fingerprint(
+    *,
+    action_summary: str,
+    scope: list[str] | None = None,
+    params: dict[str, Any] | None = None,
+) -> str:
+    """DEOM V4 §6.2 — vân tay nội dung hành động được duyệt.
+
+    Bọc nội dung TRƯỚC khi trình owner. Consume bắt buộc trình đúng nội dung đó
+    (fingerprint lệch → fail-closed). Không bao gồm thời gian/id (những thứ tự
+    nhiên khác nhau giữa 2 lần tạo) — chỉ gồm nội dung có ý nghĩa nghiệp vụ.
+    """
+    payload = {
+        "action_summary": " ".join(str(action_summary).split()).strip(),
+        "scope": sorted(str(s).strip() for s in (scope or [])),
+        "params": json.dumps(params or {}, sort_keys=True, ensure_ascii=False, default=str),
+    }
+    canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class ApprovalCardService:
@@ -108,7 +132,8 @@ class ApprovalCardService:
                     state TEXT NOT NULL DEFAULT 'PENDING',
                     decided_by TEXT,
                     decided_at_utc TEXT,
-                    consumed_at_utc TEXT
+                    consumed_at_utc TEXT,
+                    action_fingerprint TEXT
                 )
                 """
             )
@@ -150,6 +175,7 @@ class ApprovalCardService:
             decided_by=row["decided_by"],
             decided_at_utc=row["decided_at_utc"],
             consumed_at_utc=row["consumed_at_utc"],
+            action_fingerprint=row["action_fingerprint"] if "action_fingerprint" in row.keys() else None,
         )
 
     def _is_expired(self, card: ApprovalCard, now: datetime | None = None) -> bool:
@@ -175,8 +201,15 @@ class ApprovalCardService:
         scope: list[str] | None = None,
         evidence_bundle: list[str] | None = None,
         ttl_hours: int = 24,
+        action_fingerprint: str | None = None,
+        action_params: dict[str, Any] | None = None,
     ) -> ApprovalCard:
-        """Tạo thẻ PENDING. R5 → từ chối tuyệt đối (policy đã block, không card)."""
+        """Tạo thẻ PENDING. R5 → từ chối tuyệt đối (policy đã block, không card).
+
+        DEOM V4 §6.2: nếu `action_fingerprint` không cung cấp thì tự tính từ
+        (action_summary, scope, action_params) — card luôn có binding nội dung
+        hành động; consume sau này bắt buộc khớp.
+        """
         risk = str(risk_level).upper()
         if risk == "R5":
             raise ApprovalCardError("R5 is hard-blocked — approval cards are never created for R5")
@@ -184,6 +217,10 @@ class ApprovalCardService:
             raise ApprovalCardError(f"approval cards are for R4 only, got {risk}")
         if not action_summary.strip():
             raise ApprovalCardError("action_summary is required")
+        if action_fingerprint is None:
+            action_fingerprint = compute_action_fingerprint(
+                action_summary=action_summary, scope=scope, params=action_params
+            )
 
         now = datetime.now(timezone.utc)
         card = ApprovalCard(
@@ -196,14 +233,16 @@ class ApprovalCardService:
             evidence_bundle=list(evidence_bundle or []),
             created_at_utc=now.isoformat(),
             expires_at_utc=(now + timedelta(hours=max(1, int(ttl_hours)))).isoformat(),
+            action_fingerprint=action_fingerprint,
         )
         with self._lock, self._conn:
             self._conn.execute(
                 """
                 INSERT INTO approval_cards_v2 (
                     approval_id, task_id, action_summary, risk_level, requested_by,
-                    scope_json, evidence_bundle_json, created_at_utc, expires_at_utc, state
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    scope_json, evidence_bundle_json, created_at_utc, expires_at_utc, state,
+                    action_fingerprint
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     card.approval_id,
@@ -216,6 +255,7 @@ class ApprovalCardService:
                     card.created_at_utc,
                     card.expires_at_utc,
                     card.state,
+                    card.action_fingerprint,
                 ),
             )
         self._log_event(card.approval_id, "CREATED", requested_by, action_summary)
@@ -335,8 +375,20 @@ class ApprovalCardService:
     # ------------------------------------------------------------------
     # Consume (1 lần) + quét hết hạn
     # ------------------------------------------------------------------
-    def consume(self, approval_id: str, *, actor: str = "supervisor") -> ApprovalCard:
-        """Đánh dấu card đã dùng khi bắt đầu thực thi. Tái dùng → từ chối (nonce)."""
+    def consume(
+        self,
+        approval_id: str,
+        *,
+        actor: str = "supervisor",
+        action_fingerprint: str | None = None,
+    ) -> ApprovalCard:
+        """Đánh dấu card đã dùng khi bắt đầu thực thi. Tái dùng → từ chối (nonce).
+
+        DEOM V4 §6.2: nếu `action_fingerprint` được cung cấp → bắt buộc khớp
+        fingerprint đã lưu khi tạo card. Lệch → FINGERPRINT_MISMATCH, card KHÔNG
+        bị tiêu (vẫn consume được sau khi làm rõ). Card cũ chưa có fingerprint
+        (NULL) → từ chối khi consume kèm fingerprint (fail-closed).
+        """
         card = self.get_card(approval_id)
         if card is None:
             raise ApprovalCardError(f"approval card {approval_id} not found")
@@ -351,6 +403,29 @@ class ApprovalCardService:
             raise ApprovalCardError(
                 f"card {approval_id} already consumed at {card.consumed_at_utc} — one-time use enforced"
             )
+        # DEOM V4 §6.2 — binding nội dung hành động đã duyệt
+        if action_fingerprint is not None:
+            stored = getattr(card, "action_fingerprint", None)
+            if not stored:
+                self._log_event(
+                    approval_id,
+                    "FINGERPRINT_REJECTED_NO_BINDING",
+                    actor,
+                    "card has no stored fingerprint — re-request approval with binding",
+                )
+                raise ApprovalCardError(
+                    f"card {approval_id} has no action_fingerprint binding — fail-closed, request a new card"
+                )
+            if stored != action_fingerprint:
+                self._log_event(
+                    approval_id,
+                    "FINGERPRINT_MISMATCH",
+                    actor,
+                    "action content changed after approval — consume refused, card intact",
+                )
+                raise ApprovalCardError(
+                    f"card {approval_id} fingerprint mismatch — action changed after approval (fail-closed)"
+                )
         now = _now()
         with self._lock, self._conn:
             self._conn.execute(
