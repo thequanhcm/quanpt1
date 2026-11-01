@@ -1,5 +1,26 @@
 # QUAN AI BRAIN — Project Status
 
+## 01/11/2026 ~23:10 — RÀ SOÁT VIỆC DANG DỞ + DEOM M1 ✅ + M2 ✅ (owner: "phê duyệt toàn bộ, làm luôn")
+- **Rà soát đầy đủ** 7 nhóm việc dang dở theo sổ REGISTER; owner blanket approval → thực hiện tuần tự.
+- **Q-1 git init ✅**: repo mới, commit `e75d240` (1.692 file, 327K dòng); `.gitignore` chặn .env/secret/DB/venv/log; verified không secret nào tracked.
+- **Q-2 journald persistent ✅ (Pi5)**: root cause thật = vendor drop-in `/usr/lib/systemd/journald.conf.d/40-rpi-volatile-storage.conf` ép `Storage=volatile` đè config `/etc` — mask bằng symlink `/dev/null` + drop-in `99-persistent.conf`; kết quả `/var/log/journal` 57M, `journalctl --header` trỏ `/var` — log sống qua reboot (hoàn tác = xoá 2 file).
+- **Q-5 BT power-save ✅ (Pi5)**: `FastConnectable=true` + `AutoEnable=true` trong `/etc/bluetooth/main.conf`, bluetooth active, Powered yes — giảm rơi kết nối loa SRS-XB33 (owner vẫn giữ loa TẮT theo owner-ACK).
+- **DEOM M1 ✅**: 4 tài liệu thiết kế (`reports/DEOM_M1_OPERATING_MODEL.md`, `DEOM_M1_PERMISSION_MATRIX.md`, `DEOM_M1_TASK_LIFECYCLE.md`, `DEOM_M1_APPROVAL_DESIGN.md`) — bám 100% hiện trạng M0, 0 code.
+- **DEOM M2 ✅ (R4 đã duyệt)**:
+  - Backup `tasks.db` → `data/backups/tasks_backup_20261101_2300.db` (578 records nguyên vẹn) trước migration.
+  - Schema `durable_tasks` +11 cột (priority/deadline_utc/parent_task_id/dependencies/required_tools/assigned_agents/permission_scope/progress_weight/source/verified_at/verification_note) — ADD COLUMN idempotent, 578 records không mất.
+  - Bảng `task_transitions` (actor/time/reason/evidence — DEOM §4.4) + index work queue.
+  - `TaskStatus` +10 trạng thái DEOM (RECEIVED→UNDERSTANDING→ANALYZING→PLANNING→READY, VERIFYING, NEEDS_INFORMATION, PAUSED, EXPIRED, REJECTED, COMPLETED_VERIFIED/PARTIALLY/UNVERIFIED); backward-compat giữ nguyên 9 state cũ.
+  - **Task Verifier fail-honest**: không bằng chứng → COMPLETED_UNVERIFIED, không bao giờ tự phong VERIFIED; wire vào PlanOrchestrator (mọi step có expected_output + result success → VERIFIED).
+  - **Work Queue 4 bậc** + chống learning chiếm tài nguyên (learning nhường owner) + `expire_overdue` quét deadline.
+  - **NL Task Intake tiếng Việt** (`orchestration/nl_intake.py`): deterministic regex (không LLM), parse priority (khẩn/gấp/khi rảnh) + deadline giờ VN +07 ("trước 5 chiều", "trong 3 ngày", "đến khi hoàn thành"); fail-honest không đoán mạo.
+  - 3 API mới: `/api/executive/tasks/intake`, `/api/executive/tasks/transitions`, `/api/executive/work-queue`.
+  - Watchdog `check_task_deadlines()` (rate-limit 10 phút) — task quá hạn → EXPIRED chuẩn transition log.
+  - Cognitive loop + reflection nhận đủ trạng thái mới (TERMINAL_STATUSES, _is_completed).
+- **Tests**: 37 test mới (`test_deom_m2_task_lifecycle.py` 23 + `test_deom_m2_nl_intake.py` 14); cập nhật assert cũ sang ngữ nghĩa VERIFIED; **Regression FULL 3.071 PASS / 0 FAIL** (baseline 3.034).
+- **Git**: commit `dd73ae3` (M1+M2). Mirror F THÀNH CÔNG 23:40. backup tasks.db đã mirror.
+- **Còn lại**: M3 (Dispatcher + dependency manager), M4 (Permission Resolver + approval workflow), M5 (Executive Report + tab dashboard), M6 (Proactive Work Engine + recurring), M7 (7 CASE acceptance); AUDIO chờ owner mua thiết bị.
+
 ## 01/11/2026 ~22:23 — LLM-FALLBACK: cài model dự phòng cho hệ thống NetMind (owner lệnh)
 - **Yêu cầu owner**: "em cài đặt model dự phòng cho hệ thống netmind của anh".
 - **Audit-first**: `LLMProvider.generate/stream` hiện NẾU NetMind GLM chết → rơi thẳng **MOCK** (không inference thật) dù Ollama local có 8 model. Router chỉ fallback lúc CHỌN model (pre-call), không có fallback RUNTIME khi cloud chết giữa chừng. Đã chứng minh E2E: gateway giả chết → `[MOCK]` trả về.
