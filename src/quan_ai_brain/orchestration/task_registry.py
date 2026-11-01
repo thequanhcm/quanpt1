@@ -426,6 +426,45 @@ class DurableTaskRegistry:
                 for r in cur.fetchall()
             ]
 
+    def assign_agent(
+        self,
+        task_id: str,
+        agent_id: str,
+        *,
+        actor: str = "dispatcher",
+        reason: str = "",
+    ) -> TaskRecord:
+        """DEOM M3 — gán agent vào `assigned_agents_json` + transition log.
+
+        Không đổi status (assignment không phải transition vòng đời); chỉ ghi
+        danh sách agent + một transition 'same-status' với actor/reason rõ ràng
+        để audit đầy đủ (ai gán, khi nào, vì sao).
+        """
+        existing = self.get_task(task_id)
+        if not existing:
+            raise KeyError(f"Task {task_id} not found")
+        agents = list(existing.assigned_agents)
+        if agent_id not in agents:
+            agents.append(agent_id)
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE durable_tasks SET assigned_agents_json = ?, updated_at_utc = ? WHERE task_id = ?",
+                (
+                    __import__("json").dumps(agents),
+                    datetime.now(timezone.utc).isoformat(),
+                    task_id,
+                ),
+            )
+        # transition 'same-status' để audit assignment (from == to = status hiện tại)
+        self._log_transition(
+            task_id,
+            existing.status.value,
+            existing.status.value,
+            actor=actor,
+            reason=reason or f"assigned to {agent_id}",
+        )
+        return self.get_task(task_id)  # type: ignore[return-value]
+
     def work_queue(self, limit: int = 20, include_learning: bool = True) -> list[TaskRecord]:
         """Work Queue 4 bậc DEOM §7.2 — READY/PENDING theo priority, deadline, tuổi.
 
