@@ -704,6 +704,46 @@ Anh cần em giúp gì hôm nay ạ? 🚀"""
         return True
 
 
+# ---------------------------------------------------------------------------
+# (02/11/2026, owner yêu cầu) VN-LANG tầng cuối — chuẩn hoá tiếng Việt cho
+# mọi tin rời responder. Reuse bộ map của command center + bổ sung mật ngữ.
+# ---------------------------------------------------------------------------
+try:
+    from tools.netchat_command_center import _VN_STATE_MAP as _CC_VN_MAP, _ERR_VN_MAP as _CC_ERR_MAP
+except Exception:  # fail-honest: không có command center → map nội bộ tối thiểu
+    _CC_VN_MAP, _CC_ERR_MAP = {}, {}
+
+_VN_DM_STATUS = {
+    "CRITICAL": "NGHIÊM TRỌNG", "WARNING": "CẢNH BÁO", "NORMAL": "BÌNH THƯỜNG",
+    "UNKNOWN": "KHÔNG RÕ", "ONLINE": "HOẠT ĐỘNG", "OFFLINE": "MẤT KẾT NỐI",
+    "READY": "SẴN SÀNG", "RUNNING": "ĐANG CHẠY", "STOPPED": "ĐÃ DỪNG",
+    "PAUSED": "TẠM DỪNG", "OK": "BÌNH THƯỜNG", "FAILED": "THẤT BẠI",
+    "DOWN": "MẤT KẾT NỐI", "HEALTHY": "KHỎE MẠNH", "BLOCKED": "BỊ CHẶN",
+    "PENDING": "CHỜ XỬ LÝ", "APPROVED": "ĐÃ DUYỆT", "COMPLETED": "HOÀN THÀNH",
+    "IN_PROGRESS": "ĐANG LÀM", "WAITING_APPROVAL": "CHỜ DUYỆT",
+    "ERROR": "LỖI", "CONNECTED": "ĐÃ KẾT NỐI", "DISCONNECTED": "MẤT KẾT NỐI",
+    "TIMEOUT": "QUÁ THỜI GIAN CHỜ",
+}
+_VN_DM_COMPONENTS = {
+    "pc_host": "máy chính", "pi5_edge": "Pi 5", "selfcare_engine": "tự chăm sóc",
+    "ram_percent": "RAM", "disk_percent": "ổ đĩa", "cpu_percent": "CPU",
+    "connectivity": "kết nối", "response_time": "thời gian phản hồi",
+}
+_VN_DM_STATUS.update(_CC_VN_MAP)
+
+
+def _vn_normalize_dm(text):
+    """Chuẩn hoá 1 tin DM → tiếng Việt (giữ số liệu, ID, tên riêng)."""
+    out = str(text or "")
+    if not out:
+        return out
+    for en, vi in _VN_DM_COMPONENTS.items():
+        out = out.replace(en, vi)
+    for en, vi in _VN_DM_STATUS.items():
+        out = out.replace(f" {en}", f" {vi}").replace(f"→ {en}", f"→ {vi}")
+    return out
+
+
 def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
     """Send message to the channel (hoặc DM nếu tin gốc đến từ DM).
 
@@ -712,7 +752,11 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
     trạng trả lời trôi sang kênh khác.
     (01/11/2026, owner) root_id: id tin gốc — phản hồi thành REPLY trong
     thread của tin đó, anh thấy ngay em đang trả lời về mục nào.
+    (02/11/2026, owner) VN-LANG: chuẩn hoá tiếng Việt TẦNG CUỐI — mọi tin rời
+    responder đều tiếng Việt (trạng thái/mật ngữ → tiếng Việt, số liệu + tên
+    riêng giữ nguyên).
     """
+    text = _vn_normalize_dm(text)
     def _parse(stdout):
         try:
             return json.loads(stdout)

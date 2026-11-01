@@ -1842,6 +1842,16 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 music_info["error"] = str(_m_err)[:120]
 
             # 3. LLM Generation
+            # (02/11/2026, owner yêu cầu) VN-LANG: ghép thêm rào ngôn ngữ vào
+            # system prompt — mọi câu trả lời chat/DM luôn thuần tiếng Việt
+            # (quy tắc 12 trong DEFAULT_SYSTEM_INSTRUCTIONS đã có; rào này đảm
+            # bảo cả khi context builder bị thay thế/bypass).
+            context.system_instructions = (
+                context.system_instructions
+                + "\n\n[NGÔN NGỮ — BẮT BUỘC (02/11/2026)] Trả lời HOÀN TOÀN bằng tiếng Việt "
+                "có dấu, trôi chảy tự nhiên, xưng 'em' gọi 'anh'. KHÔNG trộn tiếng Anh "
+                "không cần thiết (tên riêng kỹ thuật giữ nguyên). Không dùng văn phong dịch máy."
+            )
             req = LLMRequest(
                 prompt=context.rendered_context,
                 system_prompt=context.system_instructions,
@@ -2284,6 +2294,13 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 music_info_stream["error"] = str(_m_err)[:120]
 
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
+            # (02/11/2026, owner yêu cầu) VN-LANG: rào ngôn ngữ tiếng Việt như đường non-stream.
+            context.system_instructions = (
+                context.system_instructions
+                + "\n\n[NGÔN NGỮ — BẮT BUỘC (02/11/2026)] Trả lời HOÀN TOÀN bằng tiếng Việt "
+                "có dấu, trôi chảy tự nhiên, xưng 'em' gọi 'anh'. KHÔNG trộn tiếng Anh "
+                "không cần thiết (tên riêng kỹ thuật giữ nguyên). Không dùng văn phong dịch máy."
+            )
             req = LLMRequest(
                 prompt=context.rendered_context,
                 system_prompt=context.system_instructions,

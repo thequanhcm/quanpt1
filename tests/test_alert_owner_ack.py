@@ -69,7 +69,7 @@ def test_unacked_alerts_still_send(tmp_path, engine):
     }
     eng.evaluate_checks("pc_host", checks, {"ram_percent": (">=85", ">=95"), "disk_percent": (">=90", ">=95")})
     assert len(spy.sent) == 1  # chỉ disk gửi, ram bị ack chặn
-    assert "disk_percent" in spy.sent[0]
+    assert "ổ đĩa" in spy.sent[0]  # VN-LANG: disk_percent → ổ đĩa
 
 
 def test_load_owner_acks_returns_reasons(tmp_path):

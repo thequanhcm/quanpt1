@@ -27,6 +27,58 @@ _DB_NAME = "health_alerts.db"
 # gửi lại cảnh báo đó nữa — tôn trọng quyết định, không spam mỗi cooldown.
 _ACK_DB_NAME = "alert_owner_ack.json"
 
+# (02/11/2026, owner yêu cầu) VN-LANG — chuẩn hoá tiếng Việt TẦNG CUỐI cho DM.
+# Bản dịch trạng thái/mức độ/mật ngữ kỹ thuật thường gặp; từ lạ giữ nguyên kèm
+# giá trị gốc — KHÔNG bao giờ biến dữ liệu kỹ thuật thành chữ khác nghĩa.
+_VN_STATUS = {
+    "CRITICAL": "NGHIÊM TRỌNG",
+    "WARNING": "CẢNH BÁO",
+    "NORMAL": "BÌNH THƯỜNG",
+    "UNKNOWN": "KHÔNG RÕ",
+    "MAINTENANCE": "BẢO TRÌ",
+    "ONLINE": "HOẠT ĐỘNG",
+    "OFFLINE": "MẤT KẾT NỐI",
+    "READY": "SẴN SÀNG",
+    "RUNNING": "ĐANG CHẠY",
+    "STOPPED": "ĐÃ DỪNG",
+    "PAUSED": "TẠM DỪNG",
+    "OK": "BÌNH THƯỜNG",
+    "FAIL": "LỖI",
+    "FAILED": "THẤT BẠI",
+    "DOWN": "MẤT KẾT NỐI",
+    "HEALTHY": "KHỎE MẠNH",
+    "BLOCKED": "BỊ CHẶN",
+    "PENDING": "CHỜ XỬ LÝ",
+    "APPROVED": "ĐÃ DUYỆT",
+    "COMPLETED": "HOÀN THÀNH",
+    "IN_PROGRESS": "ĐANG LÀM",
+    "WAITING_APPROVAL": "CHỜ DUYỆT",
+}
+_VN_COMPONENTS = {
+    "pc_host": "máy chính",
+    "pi5_edge": "Pi 5",
+    "selfcare_engine": "tự chăm sóc",
+    "ram_percent": "RAM",
+    "disk_percent": "ổ đĩa",
+    "cpu_percent": "CPU",
+    "connectivity": "kết nối",
+}
+
+
+def _vn_message(message: str) -> str:
+    """Chuẩn hoá 1 dòng alert/status kỹ thuật → tiếng Việt tự nhiên.
+
+    Giữ nguyên số liệu + token lạ (tên riêng, ID). Ví dụ:
+    '[pc_host] ram_percent=95.5 → CRITICAL' → '[máy chính] RAM=95.5 → NGHIÊM TRỌNG'
+    """
+    out = str(message or "")
+    for en, vi in _VN_COMPONENTS.items():
+        out = out.replace(en, vi)
+    for en, vi in _VN_STATUS.items():
+        # chỉ đếm từ nguyên (viết HOA trong thông báo kỹ thuật) — không đụng số liệu
+        out = out.replace(f" {en}", f" {vi}").replace(f"→ {en}", f"→ {vi}")
+    return out
+
 
 def load_owner_acks(workspace: Path) -> dict[str, str]:
     """Đọc các cảnh báo owner đã ack. Trả {check_id: reason}."""
@@ -84,11 +136,16 @@ class AlertEngine:
     # ---------- gửi ----------
     @staticmethod
     def _default_sender(message: str) -> dict[str, Any]:
-        """Gửi DM qua bridge chuẩn (confirm 2 bước tự động)."""
+        """Gửi DM qua bridge chuẩn (confirm 2 bước tự động).
+
+        (02/11/2026, owner yêu cầu) VN-LANG: mọi DM cho owner chuẩn hoá tiếng
+        Việt ở TẦNG CUỐI trước khi rời hệ thống — áp cho tất cả đường gửi qua
+        AlertEngine (không phụ thuộc từng đường gọi).
+        """
         try:
             from quan_ai_brain.integration.netchat_bridge import send_message
             return send_message(
-                "131u5z64pj8q9da3k1xqp3y6pe", message)  # noqa: E501
+                "131u5z64pj8q9da3k1xqp3y6pe", _vn_message(message))  # noqa: E501
         except Exception as exc:
             return {"success": False, "error": f"send_error:{type(exc).__name__}"}
 
@@ -181,7 +238,9 @@ class AlertEngine:
             if now - self._last_sent.get(key, 0.0) < self.cooldown_sec:
                 suppressed = f"cooldown:{int(self.cooldown_sec)}s"
             else:
-                result = self._sender(message)
+                # VN-LANG (02/11/2026, owner): chuẩn hoá tiếng Việt TRƯỚC khi gọi
+                # sender nào (mặc định lẫn inject) — mọi DM ra ngoài đều tiếng Việt.
+                result = self._sender(_vn_message(message))
                 sent = 1 if result.get("success") else 0
                 if not result.get("success"):
                     suppressed = f"send_failed:{result.get('error', 'unknown')[:80]}"

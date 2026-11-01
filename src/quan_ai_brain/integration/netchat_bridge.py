@@ -38,6 +38,65 @@ CHANNEL_ID = "131u5z64pj8q9da3k1xqp3y6pe"
 DEFAULT_CHANNEL_NAME = "Trợ lý Tony Pham"
 BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
 
+# ---------------------------------------------------------------------------
+# (02/11/2026, owner yêu cầu) VN-LANG — chuẩn hoá tiếng Việt TẦNG CUỐI cho DM.
+# Mọi tin gửi owner qua bridge được dịch trạng thái/mật ngữ kỹ thuật sang
+# tiếng Việt. Số liệu, ID, tên riêng (Pi 5, Ollama, GLM…) GIỮ NGUYÊN — không
+# bao giờ biến dữ liệu kỹ thuật thành chữ khác nghĩa.
+# ---------------------------------------------------------------------------
+_VN_STATUS = {
+    "CRITICAL": "NGHIÊM TRỌNG",
+    "WARNING": "CẢNH BÁO",
+    "NORMAL": "BÌNH THƯỜNG",
+    "UNKNOWN": "KHÔNG RÕ",
+    "MAINTENANCE": "BẢO TRÌ",
+    "ONLINE": "HOẠT ĐỘNG",
+    "OFFLINE": "MẤT KẾT NỐI",
+    "READY": "SẴN SÀNG",
+    "RUNNING": "ĐANG CHẠY",
+    "STOPPED": "ĐÃ DỪNG",
+    "PAUSED": "TẠM DỪNG",
+    "OK": "BÌNH THƯỜNG",
+    "FAIL": "LỖI",
+    "FAILED": "THẤT BẠI",
+    "DOWN": "MẤT KẾT NỐI",
+    "HEALTHY": "KHỎE MẠNH",
+    "BLOCKED": "BỊ CHẶN",
+    "PENDING": "CHỜ XỬ LÝ",
+    "APPROVED": "ĐÃ DUYỆT",
+    "COMPLETED": "HOÀN THÀNH",
+    "IN_PROGRESS": "ĐANG LÀM",
+    "WAITING_APPROVAL": "CHỜ DUYỆT",
+    "ERROR": "LỖI",
+    "ACTIVE": "ĐANG HOẠT ĐỘNG",
+    "CONNECTED": "ĐÃ KẾT NỐI",
+    "DISCONNECTED": "MẤT KẾT NỐI",
+    "TIMEOUT": "QUÁ THỜI GIAN CHỜ",
+}
+_VN_COMPONENTS = {
+    "pc_host": "máy chính",
+    "pi5_edge": "Pi 5",
+    "selfcare_engine": "tự chăm sóc",
+    "ram_percent": "RAM",
+    "disk_percent": "ổ đĩa",
+    "cpu_percent": "CPU",
+    "connectivity": "kết nối",
+    "response_time": "thời gian phản hồi",
+}
+
+
+def _vn_normalize(text: str) -> str:
+    """Chuẩn hoá 1 tin DM → tiếng Việt tự nhiên (giữ số liệu + tên riêng)."""
+    out = str(text or "")
+    if not out:
+        return out
+    for en, vi in _VN_COMPONENTS.items():
+        out = out.replace(en, vi)
+    for en, vi in _VN_STATUS.items():
+        out = out.replace(f" {en}", f" {vi}").replace(f"→ {en}", f"→ {vi}")
+    return out
+
+
 # Simple single-flight lock: dashboard requests are serialized to avoid
 # hammering the NetChat API (HTTP 429 rate limit when sending in bursts).
 _NETCHAT_LOCK = threading.Lock()
@@ -182,11 +241,17 @@ def send_message(channel_id: str, text: str) -> dict[str, Any]:
 
     NetChat requires a confirmation round-trip for sends; we replay the exact
     command with --confirmed <hash>. Rate-limited to one send per 3s.
+
+    VN-LANG (02/11/2026, owner yêu cầu): TẦNG CUỐI trước khi tin rời hệ thống —
+    mọi tin gửi qua bridge được chuẩn hoá tiếng Việt (trạng thái/mật ngữ kỹ
+    thuật → tiếng Việt; số liệu + tên riêng giữ nguyên). Đây là điểm chặn duy
+    nhất mọi đường gửi DM đi qua, nên không đường nào bỏ sót.
     """
     global _LAST_SEND_AT
     text = (text or "").strip()
     if not text:
         raise NetChatBridgeError("Message is empty")
+    text = _vn_normalize(text)
     if len(text) > 3500:
         raise NetChatBridgeError("Message too long (max 3500 chars)")
 
