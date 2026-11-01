@@ -336,6 +336,37 @@ def check_task_deadlines() -> None:
         logger.warning(f"Task deadline check error (fail-honest, bỏ qua): {e}")
 
 
+def check_recurring_instances() -> None:
+    """(02/11/2026, DEOM M6) Quét template recurring đến hạn → tạo instance.
+
+    Fail-honest: lỗi chỉ log, không giết watchdog. Rate-limit 60s — instance
+    mới rơi vào work_queue chuẩn M2, dispatcher M3 điều phối như task thường.
+    """
+    marker = Path(CONFIG["log_dir"]) / "recurring_last.txt"
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        if marker.exists() and (time.time() - marker.stat().st_mtime) < 60:
+            return
+    except OSError:
+        pass
+    try:
+        from quan_ai_brain.orchestration.recurring_engine import RecurringTaskEngine
+        from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+        ws = Path(BASE_DIR)
+        registry = DurableTaskRegistry(ws / "data" / "tasks.db", workspace=ws)
+        engine = RecurringTaskEngine(registry)
+        created = engine.create_due_instances()
+        if created:
+            logger.info(
+                f"DEOM recurring: tạo {len(created)} instance định kỳ "
+                f"({[t.task_id for t in created[:5]]})"
+            )
+        marker.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"Recurring check error (fail-honest, bỏ qua): {e}")
+
+
 def check_disk_space() -> bool:
     """GAP-R3: workspace drive free-space guard (fail before DB corruption)."""
     try:
@@ -516,6 +547,10 @@ def main() -> int:
             # (01/11/2026, DEOM M2, owner duyệt blanket) Task quá deadline chưa
             # kết thúc → EXPIRED qua registry chuẩn (transition log đầy đủ).
             check_task_deadlines()
+
+            # (02/11/2026, DEOM M6) Template recurring đến hạn → tạo instance
+            # vào work_queue chuẩn (fail-honest, rate-limit 60s).
+            check_recurring_instances()
 
             # Check if server is running
             if both_servers_healthy():

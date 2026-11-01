@@ -465,6 +465,36 @@ class DurableTaskRegistry:
         )
         return self.get_task(task_id)  # type: ignore[return-value]
 
+    def update_progress_weight(
+        self,
+        task_id: str,
+        progress_weight: dict[str, Any],
+        *,
+        actor: str = "tony",
+        reason: str = "",
+    ) -> TaskRecord:
+        """Ghi đè progress_weight (JSON) — dùng bởi RecurringTaskEngine (M6)."""
+        existing = self.get_task(task_id)
+        if not existing:
+            raise KeyError(f"Task {task_id} not found")
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE durable_tasks SET progress_weight_json = ?, updated_at_utc = ? WHERE task_id = ?",
+                (
+                    json.dumps(progress_weight, ensure_ascii=False),
+                    datetime.now(timezone.utc).isoformat(),
+                    task_id,
+                ),
+            )
+        self._log_transition(
+            task_id,
+            existing.status.value,
+            existing.status.value,
+            actor=actor,
+            reason=reason or "progress_weight updated",
+        )
+        return self.get_task(task_id)  # type: ignore[return-value]
+
     def work_queue(self, limit: int = 20, include_learning: bool = True) -> list[TaskRecord]:
         """Work Queue 4 bậc DEOM §7.2 — READY/PENDING theo priority, deadline, tuổi.
 

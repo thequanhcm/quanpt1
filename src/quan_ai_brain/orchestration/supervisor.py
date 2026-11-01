@@ -16,6 +16,7 @@ from quan_ai_brain.governance.state_store import GovernanceStateStore
 from quan_ai_brain.learning.periodic_reporter import PeriodicLearningReporter
 from quan_ai_brain.orchestration.agent_dispatcher import AgentDispatcher, AgentProfile
 from quan_ai_brain.orchestration.dependency_manager import DependencyManager
+from quan_ai_brain.orchestration.task_feedback import safe_record_feedback
 from quan_ai_brain.orchestration.models import (
     AutonomyLevel,
     SupervisorState,
@@ -40,6 +41,7 @@ class ContinuousAutonomySupervisor:
         policy_engine: PolicyEngine | None = None,
         dispatcher: AgentDispatcher | None = None,
         dependency_manager: DependencyManager | None = None,
+        feedback_recorder: Any | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve()
         self.task_registry = task_registry
@@ -51,6 +53,8 @@ class ContinuousAutonomySupervisor:
         # giống pre-M3: mọi task do supervisor tự chạy khi eligibility đạt).
         self.dispatcher = dispatcher or AgentDispatcher()
         self.dependency_manager = dependency_manager or DependencyManager(task_registry)
+        # DEOM M6: feedback recorder (tùy chọn — None giữ hành vi cũ)
+        self.feedback_recorder = feedback_recorder
 
         self._state = SupervisorState.STARTING
         self._current_task: TaskRecord | None = None
@@ -213,7 +217,7 @@ class ContinuousAutonomySupervisor:
 
             self.transition_to(SupervisorState.VERIFYING_RESULT, "Verifying execution outcome and evidence")
             if simulated_success:
-                self.task_registry.update_task_status(
+                refreshed = self.task_registry.update_task_status(
                     self._current_task.task_id,
                     TaskStatus.COMPLETED,
                     result_payload=result,
@@ -222,14 +226,17 @@ class ContinuousAutonomySupervisor:
                 # DEOM M3: mở khóa task phụ thuộc + trả agent
                 self.dependency_manager.unblock_dependents(self._current_task.task_id)
                 self.dispatcher.release(self._current_task.task_id)
+                # DEOM M6: ghi kinh nghiệm sau task (fail-safe, không giết flow)
+                safe_record_feedback(self.feedback_recorder, refreshed)
                 self.transition_to(SupervisorState.READY, f"Task {self._current_task.task_id} completed successfully")
             else:
-                self.task_registry.update_task_status(
+                refreshed = self.task_registry.update_task_status(
                     self._current_task.task_id,
                     TaskStatus.FAILED,
                     error_message="Verification criteria not satisfied",
                 )
                 self.dispatcher.release(self._current_task.task_id)
+                safe_record_feedback(self.feedback_recorder, refreshed)
                 self.transition_to(SupervisorState.LEARNING, "Task failed; routing outcome to SelfLearningEngine")
             return self._state
 
