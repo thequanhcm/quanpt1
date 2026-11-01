@@ -18,6 +18,13 @@ import pytest
 WORKSPACE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(WORKSPACE / "src"))
 
+from quan_ai_brain.monitoring import (  # noqa: E402
+    database_collector,
+    network_collector,
+    pc_collector,
+    service_collector,
+    voice_collector,
+)
 from quan_ai_brain.monitoring.aggregator import (  # noqa: E402
     PI5_THRESHOLDS,
     PC_THRESHOLDS,
@@ -128,7 +135,10 @@ class TestAggregator:
         assert out["disk_percent"]["severity"] == CRITICAL
         assert out["unknown_thing"]["severity"] == UNKNOWN
 
-    def test_snapshot_with_mock_collectors(self):
+    def test_snapshot_with_mock_collectors(self, monkeypatch):
+        # Mock TẤT CẢ collector (PC + network + services + db + voice), không chỉ
+        # Pi5 — nếu không, máy thật có RAM cao / heartbeat stale sẽ làm test dính
+        # môi trường (flaky). Test này phải kiểm tra LOGIC hợp nhất, không đo máy.
         agg = HealthAggregator()
         agg._pi5_probe = lambda: {
             "component_id": "pi5_edge",
@@ -141,6 +151,44 @@ class TestAggregator:
                                          "reason": "measured", "measured_at": "t"},
             },
         }
+
+        def _fake(component_id, checks):
+            return lambda: {
+                "component_id": component_id,
+                "measured_at": "t",
+                "reachable": True,
+                "checks": checks,
+            }
+
+        monkeypatch.setattr(
+            pc_collector, "collect_pc_health",
+            _fake("pc", {"cpu_percent": {"value": 10.0, "status": "ok",
+                                          "reason": "measured", "measured_at": "t"},
+                         "ram_percent": {"value": 50.0, "status": "ok",
+                                         "reason": "measured", "measured_at": "t"}}),
+        )
+        monkeypatch.setattr(
+            network_collector, "collect_network_health",
+            _fake("network", {"pc_to_pi5_rtt_ms": {"value": 20.0, "status": "ok",
+                                                    "reason": "measured", "measured_at": "t"}}),
+        )
+        monkeypatch.setattr(
+            service_collector, "collect_service_health",
+            _fake("services", {"executive_server": {"value": "up", "status": "ok",
+                                                     "reason": "measured", "measured_at": "t"}}),
+        )
+        monkeypatch.setattr(
+            database_collector, "collect_database_health",
+            lambda ws=None: {"component_id": "databases", "measured_at": "t",
+                             "reachable": True,
+                             "checks": {"brain.db": {"value": "ok", "status": "ok",
+                                                     "reason": "measured", "measured_at": "t"}}},
+        )
+        monkeypatch.setattr(
+            voice_collector, "collect_voice_health",
+            _fake("voice", {"stt_engine": {"value": "ok", "status": "ok",
+                                           "reason": "measured", "measured_at": "t"}}),
+        )
         snap = agg.snapshot(force=True)
         assert snap["pi5"]["status"] in (NORMAL, UNKNOWN)
         assert snap["pc"]["status"] in (NORMAL, UNKNOWN)

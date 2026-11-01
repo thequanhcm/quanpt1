@@ -52,6 +52,7 @@ class PlanOrchestrator:
         approval_gate: ApprovalGate | None = None,
         governance_store: GovernanceStateStore | None = None,
         consultation_store: ConsultationStore | None = None,
+        approval_cards: Any | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve() if workspace else Path.cwd().resolve()
         self.task_registry = task_registry
@@ -59,6 +60,8 @@ class PlanOrchestrator:
         self.approval_gate = approval_gate or self.sandbox.approval_gate
         self.governance_store = governance_store or GovernanceStateStore(self.workspace / "data" / "governance.db", workspace=self.workspace)
         self.consultation_store = consultation_store or ConsultationStore(self.workspace / "data" / "consultations.db")
+        # DEOM M4: ApprovalCardService (tùy chọn — None giữ hành vi cũ)
+        self.approval_cards = approval_cards
 
     def submit_plan(
         self,
@@ -424,6 +427,21 @@ class PlanOrchestrator:
             try:
                 ticket = self.consultation_store.get_ticket(ticket_id)
                 if ticket and ticket.status.value in ("APPROVED", "DIRECTED"):
+                    return True
+            except Exception:
+                pass
+
+        # 1.5. DEOM M4: ApprovalCardService — card APPROVED + chưa consumed
+        # được tạo bởi TONY (requested_by) và owner duyệt (decided_by=quanpt1).
+        # One-time use: consume ngay khi xác nhận hợp lệ.
+        if self.approval_cards is not None:
+            try:
+                for card in self.approval_cards.list_cards(state="APPROVED", limit=200):
+                    if card.task_id != task.task_id or card.consumed_at_utc:
+                        continue
+                    if getattr(card, "risk_level", "") != "R4":
+                        continue
+                    self.approval_cards.consume(card.approval_id, actor="plan_orchestrator")
                     return True
             except Exception:
                 pass
