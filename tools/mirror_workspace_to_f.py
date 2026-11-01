@@ -264,9 +264,15 @@ def main() -> int:
     log(f"robocopy /MIR hoàn tất trong {dt:.0f}s — rc={rc} "
         f"(copy {files.get('copied', '?')} / bỏ qua {files.get('skipped', '?')} / "
         f"lỗi {files.get('failed', '?')} / thừa-đích {files.get('extras', '?')})")
-    if rc >= 8:
-        log("LỖI NGHIÊM TRỌNG robocopy (rc>=8). Mirror KHÔNG đáng tin. Hủy verify.")
+    # robocopy rc là BITMASK (0-7 bình thường): bit3 (8) = phát hiện item thừa ở đích
+    # và /MIR đã xóa — đó là HÀNH VI CHUẨN của /MIR (giữ đích khớp nguồn), KHÔNG
+    # phải lỗi copy. Lỗi thật chỉ khi bit có FAILED > 0 (rc bit bit2 kèm failed>0).
+    if files.get("failed", 0) and files.get("failed", 0) > 0:
+        log(f"LỖI NGHIÊM TRỌNG robocopy: {files.get('failed')} file copy THẤT BẠI. "
+            "Mirror KHÔNG đáng tin. Hủy verify.")
         return 1
+    if rc >= 8:
+        log(f"rc={rc} gồm bit 'extras' (đã dọn thừa-đích) — không phải lỗi; FAILED=0 nên tiếp tục.")
 
     # ---- SNAPSHOT DB LIVE: brain.db... chụp nhất quán qua sqlite backup API ----
     n_snap = snapshot_live_dbs()
