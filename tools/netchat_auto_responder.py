@@ -1350,5 +1350,13 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"Fatal error: {e}")
+        # (02/11/2026) VN-LANG: pythonw windowless — stdout có thể là console
+        # cp1252 gây UnicodeEncodeError khi in lỗi tiếng Việt. Ghi file UTF-8
+        # thay vì print ra console (fail-honest: lỗi không biến mất).
+        try:
+            (Path(__file__).resolve().parent.parent / "logs").mkdir(exist_ok=True)
+            with open(Path(__file__).resolve().parent.parent / "logs" / "netchat_responder_fatal.log", "a", encoding="utf-8", errors="replace") as fh:
+                fh.write(f"{datetime.now(timezone.utc).isoformat()} Fatal: {e}\n")
+        except Exception:
+            pass
         sys.exit(1)
