@@ -225,6 +225,11 @@ class PlanOrchestrator:
         for step in steps:
             if step.status == TaskStatus.COMPLETED:
                 continue
+            # DEOM V4 G-C (ADV): step FAILED là trạng thái chốt của lần chạy này —
+            # KHÔNG được lifecycle "chữa lành" ngầm bằng cách chạy lại. Bước sau
+            # phụ thuộc nó sẽ bị chặn ở dependency check bên dưới (fail-honest).
+            if step.status == TaskStatus.FAILED:
+                continue
 
             # Check Dependencies
             if step.dependencies:
