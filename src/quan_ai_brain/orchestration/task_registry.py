@@ -315,10 +315,25 @@ class DurableTaskRegistry:
         evidence_ref: str | None = None,
         actor: str = "tony",
         reason: str = "",
+        force: bool = False,
     ) -> TaskRecord:
         existing = self.get_task(task_id)
         if not existing:
             raise KeyError(f"Task {task_id} not found")
+
+        # DEOM V4 G-C — state machine: mọi transition phải hợp lệ (trừ cùng trạng
+        # thái = no-op ghi checkpoint). force=True chỉ dành cho recovery nội bộ
+        # đặc biệt (hiện không flow nào dùng) — vẫn ghi rõ vào transition log.
+        from quan_ai_brain.orchestration.task_state_machine import (
+            InvalidTaskTransitionError,
+            is_valid_transition,
+        )
+
+        if not force and not is_valid_transition(existing.status, status):
+            raise InvalidTaskTransitionError(
+                f"invalid transition {existing.status.value} -> {status.value} for task {task_id}"
+                f" (actor={actor}); terminal states không quay lại RUNNING — dùng task mới hoặc PAUSED"
+            )
 
         now_utc = datetime.now(timezone.utc).isoformat()
         terminal_ok = status in (TaskStatus.COMPLETED, TaskStatus.COMPLETED_VERIFIED, TaskStatus.COMPLETED_PARTIALLY, TaskStatus.COMPLETED_UNVERIFIED)

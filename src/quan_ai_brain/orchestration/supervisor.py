@@ -207,6 +207,17 @@ class ContinuousAutonomySupervisor:
                 self.transition_to(SupervisorState.READY)
                 return self._state
 
+            # DEOM V4 G-C state machine: RUNNING_AUTHORIZED_TASK có thể vào từ
+            # task READY (M6 wire) hoặc APPROVED — chuẩn hoá task sang
+            # IN_PROGRESS trước khi kết luận outcome (supervisor là actor hợp lệ).
+            if self._current_task.status in (TaskStatus.READY, TaskStatus.APPROVED):
+                self._current_task = self.task_registry.update_task_status(
+                    self._current_task.task_id,
+                    TaskStatus.IN_PROGRESS,
+                    actor="supervisor",
+                    reason="bắt đầu thực thi trong sandbox (authorized)",
+                )
+
             # In dry-run mode, safely simulate execution without side effects
             simulated_success = True
             result = {

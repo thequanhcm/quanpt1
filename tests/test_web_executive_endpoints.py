@@ -240,7 +240,10 @@ def test_executive_api_tasks_full_lifecycle(executive_server_instance: str) -> N
         assert resp.status == 200
         cancel_data = json.loads(resp.read().decode("utf-8"))
         assert cancel_data["success"] is True
-        assert cancel_data["task"]["status"] == "CANCELLED"
+        # DEOM V4 G-C state machine: task chạy xong bước 4 → COMPLETED_VERIFIED
+        # (terminal) nên cancel không hủy được nữa — API phải trả trạng thái thật
+        # thay vì 500. Đây là hành vi an toàn mong muốn (bảo toàn kết luận).
+        assert cancel_data["task"]["status"] in ("CANCELLED", "COMPLETED_VERIFIED")
 
 
 

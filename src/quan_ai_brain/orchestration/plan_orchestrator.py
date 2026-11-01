@@ -397,6 +397,17 @@ class PlanOrchestrator:
                     error_message=reason,
                 )
 
+        # DEOM V4 G-C state machine: task đã terminal (COMPLETED_VERIFIED…) không
+        # hủy được nữa — trả trạng thái hiện tại thay vì 500 ở API.
+        current = self.task_registry.get_task(task_id)
+        if current and current.status in (
+            TaskStatus.COMPLETED_VERIFIED,
+            TaskStatus.COMPLETED_UNVERIFIED,
+            TaskStatus.REJECTED,
+            TaskStatus.EXPIRED,
+        ):
+            return current
+
         updated = self.task_registry.update_task_status(
             task_id,
             TaskStatus.CANCELLED,

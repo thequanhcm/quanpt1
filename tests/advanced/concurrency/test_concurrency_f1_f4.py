@@ -152,8 +152,8 @@ class TestF2ConcurrentUpdate:
         rec = registry.register_task("việc audit", risk_level="R1")
         registry.update_task_status(rec.task_id, TaskStatus.IN_PROGRESS, actor="a1")
         registry.update_task_status(rec.task_id, TaskStatus.VERIFYING, actor="a2")
-        registry.update_task_status(rec.task_id, TaskStatus.COMPLETED, actor="a3")
+        registry.update_task_status(rec.task_id, TaskStatus.COMPLETED_VERIFIED, actor="a3")
         history = registry.list_transitions(rec.task_id)
         chain = [(h.from_status, h.to_status) for h in history]
         assert ("PENDING", "IN_PROGRESS") in chain or ("RECEIVED", "IN_PROGRESS") in chain
-        assert chain[-1][1] == "COMPLETED"
+        assert chain[-1][1] == "COMPLETED_VERIFIED"
