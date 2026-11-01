@@ -5,13 +5,13 @@
 > bảo đảm tính minh bạch, độc lập và khả năng phục hồi phiên làm việc cho ChatGPT.
 
 ## 1. Thông tin phiên làm việc (Session Metadata)
-- **Mã phiên (UTC):** `2026-11-01T15:42:14.983591+00:00`
-- **Thời gian máy chủ:** `2026-11-01 22:42:14` (Local Time)
+- **Mã phiên (UTC):** `2026-11-01T17:16:48.009304+00:00`
+- **Thời gian máy chủ:** `2026-11-02 00:16:48` (Local Time)
 - **Workspace root:** `D:/AI/AI Quanpt1 2026/BRAIN`
 - **Python Runtime:** `3.11.13` (64bit)
 - **Hệ điều hành:** `Windows-10-10.0.26300-SP0`
 - **Phiên bản ứng dụng:** `0.2.0` (Foundation Evolution — Phase A)
-- **Git Branch:** `master` | **Commit:** `dd73ae3`
+- **Git Branch:** `feat/deom-m1-m2-task-lifecycle` | **Commit:** `156f474`
 - **Trạng thái Working Tree:** Có thay đổi chưa commit
 
 ## 2. Tóm tắt điều hành (Executive Summary)
@@ -21,7 +21,7 @@
   2. Hiện thực `SessionMemoryManager` (`src/quan_ai_brain/cognition/session_memory.py`) trích xuất sự thật người dùng và lưu trữ phiên hội thoại bền vững vào `data/brain.db`.
   3. Cài đặt `OutputGuardrails` (`src/quan_ai_brain/core/guardrails.py`) lọc rò rỉ credential, script tag injection và che giấu đường dẫn tệp nhạy cảm.
   4. Mở rộng `PromptContextBuilder` và API `/api/chat`, `/api/chat/history` trên Web Server phục vụ hội thoại đa lượt liên tục có trí nhớ.
-  5. Kết quả kiểm thử tự động phiên hiện tại: 3071 PASSED, 0 FAILED, 44 SKIPPED (Tổng: 3115 bài test, PARTIALLY_VERIFIED (3071 passed, 44 skipped)).
+  5. Kết quả kiểm thử tự động phiên hiện tại: 3111 PASSED, 0 FAILED, 44 SKIPPED (Tổng: 3155 bài test, PARTIALLY_VERIFIED (3111 passed, 44 skipped)).
 - **Các hạng mục đã hoàn thành:**
   - [x] Bộ định tuyến mô hình động `LLMRouter` với phân tầng fast / reasoning và fallback tin cậy.
   - [x] Quản lý bộ nhớ phiên `SessionMemoryManager` và trích xuất tự động danh tính, sở thích, chỉ thị của chủ sở hữu.
@@ -30,7 +30,7 @@
   - [x] Tích hợp lịch sử hội thoại gần nhất `[RECENT CONVERSATION HISTORY]` vào ngữ cảnh suy luận của LLM.
   - [x] Endpoint `GET /api/chat/history` và nâng cấp toàn diện `POST /api/chat` trên `BrainAPIHandler`.
   - [x] 5 bài kiểm thử E2E đầu cuối (`tests/test_end_to_end_chat.py`) xác minh đa lượt đàm thoại và trí nhớ dài hạn.
-  - [x] Kiểm thử tự động: 3071 bài PASS, 44 bài SKIP (Phần cứng Pi 5 offline), 0 bài FAIL (PARTIALLY_VERIFIED (3071 passed, 44 skipped)).
+  - [x] Kiểm thử tự động: 3111 bài PASS, 44 bài SKIP (Phần cứng Pi 5 offline), 0 bài FAIL (PARTIALLY_VERIFIED (3111 passed, 44 skipped)).
 - **Các hạng mục tiếp theo (Sprint 2):**
   - Kết nối TaskPlan vào `DurableTaskRegistry` (`data/tasks.db`) và xây dựng vòng lặp thực thi có kiểm soát an toàn (Inert Sandbox).
 - **Lưu ý kỹ thuật quan trọng cho kỹ sư tiếp theo:**
@@ -41,11 +41,9 @@
 ## 3. Thay đổi mã nguồn (Code Changes & Working Tree)
 - **Git Status:**
 ```text
-m Skill/SKILL_BAT_AI
 [secret-like path omitted]
 [secret-like path omitted]
-M docs/PROJECT_STATUS.md
-M reports/TONY_OWNER_DECISION_REGISTER.md
+?? "bao cao xay dung he thong/11.2026/BAO_CAO_TONY_TONG_HOP_20261102_0200.md"
 ```
 - **Tệp mã nguồn cốt lõi trong Sprint 7A:**
   - `src/quan_ai_brain/execution/process_containment.py`: Hợp đồng `ProcessBackendInterface`, `ProcessContainmentConfig`, `InertProcessBackend`, `ContainedExecutionRunner`.
@@ -72,15 +70,15 @@ M reports/TONY_OWNER_DECISION_REGISTER.md
   - `tests/test_edge_client.py`: 6 bài test xác thực HMAC, nonce anti-replay, kiosk HTTP endpoints, fail-safe disconnect.
 
 ## 4. Kết quả kiểm thử (Test Verification)
-- **Kết luận kiểm thử:** **PARTIALLY_VERIFIED (3071 passed, 44 skipped)**
+- **Kết luận kiểm thử:** **PARTIALLY_VERIFIED (3111 passed, 44 skipped)**
 - **Lệnh thực thi:** `D:\AI\AI Quanpt1 2026\BRAIN\.venv\Scripts\python.exe -m pytest -q tests`
-- **Tổng số bài test:** `3115` | **Passed:** `3071` | **Failed:** `0` | **Skipped:** `44`
-- **Thời gian chạy:** `110.29s`
+- **Tổng số bài test:** `3155` | **Passed:** `3111` | **Failed:** `0` | **Skipped:** `44`
+- **Thời gian chạy:** `127.43s`
 - **Exit Code:** `0`
 
-- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `3115` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
+- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `3155` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
 - **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.
-- **Trạng thái xác minh (`verification_status`):** `PARTIALLY_VERIFIED (3071 passed, 44 skipped)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
+- **Trạng thái xác minh (`verification_status`):** `PARTIALLY_VERIFIED (3111 passed, 44 skipped)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
 
 ```text
 ........................................................................ [  2%]
@@ -89,44 +87,44 @@ M reports/TONY_OWNER_DECISION_REGISTER.md
 ........................................................................ [  9%]
 ........................................................................ [ 11%]
 ........................................................................ [ 13%]
-........................................................................ [ 16%]
+........................................................................ [ 15%]
 ........................................................................ [ 18%]
 ........................................................................ [ 20%]
-........................................................................ [ 23%]
+........................................................................ [ 22%]
 ........................................................................ [ 25%]
 ........................................................................ [ 27%]
-........................................................................ [ 30%]
-.............sss..........................s............................. [ 32%]
-......s...........s...ss....s.ssssss.ss................................. [ 34%]
-.....................ssss.s.....ss...................................... [ 36%]
-........................................................................ [ 39%]
+........................................................................ [ 29%]
+.....................................................sss................ [ 31%]
+..........s...................................s...........s...ss....s.ss [ 34%]
+ssss.ss......................................................ssss.s..... [ 36%]
+ss...................................................................... [ 38%]
 ........................................................................ [ 41%]
 ........................................................................ [ 43%]
-.............s........s........s.s....s.s............................... [ 46%]
-........................................................................ [ 48%]
+.....................................................s........s........s [ 45%]
+.s....s.s............................................................... [ 47%]
 ........................................................................ [ 50%]
-........................................................................ [ 53%]
-........................................................................ [ 55%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
 ........................................................................ [ 57%]
-........................................................................ [ 60%]
-........................................................................ [ 62%]
-........................................................................ [ 64%]
-........................................................................ [ 67%]
-.....................................................................s.. [ 69%]
-........................................................................ [ 71%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 63%]
+........................................................................ [ 66%]
+........................................................................ [ 68%]
+.....................................s.................................. [ 70%]
 ........................................................................ [ 73%]
-..s..............s...........................ss..........s...s.......... [ 76%]
-........................................................................ [ 78%]
-........................................................................ [ 80%]
-........................................................................ [ 83%]
-........................................................................ [ 85%]
-........................................................................ [ 87%]
-........................................................................ [ 90%]
-........................ssssss.......................................... [ 92%]
-........................................................................ [ 94%]
-........................................................................ [ 97%]
-.......s................................................................ [ 99%]
-...................                                                      [100%]
+..........................................s..............s.............. [ 75%]
+.............ss..........s...s.......................................... [ 77%]
+........................................................................ [ 79%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+................................................................ssssss.. [ 91%]
+........................................................................ [ 93%]
+........................................................................ [ 95%]
+...............................................s........................ [ 98%]
+...........................................................              [100%]
 ============================== warnings summary ===============================
 src\quan_ai_brain\analytics\statistical_engine.py:20
   D:\AI\AI Quanpt1 2026\BRAIN\src\quan_ai_brain\analytics\statistical_engine.py:20: PytestCollectionWarning: cannot collect test class 'TestType' because it has a __init__ constructor (from: tests/test_v39_analytics_engine.py)
@@ -178,7 +176,7 @@ SKIPPED [1] tests\test_v41_image_ocr.py:45: pytesseract/Pillow chưa cài
 SKIPPED [1] tests\test_v41_image_ocr.py:54: pytesseract/Pillow chưa cài
 SKIPPED [1] tests\test_v41_image_ocr.py:62: pytesseract/Pillow chưa cài
 SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
-3071 passed, 44 skipped, 1 warning in 110.29s (0:01:50)
+3111 passed, 44 skipped, 1 warning in 127.43s (0:02:07)
 ```
 
 ## 5. Danh mục module & Trạng thái hiện tại
@@ -286,9 +284,9 @@ WORKSPACE: D:\AI\AI Quanpt1 2026\BRAIN
 CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object
 PYTHON_VERSION: 3.11.9 x64
 TEST_SUMMARY:
-  verdict: PARTIALLY_VERIFIED (3071 passed, 44 skipped)
-  total_tests: 3115
-  passed: 3071
+  verdict: PARTIALLY_VERIFIED (3111 passed, 44 skipped)
+  total_tests: 3155
+  passed: 3111
   failed: 0
   skipped: 44
 CORE_CAPABILITIES_IMPLEMENTED:
@@ -351,5 +349,5 @@ PROTECTED_EXTERNAL_PROJECTS:
   - E:\AI\battery-ai-\BATTERY_AI_V4 (Battery Intelligence Brain)
   - E:\AI\BOT (Active production bots)
 INSTRUCTION_FOR_NEXT_SESSION:
-  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (3115 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
+  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (3155 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
 ```
