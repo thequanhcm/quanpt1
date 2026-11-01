@@ -427,10 +427,21 @@ class ApprovalCardService:
                     f"card {approval_id} fingerprint mismatch — action changed after approval (fail-closed)"
                 )
         now = _now()
+        # F3 (Advanced Assurance): atomic one-time consume — UPDATE có điều kiện
+        # `consumed_at_utc IS NULL` nên N thread đua chỉ ĐÚNG 1 thắng; các thread
+        # còn lại thấy consumed_at_utc đã đổi → chặn (không double-consume).
         with self._lock, self._conn:
-            self._conn.execute(
-                "UPDATE approval_cards_v2 SET consumed_at_utc = ? WHERE approval_id = ?",
+            cur = self._conn.execute(
+                """
+                UPDATE approval_cards_v2 SET consumed_at_utc = ?
+                WHERE approval_id = ? AND consumed_at_utc IS NULL
+                """,
                 (now, approval_id),
+            )
+            claimed = cur.rowcount == 1
+        if not claimed:
+            raise ApprovalCardError(
+                f"card {approval_id} already consumed — one-time use enforced (atomic claim lost race)"
             )
         self._log_event(approval_id, "CONSUMED", actor, "one-time use")
         return self.get_card(approval_id)  # type: ignore[return-value]
