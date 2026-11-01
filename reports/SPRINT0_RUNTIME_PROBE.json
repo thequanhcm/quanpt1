@@ -1,0 +1,74 @@
+{
+  "started": "2026-10-25 10:15:25",
+  "host": "http://127.0.0.1:11434",
+  "loaded_before": "error: HTTP Error 405: Method Not Allowed",
+  "bge_m3_cold": {
+    "model": "bge-m3",
+    "wall_s": 0.466,
+    "dim": 1024,
+    "text_chars": 66
+  },
+  "bge_m3_warm": {
+    "model": "bge-m3",
+    "wall_s": 0.387,
+    "dim": 1024,
+    "text_chars": 58
+  },
+  "qwen2.5:0.5b": [
+    {
+      "model": "qwen2.5:0.5b",
+      "wall_s": 2.766,
+      "load_s": 2.3540675,
+      "eval_count": 32,
+      "eval_s": 0.24,
+      "tok_s": 133.1,
+      "prompt_chars": 18,
+      "response_chars": 105
+    },
+    {
+      "model": "qwen2.5:0.5b",
+      "wall_s": 0.681,
+      "load_s": 0.1922035,
+      "eval_count": 64,
+      "eval_s": 0.443,
+      "tok_s": 144.5,
+      "prompt_chars": 51,
+      "response_chars": 222
+    }
+  ],
+  "qwen2.5:1.5b": [
+    {
+      "model": "qwen2.5:1.5b",
+      "wall_s": 2.599,
+      "load_s": 2.0196675,
+      "eval_count": 32,
+      "eval_s": 0.404,
+      "tok_s": 79.2,
+      "prompt_chars": 18,
+      "response_chars": 107
+    },
+    {
+      "model": "qwen2.5:1.5b",
+      "wall_s": 8.843,
+      "load_s": 0.2019109,
+      "eval_count": 56,
+      "eval_s": 0.731,
+      "tok_s": 76.7,
+      "prompt_chars": 51,
+      "response_chars": 182
+    }
+  ],
+  "qwen2.5:7b": [
+    {
+      "model": "qwen2.5:7b",
+      "wall_s": 35.558,
+      "load_s": 17.0651334,
+      "eval_count": 96,
+      "eval_s": 15.911,
+      "tok_s": 6.0,
+      "prompt_chars": 60,
+      "response_chars": 306
+    }
+  ],
+  "loaded_after": "error: HTTP Error 405: Method Not Allowed"
+}

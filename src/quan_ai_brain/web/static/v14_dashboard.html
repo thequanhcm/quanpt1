@@ -1,0 +1,42 @@
+<!-- V14 Dashboard Tab - Add to executive.html -->
+<div id="tab-v14-dashboard" class="tab-content" style="display:none; padding:15px;">
+  <h3 style="margin:0 0 15px 0; font-size:1rem; color:#e2e8f0;">🧠 Memory Quality & Temporal Dashboard</h3>
+  
+  <!-- Temporal Stats -->
+  <div id="temporal-stats" style="margin-bottom:20px;"></div>
+  
+  <!-- Freshness Heatmap -->
+  <div style="background:#1e293b; padding:12px; border-radius:8px; border:1px solid #334155; margin-bottom:20px;">
+    <h4 style="margin:0 0 10px 0; font-size:0.8rem; color:#94a3b8;">Freshness Heatmap</h4>
+    <div id="temporal-heatmap" style="max-height:200px; overflow-y:auto;"></div>
+  </div>
+  
+  <!-- Context Panel -->
+  <div id="context-panel" style="background:#1e293b; padding:12px; border-radius:8px; border:1px solid #334155; margin-bottom:20px;"></div>
+  
+  <!-- Contextual Search -->
+  <div style="background:#1e293b; padding:12px; border-radius:8px; border:1px solid #334155; margin-bottom:20px;">
+    <h4 style="margin:0 0 10px 0; font-size:0.8rem; color:#94a3b8;">Contextual Search</h4>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <input id="contextual-search-input" placeholder="Search with current context..." 
+             style="flex:1; background:#0f172a; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:8px 12px; font-size:0.75rem;">
+      <button id="contextual-search-btn" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:0.75rem; cursor:pointer;">Search</button>
+    </div>
+    <div id="contextual-search-results" style="max-height:300px; overflow-y:auto;"></div>
+  </div>
+  
+  <!-- Quality Dashboard -->
+  <div id="quality-dashboard" style="margin-bottom:20px;"></div>
+  
+  <!-- Low Quality List -->
+  <div style="background:#1e293b; padding:12px; border-radius:8px; border:1px solid #334155; margin-bottom:20px;">
+    <h4 style="margin:0 0 10px 0; font-size:0.8rem; color:#94a3b8;">Low Quality Knowledge Units</h4>
+    <div id="low-quality-list" style="max-height:300px; overflow-y:auto;"></div>
+  </div>
+  
+  <!-- Maintenance Controls -->
+  <div style="background:#1e293b; padding:12px; border-radius:8px; border:1px solid #334155;">
+    <h4 style="margin:0 0 10px 0; font-size:0.8rem; color:#94a3b8;">Automated Maintenance</h4>
+    <button id="btn-run-maintenance" style="background:#16a34a; color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:0.75rem; cursor:pointer;">🔄 Run Maintenance</button>
+  </div>
+</div>

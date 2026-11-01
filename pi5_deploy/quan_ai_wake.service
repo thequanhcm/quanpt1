@@ -1,0 +1,16 @@
+[Unit]
+Description=QUAN AI BRAIN — Pi5 Wake Word Service (Vosk offline, nghe "TONY ơi" 24/7)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=quanpt1
+WorkingDirectory=/home/quanpt1/Desktop/edge_client
+ExecStart=/home/quanpt1/wake_venv/bin/python /home/quanpt1/Desktop/edge_client/wake_word_service.py
+Restart=always
+RestartSec=5
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+
+[Install]
+WantedBy=graphical.target

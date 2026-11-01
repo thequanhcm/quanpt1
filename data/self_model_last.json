@@ -1,0 +1,1 @@
+{"generated_at": "2026-11-01T05:17:45.787045+00:00", "answers": {"fingerprint": {"components": {"pi5_edge": "UNREACHABLE", "core_server": "HEALTHY", "ollama_daemon": "HEALTHY"}, "approved_knowledge": 1842, "quarantined_knowledge": 3016, "pending_tasks": 0, "pending_owner_decisions": 0}}}

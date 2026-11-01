@@ -1,0 +1,118 @@
+/**
+ * QUAN AI BRAIN — Digital Human Avatar Styling (Model A)
+ * Reusable, self-contained stylesheet for avatar viewport, animations, and emotion theming.
+ */
+
+:root {
+  --avatar-size: 480px;
+  --bg-dark: #050811;
+  --bg-card: rgba(13, 20, 36, 0.94);
+  --border-glow: rgba(0, 229, 255, 0.35);
+  --cyan-primary: #00e5ff;
+  --text-main: #f0f4fc;
+  --text-dim: #718096;
+
+  /* Default Avatar State Theme (IDLE) */
+  --avatar-accent: #00e5ff;
+  --avatar-glow: rgba(0, 229, 255, 0.45);
+}
+
+/* ================= 12 EMOTION / STATUS STATES ================= */
+.state-idle         { --avatar-accent: #00e5ff; --avatar-glow: rgba(0, 229, 255, 0.45); }
+.state-listening    { --avatar-accent: #06b6d4; --avatar-glow: rgba(6, 182, 212, 0.70); }
+.state-thinking     { --avatar-accent: #a855f7; --avatar-glow: rgba(168, 85, 247, 0.65); }
+.state-speaking     { --avatar-accent: #3b82f6; --avatar-glow: rgba(59, 130, 246, 0.70); }
+.state-happy        { --avatar-accent: #10b981; --avatar-glow: rgba(16, 185, 129, 0.70); }
+.state-empathetic   { --avatar-accent: #38bdf8; --avatar-glow: rgba(56, 189, 248, 0.65); }
+.state-confused     { --avatar-accent: #f59e0b; --avatar-glow: rgba(245, 158, 11, 0.70); }
+.state-success      { --avatar-accent: #10b981; --avatar-glow: rgba(16, 185, 129, 0.75); }
+.state-warning      { --avatar-accent: #f97316; --avatar-glow: rgba(249, 115, 22, 0.75); }
+.state-offline      { --avatar-accent: #64748b; --avatar-glow: rgba(100, 116, 139, 0.30); opacity: 0.7; }
+.state-error        { --avatar-accent: #dc2626; --avatar-glow: rgba(220, 38, 38, 0.85); }
+.state-reconnecting { --avatar-accent: #eab308; --avatar-glow: rgba(234, 179, 8, 0.70); }
+
+/* Additional System Aliases */
+.state-researching  { --avatar-accent: #10b981; --avatar-glow: rgba(16, 185, 129, 0.60); }
+.state-learning     { --avatar-accent: #f59e0b; --avatar-glow: rgba(245, 158, 11, 0.70); }
+.state-safemode     { --avatar-accent: #38bdf8; --avatar-glow: rgba(56, 189, 248, 0.50); }
+.state-blocked      { --avatar-accent: #ef4444; --avatar-glow: rgba(239, 68, 68, 0.75); }
+
+/* ================= AVATAR STAGE CONTAINER ================= */
+.avatar-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.avatar-card {
+  width: 100%;
+  max-width: var(--avatar-size);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* ================= 2.5D CANVAS VIEWPORT ================= */
+.avatar-viewport {
+  width: 100%;
+  max-width: var(--avatar-size);
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 0 0 36px var(--avatar-glow), inset 0 0 20px rgba(0, 0, 0, 0.6);
+  border: 1.5px solid var(--avatar-accent);
+  background: radial-gradient(circle at 50% 50%, rgba(14, 25, 52, 0.95) 0%, rgba(6, 12, 24, 0.98) 100%);
+  transition: border-color 0.4s ease, box-shadow 0.4s ease, opacity 0.4s ease;
+}
+
+.avatar-viewport.circular {
+  border-radius: 50%;
+}
+
+.avatar-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+/* ================= WAVEFORM GLOW BAR ================= */
+.avatar-waveform-wrap {
+  width: 260px;
+  height: 24px;
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-waveform-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ================= AURA & AMBIENT ANIMATIONS ================= */
+@keyframes auraRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulseGlow {
+  0%   { filter: drop-shadow(0 0 10px var(--avatar-accent)); }
+  50%  { filter: drop-shadow(0 0 24px var(--avatar-accent)); }
+  100% { filter: drop-shadow(0 0 10px var(--avatar-accent)); }
+}
+
+.avatar-viewport.pulse {
+  animation: pulseGlow 3s ease-in-out infinite;
+}

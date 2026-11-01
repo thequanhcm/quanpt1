@@ -1,0 +1,20 @@
+{
+  "capture_id": "cap_1792832504609",
+  "snapshot_id": "cap_1792832504609",
+  "source_device_id": "EDGE-PI5-DESK-01",
+  "captured_at": "2026-10-24T09:01:43.893404+00:00",
+  "timestamp": "2026-10-24T09:01:43.893404+00:00",
+  "received_at": "2026-10-24T09:01:43.894560+00:00",
+  "content_hash": "c09c6ce0385e986511065f8f24191e837d765104773a89d39b8b1fa03e1426d5",
+  "sha256": "c09c6ce0385e986511065f8f24191e837d765104773a89d39b8b1fa03e1426d5",
+  "sha256_hash": "c09c6ce0385e986511065f8f24191e837d765104773a89d39b8b1fa03e1426d5",
+  "media_type": "image/jpeg",
+  "size_bytes": 21196,
+  "capture_mode": "SNAPSHOT_ON_DEMAND",
+  "purpose": "Chụp ảnh theo yêu cầu chủ sở hữu",
+  "retention_policy": "OWNER_CONTROLLED_30D",
+  "verification_status": "VERIFIED_PASS",
+  "relative_file": "data/edge_media/captures/2026-10-24T09-01-43_893404+00-00_cap_1792832504609.jpg",
+  "file_path": "data/edge_media/captures/2026-10-24T09-01-43_893404+00-00_cap_1792832504609.jpg",
+  "filename": "2026-10-24T09-01-43_893404+00-00_cap_1792832504609.jpg"
+}

@@ -1,0 +1,16 @@
+{
+  "voice": {
+    "last_user_text": "M. La. A. I. V.",
+    "last_reply": "Dạ, câu \"M. La. A. I. V.\" có vẻ bị lỗi gõ hoặc lỗi nhận giọng nên em chưa hiểu rõ ý anh.\n\nAnh nhắn lại rõ hơn giúp em nhé — anh muốn hỏi về gì (trạng thái hệ thống, tài liệu, hay việc khác)?",
+    "last_intent": null,
+    "updated_ts": 1793505917.5814896,
+    "updated_at_utc": "2026-11-01T04:05:17.581489+00:00"
+  },
+  "dm": {
+    "last_user_text": "Vậy nó sạc được bao nhiêu chu kỳ nữa?",
+    "last_reply": "Dạ, em chưa có số liệu tổng số chu kỳ thiết kế của cục pin nên không kết luận chính xác được, chỉ suy luận như sau:\n\n- Nếu là pin lithium (điển hình 500–1000 chu kỳ đến khi còn ~80% sức khỏe): với 321 chu kỳ và còn 87%, khả năng cao là còn khoảng 200–600 chu kỳ nữa tùy chất lượng pin.\n- Nếu quy theo tài liệu ắc quy trong kho (phóng sâu 100%: ắc quy thường 230–250 lần, GEL ~450 lần) thì 321 chu kỳ đã vượt mức của ắc quy thường — nhưng pin còn 87% nên khả năng cao không phải loại này.\n\nAnh cho em biết model pin (Li-ion/LiFePO4/ắc quy) thì em tính con số cụ thể hơn.",
+    "last_intent": null,
+    "updated_ts": 1793533963.5000021,
+    "updated_at_utc": "2026-11-01T11:52:43.500002+00:00"
+  }
+}

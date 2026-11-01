@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>TONY — Sức khoẻ Hệ thống</title>
+<style>
+  body { font-family: system-ui, sans-serif; background:#0d1117; color:#e6edf3; margin:0; padding:24px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:#8b949e; font-size:.85rem; margin-bottom:18px; }
+  .overall { display:inline-block; padding:6px 18px; border-radius:20px; font-weight:700; font-size:1.1rem; }
+  .NORMAL { background:#1a7f37; } .WARNING { background:#9e6a03; } .CRITICAL { background:#b62324; }
+  .UNKNOWN { background:#57606a; } .MAINTENANCE { background:#1f6feb; }
+  .grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-top:18px; }
+  .card { background:#161b22; border:1px solid #30363d; border-radius:10px; padding:14px 16px; }
+  .card h2 { font-size:.95rem; margin:0 0 10px; display:flex; align-items:center; gap:8px; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  th, td { text-align:left; padding:4px 8px; border-bottom:1px solid #21262d; }
+  th { color:#8b949e; font-weight:600; }
+  .sev { padding:2px 8px; border-radius:10px; font-size:.72rem; font-weight:600; }
+  .sev.NORMAL { background:#1a7f37; } .sev.WARNING { background:#9e6a03; }
+  .sev.CRITICAL { background:#b62324; } .sev.UNKNOWN { background:#57606a; } .sev.MAINTENANCE { background:#1f6feb; }
+  .muted { color:#8b949e; font-size:.8rem; }
+  button { background:#21262d; color:#e6edf3; border:1px solid #30363d; border-radius:6px; padding:6px 14px; cursor:pointer; }
+  button:hover { background:#30363d; }
+  #monitor-info { margin-top:10px; font-size:.8rem; color:#8b949e; }
+  .wide { grid-column: 1 / -1; }
+  canvas { width:100%; height:120px; }
+</style>
+</head>
+<body>
+<h1>TONY — Sức khoẻ Hệ thống <span id="overall" class="UNKNOWN">...</span></h1>
+<div class="sub">M1 System Health Intelligence + M4 Self Model & Learning · 6 khu vực đo thật · auto-refresh 60s ·
+  <button onclick="load()">Làm mới</button> <span id="ts"></span></div>
+
+<div class="grid">
+  <div class="card"><h2><span class="dot" id="dot-pc"></span>PC (DESKTOP-SNMI929) <span id="st-pc" class="sev">...</span></h2>
+    <table id="tbl-pc"><thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2><span class="dot" id="dot-pi5"></span>Raspberry Pi 5 <span id="st-pi5" class="sev">...</span></h2>
+    <table id="tbl-pi5"><thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2><span class="dot" id="dot-network"></span>Mạng (PC↔Pi5) <span id="st-network" class="sev">...</span></h2>
+    <table id="tbl-network"><thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2><span class="dot" id="dot-services"></span>Services <span id="st-services" class="sev">...</span></h2>
+    <table id="tbl-services"><thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2><span class="dot" id="dot-databases"></span>Databases <span id="st-databases" class="sev">...</span></h2>
+    <table id="tbl-databases"><thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h2><span class="dot" id="dot-voice"></span>Voice (STT/LLM/TTS) <span id="st-voice" class="sev">...</span></h2>
+    <table id="tbl-voice"><thead><tr><th>Chỉ số</th><th>Giá trị</th><th>Trạng thái</th></tr></thead><tbody></tbody></table></div>
+
+  <div class="card wide"><h2><span class="dot" id="dot-self"></span>M4 — Tự nhận thức (Self Model quét thật lúc tải trang)</h2>
+    <table id="tbl-self"><thead><tr><th>Hạng mục</th><th>Giá trị</th></tr></thead><tbody></tbody></table></div>
+
+  <div class="card wide"><h2><span class="dot" id="dot-learn"></span>M4 — Tự học & Tri thức (CLO + candidates + skills, dữ liệu thật)</h2>
+    <table id="tbl-learn"><thead><tr><th>Hạng mục</th><th>Giá trị</th></tr></thead><tbody></tbody></table></div>
+
+  <div class="card wide"><h2>Xu hướng CPU % (PC) & RTT ms (PC→Pi5) — 120 điểm gần nhất</h2>
+    <canvas id="chart" width="1200" height="120"></canvas></div>
+
+  <div class="card wide"><h2>Chẩn đoán nguyên nhân (RCA — tách bạch FACT / GIẢ THUYẾT / THIẾU BẰNG CHỨNG)</h2>
+    <table id="tbl-rca"><thead><tr><th>Nhãn</th><th>Loại</th><th>Khu vực</th><th>Nhận định</th><th>Bằng chứng</th></tr></thead><tbody></tbody></table></div>
+
+  <div class="card wide"><h2>Cảnh báo gần đây (gửi DM NetChat, chống spam 5 phút)</h2>
+    <table id="tbl-alerts"><thead><tr><th>Thời gian</th><th>Thành phần</th><th>Mức</th><th>Giá trị</th><th>Gửi DM</th></tr></thead><tbody></tbody></table>
+    <div id="monitor-info"></div></div>
+</div>
+
+<script>
+const LABELS = {
+  cpu_percent:'CPU %', ram_percent:'RAM %', ram_available_mb:'RAM trống (MB)',
+  disk_percent:'Dung lượng %', disk_free_gb:'Dĩa trống (GB)', disk_total_gb:'Dĩa tổng (GB)',
+  server_rss_mb:'Server RAM (MB)', server_cpu_percent:'Server CPU %', server_threads:'Threads',
+  python_process_count:'Process Python', uptime_hours:'Uptime (giờ)',
+  soc_temp_c:'Nhiệt SoC (°C)', throttled:'Throttled', ram_mb:'RAM',
+  disk_root:'Dĩa root', bt_speaker_connected:'Loa BT SRS-XB33', services:'Services Pi5',
+  boot_time:'Boot lúc',
+  pc_to_pi5_rtt_ms:'RTT PC→Pi5 (ms)', pc_to_pi5_loss_pct:'Mất gói %', tailscale_interface:'Tailscale',
+  executive_server:'Executive 8766', dashboard:'Dashboard 8765',
+  netchat_responder_heartbeat:'Responder heartbeat (giây)', learning_daemon_heartbeat:'Learning log tuổi (giây)',
+  'brain.db':'brain.db', 'tasks.db':'tasks.db',
+  stt_engine:'STT faster-whisper', llm_netmind:'LLM NetMind', llm_ollama:'Ollama', tts_engine:'TTS Edge'
+};
+const SEV_VN = {NORMAL:'TỐT', WARNING:'CẢNH BÁO', CRITICAL:'NGHIÊM TRỌNG', UNKNOWN:'KHÔNG RÕ', MAINTENANCE:'BẢO TRÌ'};
+const KIND_VN = {OBSERVED_FACT:'DỮ KIỆN ĐO THẤY', POSSIBLE_CAUSE:'GIẢ THUYẾT (CHƯA XÁC NHẬN)',
+                 CONFIRMED_CAUSE:'ĐÃ XÁC NHẬN', INSUFFICIENT_EVIDENCE:'THIẾU BẰNG CHỨNG'};
+
+function fmtVal(k, v) {
+  if (v === null || v === undefined) return '—';
+  if (k === 'ram_mb' && typeof v === 'object')
+    return v.used_pct + '% (' + v.used_mb + '/' + v.total_mb + ' MB)';
+  if (k === 'disk_root' && typeof v === 'object')
+    return v.used_pct + ' (' + v.free_mb + ' MB trống)';
+  if (k === 'services' && typeof v === 'object')
+    return Object.entries(v).map(([s, st]) => s.split('quan_ai_')[1] + ':' + st).join(' · ');
+  if (k === 'throttled') return v + (v === '0x0' ? ' (ổn)' : ' (CÓ THROTTLING!)');
+  if (typeof v === 'object' && v.quick_check) return 'check:' + v.quick_check + ' · ' + v.size_mb + 'MB · WAL ' + v.wal_mb + 'MB';
+  return String(v);
+}
+
+function fillTable(tblId, checks) {
+  const tb = document.querySelector(tblId + ' tbody');
+  tb.innerHTML = '';
+  for (const [k, info] of Object.entries(checks || {})) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + (LABELS[k] || k) + '</td>'
+      + '<td>' + fmtVal(k, info.value) + '</td>'
+      + '<td><span class="sev ' + info.severity + '">' + (SEV_VN[info.severity] || info.severity) + '</span></td>';
+    tb.appendChild(tr);
+  }
+  if (!Object.keys(checks || {}).length)
+    tb.innerHTML = '<tr><td colspan="3" class="muted">Không có dữ liệu đo (fail-honest)</td></tr>';
+}
+
+function setBadge(elId, dotId, status) {
+  const el = document.getElementById(elId);
+  el.textContent = SEV_VN[status] || status;
+  el.className = 'sev ' + status;
+  document.getElementById(dotId).style.background =
+    {NORMAL:'#3fb950',WARNING:'#d29922',CRITICAL:'#f85149',UNKNOWN:'#8b949e',MAINTENANCE:'#4493f8'}[status] || '#8b949e';
+}
+
+function drawChart(history) {
+  const c = document.getElementById('chart');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  const pts = history.slice().reverse(); // cũ → mới
+  if (pts.length < 2) {
+    ctx.fillStyle = '#8b949e'; ctx.fillText('Chưa đủ dữ liệu lịch sử (đang tích lũy mỗi 2 phút)', 12, 60);
+    return;
+  }
+  const draw = (key, color, max, off, h) => {
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.beginPath();
+    pts.forEach((p, i) => {
+      const x = 10 + i * (c.width - 20) / (pts.length - 1);
+      const v = Math.min(p[key] ?? max, max);
+      const y = off + h - (v / max) * h;
+      i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+    });
+    ctx.stroke();
+  };
+  draw('cpu_percent', '#f0883e', 100, 5, 50);
+  draw('rtt_ms', '#4493f8', Math.max(100, ...pts.map(p => p.rtt_ms || 0)), 65, 50);
+  ctx.fillStyle = '#8b949e'; ctx.font = '11px sans-serif';
+  ctx.fillText('CPU % (cam) — RTT ms (xanh) · ' + pts.length + ' điểm · ' + pts[0].ts_utc.slice(11, 19) + ' → ' + pts[pts.length-1].ts_utc.slice(11, 19), 12, 118);
+}
+
+async function load() {
+  try {
+    const [snap, mon, hist, rca] = await Promise.all([
+      fetch('/api/health/machine?force=1').then(r => r.json()),
+      fetch('/api/health/monitor').then(r => r.json()),
+      fetch('/api/health/history?limit=120').then(r => r.json()),
+      fetch('/api/health/rca').then(r => r.json()),
+    ]);
+    if (!snap.success) throw new Error(snap.error || 'lỗi snapshot');
+    document.getElementById('overall').textContent = SEV_VN[snap.overall_status] || snap.overall_status;
+    document.getElementById('overall').className = 'overall ' + snap.overall_status;
+    for (const comp of ['pc', 'pi5', 'network', 'services', 'databases', 'voice']) {
+      setBadge('st-' + comp, 'dot-' + comp, snap[comp].status);
+      fillTable('#tbl-' + comp, snap[comp].checks);
+    }
+    document.getElementById('ts').textContent = 'đo lúc ' + new Date(snap.measured_at).toLocaleTimeString('vi-VN');
+    drawChart(hist.history || []);
+
+    // --- M4: Self Model + Learning (fail-honest: lỗi → hiện lý do, không che) ---
+    try {
+      const [sm, sl] = await Promise.all([
+        fetch('/api/self/model').then(r => r.json()),
+        fetch('/api/self/learning').then(r => r.json()),
+      ]);
+      const st = document.querySelector('#tbl-self tbody');
+      const lt = document.querySelector('#tbl-learn tbody');
+      st.innerHTML = ''; lt.innerHTML = '';
+      if (sm.success) {
+        const m = sm.model;
+        const rows = [
+          ['Danh tính', m.identity.assistant_name + ' · chủ: ' + m.identity.owner],
+          ['Triển khai', m.deployment.core_location + ' ⇄ ' + m.deployment.edge_location],
+          ['Module hoạt động', (m.active_modules || []).length + ' module'],
+          ['Năng lực đã kiểm chứng', (m.verified_capabilities || []).length],
+          ['Năng lực chưa kiểm chứng', (m.unverified_capabilities || []).length],
+          ['Giới hạn đã biết', (m.known_limitations || []).slice(0, 3).join(' · ') || '—'],
+          ['Confidence', Math.round((m.confidence ?? 0) * 100) + '%'],
+        ];
+        for (const [k, v] of rows) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + k + '</td><td>' + String(v).slice(0, 220) + '</td>';
+          st.appendChild(tr);
+        }
+      } else {
+        st.innerHTML = '<tr><td colspan="2" class="muted">LỖI: ' + (sm.error || '?') + '</td></tr>';
+      }
+      if (sl.success) {
+        const L = sl.learning;
+        const c = L.candidates || {};
+        const s = L.skills || {};
+        const rows = [
+          ['CLO (vòng tự chủ học)', 'sessions: ' + (L.clo_sessions ?? 0)
+            + ' · enabled: ' + (L.clo_enabled ?? 'UNKNOWN')
+            + (L.clo_last_session ? ' · vòng cuối #' + L.clo_last_session.cycle
+               + ' [' + L.clo_last_session.status + '] lúc ' + String(L.clo_last_session.started_at).slice(0, 19) : '')],
+          ['Candidate knowledge', 'approved: ' + (c.approved ?? 0) + ' · quarantined: ' + (c.quarantined ?? 0)
+            + ' · tổng: ' + (c.total ?? 0) + ' (quarantine chỉ mở khi anh duyệt Q-4)'],
+          ['Skill registry', 'tổng: ' + (s.total ?? 0) + ' · '
+            + Object.entries(s.by_status || {}).map(([k, v]) => k + ': ' + v).join(' · ')],
+        ];
+        for (const [k, v] of rows) {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td>' + k + '</td><td>' + v + '</td>';
+          lt.appendChild(tr);
+        }
+      } else {
+        lt.innerHTML = '<tr><td colspan="2" class="muted">LỖI: ' + (sl.error || '?') + '</td></tr>';
+      }
+      document.getElementById('dot-self').style.background = sm.success ? '#3fb950' : '#f85149';
+      document.getElementById('dot-learn').style.background = sl.success ? '#3fb950' : '#f85149';
+    } catch (e2) {
+      document.querySelector('#tbl-self tbody').innerHTML =
+        '<tr><td colspan="2" class="muted">Không tải được dữ liệu M4: ' + String(e2).slice(0, 120) + '</td></tr>';
+      document.querySelector('#tbl-learn tbody').innerHTML = '';
+    }
+
+    // RCA table:
+    const rt = document.querySelector('#tbl-rca tbody');
+    rt.innerHTML = '';
+    for (const r of (rca.rca || [])) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td><span class="sev ' + r.label + '">' + (SEV_VN[r.label] || r.label) + '</span></td>'
+        + '<td class="muted">' + (KIND_VN[r.kind] || r.kind) + '</td>'
+        + '<td>' + r.component + '</td>'
+        + '<td>' + r.statement + '</td>'
+        + '<td class="muted">' + (r.evidence || '') + '</td>';
+      rt.appendChild(tr);
+    }
+    if (!(rca.rca || []).length) rt.innerHTML = '<tr><td colspan="5" class="muted">Không có nhận định — mọi chỉ số TỐT</td></tr>';
+
+    // Alerts:
+    const tb = document.querySelector('#tbl-alerts tbody');
+    tb.innerHTML = '';
+    const alerts = (mon.recent_alerts || []).slice(0, 10);
+    for (const a of alerts) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + new Date(a.ts_utc).toLocaleTimeString('vi-VN') + '</td>'
+        + '<td>' + a.check_id + '</td>'
+        + '<td><span class="sev ' + a.severity + '">' + (SEV_VN[a.severity] || a.severity) + '</span></td>'
+        + '<td class="muted">' + (a.value || '').slice(0, 40) + '</td>'
+        + '<td>' + (a.sent ? '✅ đã gửi' : '<span class="muted">⏸ ' + (a.suppressed_reason || 'chưa gửi') + '</span>') + '</td>';
+      tb.appendChild(tr);
+    }
+    if (!alerts.length) tb.innerHTML = '<tr><td colspan="5" class="muted">Không có cảnh báo — hệ thống êm</td></tr>';
+    document.getElementById('monitor-info').textContent =
+      'Vòng giám sát: ' + (mon.running ? 'ĐANG CHẠY' : 'DỪNG')
+      + ' · chu kỳ ' + (mon.cycle_sec || '—') + 's · đã chạy ' + (mon.cycles_done || 0) + ' vòng'
+      + ' · tổng thể gần nhất: ' + (SEV_VN[mon.last_overall_status] || mon.last_overall_status);
+  } catch (e) {
+    document.getElementById('overall').textContent = 'LỖI';
+    document.getElementById('overall').className = 'overall CRITICAL';
+    document.getElementById('ts').textContent = String(e);
+  }
+}
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>

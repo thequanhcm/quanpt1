@@ -1,0 +1,58 @@
+# QUAN AI BRAIN workspace — .gitignore (Q-1, 01/11/2026)
+# Nguyên tắc: KHÔNG track secret, DB lớn có dữ liệu cá nhân, venv, cache.
+
+# Secrets & credentials — TUYỆT ĐỐI KHÔNG TRACK
+.env
+.env.*
+*.key
+*.pem
+*.pfx
+*.p12
+credentials*.json
+data/edge_hmac_secret.txt
+*secret*.txt
+*token*.txt
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv_broken_backup/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Dữ liệu lớn / DB runtime (có bản sao F:\BRAIN + backups riêng)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+backups/
+logs/
+*.log
+
+# Vector/index lớn
+vector_db/
+embeddings_cache/
+chroma/
+faiss/
+
+# Tài liệu cá nhân nặng (kho tài liệu riêng của anh)
+kho_tai_lieu/
+Skill/SKILL/company số/
+Skill/UC/
+
+# Media/render tạm
+tmp*/
+*.png.tmp
+composer-images/
+
+# Hệ thống
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Mirror đích (không track)
+/mirror/

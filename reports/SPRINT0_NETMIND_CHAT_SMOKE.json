@@ -1,0 +1,26 @@
+{
+  "probe_date": "2026-10-25",
+  "model": "zai-org/GLM-5.3-Flash",
+  "base_url": "https://stream-netmind.viettel.vn/aigw/ai/v1",
+  "endpoint": "POST /chat/completions",
+  "stream": false,
+  "http_status": 200,
+  "wall_s": 0.52,
+  "finish_reason": "length",
+  "content_preview": "Dạ chào anh, em là Tony Phạm, trợ lý điều hành",
+  "usage": {
+    "prompt_tokens": 53,
+    "completion_tokens": 80,
+    "total_tokens": 133,
+    "completion_tokens_details": {
+      "reasoning_tokens": 63
+    }
+  },
+  "observations": [
+    "Vietnamese response natural and correct.",
+    "reasoning_tokens consumed 63/80 completion tokens at default settings -> latency/cost control parameter MUST be configured in Sprint 1 provider (check reasoning_effort / thinking parameter support on gateway).",
+    "Streaming NOT yet verified (Sprint 1 scope).",
+    "Tool/function calling NOT yet verified (Sprint 1 scope)."
+  ],
+  "api_key_stored_in_this_file": false
+}
