@@ -1,7 +1,10 @@
 @echo off
 title QUAN AI BRAIN - 24/7 AUTO START (QUANPT1)
-cd /d "D:\AI\AI Quanpt1 2026\BRAIN"
+cd /d "E:\BRAIN"
 color 0A
+REM (02/11/2026) UTF-8 cho tien trinh Python con - phong UnicodeEncodeError cp1252
+set "PYTHONUTF8=1"
+set "PYTHONIOENCODING=utf-8"
 
 echo ============================================================
 echo    QUAN AI BRAIN - KHOI DONG 24/7 (AUTO START)
@@ -10,7 +13,7 @@ echo ============================================================
 echo.
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [LOI] Khong tim thay .venv tai D:\AI\AI Quanpt1 2026\BRAIN
+    echo [LOI] Khong tim thay .venv tai E:\BRAIN
     pause
     exit /b 1
 )
@@ -20,9 +23,9 @@ set "NETMIND_EXTERNAL_DATA_ALLOWED=true"
 if "%NETMIND_API_KEY%"=="" call :LoadUserEnv
 if "%GEMINI_API_KEY%"=="" call :LoadUserEnv
 
-REM ---- [0/5] Ollama (port 11434, C:\Users\quocd\AppData\Local\Programs\Ollama\ollama.exe): kiem tra + start bang python ----
+REM ---- [0/5] Ollama (port 11434, C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe): kiem tra + start bang python ----
 echo [0/5] Kiem tra Ollama (BGE-M3 embedding)...
-if exist "C:\Users\quocd\AppData\Local\Programs\Ollama\ollama.exe" (
+if exist "C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe" (
     ".venv\Scripts\python.exe" tools\khoi_dong_ollama.py
 )
 echo    (chi tiet xem logs\khoi_dong_ollama.log)
@@ -37,7 +40,7 @@ if errorlevel 1 start "QAB-DualServers" /MIN ".venv\Scripts\pythonw.exe" start_d
 ping -n 9 127.0.0.1 >nul
 
 REM ---- [2/5] NetChat Auto-Responder ----
-echo [2/5] Khoi dong NetChat Auto-Responder (bot_quanpt1)...
+echo [2/5] Khoi dong NetChat Auto-Responder (bot_tony)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "netchat_auto_responder" >nul 2>&1
 if errorlevel 1 start "QAB-NetChatBot" /MIN ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
 ping -n 4 127.0.0.1 >nul

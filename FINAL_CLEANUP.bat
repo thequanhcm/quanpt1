@@ -12,7 +12,7 @@ echo 🧹 FINAL CLEANUP - TONY Assistant
 echo ============================================
 echo.
 
-cd /d "D:\AI\AI Quanpt1 2026\BRAIN"
+cd /d "E:\BRAIN"
 
 echo Files to be REMOVED:
 echo   ❌ Duplicate start/stop scripts

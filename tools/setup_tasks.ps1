@@ -2,8 +2,8 @@
 # Run as Administrator for best results
 # Usage: powershell -ExecutionPolicy Bypass -File tools/setup_tasks.ps1
 
-$baseDir = "D:\AI\AI Quanpt1 2026\BRAIN"
-$venvPython = "C:\Users\quocd\.venv\Scripts\python.exe"
+$baseDir = "E:\BRAIN"
+$venvPython = "E:\BRAIN\.venv\Scripts\python.exe"
 $watchdog = "$baseDir\tools\watchdog.py"
 $backupScript = "$baseDir\tools\backup_database.py"
 

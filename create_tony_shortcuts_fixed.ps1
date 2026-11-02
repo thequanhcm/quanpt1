@@ -10,8 +10,8 @@ if (Test-Path $oldStop) { Remove-Item $oldStop -Force }
 # Start Shortcut
 $startPath = "$env:USERPROFILE\Desktop\🚀 START TONY.lnk"
 $startShortcut = $WshShell.CreateShortcut($startPath)
-$startShortcut.TargetPath = "D:\AI\AI Quanpt1 2026\BRAIN\TONY_START.bat"
-$startShortcut.WorkingDirectory = "D:\AI\AI Quanpt1 2026\BRAIN"
+$startShortcut.TargetPath = "E:\BRAIN\TONY_START.bat"
+$startShortcut.WorkingDirectory = "E:\BRAIN"
 $startShortcut.Description = "Start TONY Assistant - All services"
 $startShortcut.IconLocation = "shell32.dll,238"
 $startShortcut.Save()
@@ -20,8 +20,8 @@ Write-Host "✅ Created: 🚀 START TONY.lnk" -ForegroundColor Green
 # Stop Shortcut
 $stopPath = "$env:USERPROFILE\Desktop\🛑 STOP TONY.lnk"
 $stopShortcut = $WshShell.CreateShortcut($stopPath)
-$stopShortcut.TargetPath = "D:\AI\AI Quanpt1 2026\BRAIN\TONY_STOP.bat"
-$stopShortcut.WorkingDirectory = "D:\AI\AI Quanpt1 2026\BRAIN"
+$stopShortcut.TargetPath = "E:\BRAIN\TONY_STOP.bat"
+$stopShortcut.WorkingDirectory = "E:\BRAIN"
 $stopShortcut.Description = "Stop TONY Assistant - All services"
 $stopShortcut.IconLocation = "shell32.dll,25"
 $stopShortcut.Save()

@@ -17,11 +17,11 @@ from pathlib import Path
 from typing import Any
 
 _SKILL_SCRIPT = Path(
-    r"C:/Users/quocd/AppData/Local/netmind_desktop/skills/"
+    r"C:/Users/DELL/AppData/Local/netmind_desktop/skills/"
     r"ttns-meeting-lookup/scripts/ttns-meeting-lookup.py"
 )
 _SKILL_PY = Path(
-    r"C:/Users/quocd/AppData/Local/netmind_desktop/netmind-agent/venv/Scripts/python.exe"
+    r"C:/Users/DELL/AppData/Local/netmind_desktop/netmind-agent/venv/Scripts/python.exe"
 )
 _TIMEOUT_S = 35
 

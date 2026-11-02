@@ -145,7 +145,7 @@ class AlertEngine:
         try:
             from quan_ai_brain.integration.netchat_bridge import send_message
             return send_message(
-                "131u5z64pj8q9da3k1xqp3y6pe", _vn_message(message))  # noqa: E501
+                "mwp3nk3ciprjjr4hdmcoqgk6jr", _vn_message(message))  # noqa: E501
         except Exception as exc:
             return {"success": False, "error": f"send_error:{type(exc).__name__}"}
 

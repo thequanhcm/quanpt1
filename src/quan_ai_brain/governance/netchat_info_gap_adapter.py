@@ -26,14 +26,14 @@ from quan_ai_brain.cognition.information_gap_analyzer import (
 WORKSPACE = Path(__file__).resolve().parent.parent.parent.parent
 
 _NETCHAT_BOT = (
-    r"C:\Users\quocd\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
+    r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
 )
 _AGENT_PY = (
-    r"C:\Users\quocd\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
+    r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
 )
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "131u5z64pj8q9da3k1xqp3y6pe"
+CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
 
 # Mã nhiệm vụ trong tin nhắn: TASK-xxxx (chữ/số)
 _TASK_RE = re.compile(r"TASK[-_]?([A-Za-z0-9]{3,12})", re.IGNORECASE)

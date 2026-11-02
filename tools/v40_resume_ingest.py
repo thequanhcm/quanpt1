@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.WARNING)
 from quan_ai_brain.knowledge.knowledge_ingestion import KnowledgeIngestionPipeline
 from quan_ai_brain.knowledge.knowledge_query import KnowledgeQueryEngine
 
-source_path = Path("D:/AI/AI Quanpt1 2026/BRAIN/kho_tai_lieu")
+source_path = Path("E:/BRAIN/kho_tai_lieu")
 query_engine = KnowledgeQueryEngine()
 pipeline = KnowledgeIngestionPipeline(source_path, query_engine)
 

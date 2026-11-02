@@ -3,8 +3,8 @@
 V38 Knowledge Base Ingestion Script
 
 Usage:
-    python tools/ingest_knowledge_base.py --source "D:/AI/AI Quanpt1 2026/BRAIN/kho_tai_lieu"
-    python tools/ingest_knowledge_base.py --source "D:/AI/AI Quanpt1 2026/BRAIN/kho_tai_lieu" --industry engineering
+    python tools/ingest_knowledge_base.py --source "E:/BRAIN/kho_tai_lieu"
+    python tools/ingest_knowledge_base.py --source "E:/BRAIN/kho_tai_lieu" --industry engineering
     python tools/ingest_knowledge_base.py --status
 """
 
@@ -25,7 +25,7 @@ def main():
     parser.add_argument(
         "--source",
         type=str,
-        default="D:/AI/AI Quanpt1 2026/BRAIN/kho_tai_lieu",
+        default="E:/BRAIN/kho_tai_lieu",
         help="Source directory containing knowledge files"
     )
     parser.add_argument(

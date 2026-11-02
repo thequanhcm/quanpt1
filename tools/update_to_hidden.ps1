@@ -2,7 +2,7 @@
 # Run this as Administrator in PowerShell
 
 $USERNAME = [System.Environment]::UserName
-$WORKSPACE = "D:\AI\AI Quanpt1 2026\BRAIN"
+$WORKSPACE = "E:\BRAIN"
 $VENV_PYTHON = "$WORKSPACE\.venv\Scripts\python.exe"
 
 Write-Host "============================================" -ForegroundColor Cyan

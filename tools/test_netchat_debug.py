@@ -6,8 +6,8 @@ import urllib.request
 import urllib.error
 
 CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"
-NETCHAT_SCRIPT = r"C:\Users\quocd\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
-PYTHON_EXE = r"C:\Users\quocd\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
+NETCHAT_SCRIPT = r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
+PYTHON_EXE = r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
 
 print("=" * 70)
 print("NETCHAT AUTO-RESPONDER DEBUG TEST")

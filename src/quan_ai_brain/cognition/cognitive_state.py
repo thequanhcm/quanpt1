@@ -935,7 +935,7 @@ class CognitiveSelfAssessment:
     """Evaluates system components and capabilities based strictly on empirical evidence."""
 
     def __init__(self, workspace: Path | str | None = None) -> None:
-        self.workspace = Path(workspace or "D:/AI/AI Quanpt1 2026/BRAIN").resolve()
+        self.workspace = Path(workspace or "E:/BRAIN").resolve()
 
     def assess_system(self) -> dict[str, Any]:
         """Produce an evidence-bounded self-assessment across all core modules."""

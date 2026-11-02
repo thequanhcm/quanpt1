@@ -17,7 +17,7 @@ Architecture:
 - Query Engine: Search with filters (industry, category, confidence)
 
 Usage:
-    python tools/ingest_knowledge_base.py --source "D:/AI/AI Quanpt1 2026/BRAIN/kho_tai_lieu"
+    python tools/ingest_knowledge_base.py --source "E:/BRAIN/kho_tai_lieu"
 """
 
 from __future__ import annotations

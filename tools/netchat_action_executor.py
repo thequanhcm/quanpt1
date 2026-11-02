@@ -313,9 +313,9 @@ def send_file_to_dm(file_path: str, caption: str = "") -> tuple[bool, str]:
     """Upload file (ảnh chụp màn hình...) vào DM bot↔quanpt1 qua netchat_bot.py
     upload_dm + cổng xác nhận 2 bước tự động. Trả (ok, thông_báo)."""
     try:
-        python_exe = (r"C:\Users\quocd\AppData\Local\netmind_desktop"
+        python_exe = (r"C:\Users\DELL\AppData\Local\netmind_desktop"
                       r"\netmind-agent\venv\Scripts\python.exe")
-        bot_script = (r"C:\Users\quocd\AppData\Local\netmind_desktop"
+        bot_script = (r"C:\Users\DELL\AppData\Local\netmind_desktop"
                       r"\skills\bot-netchat\netchat_bot.py")
         cmd = [python_exe, bot_script, "upload_dm", "quanpt1", file_path, caption]
         r1 = subprocess.run(cmd, capture_output=True, text=True, timeout=60,

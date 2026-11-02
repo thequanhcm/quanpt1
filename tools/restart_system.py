@@ -170,8 +170,8 @@ def ensure_ollama_running() -> bool:
 
     log("Ollama chưa bật. Đang khởi động tiến trình Ollama cục bộ...", "WARN")
     ollama_candidates = [
-        Path(r"C:\Users\quocd\AppData\Local\Programs\Ollama\ollama app.exe"),
-        Path(r"C:\Users\quocd\AppData\Local\Programs\Ollama\ollama.exe"),
+        Path(r"C:\Users\DELL\AppData\Local\Programs\Ollama\ollama app.exe"),
+        Path(r"C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe"),
     ]
     for exe in ollama_candidates:
         if exe.exists():

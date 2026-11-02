@@ -110,7 +110,7 @@ def main() -> int:
     print("\n4. Ingesting owner preferences...")
     owner_facts = [
         ("Chủ sở hữu QUAN AI BRAIN là Anh Quân — Quanpt1 (quanpt1@viettel.com.vn)", ["owner_identity", "governance"]),
-        ("Workspace chính: D:/AI/AI Quanpt1 2026/BRAIN", ["workspace", "configuration"]),
+        ("Workspace chính: E:/BRAIN", ["workspace", "configuration"]),
         ("GPU: NVIDIA Quadro T1000 4GB VRAM", ["hardware", "configuration"]),
         ("Model chủ lực: zai-org/GLM-5.3-Flash qua NetMind Gateway", ["llm", "configuration"]),
         ("Pi 5 IP: 192.168.1.21, port 8768", ["hardware", "pi5"]),

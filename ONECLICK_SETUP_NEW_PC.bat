@@ -159,7 +159,7 @@ if exist "%USERPROFILE%\.ssh\id_ed25519" (
 ) else (
     echo     [WARN] Chua co %USERPROFILE%\.ssh\id_ed25519
     echo            Anh chep 2 file id_ed25519 + id_ed25519.pub tu may cu
-    echo            copy C:\Users\quocd\.ssh id_ed25519 + id_ed25519.pub sang may nay
+    echo            copy C:\Users\DELL\.ssh id_ed25519 + id_ed25519.pub sang may nay
     echo [STEP 5] WARN ssh key >> "%LOG%"
     set /a WARN+=1
 )

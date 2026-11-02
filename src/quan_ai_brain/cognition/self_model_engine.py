@@ -132,7 +132,7 @@ class SelfModelEngine:
 
         # Deployment
         deployment = {
-            "core_location": "Windows PC DESKTOP-SNMI929 (D:/AI/AI Quanpt1 2026/BRAIN)",
+            "core_location": "Windows PC DESKTOP-SNMI929 (E:/BRAIN)",
             "edge_location": "Raspberry Pi 5 quanpt1@100.100.83.59 (EDGE-PI5-DESK-01, Tailscale)",
             "architecture": "PC Core + Edge (Pi 5)",
         }

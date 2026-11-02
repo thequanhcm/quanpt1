@@ -2,7 +2,7 @@
 
 Usage (Windows):
     1. Install NSSM: https://nssm.cc/download
-    2. nssm install QUAN_AIBRAIN "C:\\Users\\quocd\\.venv\\Scripts\\python.exe" "D:\\AI\\AI Quanpt1 2026\\BRAIN\\tools\\watchdog.py"
+    2. nssm install QUAN_AIBRAIN "C:\\Users\\DELL\\.venv\\Scripts\\python.exe" "E:\\BRAIN\\tools\\watchdog.py"
     3. nssm start QUAN_AIBRAIN
     4. nssm set QUAN_AIBRAIN Start SERVICE_AUTO_START
 
@@ -31,14 +31,14 @@ os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
 os.environ.setdefault("MKL_NUM_THREADS", "2")
 
 # Configuration - use raw strings for Windows paths
-BASE_DIR = r"D:\AI\AI Quanpt1 2026\BRAIN"
+BASE_DIR = r"E:\BRAIN"
 # (01/11/2026) FIX giống responder: PYTHONPATH thừa hưởng (netmind-agent có
 # package `tools` riêng) có thể che package của BRAIN — ép BRAIN root lên đầu.
 sys.path.insert(0, BASE_DIR)
 CONFIG = {
     # 24/7 reboot-proof (27/10/2026): watchdog now supervises BOTH servers via
     # start_dual_servers.py (8765 UI + 8766 Executive) using the project venv.
-    # The previous venv_python pointed to C:\Users\quocd\.venv which does NOT
+    # The previous venv_python pointed to C:\Users\DELL\.venv which does NOT
     # exist — auto-restart would have failed silently forever.
     "server_script": os.path.join(BASE_DIR, "start_dual_servers.py"),
     "venv_python": os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe"),
@@ -108,7 +108,7 @@ CONFIG.setdefault("ollama_port", 11434)
 # ma tu duoc khoi dong lai (bounded 3 lan/gio) khi OFFLINE.
 CONFIG.setdefault(
     "ollama_exe",
-    os.path.join(r"C:\Users\quocd\AppData\Local\Programs\Ollama", "ollama.exe"),
+    os.path.join(r"C:\Users\DELL\AppData\Local\Programs\Ollama", "ollama.exe"),
 )
 CONFIG.setdefault("max_ollama_revival_per_hour", 3)
 CONFIG.setdefault("netchat_responder_log", os.path.join(BASE_DIR, "logs", "netchat_responder_heartbeat.log"))

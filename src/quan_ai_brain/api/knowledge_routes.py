@@ -31,7 +31,7 @@ def ingest_knowledge():
     """Ingest knowledge base from source directory."""
     try:
         data = request.get_json() or {}
-        source_path = Path(data.get('source', 'D:/AI/AI Quanpt1 2026/BRAIN/kho_tai_lieu'))
+        source_path = Path(data.get('source', 'E:/BRAIN/kho_tai_lieu'))
         max_workers = data.get('workers', 4)
         
         if not source_path.exists():

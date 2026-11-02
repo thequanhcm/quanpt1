@@ -6,7 +6,7 @@ thiện nó'. Ổ F: 270 GB nhãn 'Quan AI Brain' do owner tạo — trước sc
 CÒN TRỐNG (chưa từng được copy).
 
 Thiết kế an toàn:
-- NGUỒN : D:\AI\AI Quanpt1 2026\BRAIN — script CHỈ ĐỌC nguồn, không bao giờ
+- NGUỒN : E:\BRAIN — script CHỈ ĐỌC nguồn, không bao giờ
   ghi/xóa bất cứ thứ gì trong workspace gốc.
 - ĐÍCH  : F:\BRAIN — thư mục riêng trên ổ 'Quan AI Brain', không đụng root F:\.
 - Cơ chế: robocopy /MIR — lần đầu copy đủ, các lần sau chỉ copy phần thay đổi
@@ -36,7 +36,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-SOURCE = Path(r"D:\AI\AI Quanpt1 2026\BRAIN")
+SOURCE = Path(r"E:\BRAIN")
 DEST = Path(r"F:\BRAIN")
 EXCLUDE_DIRS = {"__pycache__"}
 LOG_FILE = SOURCE / "logs" / "mirror_to_f.log"

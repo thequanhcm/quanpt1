@@ -20,7 +20,7 @@ echo [1/5] Creating Task Scheduler tasks...
 echo.
 
 REM Define workspace
-set WORKSPACE=D:\AI\AI Quanpt1 2026\BRAIN
+set WORKSPACE=E:\BRAIN
 set PYTHON=%WORKSPACE%\.venv\Scripts\python.exe
 
 REM Task 1: QUAN AI BRAIN Server

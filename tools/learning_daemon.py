@@ -72,7 +72,7 @@ from quan_ai_brain.memory.sqlite_store import MemoryStore
 
 # Configuration
 CONFIG = {
-    "workspace": Path(r"D:\AI\AI Quanpt1 2026\BRAIN"),
+    "workspace": Path(r"E:\BRAIN"),
     "db_path": "data/brain.db",
     "owner_id": "Quanpt1",
     "consolidation_interval": 300,  # 5 minutes

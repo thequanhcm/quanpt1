@@ -7,7 +7,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
 BAT_FILE = ROOT / "KHOI_DONG_QUAN_AI_BRAIN_ONECLICK.bat"
-DESKTOP = Path(os.environ.get("USERPROFILE", "C:\\Users\\quocd")) / "Desktop"
+DESKTOP = Path(os.environ.get("USERPROFILE", "C:\\Users\\DELL")) / "Desktop"
 
 SHORTCUT_NAMES = [
     "QUAN AI BRAIN - KHOI DONG 1-CLICK.lnk",

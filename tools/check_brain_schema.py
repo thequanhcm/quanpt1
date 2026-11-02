@@ -1,7 +1,7 @@
 """Check brain.db schema."""
 import sqlite3
 
-conn = sqlite3.connect("D:/AI/AI Quanpt1 2026/BRAIN/data/brain.db")
+conn = sqlite3.connect("E:/BRAIN/data/brain.db")
 cursor = conn.cursor()
 
 # List tables

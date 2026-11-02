@@ -15,7 +15,7 @@ echo  TONY STOP - Stopping QUAN AI BRAIN
 echo ============================================
 echo.
 
-cd /d "D:\AI\AI Quanpt1 2026\BRAIN"
+cd /d "E:\BRAIN"
 
 REM Confirmation
 echo Luu y: Lenh nay se dung TONY (server, bot NetChat, learning, watchdog).
@@ -37,7 +37,7 @@ echo.
 REM (29/10/2026) FIX quan trong: truoc day taskkill blanket TAT CA python.exe /
 REM pythonw.exe tren may -- lam chet ca netMind Desktop va ung dung Python khac.
 REM Gio chi kill process co file thuc thi nam trong thu muc workspace
-REM (D:\AI\AI Quanpt1 2026\BRAIN\.venv\...) -- chinh xac 4 services cua TONY.
+REM (E:\BRAIN\.venv\...) -- chinh xac 4 services cua TONY.
 REM (30/10/2026) May moi: kill theo MARKER script (command line) thay vi loc theo
 REM Path '*QUAN AI BRAIN*' (khong con dung — xem TONY_START.bat). Bat duoc ca
 REM launcher .venv lan interpreter con (base python cua venv launcher).

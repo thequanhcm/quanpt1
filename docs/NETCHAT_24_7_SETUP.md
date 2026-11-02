@@ -15,7 +15,7 @@ Setup bot **TONY** hoạt động **24/7** trên NetChat kênh `4phc9b1mx78qjq3g
 |---|---|---|
 | **Server QUAN AI BRAIN** | ✅ Running | PID 22704, port 8765 |
 | **Auto-responder** | ✅ Running | PID 3260, monitoring kênh |
-| **Bot NetChat** | ✅ Connected | bot_quanpt1 (edojmne9d7gcxx8axu1mzas3pr) |
+| **Bot NetChat** | ✅ Connected | bot_tony (66opztx9ut8rjxny555xhj84je) |
 | **Channel** | ✅ Active | TONY (4phc9b1mx78qjq3grccw89u94a) |
 | **NETMIND_EXTERNAL_DATA_ALLOWED** | ✅ Enabled | Set trong `start_server_fixed.py` |
 | **reasoning_effort** | ✅ "low" | GLM-5.3-Flash phản hồi nhanh |

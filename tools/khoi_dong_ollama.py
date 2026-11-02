@@ -7,7 +7,7 @@ import subprocess
 import time
 from pathlib import Path
 
-BASE = Path(r"D:\AI\AI Quanpt1 2026\BRAIN")
+BASE = Path(r"E:\BRAIN")
 LOG = BASE / "logs" / "khoi_dong_ollama.log"
 
 
@@ -27,7 +27,7 @@ def main() -> int:
             print("    OK: Ollama dang chay - bo qua")
             fh.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Ollama already up\n")
             return 0
-        exe = Path(r"C:\Users\quocd\AppData\Local\Programs\Ollama\ollama.exe")
+        exe = Path(r"C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe")
         if not exe.exists():
             print("    CANH BAO: khong thay ollama.exe - bo qua")
             fh.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] ollama.exe missing\n")

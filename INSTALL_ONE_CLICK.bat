@@ -21,7 +21,7 @@ echo ✅ Running as Administrator
 echo.
 
 REM Set workspace
-set WORKSPACE=D:\AI\AI Quanpt1 2026\BRAIN
+set WORKSPACE=E:\BRAIN
 
 echo ============================================
 echo Step 1: Checking Python & Dependencies

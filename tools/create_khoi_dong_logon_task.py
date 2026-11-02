@@ -23,11 +23,11 @@ def main() -> int:
     td.Settings.StopIfGoingOnBatteries = False
     td.Settings.ExecutionTimeLimit = "PT0S"  # không giới hạn thời gian
     trig = td.Triggers.Create(9)  # TASK_TRIGGER_LOGON
-    trig.UserId = "quocd"
+    trig.UserId = "DELL"
     trig.Enabled = True
     action = td.Actions.Create(0)
-    action.Path = r"D:\AI\AI Quanpt1 2026\BRAIN\KHOI_DONG_24_7.bat"
-    action.WorkingDirectory = r"D:\AI\AI Quanpt1 2026\BRAIN"
+    action.Path = r"E:\BRAIN\KHOI_DONG_24_7.bat"
+    action.WorkingDirectory = r"E:\BRAIN"
     root.RegisterTaskDefinition(TASK_NAME, td, 6, None, None, 3)  # 6 = update-or-create
     print(f"{TASK_NAME}: created OK (logon trigger, chạy KHOI_DONG_24_7.bat)")
     return 0

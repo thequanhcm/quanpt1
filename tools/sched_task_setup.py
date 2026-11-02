@@ -4,8 +4,8 @@ from __future__ import annotations
 import subprocess
 
 TASKS = [
-    ("QUAN_AI_BRAIN_BACKUP_2AM", r"D:\AI\AI Quanpt1 2026\BRAIN\tools\run_backup.bat"),
-    ("QUAN_AI_BRAIN_MORNING_REPORT_8AM", r"D:\AI\AI Quanpt1 2026\BRAIN\tools\run_morning_report.bat"),
+    ("QUAN_AI_BRAIN_BACKUP_2AM", r"E:\BRAIN\tools\run_backup.bat"),
+    ("QUAN_AI_BRAIN_MORNING_REPORT_8AM", r"E:\BRAIN\tools\run_morning_report.bat"),
 ]
 
 

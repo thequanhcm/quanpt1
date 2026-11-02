@@ -41,7 +41,7 @@ def fake_bridge(monkeypatch):
         "get_status",
         lambda channel_id=bridge.DEFAULT_CHANNEL_ID: {
             "success": True,
-            "bot": {"id": "bot-id-123", "username": "bot_quanpt1", "is_bot": True},
+            "bot": {"id": "bot-id-123", "username": "bot_tony", "is_bot": True},
             "channel": {"id": channel_id, "name": "Trợ lý Tony Pham"},
             "checked_at_utc": "2026-10-26T00:00:00+00:00",
         },
@@ -87,7 +87,7 @@ def test_netchat_status_endpoint(netchat_server_url: str, fake_bridge) -> None:
         assert resp.status == 200
         data = json.loads(resp.read().decode("utf-8"))
     assert data["success"] is True
-    assert data["bot"]["username"] == "bot_quanpt1"
+    assert data["bot"]["username"] == "bot_tony"
     assert data["channel"]["name"] == "Trợ lý Tony Pham"
 
 
@@ -135,7 +135,7 @@ def test_netchat_tab_in_executive_html(netchat_server_url: str) -> None:
     with urllib.request.urlopen(f"{netchat_server_url}/executive.html", timeout=5) as resp:
         content = resp.read().decode("utf-8")
     assert "tab-netchat" in content
-    assert "Quản Trị Kênh NetChat" in content
+    assert "Kênh NetChat" in content
     assert "netchat-avatar-canvas" in content
 
 

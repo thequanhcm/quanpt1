@@ -6,8 +6,8 @@ echo ============================================================
 echo QUAN AI BRAIN 24/7 Task Scheduler Setup
 echo ============================================================
 
-set BASE_DIR=D:\AI\AI Quanpt1 2026\BRAIN
-set VENV_PYTHON=C:\Users\quocd\.venv\Scripts\python.exe
+set BASE_DIR=E:\BRAIN
+set VENV_PYTHON=E:\BRAIN\.venv\Scripts\python.exe
 set WATCHDOG=%BASE_DIR%\tools\watchdog.py
 set BACKUP=%BASE_DIR%\tools\backup_database.py
 

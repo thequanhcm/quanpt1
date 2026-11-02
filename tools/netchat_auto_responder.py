@@ -150,14 +150,15 @@ Anh muốn em giải thích chi tiết phần nào ạ?"""
 
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "131u5z64pj8q9da3k1xqp3y6pe"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
+CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
 # (31/10/2026) DM bot↔quanpt1: owner trả lời trong DM nhưng responder cũ chỉ
 # đọc kênh → tin DM bị bỏ qua (sự cố 01:42: 'Chào em' trong DM không được trả lời).
 # Giờ responder theo dõi CẢ HAI nguồn và trả lời đúng nơi owner nhắn.
-DM_CHANNEL_ID = "131u5z64pj8q9da3k1xqp3y6pe"
+DM_CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
 OWNER_USERNAME = "quanpt1"
 CHANNEL_NAME = "Trợ lý Tony Pham"
-BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
+# (02/11/2026) Thay bot_quanpt1 thanh bot_tony
+BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
 CATCHUP_WINDOW_MIN = 720  # (01/11/2026, owner) sau restart/treo: quét lại TẤT CẢ
 # tin anh gửi trong 12 giờ qua chưa được trả lời — không bỏ lỡ tin nào.
 # (27/10/2026) Chống trả lời trùng sau restart: lưu các message_id ĐÃ trả lời
@@ -184,8 +185,17 @@ def _save_seen_state(ids: set) -> None:
     except Exception:
         pass  # state persistence là best-effort; poll vẫn hoạt động bình thường
 
-NETCHAT_SCRIPT = r"C:\Users\quocd\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
-PYTHON_EXE = r"C:\Users\quocd\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
+_local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
+_script_cand = [
+    _local_appdata / "netmind_desktop" / "skills" / "bot-netchat" / "netchat_bot.py",
+    Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"),
+]
+NETCHAT_SCRIPT = str(next((p for p in _script_cand if p.exists()), _script_cand[0]))
+_py_cand = [
+    _local_appdata / "netmind_desktop" / "netmind-agent" / "venv" / "Scripts" / "python.exe",
+    Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"),
+]
+PYTHON_EXE = str(next((p for p in _py_cand if p.exists()), _py_cand[0]))
 BRAIN_PYTHON = str(Path(__file__).resolve().parent.parent / ".venv" / "Scripts" / "python.exe")
 
 # (31/10/2026) Fallback DM: kenh 'Tro ly Tony Pham' dang o che do RIENG TU — bot
@@ -245,7 +255,7 @@ def _stt_audio(path: Path) -> str:
     """Nhận diện giọng nói file audio → text tiếng Việt (subprocess venv BRAIN)."""
     code = (
         "import sys;"
-        "sys.path.insert(0, r'D:\\AI\\AI Quanpt1 2026\\BRAIN');"
+        "sys.path.insert(0, r'E:\\BRAIN');"
         "from tools.voice_stt import transcribe;"
         "print(transcribe(sys.argv[1]))"
     )
@@ -1310,8 +1320,8 @@ def main():
                         )
                         _ana.note_reminder_sent(_tid)
                         _sp.run(
-                            [r"C:/Users/quocd/AppData/Local/netmind_desktop/netmind-agent/venv/Scripts/python.exe",
-                             r"C:/Users/quocd/AppData/Local/netmind_desktop/skills/bot-netchat/netchat_bot.py",
+                            [PYTHON_EXE,
+                             NETCHAT_SCRIPT,
                              "send", _CH, "--to-channel", _remind],
                             capture_output=True, text=True, timeout=30,
                         )

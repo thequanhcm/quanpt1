@@ -36,7 +36,7 @@ def main() -> int:
             trig.Id = f"{name}_logon_boot"
             # Chỉ dậy khi user DELL đăng nhập (mặc định mọi user — giới hạn)
             try:
-                trig.UserId = "quocd"
+                trig.UserId = "DELL"
             except Exception:
                 pass
             # RegistrationType 0 = cập nhật tại chỗ, giữ mọi thứ khác

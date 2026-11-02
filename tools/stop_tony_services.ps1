@@ -1,6 +1,6 @@
 # Dung toan bo services TONY (QUAN AI BRAIN) theo MARKER script trong command line.
 # (30/10/2026) May moi: kill theo Path '*QUAN AI BRAIN*' khong con dung — path
-# workspace moi la 'AI Quanpt1 2026\BRAIN' va interpreter con (base python cua
+# workspace hien tai la 'E:\BRAIN' va interpreter con (base python cua
 # venv launcher) mang path khac hoan toan. Kill theo marker script:
 #   - Bat duoc CA launcher (.venv\pythonw.exe) LAN interpreter con (base python)
 #     vi ca hai deu co ten script trong CommandLine.

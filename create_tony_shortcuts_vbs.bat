@@ -16,13 +16,13 @@ echo Creating new shortcuts...
 (
 echo Set WshShell = CreateObject^("WScript.Shell"^)
 echo Set sc = WshShell.CreateShortcut^("START TONY.lnk"^)
-echo sc.TargetPath = "D:\AI\AI Quanpt1 2026\BRAIN\TONY_START.bat"
-echo sc.WorkingDirectory = "D:\AI\AI Quanpt1 2026\BRAIN"
+echo sc.TargetPath = "E:\BRAIN\TONY_START.bat"
+echo sc.WorkingDirectory = "E:\BRAIN"
 echo sc.Description = "Start TONY Assistant"
 echo sc.Save
 echo Set sc = WshShell.CreateShortcut^("STOP TONY.lnk"^)
-echo sc.TargetPath = "D:\AI\AI Quanpt1 2026\BRAIN\TONY_STOP.bat"
-echo sc.WorkingDirectory = "D:\AI\AI Quanpt1 2026\BRAIN"
+echo sc.TargetPath = "E:\BRAIN\TONY_STOP.bat"
+echo sc.WorkingDirectory = "E:\BRAIN"
 echo sc.Description = "Stop TONY Assistant"
 echo sc.Save
 ) > "%TEMP%\create_shortcuts.vbs"

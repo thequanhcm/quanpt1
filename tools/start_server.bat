@@ -9,7 +9,7 @@ echo 🚀 QUAN AI BRAIN - Starting API Server
 echo ============================================
 echo.
 
-cd /d "D:\AI\AI Quanpt1 2026\BRAIN"
+cd /d "E:\BRAIN"
 
 REM Check if virtual environment exists
 if not exist ".venv\Scripts\python.exe" (

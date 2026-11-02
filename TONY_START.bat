@@ -17,7 +17,7 @@ set "OMP_NUM_THREADS=2"
 set "OPENBLAS_NUM_THREADS=2"
 set "MKL_NUM_THREADS=2"
 
-cd /d "D:\AI\AI Quanpt1 2026\BRAIN"
+cd /d "E:\BRAIN"
 
 REM ---- (31/10/2026) Tu nap API key tu registry user-level (neu chua co trong env) ----
 REM Server doc key tu env khi goi GLM. Key da duoc persist vao HKCU\Environment
@@ -43,7 +43,7 @@ echo ============================================
 echo.
 
 if not exist ".venv\Scripts\python.exe" (
-    echo [LOI] Khong tim thay .venv tai D:\AI\AI Quanpt1 2026\BRAIN
+    echo [LOI] Khong tim thay .venv tai E:\BRAIN
     pause
     exit /b 1
 )
@@ -51,17 +51,17 @@ if not exist ".venv\Scripts\python.exe" (
 REM ---- Stop existing TONY processes first (idempotent, co muc tieu) ----
 REM (30/10/2026) May moi: kill theo MARKER script (command line), bat duoc ca
 REM launcher .venv lAN interpreter con (base python) ? truoc day loc theo Path
-REM '*QUAN AI BRAIN*' khong con dung vi workspace la 'AI Quanpt1 2026\BRAIN'
+REM '*QUAN AI BRAIN*' khong con dung vi workspace la 'E:\BRAIN' (may nay)
 REM va interpreter con mang path khac (van song sot thanh orphan giu port).
 REM Khong goi TONY_STOP.bat vi no co prompt confirm -> treo start script.
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\stop_tony_services.ps1"
 
 REM ---- [1/6] Ollama (embedding BGE-M3) ----
 echo [1/6] Kiem tra / khoi dong Ollama (port 11434)...
-if exist "C:\Users\quocd\AppData\Local\Programs\Ollama\ollama.exe" (
+if exist "C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe" (
     ".venv\Scripts\python.exe" tools\khoi_dong_ollama.py
 ) else (
-    echo     CANH BAO: khong thay C:\Users\quocd\AppData\Local\Programs\Ollama\ollama.exe - bo qua
+    echo     CANH BAO: khong thay C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe - bo qua
 )
 echo     (chi tiet: logs\khoi_dong_ollama.log)
 
@@ -72,7 +72,7 @@ if errorlevel 1 start "TONY - DualServers" /MIN ".venv\Scripts\pythonw.exe" star
 ping -n 6 127.0.0.1 >nul
 
 REM ---- [3/6] NetChat Auto-Responder (bot TONY) ----
-echo [3/6] Khoi dong NetChat Auto-Responder (bot_quanpt1)...
+echo [3/6] Khoi dong NetChat Auto-Responder (bot_tony)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "netchat_auto_responder" >nul 2>&1
 if errorlevel 1 start "TONY - Responder" /MIN ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
 ping -n 3 127.0.0.1 >nul
