@@ -115,6 +115,7 @@ body {
   font-weight: 700;
   padding: 3px 8px;
   border-radius: 6px;
+  white-space: nowrap;
   background: rgba(255, 209, 102, 0.15);
   color: var(--gold-accent);
   border: 1px solid rgba(255, 209, 102, 0.35);
@@ -189,7 +190,9 @@ body {
 
 .nav-switch-link {
   font-size: 0.82rem;
-  color: var(--cyan-primary);
+  color: #0e7490;
+  font-weight: 600;
+  white-space: nowrap;
   text-decoration: none;
   padding: 6px 12px;
   border-radius: 8px;
@@ -1077,10 +1080,8 @@ body {
   font-family: var(--font-mono);
   font-weight: 700;
   border: 1px solid rgba(8, 145, 178, 0.25);
-  white-space: nowrap;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  line-height: 1.4;
 }
 
 .avatar-state-tag {

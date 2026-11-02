@@ -1524,7 +1524,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const pct = activeTask.progress_pct !== undefined ? activeTask.progress_pct : Math.round((compSteps / totalSteps) * 100);
             const currStep = activeTask.steps && activeTask.steps[compSteps] ? activeTask.steps[compSteps].name : (pct >= 100 ? "Hoàn tất" : (activeTask.current_step_name || "Đang thực thi"));
 
-            if (stepLabelEl) stepLabelEl.textContent = `Tiến trình DAG: Bước ${Math.min(compSteps + 1, totalSteps)} / ${totalSteps} (${currStep})`;
+            if (stepLabelEl) stepLabelEl.textContent = totalSteps > 0
+              ? `Tiến trình DAG: Bước ${Math.min(compSteps + 1, totalSteps)} / ${totalSteps} (${currStep})`
+              : "Tiến trình DAG: Chờ khởi tạo";
             if (progressPctEl) progressPctEl.textContent = `${pct}%`;
             if (progressBarEl) progressBarEl.style.width = `${pct}%`;
           }
