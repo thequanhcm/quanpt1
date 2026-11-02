@@ -79,6 +79,79 @@ class EvidenceStore:
                 (_now(), kind, target, raw, sha, note))
             return int(cur.lastrowid)
 
+    # ── UIE V2 Phase 1: bản ghi sự kiện an ninh chuẩn 11 trường (§IV) ──
+    def record_incident(
+        self,
+        *,
+        actor: str,
+        target: str,
+        source: str,
+        action: str,
+        risk: str,
+        authorization: str = "",
+        approval_ref: str = "",
+        result: str = "",
+        verification: str = "",
+        payload: dict[str, Any] | None = None,
+        note: str = "",
+    ) -> int:
+        """Sự kiện an ninh end-to-end: Event ID + 11 trường §IV mệnh lệnh UIE V2.
+        SHA-256 bóc riêng cho phần payload gốc (không đổi khi bổ sung result)."""
+        import hashlib
+
+        payload = payload or {}
+        raw = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+        sha = hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS security_incidents (
+                    event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts_utc TEXT NOT NULL,
+                    actor TEXT NOT NULL,
+                    target TEXT NOT NULL,
+                    evidence_source TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    risk TEXT NOT NULL,
+                    authorization TEXT NOT NULL DEFAULT '',
+                    approval_ref TEXT NOT NULL DEFAULT '',
+                    result TEXT NOT NULL DEFAULT '',
+                    verification TEXT NOT NULL DEFAULT ''
+                )""")
+            cur = conn.execute(
+                "INSERT INTO security_incidents (ts_utc, actor, target, evidence_source,"
+                " action, risk, authorization, approval_ref, result, verification)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (_now(), actor, target, source, action, risk,
+                 authorization, approval_ref, result, verification))
+            event_id = int(cur.lastrowid)
+            # evidence gốc gắn qua note chuẩn "incident:<event_id>"
+            conn.execute(
+                "INSERT INTO evidence (captured_at, kind, target, payload_json,"
+                " sha256, note) VALUES (?,?,?,?,?,?)",
+                (_now(), "security_incident", target, raw, sha, f"incident:{event_id}|{note}"))
+        return event_id
+
+    def get_incident(self, event_id: int) -> dict[str, Any] | None:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='security_incidents'")
+            row = conn.execute(
+                "SELECT event_id, ts_utc, actor, target, evidence_source, action, risk,"
+                " authorization, approval_ref, result, verification"
+                " FROM security_incidents WHERE event_id=?", (event_id,)).fetchone()
+        if row is None:
+            return None
+        keys = ("event_id", "ts_utc", "actor", "target", "evidence_source",
+                "action", "risk", "authorization", "approval_ref", "result", "verification")
+        return dict(zip(keys, row))
+
+    def count_incidents(self) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS security_incidents ("
+                "event_id INTEGER PRIMARY KEY AUTOINCREMENT)")
+            row = conn.execute("SELECT COUNT(*) FROM security_incidents").fetchone()
+        return int(row[0])
+
     def get(self, evidence_id: int) -> dict[str, Any] | None:
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute(
