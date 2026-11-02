@@ -153,6 +153,44 @@ class SecurityWatcher:
             return ""
 
     @staticmethod
+    def get_cmdlines_bulk() -> dict[int, str]:
+        """SENTINEL-S3: cmdline CỦA MỌI tiến trình trong 1 lần gọi PowerShell.
+
+        Sửa lỗ hổng thật bắt được trong live E2E (02/11): watcher cũ chỉ khớp
+        tên tiến trình với subject hợp đồng — agent chạy dưới node/python.exe
+        (tên chung) nhưng cmdline mang danh tính ('codex', 'claude'...) thì LẬN
+        ĐƯỢC. Quét hàng loạt: 1 process PowerShell ~1-2s thay vì per-PID.
+        """
+        try:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "Get-CimInstance Win32_Process | "
+                 "Where-Object { $_.CommandLine } | "
+                 "Select-Object ProcessId, CommandLine | "
+                 "ConvertTo-Json -Compress"],
+                capture_output=True, text=True, timeout=30,
+                encoding="utf-8", errors="replace",
+            )
+            raw = (r.stdout or "").strip()
+            if not raw:
+                return {}
+            data = json.loads(raw)
+            if isinstance(data, dict):      # 1 kết quả duy nhất → không phải list
+                data = [data]
+            out: dict[int, str] = {}
+            for item in data:
+                try:
+                    pid = int(item.get("ProcessId", 0))
+                    cmd = str(item.get("CommandLine", ""))
+                    if pid and cmd:
+                        out[pid] = cmd
+                except Exception:
+                    continue
+            return out
+        except Exception:
+            return {}
+
+    @staticmethod
     def list_network_connections() -> list[dict[str, Any]]:
         """netstat -ano — PID + đích ngoài (không loopback)."""
         try:
@@ -199,13 +237,21 @@ class SecurityWatcher:
         procs = self.list_processes()
         new_violations: list[dict[str, Any]] = []
 
+        # SENTINEL-S3: cmdline hàng loạt 1 lần — bắt agent ẩn danh tính dưới
+        # tên tiến trình chung (node.exe/python.exe) nhưng cmdline mang subject.
+        bulk_cmdlines: dict[int, str] = self.get_cmdlines_bulk() if deep else {}
+
         matched_pids: set[int] = set()
         for proc in procs:
             name_low = proc["name"].lower()
-            if not any(s in name_low for s in family):
+            cmdline = bulk_cmdlines.get(proc["pid"], "")
+            # khớp TÊN hoặc CMDLINE (chống lẩn: subject ẩn trong tham số)
+            if not (any(s in name_low for s in family)
+                    or any(s in cmdline.lower() for s in family)):
                 continue
-            cmdline = self.get_cmdline(proc["pid"]) if deep else ""
             matched_pids.add(proc["pid"])
+            if deep and not cmdline:
+                cmdline = self.get_cmdline(proc["pid"])
             contract = self.contracts.match_process(cmdline or name_low)
             if contract is None:
                 # tên khớp subject nhưng không có hợp đồng ACTIVE → vượt thẩm quyền rồi

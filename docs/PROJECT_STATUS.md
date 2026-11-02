@@ -1,5 +1,41 @@
 # QUAN AI BRAIN — Project Status
 
+## 02/11/2026 ~16:30 — UAIIF-S4 ✅ GIAI ĐOẠN 1/3: AGENT INTELLIGENCE CORE (owner: master prompt UAIIF v1.0)
+- **Card TASK-UAIIF-S4**: APPROVED + consumed. R2. Nguyên tắc bất di bất dịch tuân thủ: KHÔNG tạo cognitive core mới (uaiif/ = năng lực chuyên môn mở rộng dùng core có sẵn); Pi5 = QPIG tool gateway không chứa não; tái sử dụng ToolRegistry + federation + SENTINEL + containment — 0 module trùng lặp.
+- **UniversalAgentKnowledge** `uaiif/agent_knowledge.py` (MỚI 280d): kho kiến thức 7 LAYER × 20 nhóm Agent; epistemic statuses VERIFIED/OBSERVED/INFERRED/UNKNOWN (VERIFIED bắt buộc evidence_ref — không đánh đồng đọc tài liệu với thành thạo); chu trình học 8 bước; **AgentIntelligenceScorecard 8 câu hỏi điểm gắn bằng chứng** (không tự cho điểm cảm tính — test chứng minh: không knowledge thì điểm = 0 dù truyền cờ đẹp).
+- **AgentDiscoveryWorkflow** `uaiif/agent_discovery.py` (MỚI 215d): 7 bước DISCOVERY→...→KNOWLEDGE_CONSOLIDATION; mỗi bước có bằng chứng; **phân biệt External Behavioral Assessment vs Internal Architecture Inspection**; fail-honest (target chết → NOT_ACCESSIBLE + đủ 7 bước vẫn trả).
+- **UniversalAgentProfile** `uaiif/agent_profile.py` (MỚI 180d): 24 trường chuẩn, mỗi trường Verified/Observed/Inferred/Unknown/Not_Accessible riêng; idempotent theo target; completeness counter.
+- **QPIG** `uaiif/qpig.py` (MỚI 195d): 6 nhóm tool (Discovery/Inspection/Communication/Capability/Security/Control) **đăng ký vào ToolRegistry hiện có** với RiskLevel chuẩn + input_schema + requires_owner_approval cho R3; communication chỉ chạy kênh ĐÃ đăng ký; control chỉ pre-approved; điểm vào thống nhất call().
+- **Live E2E thật**: khảo sát Pi5 (nút federation) → profile uap_0798098 với 16/24 trường Unknown TRUNG THỰC (SSH chưa mở — không bịa); QPIG capability_list + inspection_probe thật REACHABLE; Scorecard thật **60/100** (mọi điểm có bằng chứng: 6 VERIFIED knowledge, SENTINEL 38 test PASS, containment 3 cấp PASS, 0 evidence → câu 8 = 0 đúng trung thực).
+- **Tests**: 34/34 mới (test_uaiif_s4.py) — bao gồm test chống tự thương lượng (test_no_self_congratulation).
+- Full regression: `reports/TEST_RUN_UAIIF_S4.txt`. Còn lại (trung thực): GĐ2 QPIG phía Pi5 thật (khi SSH mở) + MCP client + A2A; GĐ3 200 kịch bản kiểm thử + learning engine tự động.
+
+## 02/11/2026 ~16:20 — SENTINEL-S3 ✅ GIAI ĐOẠN 1/4: SECURITY AUTHORITY CORE (owner: master prompt SENTINEL AI v1.0)
+- **Card TASK-SENTINEL-S3**: APPROVED + consumed (auth `owner_desktop_chat_directive`). R2.
+- **M01+M04** `security/agent_identity.py` (MỚI 390d): sổ cái agent — trust/risk scoring DETERMINISTIC (base 20, đăng ký +40, hợp đồng +30, vi phạm −25/+25), phân loại A-F, SENTINEL không tự gán COMPROMISED/MALICIOUS (chỉ owner hoặc evidence_ref điều tra) — tách nghi vấn khỏi xác nhận đúng prompt mục 4.
+- **Phản ứng 5 cấp** `security/threat_levels.py` (MỚI 185d): L0-L4 append-only, L2+ bắt buộc evidence_ref, hạ từ L4 chỉ owner, L4 → notify_owner callback.
+- **M06** `security/containment.py` (MỚI 250d): governance 3 cấp AUTONOMOUS/CONTROLLED/HUMAN, EvidenceStore sha256 append-only, SUSPEND/KILL orchestrate actions.py (whitelist S1 giữ nguyên), CONTROLLED/HUMAN chỉ ghi kế hoạch chờ R4.
+- **DM**: `sentinel` (NOC dashboard) / `sentinel agent <q>` / `sentinel mức L0..L4` (owner qua DM).
+- **Watchdog**: security_watchdog_cycle giờ tự cập nhật hồ sơ SENTINEL theo vi phạm đo được.
+- **Lỗ hổng thật đã sửa**: watcher cũ chỉ khớp TÊN tiến trình — agent ẩn dưới node/python.exe với cmdline mang danh tính LẬN ĐƯỢC. Live E2E bắt được (demo PID 9408, cycle=0). Sửa gốc: `get_cmdlines_bulk()` quét cmdline mọi tiến trình 1 lần PowerShell, khớp tên HOẶC cmdline. Re-test 2/2 phát hiện.
+- **Tests**: 38/38 mới (test_sentinel_s3.py) · 86/86 cụm an ninh S1+S2+S3 · Live E2E: demo vi phạm → hồ sơ SUSPICIOUS/RESTRICTED tự lập → dashboard phản ánh đúng → dọn DB test sạch.
+- Báo cáo 10 mục: `reports/BAO_CAO_SENTINEL_S3_20261102.md`. Còn thiếu (trung thực): M02 sâu, M03, M07, M08, M09, M10, M12, Dashboard UI, 100 kịch bản — lộ trình S4/S5.
+- Full regression: `reports/TEST_RUN_SENTINEL_S3.txt`.
+
+## 02/11/2026 ~15:45 — SEC-S2 ✅ TONY LÕI LIÊN BANG (owner: "biến Pi5 thành công cụ giao tiếp với thiết bị khác, PC toàn quyền điều khiển, xử lý, khống chế")
+- **Card TASK-SEC-S2**: APPROVED + consumed (auth `owner_desktop_chat_directive`). R2.
+- **Giải pháp trung thực**: không AI nào "xâm nhập lõi" AI khác — kiểm soát = (1) đặt người của mình CÙNG MÁY với agent đó (resident agent — nền có sẵn), (2) giám sát điểm chạm mạng, (3) hạn ngạch cloud fail-closed.
+- **(a) NodeRegistry** `federation/node_registry.py` (MỚI 206d): SQLite data/federation_nodes.db — EDGE/PC/CONNECTOR, probe ping REACHABLE/UNREACHABLE, idempotent upsert, fail-honest.
+- **(b) LanScanner** `federation/lan_scanner.py` (MỚI 143d): quét /24 hiện diện-only (ping song song ThreadPool + ARP MAC + OUI Raspberry Pi hint + reverse DNS) — KHÔNG scan cổng tấn công, chỉ-đọc.
+- **(c) CloudConnector** `federation/cloud_connector.py` (MỚI 149d): ConnectorCallResult + call_with_budget — vượt hạn ngạch → BLOCKED fail-closed, lỗi fn không tính ngạch, AuditLogger.record đầy đủ.
+- **(d) Lệnh DM** (netchat_security_center PATCH): `liên bang` / `quét mạng` / `đăng ký nút edge <IP> [tên]` / `đăng ký đầu nối <domain> [hạn ngạch: N]` + federation_watchdog_cycle() (probe nút → mất kết nối → DM, cooldown 1 lần/giờ/nút qua data/fed_alert_last.json).
+- **Watchdog PATCH**: chu kỳ FED sau chu kỳ SEC trong main loop.
+- **Pi5 script PATCH**: `pi5_deploy/tony_pi5_all_in_one.sh` core_host mặc định **192.168.1.9** (CORE_HOST env cho Tailscale).
+- **Pi5 thực tế**: REACHABLE tại **192.168.1.2** (DHCP đổi từ .21 cũ); SSH port 22 vẫn đóng; MAC 34-24-3e KHÔNG khớp OUI Pi → đã đăng ký nút edge_pi5, còn chờ owner chạy script trên Pi (bước vật lý 5 phút) để mở SSH + nối kiosk/loa/camera.
+- **Live E2E thật**: quét LAN 7 thiết bị · đăng ký edge_pi5 + pc_core_quanpt → probe REACHABLE · nút test IP chết → chu kỳ liên bang phát hiện → **DM cảnh báo thật tới kênh owner** → cooldown đúng → dọn nút test.
+- **Tests**: 22/22 mới (test_sec_s2_federation.py) · **Full regression 3.370 PASS / 0 FAIL / 45 skip (4:57)** (baseline 3.348, +22 đúng số test mới).
+- Báo cáo: `reports/BAO_CAO_SEC_S2_20261102.md`. Hạn chế: thiết bị LAN chỉ thấy hiện diện khi chưa đăng ký; SYSTEM/admin chỉ báo cáo; AI cloud chỉ điểm chạm máy mình.
+
 ## 02/11/2026 ~15:10 — SEC-S1 ✅ TONY NHÂN VIÊN AN NINH (owner: "tạm thời nắm quyền kiểm soát, quản trị" + "Duyệt — làm Sprint S1 luôn")
 - **Card TASK-SEC-S1**: APPROVED + consumed (auth `owner_desktop_chat_directive`, clarify 02/11). R2.
 - **(a) Hợp đồng nhiệm vụ** `security/task_contracts.py`: TaskContract (subject/goal/allowed_paths/allowed_domains/expires_at/auto_contain) + TaskContractStore (SQLite idempotent) + parse_dm_contract fail-honest. Hợp đồng = chuẩn duy nhất đo "vượt tầm".

@@ -556,6 +556,17 @@ def main() -> int:
             except Exception as _sec_exc:  # hỏng module an ninh không được giết watchdog
                 logger.debug(f"SEC cycle skipped: {_sec_exc}")
 
+            # (02/11/2026, SEC-S2) Liên bang: probe các nút đã đăng ký (Pi5/PC khác)
+            # — mất kết nối → DM cảnh báo (cooldown 1 lần/giờ/nút).
+            try:
+                from tools.netchat_security_center import federation_watchdog_cycle
+
+                _fed_lost = federation_watchdog_cycle()
+                if _fed_lost:
+                    logger.warning(f"FED: {_fed_lost} nút mất kết nối trong cycle này")
+            except Exception as _fed_exc:
+                logger.debug(f"FED cycle skipped: {_fed_exc}")
+
             # (01/11/2026, DEOM M2, owner duyệt blanket) Task quá deadline chưa
             # kết thúc → EXPIRED qua registry chuẩn (transition log đầy đủ).
             check_task_deadlines()

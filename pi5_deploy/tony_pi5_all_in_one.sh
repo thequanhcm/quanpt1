@@ -26,15 +26,16 @@ echo "[OK] Đã tắt kiosk cũ (nếu có)"
 
 # 3) Cập nhật core_host trong config.json → IP Tailscale PC
 CFG=/home/quanpt1/Desktop/edge_client/config.json
+CORE_HOST="${CORE_HOST:-192.168.1.9}"   # PC lõi mới (02/11/2026, LAN QUANPT); nếu có Tailscale: CORE_HOST=100.x.x.x bash script
 if [ -f "$CFG" ]; then
-  python3 - <<'PYEOF'
-import json
+  python3 - "$CORE_HOST" <<'PYEOF'
+import json, sys
 p = "/home/quanpt1/Desktop/edge_client/config.json"
 cfg = json.load(open(p))
-cfg["core_host"] = "100.102.120.6"
+cfg["core_host"] = sys.argv[1]
 cfg["core_port"] = 8766
 json.dump(cfg, open(p, "w"), indent=2)
-print("[OK] core_host = 100.102.120.6:8766")
+print(f"[OK] core_host = {sys.argv[1]}:8766")
 PYEOF
 else
   echo "[CẢNH BÁO] Không tìm thấy $CFG — bỏ qua bước sửa IP"
