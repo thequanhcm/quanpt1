@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = 0; i < numBars; i++) {
                 const x = i * (barWidth + 3) + 4;
                 let barHeight = 4;
-                let strokeColor = 'rgba(0, 229, 255, 0.4)';
+                let strokeColor = 'rgba(8, 145, 178, 0.4)';
 
                 if (currentAvatarState === 'SPEAKING') {
                     const factor = Math.sin(phase * 2.2 + i * 0.45) * 0.5 + 0.5;
@@ -147,13 +147,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     strokeColor = 'rgba(245, 158, 11, 0.9)';
                 } else if (currentAvatarState === 'SAFE_MODE') {
                     barHeight = 5;
-                    strokeColor = 'rgba(56, 189, 248, 0.6)';
+                    strokeColor = 'rgba(2, 132, 199, 0.6)';
                 } else {
                     const mid = numBars / 2;
                     const dist = Math.abs(i - mid);
                     const pulse = Math.sin(phase * 0.8) * 0.5 + 0.5;
                     barHeight = 3 + Math.max(0, (5 - dist * 0.4) * pulse);
-                    strokeColor = 'rgba(0, 229, 255, 0.5)';
+                    strokeColor = 'rgba(8, 145, 178, 0.5)';
                 }
 
                 const y = (h - barHeight) / 2;
@@ -865,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p style="margin-bottom: 8px;"><strong>Vấn đề:</strong> ${prop.problem_statement}</p>
                     <p style="margin-bottom: 8px;"><strong>Giải pháp:</strong> ${prop.proposed_solution}</p>
                     <div style="margin: 14px 0; background: #000; padding: 14px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.8rem; overflow-x: auto;">
-                        <pre style="color: #38bdf8;">${prop.unified_diff}</pre>
+                        <pre style="color: #0369a1;">${prop.unified_diff}</pre>
                     </div>
                     <div style="padding: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); font-size: 0.85rem; color: #6ee7b7;">
                         ✅ Tri thức mới đã được cách ly an toàn (QUARANTINED) tại SQLite. Quyết định áp dụng hoàn toàn thuộc về Chủ nhân Quanpt1.
