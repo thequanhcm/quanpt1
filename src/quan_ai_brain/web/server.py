@@ -1841,6 +1841,34 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as _m_err:
                 music_info["error"] = str(_m_err)[:120]
 
+            # 2.95 CAI V3.0 SPRINT 1 — QPIG Tool Bridge (§IV): chèn tool evidence
+            # vào context TRƯỚC LLM call. Chỉ tool AUTO (không cần ticket) mới
+            # tự execute; tool R3+ chỉ đề xuất + yêu cầu ticket Quanpt1.
+            tool_calls_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.tools.chat_bridge import (
+                    ChatToolBridge, ToolRegistryLoader, ToolSelector,
+                )
+                _loader = ToolRegistryLoader(qpig=self.qpig if hasattr(self, "qpig") else None)
+                _loader.load()
+                _selector = ToolSelector(_loader.registry)
+                _bridge = ChatToolBridge(self.qpig if hasattr(self, "qpig") else _loader.qpig,
+                                         _selector)
+                _calls = _bridge.process(query, max_calls=2)
+                _block = _bridge.render_context_block(_calls)
+                if _block:
+                    context.system_instructions = context.system_instructions + "\n" + _block
+                tool_calls_info = {
+                    "attempted": True,
+                    "n_calls": len(_calls),
+                    "auto_executed": sum(1 for c in _calls if c.evidence_id is not None),
+                    "require_approval": [c.directive_name for c in _calls
+                                         if c.evidence_id is None and c.note.startswith("cần")],
+                    "evidence_ids": [c.evidence_id for c in _calls if c.evidence_id is not None],
+                }
+            except Exception as _tool_exc:
+                tool_calls_info["error"] = str(_tool_exc)[:160]
+
             # 3. LLM Generation
             # (02/11/2026, owner yêu cầu) VN-LANG: ghép thêm rào ngôn ngữ vào
             # system prompt — mọi câu trả lời chat/DM luôn thuần tiếng Việt
@@ -2105,6 +2133,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "tool_calls": tool_calls_info,
                 "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
             })
         except Exception as exc:
