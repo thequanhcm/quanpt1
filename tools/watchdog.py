@@ -544,6 +544,18 @@ def main() -> int:
             # qua engine chuẩn (fail-honest, max 1 lần/giờ)
             check_clo_stall()
 
+            # (02/11/2026, SEC-S1) Vệ sĩ an ninh: quét tiến trình/mạng ↔ hợp đồng
+            # nhiệm vụ; chỉ tốn tài nguyên khi CÓ hợp đồng ACTIVE; vi phạm →
+            # auto-contain (nếu hợp đồng bật 'tự giữ') + DM alert 1 tin/cycle.
+            try:
+                from tools.netchat_security_center import security_watchdog_cycle
+
+                _sec_violations = security_watchdog_cycle()
+                if _sec_violations:
+                    logger.warning(f"SEC: {_sec_violations} vi phạm mới trong cycle này")
+            except Exception as _sec_exc:  # hỏng module an ninh không được giết watchdog
+                logger.debug(f"SEC cycle skipped: {_sec_exc}")
+
             # (01/11/2026, DEOM M2, owner duyệt blanket) Task quá deadline chưa
             # kết thúc → EXPIRED qua registry chuẩn (transition log đầy đủ).
             check_task_deadlines()

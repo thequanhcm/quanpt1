@@ -1498,6 +1498,19 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
         except Exception as exc:
             return "todo_add", f"⚠️ Lỗi thêm việc: {type(exc).__name__}: {exc}"
 
+    # 2.2) (02/11/2026) SEC-S1: lệnh An ninh (an ninh / giữ <pid> / thả <pid> /
+    #      hạ <pid> / giao nhiệm vụ cho ...) — TRƯỚC detect_intent Pi5 & app PC
+    #      để 'hạ 1234' không bị nuốt thành lệnh khác.
+    try:
+        from tools.netchat_security_center import route_security_command
+
+        sec = route_security_command(text)
+        if sec is not None:
+            _audit("netchat_command.security", {"intent": sec[0]})
+            return sec
+    except Exception as exc:  # hỏng module an ninh không được phá luồng khác
+        _audit("netchat_command.security_error", {"error": str(exc)[:200]})
+
     # 2.5) (31/10/2026) Lệnh hình thể Pi5 ưu tiên cao hơn lệnh app PC —
     #    'bật pi5'/'tắt pi5' phải là tony_on/off, KHÔNG rơi vào pc_open/pc_close.
     _pi_intent = detect_intent(t_for_args)

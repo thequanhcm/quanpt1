@@ -1,5 +1,17 @@
 # QUAN AI BRAIN — Project Status
 
+## 02/11/2026 ~15:10 — SEC-S1 ✅ TONY NHÂN VIÊN AN NINH (owner: "tạm thời nắm quyền kiểm soát, quản trị" + "Duyệt — làm Sprint S1 luôn")
+- **Card TASK-SEC-S1**: APPROVED + consumed (auth `owner_desktop_chat_directive`, clarify 02/11). R2.
+- **(a) Hợp đồng nhiệm vụ** `security/task_contracts.py`: TaskContract (subject/goal/allowed_paths/allowed_domains/expires_at/auto_contain) + TaskContractStore (SQLite idempotent) + parse_dm_contract fail-honest. Hợp đồng = chuẩn duy nhất đo "vượt tầm".
+- **(b) Vệ sĩ** `security/watcher.py`: quét tasklist/netstat chỉ-đọc; detect_violations: UNREGISTERED / OUT_OF_SCOPE_PATH / OUT_OF_SCOPE_DOMAIN / OVER_CONTRACT; SecurityEventStore append-only (data/security_events.db). Chỉ quét sâu khi CÓ hợp đồng (0 chi phí ngược lại).
+- **(c) Tạm giữ** `security/actions.py`: NtSuspendProcess/NtResumeProcess (treo giữ dữ liệu, thả được) + taskkill; PROTECTED_WHITELIST cứng (Windows system + TONY/netMind) refuse fail-closed — **đã chứng minh thật: suspend watchdog PID 12572 → REFUSE**.
+- **(d) Lệnh DM**: `an ninh` / `giữ <pid>` / `thả <pid>` / `hạ <pid>` / `giao nhiệm vụ cho <AI>: <mục tiêu> | phạm vi | miền | hạn | tự giữ` — wire vào netchat_command_center (priority trước detect_intent) + security_watchdog_cycle() gắn watchdog main loop (vi phạm → auto-contain nếu hợp đồng bật tự giữ → DM 1 tin/cycle).
+- **Tests**: 26/26 mới (test_sec_s1_security.py) · **Full regression 3.348 PASS / 0 FAIL** (baseline 3.322).
+- **Live smoke E2E**: full chain route_message thật (an ninh / giữ PID ảo → từ chối trung thực / tạo hợp đồng thật → DB / cycle=0 đúng) · kill responder+watchdog cũ → watchdog mới tự hồi phục responder (heartbeat 13s) — responder giờ chạy code có lệnh an ninh.
+- **Bài học git-bash**: `cmd //c file.bat` từ MSYS không thực thi .bat (banner interactive, không chạy) — spawn process nền đúng cách: `powershell Start-Process -FilePath ...pythonw.exe -ArgumentList ... -WindowStyle Hidden`.
+- Báo cáo: `reports/BAO_CAO_SEC_S1_20261102.md`. Hạn chế trung thực: keyword-match có thể lẩn tránh (S2: parent-child tree + psutil resource cap); SYSTEM process không kill được (thiếu admin); AI cloud chỉ thấy điểm chạm máy mình.
+- **S2 đề xuất**: resource caps thật (psutil), giám sát tiến trình con, tab An ninh dashboard 8766.
+
 ## 02/11/2026 ~12:40 — KÍCH HOẠT 24/7 TRÊN MÁY MỚI (E:\BRAIN) ✅ (owner: "kiểm tra toàn bộ và kích hoạt, chạy 24/7, restart máy thì DM báo")
 - **Audit-first**: máy mới (QUANPT, user DELL) có repo + data nguyên vẹn (2.869 episodes, 5.051 semantic memories) nhưng 0 tiến trình, 3 task scheduler DISABLED trỏ đường dẫn máy cũ (E:\AI\QUAN AI BRAIN), editable-install trong venv trỏ `D:\AI\AI Quanpt1 2026\BRAIN\src` (máy trước) → `import quan_ai_brain` FAIL từ subprocess.
 - **Di trú đường dẫn (156 thay thế / 43 file runtime)**: `D:\AI\AI Quanpt1 2026\BRAIN` + `C:\Users\quocd` → `E:\BRAIN` + `C:\Users\DELL` trong toàn bộ tools/src/*.bat/*ps1 (kể cả TONY_START/STOP, KHOI_DONG_24_7, 3 _spawn_*.bat, watchdog, learning_daemon, netchat_action_executor, sched_task_setup, run_backup/run_morning_report, stop_tony_services). Bỏ qua tool di trá lịch sử. Syntax-check 43 file OK.
