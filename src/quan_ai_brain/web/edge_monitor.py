@@ -198,6 +198,9 @@ class EdgeConnectionMonitor:
                     severity="INFO",
                     metadata={"recovered_at_utc": now_utc, "rtt_ms": self.last_rtt_ms},
                 )
+                # (02/11/2026) Banner "ĐÃ KHÔI PHỤC" chỉ là thông báo chốc lát —
+                # tự hết hạn sau 60s để không treo vĩnh viễn cùng badge trạng thái.
+                self._schedule_alert_expiry(EdgeAlertCode.ALERT_E_PI5_RECOVERED, ttl_sec=60)
 
             return self.get_status()
 
@@ -281,6 +284,22 @@ class EdgeConnectionMonitor:
                             "misses": self.consecutive_misses,
                         },
                     )
+
+    def _schedule_alert_expiry(self, code: "EdgeAlertCode", ttl_sec: int = 60) -> None:
+        """Tự động gỡ alert tạm thời (INFO) khỏi active_alerts sau ttl giây.
+
+        Dùng cho các alert mang tính thông báo (vd ALERT_E_PI5_RECOVERED) — nếu không
+        tự hết hạn, banner xanh "ĐÃ KHÔI PHỤC" sẽ treo vĩnh viễn và mâu thuẫn với
+        badge trạng thái hiện tại trên Cockpit.
+        """
+
+        def _expire() -> None:
+            with self.lock:
+                self.active_alerts.pop(code, None)
+
+        timer = threading.Timer(ttl_sec, _expire)
+        timer.daemon = True
+        timer.start()
 
     def _trigger_alert(
         self,
