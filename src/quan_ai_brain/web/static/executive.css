@@ -1502,7 +1502,7 @@ body {
   padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 14px;
 }
 
 .focus-card-header {
@@ -1632,7 +1632,7 @@ body {
   padding: 20px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  gap: 14px;
 }
 
 .safety-card-header {
