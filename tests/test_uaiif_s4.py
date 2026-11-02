@@ -236,9 +236,13 @@ class TestQPIG:
         return QPIG()
 
     def test_six_tools_registered(self) -> None:
+        """QPIG V2: giữ 6 tool v1 + 13 tool mới chuẩn §2 (19 danh mục directive)."""
         qpig = self._make()
-        assert len(qpig.registered_tools()) == 6
-        for s in qpig.registered_tools():
+        rows = qpig.registered_tools()
+        v1 = [r for r in rows if "protocol" not in r]
+        v2 = [r for r in rows if r.get("protocol")]
+        assert len(v1) == 6 and len(v2) == 19
+        for s in rows:
             assert qpig.registry.has_tool(s["tool_id"])
 
     def test_unknown_tool_refused(self) -> None:
@@ -306,8 +310,14 @@ class TestQPIG:
     def test_r3_tools_flagged(self) -> None:
         qpig = self._make()
         risky = [t for t in qpig.registered_tools() if t["risk"] >= 3]
-        assert len(risky) == 2   # COMMUNICATION + CONTROL
-        for s in ("qpig_communication_send", "qpig_control_contain"):
+        # v1: COMMUNICATION + CONTROL; v2 thêm task_dispatch, permission/service
+        # control, isolation, recovery, device_control, rollback + permission (10 R3)
+        assert len(risky) == 10
+        for s in ("qpig_communication_send", "qpig_control_contain",
+                  "qpig_agent_task_dispatch", "qpig_agent_service_control",
+                  "qpig_agent_isolation_request", "qpig_agent_recovery",
+                  "qpig_device_control", "qpig_rollback_execution",
+                  "qpig_agent_communication", "qpig_agent_permission_control"):
             td = qpig.registry.get(s)
             assert td.requires_owner_approval is True
             assert td.side_effects is True

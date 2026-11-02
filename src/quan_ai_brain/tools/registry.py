@@ -17,11 +17,15 @@ class ToolDefinition:
     risk_level: RiskLevel
     handler: Callable[[dict[str, Any]], Any]
     input_schema: dict[str, Any] = field(default_factory=dict)
+    output_schema: dict[str, Any] = field(default_factory=dict)
     allowed_resource_scope: str = "workspace"
     side_effects: bool = False
     requires_owner_approval: bool = True
     supports_dry_run: bool = False
     tool_version: str = "1.0.0"
+    protocol: str = ""            # QPIG V2 §2: Supported Protocol
+    timeout_s: float = 10.0       # QPIG V2 §2: Timeout
+    verification_method: str = ""  # QPIG V2 §2: Verification Method
 
     def __post_init__(self) -> None:
         if not self.tool_id or not self.tool_id.strip():
