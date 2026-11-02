@@ -1344,7 +1344,7 @@ document.addEventListener("DOMContentLoaded", () => {
         for (let i = 0; i < numBars; i++) {
           const x = i * (barWidth + 3) + 4;
           let barHeight = 4;
-          let strokeColor = "rgba(0, 229, 255, 0.4)";
+          let strokeColor = "rgba(8, 145, 178, 0.55)";
 
           if (currentAvatarState === "SPEAKING") {
             const factor = Math.sin(phase * 2.2 + i * 0.45) * 0.5 + 0.5;
@@ -1412,7 +1412,7 @@ document.addEventListener("DOMContentLoaded", () => {
           const telemStatus = document.getElementById("telem-supervisor-status");
           if (telemStatus) {
             telemStatus.textContent = sup.state === "STOPPED" ? "DỪNG KHẨN CẤP" : (sup.state === "SAFE_MODE" ? "CHẾ ĐỘ AN TOÀN" : "ONLINE — ACTIVE");
-            telemStatus.style.color = sup.state === "STOPPED" ? "var(--red-alert)" : (sup.state === "SAFE_MODE" ? "#38bdf8" : "var(--green-success)");
+            telemStatus.style.color = sup.state === "STOPPED" ? "var(--red-alert)" : (sup.state === "SAFE_MODE" ? "#0369a1" : "var(--green-success)");
           }
 
           // Emergency badges & buttons
@@ -1986,7 +1986,7 @@ document.addEventListener("DOMContentLoaded", () => {
         btnTabStartupSeq.innerHTML = `
           <span style="font-size: 1.8rem; line-height: 1;">⏳</span>
           <div style="flex: 1;">
-            <div style="font-size: 0.95rem; font-weight: 700; color:#38bdf8;">ĐANG CHÀO & TỰ KIỂM TRA PHẦN CỨNG...</div>
+            <div style="font-size: 0.95rem; font-weight: 700; color:#0369a1;">ĐANG CHÀO & TỰ KIỂM TRA PHẦN CỨNG...</div>
             <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 3px;">Đang phát câu chào và kiểm tra micro/camera qua loa Pi 5...</div>
           </div>
         `;
@@ -2214,7 +2214,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const delBtn = isProtected
           ? `<span class="note-sub" style="color:var(--text-dim); margin-left:4px;">Gốc</span>`
-          : `<button class="btn-file-del" data-filename="${escapeHtml(f.name)}" style="background:rgba(239,68,68,0.12); color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:4px; padding:3px 8px; font-size:0.75rem; cursor:pointer;">🗑️ Xóa</button>`;
+          : `<button class="btn-file-del" data-filename="${escapeHtml(f.name)}" style="background:rgba(239,68,68,0.12); color:#dc2626; border:1px solid rgba(239,68,68,0.3); border-radius:4px; padding:3px 8px; font-size:0.75rem; cursor:pointer;">🗑️ Xóa</button>`;
 
         return `
           <tr>
@@ -2273,7 +2273,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
     } catch (err) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding:20px; color:#f87171;">Không thể tải danh sách tệp: ${err}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center" style="padding:20px; color:#dc2626;">Không thể tải danh sách tệp: ${err}</td></tr>`;
     }
   }
 
@@ -2466,7 +2466,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (iconStatus) iconStatus.textContent = "🔌";
       if (avatarHalo) {
         avatarHalo.style.borderColor = "rgba(239, 68, 68, 0.4)";
-        avatarHalo.style.background = "radial-gradient(circle, rgba(239, 68, 68, 0.15) 0%, rgba(15, 23, 42, 0) 70%)";
+        avatarHalo.style.background = "radial-gradient(circle, rgba(239, 68, 68, 0.15) 0%, rgba(241, 245, 249, 0) 70%)";
       }
       if (mainText) mainText.textContent = "Thiết Bị Pi 5 Đang Ngoại Tuyến";
       if (subText) subText.textContent = "Chưa kết nối Wi-Fi với Pi 5 hoặc thiết bị chưa được cấp nguồn.";
@@ -2501,7 +2501,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (iconStatus) iconStatus.textContent = "✨";
       if (avatarHalo) {
         avatarHalo.style.borderColor = "#10b981";
-        avatarHalo.style.background = "radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, rgba(15, 23, 42, 0) 70%)";
+        avatarHalo.style.background = "radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, rgba(241, 245, 249, 0) 70%)";
         avatarHalo.classList.add("pulse");
       }
       if (mainText) mainText.textContent = "Giao Diện Hình Thể Đang Hoạt Động (Kiosk Active)";
@@ -2514,7 +2514,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (tabEmbodimentBadge) {
         tabEmbodimentBadge.textContent = "STANDBY";
         tabEmbodimentBadge.style.background = "rgba(245, 158, 11, 0.15)";
-        tabEmbodimentBadge.style.color = "#fcd34d";
+        tabEmbodimentBadge.style.color = "#92400e";
         tabEmbodimentBadge.style.borderColor = "rgba(245, 158, 11, 0.3)";
       }
       if (embodimentPill) {
@@ -2532,7 +2532,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (iconStatus) iconStatus.textContent = "💤";
       if (avatarHalo) {
         avatarHalo.style.borderColor = "rgba(148, 163, 184, 0.3)";
-        avatarHalo.style.background = "radial-gradient(circle, rgba(100, 116, 139, 0.15) 0%, rgba(15, 23, 42, 0) 70%)";
+        avatarHalo.style.background = "radial-gradient(circle, rgba(100, 116, 139, 0.15) 0%, rgba(241, 245, 249, 0) 70%)";
         avatarHalo.classList.remove("pulse");
       }
       if (mainText) mainText.textContent = "Hình Thể Đang Ở Chế Độ Nghỉ (Standby)";
@@ -2606,7 +2606,7 @@ document.addEventListener("DOMContentLoaded", () => {
           } else if (data.mic_muted === true) {
             badgeMic.className = "badge";
             badgeMic.style.background = "rgba(245, 158, 11, 0.2)";
-            badgeMic.style.color = "#fbbf24";
+            badgeMic.style.color = "#b45309";
             badgeMic.style.border = "1px solid #f59e0b";
             badgeMic.textContent = "🔇 MUTE";
           } else {
@@ -2621,8 +2621,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (badgeWake) {
           if (data.wake_word_enabled) {
             badgeWake.style.background = "rgba(56, 189, 248, 0.2)";
-            badgeWake.style.color = "#38bdf8";
-            badgeWake.style.border = "1px solid #38bdf8";
+            badgeWake.style.color = "#0369a1";
+            badgeWake.style.border = "1px solid #0369a1";
             badgeWake.textContent = "🎙️ WAKE: BẬT";
           } else {
             badgeWake.style.background = "rgba(100, 116, 139, 0.2)";
@@ -3026,11 +3026,11 @@ document.addEventListener("DOMContentLoaded", () => {
               <td><strong>${escapeHtml(item.snapshot_id)}</strong></td>
               <td><span class="note-sub">${dateStr}</span></td>
               <td>${sizeKb}</td>
-              <td><code style="font-size:0.7rem; color:#00e5ff;">${shortHash}</code></td>
+              <td><code style="font-size:0.7rem; color:#0e7490;">${shortHash}</code></td>
               <td><span class="badge badge-ready" style="font-size:0.7rem; padding:2px 6px;">✅ SHA-256</span></td>
               <td style="text-align: right; white-space: nowrap;">
-                <button class="btn btn-outline btn-sm btn-lib-view" data-url="${imgUrl}" style="border-color:#38bdf8; color:#38bdf8; padding:3px 8px; font-size:0.75rem; margin-right:4px;">👁️ Xem</button>
-                <button class="btn btn-outline btn-sm btn-lib-del" data-id="${escapeHtml(item.snapshot_id)}" style="border-color:#ef4444; color:#f87171; padding:3px 8px; font-size:0.75rem;">🗑️ Xóa</button>
+                <button class="btn btn-outline btn-sm btn-lib-view" data-url="${imgUrl}" style="border-color:#0369a1; color:#0369a1; padding:3px 8px; font-size:0.75rem; margin-right:4px;">👁️ Xem</button>
+                <button class="btn btn-outline btn-sm btn-lib-del" data-id="${escapeHtml(item.snapshot_id)}" style="border-color:#ef4444; color:#dc2626; padding:3px 8px; font-size:0.75rem;">🗑️ Xóa</button>
               </td>
             </tr>
           `;
@@ -3191,7 +3191,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const riskColor = t.risk_level === "R5" ? "#ef4444" : (t.risk_level === "R4" ? "#f59e0b" : "#10b981");
         const statusColors = {
           "COMPLETED": { bg: "rgba(16, 185, 129, 0.15)", fg: "#10b981", lbl: "HOÀN TẤT" },
-          "IN_PROGRESS": { bg: "rgba(56, 189, 248, 0.15)", fg: "#38bdf8", lbl: "ĐANG CHẠY" },
+          "IN_PROGRESS": { bg: "rgba(56, 189, 248, 0.15)", fg: "#0369a1", lbl: "ĐANG CHẠY" },
           "WAITING_APPROVAL": { bg: "rgba(245, 158, 11, 0.15)", fg: "#f59e0b", lbl: "CHỜ DUYỆT" },
           "PENDING": { bg: "rgba(148, 163, 184, 0.15)", fg: "#94a3b8", lbl: "CHỜ THỰC THI" },
           "BLOCKED": { bg: "rgba(239, 68, 68, 0.15)", fg: "#ef4444", lbl: "BỊ CHẶN" },
@@ -3205,14 +3205,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         return `
           <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.1); transition: background 0.2s;" onmouseover="this.style.background='rgba(30, 41, 59, 0.4)'" onmouseout="this.style.background='transparent'">
-            <td style="padding: 10px; font-family: monospace; color: #38bdf8; font-size: 12px;"><strong>${t.task_id}</strong></td>
-            <td style="padding: 10px; color: #f1f5f9; max-width: 280px; word-break: break-word;">${escapeHtml(t.goal)}</td>
+            <td style="padding: 10px; font-family: monospace; color: #0369a1; font-size: 12px;"><strong>${t.task_id}</strong></td>
+            <td style="padding: 10px; color: #1e293b; max-width: 280px; word-break: break-word;">${escapeHtml(t.goal)}</td>
             <td style="padding: 10px;"><span style="background: ${riskColor}22; color: ${riskColor}; border: 1px solid ${riskColor}44; padding: 2px 8px; border-radius: 4px; font-weight: 700; font-size: 11px;">${t.risk_level}</span></td>
             <td style="padding: 10px; font-size: 11px; color: #94a3b8;">${t.autonomy_level}</td>
             <td style="padding: 10px;"><span style="background: ${st.bg}; color: ${st.fg}; border: 1px solid ${st.fg}44; padding: 3px 8px; border-radius: 4px; font-weight: 600; font-size: 11px;">${st.lbl}</span></td>
             <td style="padding: 10px;">
               <div style="display: flex; align-items: center; gap: 8px;">
-                <div style="width: 80px; background: #1e293b; border-radius: 4px; height: 6px; overflow: hidden;">
+                <div style="width: 80px; background: #e2e8f0; border-radius: 4px; height: 6px; overflow: hidden;">
                   <div style="width: ${pct}%; background: #10b981; height: 100%;"></div>
                 </div>
                 <span style="font-size: 11px; color: #94a3b8;">${comp}/${total} (${pct}%)</span>
@@ -3262,7 +3262,7 @@ document.addEventListener("DOMContentLoaded", () => {
       container.innerHTML = steps.map(s => {
         const stepStatusMap = {
           "COMPLETED": { bg: "rgba(16, 185, 129, 0.15)", fg: "#10b981", icon: "✓" },
-          "IN_PROGRESS": { bg: "rgba(56, 189, 248, 0.15)", fg: "#38bdf8", icon: "⏳" },
+          "IN_PROGRESS": { bg: "rgba(56, 189, 248, 0.15)", fg: "#0369a1", icon: "⏳" },
           "WAITING_APPROVAL": { bg: "rgba(245, 158, 11, 0.15)", fg: "#f59e0b", icon: "⚠️" },
           "BLOCKED": { bg: "rgba(239, 68, 68, 0.15)", fg: "#ef4444", icon: "⛔" },
           "FAILED": { bg: "rgba(239, 68, 68, 0.15)", fg: "#ef4444", icon: "✗" },
@@ -3272,11 +3272,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const riskColor = s.risk_level >= 5 ? "#ef4444" : (s.risk_level >= 4 ? "#f59e0b" : "#10b981");
 
         return `
-          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-left: 4px solid ${st.fg}; border-radius: 6px; padding: 12px;">
+          <div style="background: rgba(255, 255, 255, 0.75); border: 1px solid rgba(56, 189, 248, 0.2); border-left: 4px solid ${st.fg}; border-radius: 6px; padding: 12px;">
             <div class="flex-between">
               <div style="display: flex; gap: 8px; align-items: center;">
                 <span style="background: ${st.bg}; color: ${st.fg}; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700;">${st.icon}</span>
-                <strong style="color: #f8fafc; font-size: 13px;">Bước ${s.sequence}: ${escapeHtml(s.name)}</strong>
+                <strong style="color: #0f172a; font-size: 13px;">Bước ${s.sequence}: ${escapeHtml(s.name)}</strong>
                 <span style="font-family: monospace; font-size: 11px; color: #64748b;">(${s.step_id})</span>
               </div>
               <div style="display: flex; gap: 6px; align-items: center;">
@@ -3600,7 +3600,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const a = data.approvals || {};
       if (a.status === "OK") {
         $("wb-approvals-pending").textContent = String(a.pending ?? 0);
-        $("wb-approvals-pending").style.color = (a.pending ?? 0) > 0 ? "#fbbf24" : "#86efac";
+        $("wb-approvals-pending").style.color = (a.pending ?? 0) > 0 ? "#b45309" : "#15803d";
         $("wb-approvals-detail").textContent = `tổng ${a.total ?? 0} · đã duyệt ${a.approved ?? 0} · từ chối ${a.rejected ?? 0}`;
       } else {
         setUnverified("wb-approvals-pending", "wb-approvals-detail", "governance.db");
@@ -3629,7 +3629,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // Services
       const s = data.services || {};
       $("wb-services").innerHTML = Object.entries(s).map(([k, v]) =>
-        `<div><span style="color:${v === "CONNECTED" ? "#86efac" : "#f87171"}">●</span> ${esc(k)}: ${esc(v)}</div>`
+        `<div><span style="color:${v === "CONNECTED" ? "#15803d" : "#f87171"}">●</span> ${esc(k)}: ${esc(v)}</div>`
       ).join("") || "không có dịch vụ nào được cấu hình";
 
       // Badge tab
@@ -3652,19 +3652,19 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ok, status, data } = await wbFetch(url);
       const el = $("wb-tasks-list");
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
         return;
       }
       if (!data.tasks.length) { el.textContent = "Không có nhiệm vụ nào ở trạng thái này."; return; }
       el.innerHTML = data.tasks.map((t) =>
         `<div style="padding:6px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
-          <div><b>${esc(t.task_id)}</b> <span style="color:#fbbf24;">[${esc(t.status)}]</span> <span style="color:#94a3b8;">r=${esc(t.risk_level)}</span></div>
-          <div style="color:#94a3b8; font-size:0.74rem;">${esc((t.goal || "").slice(0, 140))}</div>
+          <div><b>${esc(t.task_id)}</b> <span style="color:#b45309;">[${esc(t.status)}]</span> <span style="color:#64748b;">r=${esc(t.risk_level)}</span></div>
+          <div style="color:#64748b; font-size:0.74rem;">${esc((t.goal || "").slice(0, 140))}</div>
           <div style="color:#64748b; font-size:0.7rem;">cập nhật ${esc((t.updated_at_utc || "").slice(0, 19))}</div>
         </div>`
       ).join("");
     } catch (err) {
-      $("wb-tasks-list").innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
+      $("wb-tasks-list").innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
     }
   }
 
@@ -3674,18 +3674,18 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ok, data } = await wbFetch("/api/approvals");
       const el = $("wb-approvals-list");
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG</span>`;
         return;
       }
       const cards = (data.cards || []).filter((c) => c.status === "PENDING_APPROVAL");
       if (!cards.length) { el.textContent = "Không có card nào chờ phê duyệt."; return; }
       el.innerHTML = cards.map((c) =>
         `<div style="padding:8px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
-          <div><b style="color:#fbbf24;">${esc(c.task_code)}</b> <span style="color:#94a3b8;">v${c.version ?? 1}</span></div>
-          <div style="color:#94a3b8; font-size:0.74rem; margin:2px 0;">${esc((c.title || "").slice(0, 120))}</div>
+          <div><b style="color:#b45309;">${esc(c.task_code)}</b> <span style="color:#64748b;">v${c.version ?? 1}</span></div>
+          <div style="color:#64748b; font-size:0.74rem; margin:2px 0;">${esc((c.title || "").slice(0, 120))}</div>
           <div style="display:flex; gap:6px; margin-top:4px;">
-            <button class="wb-approve" data-code="${esc(c.task_code)}" style="background:rgba(34,197,94,0.2); color:#86efac; border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✓ Duyệt</button>
-            <button class="wb-reject" data-code="${esc(c.task_code)}" style="background:rgba(239,68,68,0.2); color:#f87171; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✗ Từ chối</button>
+            <button class="wb-approve" data-code="${esc(c.task_code)}" style="background:rgba(34,197,94,0.2); color:#15803d; border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✓ Duyệt</button>
+            <button class="wb-reject" data-code="${esc(c.task_code)}" style="background:rgba(239,68,68,0.2); color:#dc2626; border:1px solid rgba(239,68,68,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✗ Từ chối</button>
           </div>
         </div>`
       ).join("");
@@ -3697,7 +3697,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (reason && reason.trim()) decideApproval(b.dataset.code, "reject", reason.trim());
         }));
     } catch (err) {
-      $("wb-approvals-list").innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
+      $("wb-approvals-list").innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
     }
   }
 
@@ -3705,7 +3705,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const result = $("wb-approval-result");
     if (wbApprovalBusy) { result.textContent = "⏳ Đang xử lý — không gửi trùng."; return; }
     wbApprovalBusy = true;
-    result.style.color = "#fbbf24";
+    result.style.color = "#b45309";
     result.textContent = "⏳ Đang gửi tới server…";
     try {
       const { ok, status, data } = await wbFetch("/api/approvals/decide", {
@@ -3715,7 +3715,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       // KHÔNG coi bấm nút là thành công — chỉ tin HTTP status + body server trả
       if (ok && data && data.success === true) {
-        result.style.color = "#86efac";
+        result.style.color = "#15803d";
         result.textContent = `✅ Server xác nhận: ${taskCode} → ${data.status}`;
         await Promise.all([loadApprovals(), loadOverview()]);
       } else if (status === 409) {
@@ -3745,7 +3745,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ok, data } = await wbFetch("/api/todos");
       const el = $("wb-todos-list");
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG</span>`;
         return;
       }
       const today = new Date().toISOString().slice(0, 10);
@@ -3754,13 +3754,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const over = t.due && t.due < today;
         return `<div style="display:flex; align-items:center; gap:8px; padding:4px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
           <input type="checkbox" class="wb-todo-done" data-id="${t.id}" title="Đánh dấu hoàn thành">
-          <span style="${over ? "color:#f87171;" : ""}">${over ? "🔴" : "⚪"} [${esc(t.due || "—")}] ${esc(t.title)}</span>
+          <span style="${over ? "color:#dc2626;" : ""}">${over ? "🔴" : "⚪"} [${esc(t.due || "—")}] ${esc(t.title)}</span>
         </div>`;
       }).join("");
       el.querySelectorAll(".wb-todo-done").forEach((cb) =>
         cb.addEventListener("change", () => { if (cb.checked) markTodoDone(cb.dataset.id); }));
     } catch (err) {
-      $("wb-todos-list").innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
+      $("wb-todos-list").innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG: ${esc(err.message)}</span>`;
     }
   }
 
@@ -3816,18 +3816,18 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({}),
       });
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
         return;
       }
       const r = data.result || {};
-      el.innerHTML = `<div style="color:#94a3b8;">connector=${esc(r.connector_status)} · mới ${r.new ?? 0} · trùng ${r.duplicates ?? 0}</div>` +
+      el.innerHTML = `<div style="color:#64748b;">connector=${esc(r.connector_status)} · mới ${r.new ?? 0} · trùng ${r.duplicates ?? 0}</div>` +
         (data.emails || []).map((m) =>
           `<div style="padding:4px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
-            <b>${esc(m.subject)}</b> <span style="color:#94a3b8;">[${esc(m.category)}]</span>
+            <b>${esc(m.subject)}</b> <span style="color:#64748b;">[${esc(m.category)}]</span>
             <div style="color:#64748b; font-size:0.7rem;">từ ${esc(m.sender)} · nguồn ${esc(m.source)}</div>
           </div>`).join("");
     } catch (err) {
-      el.innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+      el.innerHTML = `<span style="color:#dc2626">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
@@ -3838,16 +3838,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ok, status, data } = await wbFetch("/api/improvement/report");
       const el = $("wb-impr-matrix");
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
         return;
       }
       const r = data.report || {};
-      const lvlColor = (lvl) => lvl === "Đã có và hoạt động" ? "#86efac" : (lvl === "Bị chặn" ? "#f87171" : (lvl === "Chưa xác minh" ? "#fbbf24" : "#94a3b8"));
+      const lvlColor = (lvl) => lvl === "Đã có và hoạt động" ? "#15803d" : (lvl === "Bị chặn" ? "#f87171" : (lvl === "Chưa xác minh" ? "#b45309" : "#94a3b8"));
       el.innerHTML = `<table style="width:100%; border-collapse:collapse;">
         <tr style="color:#64748b; font-size:0.68rem;"><td>Năng lực</td><td>Mức</td><td>Bằng chứng</td></tr>
         ${(r.matrix || []).map((m) => `
           <tr style="border-top:1px solid rgba(148,163,184,0.12); padding:3px 0;">
-            <td style="padding:3px 4px 3px 0; color:#e2e8f0;">${esc(m.capability)}</td>
+            <td style="padding:3px 4px 3px 0; color:#1e293b;">${esc(m.capability)}</td>
             <td style="padding:3px 4px; color:${lvlColor(m.level)};">${esc(m.level)}</td>
             <td style="padding:3px 0; color:#64748b; font-size:0.65rem;">${esc(m.evidence || "")}</td>
           </tr>`).join("")}
@@ -3855,13 +3855,13 @@ document.addEventListener("DOMContentLoaded", () => {
       $("wb-impr-improvements").innerHTML = (r.suggested_improvements || [])
         .map((s) => `<div style="margin:2px 0;">💡 ${esc(s)}</div>`).join("");
     } catch (err) {
-      $("wb-impr-matrix").innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+      $("wb-impr-matrix").innerHTML = `<span style="color:#dc2626">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
   async function exportImprovement() {
     const result = $("wb-impr-result");
-    result.style.color = "#fbbf24";
+    result.style.color = "#b45309";
     result.textContent = "⏳ Đang xuất…";
     try {
       const { ok, status, data } = await wbFetch("/api/improvement/export", {
@@ -3870,7 +3870,7 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({}),
       });
       if (ok && data && data.success === true) {
-        result.style.color = "#86efac";
+        result.style.color = "#15803d";
         result.textContent = `✅ Đã xuất: ${data.path} (${data.matrix_count} mục ma trận)`;
       } else {
         result.style.color = "#f87171";
@@ -3892,16 +3892,16 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const { ok, data } = await wbFetch(`/api/web/search?q=${encodeURIComponent(q)}&max_results=5`);
       if (!ok || !data) { el.textContent = "KHÔNG KHẢ DỤNG"; return; }
-      if (data.success !== true) { el.innerHTML = `<span style="color:#f87171">⚠️ ${esc(data.error || "lỗi không rõ")}</span>`; return; }
+      if (data.success !== true) { el.innerHTML = `<span style="color:#dc2626">⚠️ ${esc(data.error || "lỗi không rõ")}</span>`; return; }
       if (!data.results.length) { el.textContent = "Không có kết quả nào."; return; }
       el.innerHTML = data.results.map((r) => `
         <div style="padding:6px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
-          <div><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" style="color:#7dd3fc;">${esc(r.title || r.url)}</a></div>
-          ${r.snippet ? `<div style="color:#94a3b8; font-size:0.7rem;">${esc(r.snippet)}</div>` : ""}
+          <div><a href="${esc(r.url)}" target="_blank" rel="noopener noreferrer" style="color:#0369a1;">${esc(r.title || r.url)}</a></div>
+          ${r.snippet ? `<div style="color:#64748b; font-size:0.7rem;">${esc(r.snippet)}</div>` : ""}
           <div style="color:#64748b; font-size:0.65rem;">${esc(r.url)}</div>
         </div>`).join("");
     } catch (err) {
-      el.innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+      el.innerHTML = `<span style="color:#dc2626">Lỗi: ${esc(err.message)}</span>`;
     } finally {
       wbWebBusy = false;
     }
@@ -3926,7 +3926,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const conf = data.confirmed || [], cand = data.candidates || [];
       if (!data.semantic_available) {
-        result.style.color = "#fbbf24";
+        result.style.color = "#b45309";
         result.textContent = "⚠️ Semantic KHÔNG khả dụng (Ollama offline hoặc DB lỗi)" + (data.reason ? " — " + data.reason : "") + ". Kinh nghiệm vẫn là tham chiếu keyword-only.";
         return;
       }
@@ -3937,15 +3937,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const row = (m, isCand) => `<details style="padding:4px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
           <summary style="cursor:pointer;">${isCand ? "🟡" : "✅"} <b>${esc(m.content.split("\n")[0] || "")}</b>
-            <span style="font-size:0.7rem; color:#93c5fd;">${(m.similarity * 100).toFixed(1)}%</span>
-            <span style="font-size:0.7rem; color:${isCand ? "#fbbf24" : "#86efac"};">[${isCand ? "chưa duyệt" : "đã duyệt"}]</span>
+            <span style="font-size:0.7rem; color:#1d4ed8;">${(m.similarity * 100).toFixed(1)}%</span>
+            <span style="font-size:0.7rem; color:${isCand ? "#b45309" : "#15803d"};">[${isCand ? "chưa duyệt" : "đã duyệt"}]</span>
           </summary>
-          <div style="margin:4px 0 2px 12px; color:#94a3b8; font-size:0.72rem; white-space:pre-wrap;">${esc(m.content)}</div>
+          <div style="margin:4px 0 2px 12px; color:#64748b; font-size:0.72rem; white-space:pre-wrap;">${esc(m.content)}</div>
           <div style="margin-left:12px; font-size:0.7rem; color:#64748b;">Nguồn: ${esc(m.source_ref || "?")} · ${esc(m.memory_type || "")} · model ${esc(data.model || "?")}</div>
         </details>`;
       result.style.color = "#e2e8f0";
       result.innerHTML =
-        `<div style="font-size:0.7rem; color:#86efac; margin-bottom:2px;">🧠 Semantic (${esc(data.model || "BGE-M3")}) — ${conf.length} xác nhận, ${cand.length} chưa duyệt</div>` +
+        `<div style="font-size:0.7rem; color:#15803d; margin-bottom:2px;">🧠 Semantic (${esc(data.model || "BGE-M3")}) — ${conf.length} xác nhận, ${cand.length} chưa duyệt</div>` +
         conf.map((m) => row(m, false)).join("") + cand.map((m) => row(m, true)).join("");
     } catch (err) {
       result.style.color = "#f87171";
@@ -3960,7 +3960,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ok, status, data } = await wbFetch("/api/experience/lessons");
       const el = $("wb-lessons-list");
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
         return;
       }
       const cands = data.candidates || [];
@@ -3974,20 +3974,20 @@ document.addEventListener("DOMContentLoaded", () => {
         return `<details style="padding:6px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
           <summary style="cursor:pointer;">
             ${isCand ? "🟡" : "✅"} <b>${esc(rec.content.split("\n")[0] || "")}</b>
-            <span style="font-size:0.7rem; color:${isCand ? "#fbbf24" : "#86efac"};">[${isCand ? "ỨNG VIÊN — CHƯA duyệt" : "ĐÃ DUYỆT"}]</span>
+            <span style="font-size:0.7rem; color:${isCand ? "#b45309" : "#15803d"};">[${isCand ? "ỨNG VIÊN — CHƯA duyệt" : "ĐÃ DUYỆT"}]</span>
           </summary>
-          <div style="margin:6px 0 4px 12px; color:#94a3b8; font-size:0.72rem; white-space:pre-wrap;">${esc(rec.content)}</div>
+          <div style="margin:6px 0 4px 12px; color:#64748b; font-size:0.72rem; white-space:pre-wrap;">${esc(rec.content)}</div>
           <div style="margin-left:12px; font-size:0.7rem; color:#64748b;">Task: ${esc(meta.task_id || "?")} · Nguồn: ${esc(rec.source_ref || "?")} · ${esc(rec.created_at_utc || "")}</div>
-          ${isCand ? `<button class="wb-promote-lesson" data-mid="${esc(rec.id)}" style="margin:6px 0 0 12px; background:rgba(16,185,129,0.15); color:#86efac; border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✔ Anh duyệt thành kinh nghiệm xác nhận</button>` : ""}
+          ${isCand ? `<button class="wb-promote-lesson" data-mid="${esc(rec.id)}" style="margin:6px 0 0 12px; background:rgba(16,185,129,0.15); color:#15803d; border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">✔ Anh duyệt thành kinh nghiệm xác nhận</button>` : ""}
         </details>`;
       };
       el.innerHTML =
-        (confirmed.length ? `<div style="margin-bottom:4px; color:#86efac; font-size:0.72rem;">Đã xác nhận (${confirmed.length})</div>` + confirmed.map((r) => render(r, false)).join("") : "") +
-        (cands.length ? `<div style="margin:8px 0 4px 0; color:#fbbf24; font-size:0.72rem;">Ứng viên chờ duyệt (${cands.length})</div>` + cands.map((r) => render(r, true)).join("") : "");
+        (confirmed.length ? `<div style="margin-bottom:4px; color:#15803d; font-size:0.72rem;">Đã xác nhận (${confirmed.length})</div>` + confirmed.map((r) => render(r, false)).join("") : "") +
+        (cands.length ? `<div style="margin:8px 0 4px 0; color:#b45309; font-size:0.72rem;">Ứng viên chờ duyệt (${cands.length})</div>` + cands.map((r) => render(r, true)).join("") : "");
       el.querySelectorAll(".wb-promote-lesson").forEach((b) =>
         b.addEventListener("click", () => promoteLesson(b.dataset.mid)));
     } catch (err) {
-      $("wb-lessons-list").innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+      $("wb-lessons-list").innerHTML = `<span style="color:#dc2626">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
@@ -3996,7 +3996,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (wbLessonBusy) { result.textContent = "⏳ Đang xử lý — không gửi trùng."; return; }
     if (!confirm("Duyệt bài học này thành kinh nghiệm XÁC NHẬN? Chỉ làm khi anh thật sự chấp nhận.")) return;
     wbLessonBusy = true;
-    result.style.color = "#fbbf24";
+    result.style.color = "#b45309";
     result.textContent = "⏳ Đang duyệt…";
     try {
       const { ok, status, data } = await wbFetch("/api/experience/lessons/promote", {
@@ -4005,7 +4005,7 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({ memory_id: memoryId, owner_confirm: "DUYET" }),
       });
       if (ok && data && data.success === true) {
-        result.style.color = data.promoted ? "#86efac" : "#fbbf24";
+        result.style.color = data.promoted ? "#15803d" : "#b45309";
         result.textContent = data.promoted ? "✅ Đã duyệt — lesson VERIFIED + active." : "ℹ️ " + (data.reason || "Không đổi.");
         await loadLessons();
       } else if (status === 403) {
@@ -4034,7 +4034,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const { ok, status, data } = await wbFetch("/api/email/proposals");
       const el = $("wb-proposals-list");
       if (!ok || !data || data.success !== true) {
-        el.innerHTML = `<span style="color:#f87171">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
+        el.innerHTML = `<span style="color:#dc2626">KHÔNG KHẢ DỤNG (HTTP ${status})</span>`;
         return;
       }
       const props = data.proposals || [];
@@ -4050,30 +4050,30 @@ document.addEventListener("DOMContentLoaded", () => {
         return `<details style="padding:8px 0; border-bottom:1px solid rgba(148,163,184,0.12);">
           <summary style="cursor:pointer;">
             <b>${esc(pay.subject || p.subject)}</b>
-            <span style="color:#a78bfa; font-size:0.72rem;">[${esc(p.status)}]${linked ? " → task " + esc(linked) : ""}</span>
+            <span style="color:#6d28d9; font-size:0.72rem;">[${esc(p.status)}]${linked ? " → task " + esc(linked) : ""}</span>
           </summary>
-          <div style="margin:8px 0 4px 12px; color:#94a3b8; font-size:0.75rem;">
-            <div><b style="color:#e2e8f0;">🎯 Mục tiêu:</b> ${esc(pay.goal || "")}</div>
-            <div style="margin-top:4px;"><b style="color:#e2e8f0;">📌 Căn cứ:</b><ul style="margin:2px 0 2px 18px;">${(pay.basis || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div>
-            <div><b style="color:#e2e8f0;">✅ Kết luận:</b> ${esc(pay.conclusion || "")}</div>
-            <div style="margin-top:4px;"><b style="color:#fbbf24;">⚠️ Giả định CHƯA xác minh:</b><ul style="margin:2px 0 2px 18px;">${(pay.assumptions || []).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
-            <div><b style="color:#86efac;">▶ Phương án khuyến nghị:</b> ${esc(pay.recommended_action || "")}</div>
-            <div style="margin-top:4px;"><b style="color:#94a3b8;">Phương án khác:</b><ul style="margin:2px 0 2px 18px;">${(pay.alternatives || []).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
-            <div><b style="color:#f87171;">Rủi ro:</b><ul style="margin:2px 0 2px 18px;">${(pay.risks || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
-            <div><b style="color:#94a3b8;">Phạm vi:</b> ${esc(pay.action_scope || "")} · <b>Rollback:</b> ${esc(pay.rollback || "")}</div>
-            <div><b style="color:#86efac;">Tiêu chí thành công:</b><ul style="margin:2px 0 2px 18px;">${(pay.success_criteria || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul></div>
-            <div><b style="color:#fbbf24;">Cần anh quyết:</b> ${esc(pay.owner_decision_needed || "")}</div>
+          <div style="margin:8px 0 4px 12px; color:#64748b; font-size:0.75rem;">
+            <div><b style="color:#1e293b;">🎯 Mục tiêu:</b> ${esc(pay.goal || "")}</div>
+            <div style="margin-top:4px;"><b style="color:#1e293b;">📌 Căn cứ:</b><ul style="margin:2px 0 2px 18px;">${(pay.basis || []).map((b) => `<li>${esc(b)}</li>`).join("")}</ul></div>
+            <div><b style="color:#1e293b;">✅ Kết luận:</b> ${esc(pay.conclusion || "")}</div>
+            <div style="margin-top:4px;"><b style="color:#b45309;">⚠️ Giả định CHƯA xác minh:</b><ul style="margin:2px 0 2px 18px;">${(pay.assumptions || []).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
+            <div><b style="color:#15803d;">▶ Phương án khuyến nghị:</b> ${esc(pay.recommended_action || "")}</div>
+            <div style="margin-top:4px;"><b style="color:#64748b;">Phương án khác:</b><ul style="margin:2px 0 2px 18px;">${(pay.alternatives || []).map((a) => `<li>${esc(a)}</li>`).join("")}</ul></div>
+            <div><b style="color:#dc2626;">Rủi ro:</b><ul style="margin:2px 0 2px 18px;">${(pay.risks || []).map((r) => `<li>${esc(r)}</li>`).join("")}</ul></div>
+            <div><b style="color:#64748b;">Phạm vi:</b> ${esc(pay.action_scope || "")} · <b>Rollback:</b> ${esc(pay.rollback || "")}</div>
+            <div><b style="color:#15803d;">Tiêu chí thành công:</b><ul style="margin:2px 0 2px 18px;">${(pay.success_criteria || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ul></div>
+            <div><b style="color:#b45309;">Cần anh quyết:</b> ${esc(pay.owner_decision_needed || "")}</div>
             <div style="margin-top:4px; color:#64748b;">Kinh nghiệm liên quan: ${expConf} đã xác nhận · ${expCand} ứng viên CHƯA duyệt (không tính là căn cứ mạnh)</div>
           </div>
           ${linked
-            ? `<div style="margin-left:12px; color:#86efac; font-size:0.75rem;">✓ Nhiệm vụ ứng viên đã tạo: <b>${esc(linked)}</b> (PENDING — chờ duyệt, không tự chạy)</div>`
+            ? `<div style="margin-left:12px; color:#15803d; font-size:0.75rem;">✓ Nhiệm vụ ứng viên đã tạo: <b>${esc(linked)}</b> (PENDING — chờ duyệt, không tự chạy)</div>`
             : `<button class="wb-create-task" data-pid="${esc(p.proposal_id)}" style="margin-left:12px; background:rgba(168,85,247,0.2); color:#d8b4fe; border:1px solid rgba(168,85,247,0.3); border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">➕ Tạo nhiệm vụ ứng viên (PENDING — em không tự chạy)</button>`}
         </details>`;
       }).join("");
       el.querySelectorAll(".wb-create-task").forEach((b) =>
         b.addEventListener("click", () => createEmailTask(b.dataset.pid)));
     } catch (err) {
-      $("wb-proposals-list").innerHTML = `<span style="color:#f87171">Lỗi: ${esc(err.message)}</span>`;
+      $("wb-proposals-list").innerHTML = `<span style="color:#dc2626">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
@@ -4081,7 +4081,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const result = $("wb-proposal-result");
     if (wbProposalBusy) { result.textContent = "⏳ Đang xử lý — không gửi trùng."; return; }
     wbProposalBusy = true;
-    result.style.color = "#fbbf24";
+    result.style.color = "#b45309";
     result.textContent = "⏳ Đang tạo nhiệm vụ ứng viên…";
     try {
       const { ok, status, data } = await wbFetch("/api/email/task/create", {
@@ -4090,7 +4090,7 @@ document.addEventListener("DOMContentLoaded", () => {
         body: JSON.stringify({ proposal_id: proposalId }),
       });
       if (ok && data && data.success === true) {
-        result.style.color = data.created ? "#86efac" : "#fbbf24";
+        result.style.color = data.created ? "#15803d" : "#b45309";
         result.textContent = (data.created ? "✅ Đã tạo nhiệm vụ ứng viên: " : "ℹ️ Email này đã có nhiệm vụ: ") + data.task_id + " (PENDING — không tự thực thi)";
         await Promise.all([loadProposals(), loadTasks(), loadOverview()]);
       } else if (status === 404) {
@@ -4147,9 +4147,9 @@ document.addEventListener("DOMContentLoaded", () => {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
   const STATUS_COLORS = {
-    EXTRACTED: "#93c5fd", VERIFIED: "#4ade80", INFERRED: "#c4b5fd",
-    CONFLICTED: "#f87171", NEEDS_OWNER_REVIEW: "#fbbf24",
-    SUPERSEDED: "#94a3b8", CANDIDATE: "#7dd3fc", REJECTED: "#fca5a5",
+    EXTRACTED: "#93c5fd", VERIFIED: "#4ade80", INFERRED: "#6d28d9",
+    CONFLICTED: "#f87171", NEEDS_OWNER_REVIEW: "#b45309",
+    SUPERSEDED: "#94a3b8", CANDIDATE: "#0369a1", REJECTED: "#fca5a5",
   };
 
   function fmtStatus(status) {
@@ -4174,13 +4174,13 @@ document.addEventListener("DOMContentLoaded", () => {
       ];
       $("deep-overview").innerHTML = cells.map(([label, val]) => `
         <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(59,130,246,0.2); border-radius:10px; padding:10px 12px;">
-          <div style="font-size:1.3rem; font-weight:700; color:#93c5fd;">${esc(val)}</div>
-          <div style="font-size:0.72rem; color:#94a3b8;">${esc(label)}</div>
+          <div style="font-size:1.3rem; font-weight:700; color:#1d4ed8;">${esc(val)}</div>
+          <div style="font-size:0.72rem; color:#64748b;">${esc(label)}</div>
         </div>`).join("");
       const badge = $("badge-deep-memory-questions");
       if (badge) badge.textContent = s.owner_questions_open > 0 ? `${s.owner_questions_open} chờ` : "0";
     } catch (err) {
-      $("deep-overview").innerHTML = `<div style="color:#f87171; font-size:0.8rem;">Lỗi tải số liệu: ${esc(err.message)}</div>`;
+      $("deep-overview").innerHTML = `<div style="color:#dc2626; font-size:0.8rem;">Lỗi tải số liệu: ${esc(err.message)}</div>`;
     }
   }
 
@@ -4197,16 +4197,16 @@ document.addEventListener("DOMContentLoaded", () => {
       $("deep-units-list").innerHTML = data.units.map((u) => {
         const rels = (u.relations || []).slice(0, 3).map((r) => {
           const dir = r.from_id === u.knowledge_id ? `→ ${r.to_id.slice(0, 10)}` : `← ${r.from_id.slice(0, 10)}`;
-          return `<span title="${esc(r.basis)}" style="color:${r.is_speculative ? "#fbbf24" : "#64748b"};">${esc(r.relation_type)}${r.is_speculative ? "?" : ""} ${dir}</span>`;
+          return `<span title="${esc(r.basis)}" style="color:${r.is_speculative ? "#b45309" : "#64748b"};">${esc(r.relation_type)}${r.is_speculative ? "?" : ""} ${dir}</span>`;
         }).join(" · ");
         return `<div style="border-bottom:1px solid rgba(148,163,184,0.12); padding:6px 0;">
           <div>${fmtStatus(u.status)} <span style="color:#64748b;">v${u.version} · ${esc(u.knowledge_type)} · conf ${u.confidence}</span></div>
-          <div style="color:#e2e8f0; margin:2px 0;">${esc(u.statement.slice(0, 130))}</div>
+          <div style="color:#1e293b; margin:2px 0;">${esc(u.statement.slice(0, 130))}</div>
           <div style="font-size:0.7rem;">${rels || "<span style='color:#475569;'>chưa có quan hệ</span>"}</div>
         </div>`;
       }).join("");
     } catch (err) {
-      $("deep-units-list").innerHTML = `<span style="color:#f87171;">Lỗi: ${esc(err.message)}</span>`;
+      $("deep-units-list").innerHTML = `<span style="color:#dc2626;">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
@@ -4221,21 +4221,21 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       $("deep-questions-list").innerHTML = data.questions.map((q) => `
         <div style="border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:8px; margin-bottom:8px;">
-          <div style="color:#fbbf24; font-weight:600; margin-bottom:3px;">⚠ ${esc(q.problem.slice(0, 100))}</div>
-          <div style="color:#cbd5e1; margin-bottom:3px;">${esc(q.question)}</div>
+          <div style="color:#b45309; font-weight:600; margin-bottom:3px;">⚠ ${esc(q.problem.slice(0, 100))}</div>
+          <div style="color:#334155; margin-bottom:3px;">${esc(q.question)}</div>
           <details style="margin-bottom:5px;">
             <summary style="cursor:pointer; color:#64748b; font-size:0.7rem;">Bằng chứng &amp; các cách hiểu</summary>
-            <div style="color:#94a3b8; margin:4px 0; font-size:0.72rem;">${esc(q.evidence.slice(0, 220))}</div>
-            <div style="color:#94a3b8; font-size:0.72rem;">${esc(q.current_view.slice(0, 150))}</div>
+            <div style="color:#64748b; margin:4px 0; font-size:0.72rem;">${esc(q.evidence.slice(0, 220))}</div>
+            <div style="color:#64748b; font-size:0.72rem;">${esc(q.current_view.slice(0, 150))}</div>
           </details>
           <div style="display:flex; gap:6px;">
             <input type="text" id="deep-ans-${esc(q.question_id)}" placeholder="Câu trả lời của anh (kèm phạm vi nếu có)…"
-              style="flex:1; background:rgba(15,23,42,0.6); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.75rem;" />
+              style="flex:1; background:rgba(255,255,255,0.8); color:#1e293b; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.75rem;" />
             <button class="btn btn-primary" style="padding:3px 10px; font-size:0.72rem;" onclick="window.__deepAnswer('${esc(q.question_id)}')">Gửi</button>
           </div>
         </div>`).join("");
     } catch (err) {
-      $("deep-questions-list").innerHTML = `<span style="color:#f87171;">Lỗi: ${esc(err.message)}</span>`;
+      $("deep-questions-list").innerHTML = `<span style="color:#dc2626;">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
@@ -4247,11 +4247,11 @@ document.addEventListener("DOMContentLoaded", () => {
       $("deep-timeline").innerHTML = data.events.map((e) => `
         <div style="padding:3px 0; border-bottom:1px solid rgba(148,163,184,0.08);">
           <span style="color:#64748b;">${esc(e.at.slice(0, 16).replace("T", " "))}</span>
-          <span style="color:${e.kind === "review_run" ? "#7dd3fc" : "#93c5fd"}; margin:0 6px;">${e.kind === "review_run" ? "🔄" : "📘"}</span>
+          <span style="color:${e.kind === "review_run" ? "#0369a1" : "#93c5fd"}; margin:0 6px;">${e.kind === "review_run" ? "🔄" : "📘"}</span>
           ${esc(e.detail)}
         </div>`).join("") || "<em style='color:#64748b;'>Chưa có sự kiện.</em>";
     } catch (err) {
-      $("deep-timeline").innerHTML = `<span style="color:#f87171;">Lỗi: ${esc(err.message)}</span>`;
+      $("deep-timeline").innerHTML = `<span style="color:#dc2626;">Lỗi: ${esc(err.message)}</span>`;
     }
   }
 
@@ -4333,8 +4333,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function respondForm(targetType, targetId) {
     const opts = KINDS.map(([v, l]) => `<option value="${v}">${l}</option>`).join("");
     return `<div class="review-respond" style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-      <select data-tt="${targetType}" data-tid="${targetId}" style="flex:1; min-width:140px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px; font-size:0.75rem;">${opts}</select>
-      <input placeholder="Nội dung phản hồi…" data-tt="${targetType}" data-tid="${targetId}" style="flex:2; min-width:160px; background:#1e293b; color:#e2e8f0; border:1px solid #334155; border-radius:6px; padding:4px 8px; font-size:0.75rem;">
+      <select data-tt="${targetType}" data-tid="${targetId}" style="flex:1; min-width:140px; background:#e2e8f0; color:#1e293b; border:1px solid #94a3b8; border-radius:6px; padding:4px 8px; font-size:0.75rem;">${opts}</select>
+      <input placeholder="Nội dung phản hồi…" data-tt="${targetType}" data-tid="${targetId}" style="flex:2; min-width:160px; background:#e2e8f0; color:#1e293b; border:1px solid #94a3b8; border-radius:6px; padding:4px 8px; font-size:0.75rem;">
       <button class="review-send-btn" data-tt="${targetType}" data-tid="${targetId}" style="background:#2563eb; color:#fff; border:none; border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">Gửi</button>
     </div>`;
   }
@@ -4342,48 +4342,48 @@ document.addEventListener("DOMContentLoaded", () => {
   function renderGroups(data) {
     const s = data.session || {};
     const st = s.stats || {};
-    const head = `<div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; font-size:0.75rem; color:#94a3b8;">
-      <span>🆔 <b style="color:#e2e8f0;">${esc(s.session_id || "—")}</b></span>
-      <span>Trạng thái: <b style="color:#93c5fd;">${esc(s.status || "—")}</b></span>
-      <span>Phạm vi: <b style="color:#e2e8f0;">${st.scope_size ?? "—"}</b></span>
-      <span>Phát hiện: <b style="color:#e2e8f0;">${st.findings ?? "—"}</b></span>
-      <span>Suy luận: <b style="color:#e2e8f0;">${st.inferences ?? "—"}</b></span>
-      <span>Câu hỏi: <b style="color:#e2e8f0;">${st.questions ?? "—"}</b></span>
-      <span>Chờ duyệt: <b style="color:#fbbf24;">${st.changes_pending ?? "—"}</b></span>
+    const head = `<div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; font-size:0.75rem; color:#64748b;">
+      <span>🆔 <b style="color:#1e293b;">${esc(s.session_id || "—")}</b></span>
+      <span>Trạng thái: <b style="color:#1d4ed8;">${esc(s.status || "—")}</b></span>
+      <span>Phạm vi: <b style="color:#1e293b;">${st.scope_size ?? "—"}</b></span>
+      <span>Phát hiện: <b style="color:#1e293b;">${st.findings ?? "—"}</b></span>
+      <span>Suy luận: <b style="color:#1e293b;">${st.inferences ?? "—"}</b></span>
+      <span>Câu hỏi: <b style="color:#1e293b;">${st.questions ?? "—"}</b></span>
+      <span>Chờ duyệt: <b style="color:#b45309;">${st.changes_pending ?? "—"}</b></span>
       <span>Đã áp dụng: <b style="color:#4ade80;">${st.changes_applied ?? "—"}</b></span>
     </div>`;
 
     // Nhóm 1 — tri thức đang lưu
     const units = (data.units || []).map((u) => `
-      <div style="border:1px solid #1e293b; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-        <div style="font-size:0.78rem; color:#e2e8f0;"><b style="color:#93c5fd;">${esc(u.knowledge_id)}</b> [${esc(u.knowledge_type)}] ${esc(u.statement)}</div>
+      <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.78rem; color:#1e293b;"><b style="color:#1d4ed8;">${esc(u.knowledge_id)}</b> [${esc(u.knowledge_type)}] ${esc(u.statement)}</div>
         <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">trạng thái ${esc(u.status)} · nguồn ${(u.source_refs || []).join(", ") || "—"} · lý do chọn: ${esc(u.selection_reason || "—")}</div>
         ${respondForm("unit", u.knowledge_id)}
       </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Không có tri thức nào trong phạm vi.</div>`;
 
     // Nhóm 2 — quan hệ & mâu thuẫn
     const findings = (data.findings || []).map((f) => `
-      <div style="border:1px solid #1e293b; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-        <div style="font-size:0.78rem; color:#e2e8f0;"><b style="color:${f.finding_type === "CONTRADICTION" ? "#f87171" : "#93c5fd"};">${esc(f.finding_type)}</b> ${esc(f.ku_a)} ↔ ${esc(f.ku_b)}</div>
-        <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">bằng chứng: ${esc(f.evidence)}</div>
+      <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.78rem; color:#1e293b;"><b style="color:${f.finding_type === "CONTRADICTION" ? "#f87171" : "#93c5fd"};">${esc(f.finding_type)}</b> ${esc(f.ku_a)} ↔ ${esc(f.ku_b)}</div>
+        <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">bằng chứng: ${esc(f.evidence)}</div>
         <div style="font-size:0.7rem; color:#64748b;">đề xuất: ${esc(f.proposed_action)} · chắc chắn ${Math.round((f.confidence ?? 0) * 100)}%</div>
         ${respondForm("finding", f.finding_id)}
       </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Không có phát hiện nào.</div>`;
 
     // Nhóm 3 — suy luận & bằng chứng
     const infs = (data.inferences || []).map((i) => `
-      <div style="border:1px solid #1e293b; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-        <div style="font-size:0.78rem; color:#e2e8f0;"><b style="color:#a78bfa;">${esc(i.certainty)}</b> ${esc(i.question)}</div>
-        <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">kết luận đề xuất: ${esc(i.proposed_conclusion)}</div>
+      <div style="border:1px solid #cbd5e1; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
+        <div style="font-size:0.78rem; color:#1e293b;"><b style="color:#6d28d9;">${esc(i.certainty)}</b> ${esc(i.question)}</div>
+        <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">kết luận đề xuất: ${esc(i.proposed_conclusion)}</div>
         <div style="font-size:0.7rem; color:#64748b;">bằng chứng: ${(JSON.parse(i.evidence_refs_json || "[]")).join(", ") || "—"}</div>
         ${respondForm("unit", JSON.parse(i.input_kus_json || "[]")[0] || "")}
       </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Không có suy luận nào.</div>`;
 
     // Nhóm 4 — câu hỏi dành cho chủ
     const qs = (data.questions || []).map((q) => `
-      <div style="border:1px solid #334155; border-radius:8px; padding:8px 10px; margin-bottom:6px; background:#0f172a;">
-        <div style="font-size:0.78rem; color:#fbbf24;"><b>${esc(q.question_id)}</b> [${esc(q.status)}] ${esc(q.question)}</div>
-        <div style="font-size:0.7rem; color:#94a3b8; margin-top:2px;">vấn đề: ${esc(q.problem)}</div>
+      <div style="border:1px solid #94a3b8; border-radius:8px; padding:8px 10px; margin-bottom:6px; background:#ffffff;">
+        <div style="font-size:0.78rem; color:#b45309;"><b>${esc(q.question_id)}</b> [${esc(q.status)}] ${esc(q.question)}</div>
+        <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">vấn đề: ${esc(q.problem)}</div>
         <div style="font-size:0.7rem; color:#64748b;">phương án: ${(JSON.parse(q.interpretations_json || "[]")).map((x) => esc(x.view)).join(" · ") || "—"}</div>
         ${q.status !== "ANSWERED" ? respondForm("question", q.question_id) : `<div style="font-size:0.72rem; color:#4ade80; margin-top:4px;">✔ ${esc(q.answer_text || "đã trả lời")}</div>`}
       </div>`).join("") || `<div style="color:#4ade80; font-size:0.75rem;">Trong phạm vi đợt sàng lọc này, chưa phát hiện câu hỏi bắt buộc cần Quanpt1 xác nhận.</div>`;
@@ -4391,7 +4391,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Thay đổi đã tạo
     const changes = (data.changes || []).map((c) => `
       <div style="border:1px dashed #475569; border-radius:8px; padding:8px 10px; margin-bottom:6px;">
-        <div style="font-size:0.75rem; color:#e2e8f0;"><b>${esc(c.change_id)}</b> [${esc(c.change_kind)}] → ${esc(c.target_ku)} — trạng thái <b style="color:${c.confirm_state === "APPLIED" ? "#4ade80" : "#fbbf24"};">${esc(c.confirm_state)}</b></div>
+        <div style="font-size:0.75rem; color:#1e293b;"><b>${esc(c.change_id)}</b> [${esc(c.change_kind)}] → ${esc(c.target_ku)} — trạng thái <b style="color:${c.confirm_state === "APPLIED" ? "#4ade80" : "#b45309"};">${esc(c.confirm_state)}</b></div>
         ${c.confirm_state === "PENDING" ? `<div style="display:flex; gap:6px; margin-top:6px;">
           <button class="review-preview-btn" data-cid="${esc(c.change_id)}" style="background:#475569; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer;">👁 Xem trước</button>
           <button class="review-confirm-btn" data-cid="${esc(c.change_id)}" style="background:#16a34a; color:#fff; border:none; border-radius:6px; padding:4px 10px; font-size:0.72rem; cursor:pointer;">✅ Xác nhận áp dụng</button>
@@ -4401,10 +4401,10 @@ document.addEventListener("DOMContentLoaded", () => {
       </div>`).join("") || `<div style="color:#64748b; font-size:0.75rem;">Chưa có thay đổi nào được đề xuất.</div>`;
 
     return head + `
-      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#93c5fd;">1 · Tri thức đang lưu</div>${units}
-      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#93c5fd;">2 · Quan hệ và mâu thuẫn</div>${findings}
-      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#93c5fd;">3 · Suy luận và bằng chứng</div>${infs}
-      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#fbbf24;">4 · Câu hỏi dành cho Quanpt1</div>${qs}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#1d4ed8;">1 · Tri thức đang lưu</div>${units}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#1d4ed8;">2 · Quan hệ và mâu thuẫn</div>${findings}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#1d4ed8;">3 · Suy luận và bằng chứng</div>${infs}
+      <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#b45309;">4 · Câu hỏi dành cho Quanpt1</div>${qs}
       <div style="margin:10px 0 4px; font-size:0.8rem; font-weight:700; color:#4ade80;">Thay đổi (chờ xác nhận lần 2 trước khi áp dụng)</div>${changes}`;
   }
 
@@ -4421,9 +4421,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const full = await fetch(`/api/memory/review/session?session_id=${encodeURIComponent(currentSession)}`);
       const fullData = await full.json();
       if (fullData.success) box.innerHTML = renderGroups(fullData);
-      else box.innerHTML = `<div style="color:#f87171; font-size:0.8rem;">Lỗi: ${esc(fullData.error || "?")}</div>`;
+      else box.innerHTML = `<div style="color:#dc2626; font-size:0.8rem;">Lỗi: ${esc(fullData.error || "?")}</div>`;
     } catch (err) {
-      box.innerHTML = `<div style="color:#f87171; font-size:0.8rem;">Lỗi tải: ${esc(err.message)}</div>`;
+      box.innerHTML = `<div style="color:#dc2626; font-size:0.8rem;">Lỗi tải: ${esc(err.message)}</div>`;
     }
   }
 
