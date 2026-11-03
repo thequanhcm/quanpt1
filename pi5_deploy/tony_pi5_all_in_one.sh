@@ -2,15 +2,27 @@
 # =====================================================================
 # TONY PI5 SELF-SETUP 24/7 — GỘP 1 FILE DUY NHẤT (script + SSH key)
 # Owner copy 1 file này vào Pi rồi chạy:  sudo bash tony_pi5_all_in_one.sh
-# Script tự: cài SSH key TONY, tắt kiosk cũ, sửa IP mới, service 24/7
+# Script tự: BẬT SSH SERVER, cài SSH key TONY, tắt kiosk cũ, sửa IP mới,
+#            service 24/7. Cập nhật 03/11/2026 (key mới + bật sshd).
 # =====================================================================
 set -e
 echo "=== TONY SETUP PI5 24/7 — $(date) ==="
 
+# 0) BẬT SSH SERVER (điều kiện tiên quyết Sprint 3 — cổng 22 phải mở)
+if command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl enable --now ssh 2>/dev/null || sudo systemctl enable --now sshd 2>/dev/null || true
+  if sudo systemctl is-active --quiet ssh || sudo systemctl is-active --quiet sshd; then
+    echo "[OK] SSH server đang chạy (cổng 22)"
+  else
+    echo "[CẢNH BÁO] SSH server chưa chạy — kiểm tra: sudo systemctl status ssh"
+    echo "           (Raspberry Pi OS Lite: sudo apt install -y openssh-server)"
+  fi
+fi
+
 # 1) Cài SSH public key của TONY (nhúng sẵn bên dưới)
 mkdir -p /home/quanpt1/.ssh
 chmod 700 /home/quanpt1/.ssh
-TONY_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDjGIBk7jGbrLk8U44bDCXMsStV7WipDKAzjYOipnsCy tony-desktop-snmi929'
+TONY_KEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBgAl33HLBrUW0aeIYjbHgTE6vkaMJ3o8dXEc05kfe2l tony-desktop-20261103'
 if ! grep -qF "$TONY_KEY" /home/quanpt1/.ssh/authorized_keys 2>/dev/null; then
   echo "$TONY_KEY" >> /home/quanpt1/.ssh/authorized_keys
 fi
@@ -24,9 +36,9 @@ pkill -f "main.py" 2>/dev/null || true
 sleep 2
 echo "[OK] Đã tắt kiosk cũ (nếu có)"
 
-# 3) Cập nhật core_host trong config.json → IP Tailscale PC
+# 3) Cập nhật core_host trong config.json → IP PC lõi
 CFG=/home/quanpt1/Desktop/edge_client/config.json
-CORE_HOST="${CORE_HOST:-192.168.1.9}"   # PC lõi mới (02/11/2026, LAN QUANPT); nếu có Tailscale: CORE_HOST=100.x.x.x bash script
+CORE_HOST="${CORE_HOST:-192.168.1.9}"   # PC lõi mới (02/11/2026, LAN QUANPT)
 if [ -f "$CFG" ]; then
   python3 - "$CORE_HOST" <<'PYEOF'
 import json, sys
@@ -45,7 +57,7 @@ fi
 cat > /tmp/quan_ai_edge.service <<'EOF'
 [Unit]
 Description=QUAN AI BRAIN Edge Kiosk (TONY 24/7)
-After=network-online.target tailscaled.service
+After=network-online.target
 Wants=network-online.target
 
 [Service]
