@@ -213,7 +213,7 @@ def _get_owner_dm_channel() -> str | None:
     try:
         r = subprocess.run(
             [PYTHON_EXE, NETCHAT_SCRIPT, "find_dm", OWNER_USERNAME],
-            capture_output=True, text=True, timeout=30, encoding="utf-8",
+            capture_output=True, creationflags=_NO_WIN, text=True, timeout=30, encoding="utf-8",
             errors="replace",
         )
         if r.returncode == 0:
@@ -260,7 +260,7 @@ def _stt_audio(path: Path) -> str:
         "print(transcribe(sys.argv[1]))"
     )
     res = subprocess.run([BRAIN_PYTHON, "-c", code, str(path)],
-                         capture_output=True, text=True, timeout=_STT_TIMEOUT)
+                         capture_output=True, creationflags=_NO_WIN, text=True, timeout=_STT_TIMEOUT)
     out = (res.stdout or "").strip()
     if res.returncode == 0 and out and not out.startswith("STT_FAIL"):
         return out
@@ -287,7 +287,7 @@ def _ocr_image(path: Path) -> str:
     )
     try:
         res = subprocess.run([PYTHON_EXE, "-c", code_rapid, str(path)],
-                             capture_output=True, text=True, timeout=180)
+                             capture_output=True, creationflags=_NO_WIN, text=True, timeout=180)
         if res.returncode == 0 and res.stdout.strip():
             return res.stdout.strip()
     except Exception:
@@ -307,7 +307,7 @@ def _ocr_image(path: Path) -> str:
     for lang in ("vi-VN", "en-US"):
         try:
             res = subprocess.run([PYTHON_EXE, "-c", code_win, str(path), lang],
-                                 capture_output=True, text=True, timeout=120)
+                                 capture_output=True, creationflags=_NO_WIN, text=True, timeout=120)
         except Exception as exc:
             last_err = f"{type(exc).__name__}: {exc}"
             continue
@@ -338,7 +338,7 @@ def _extract_text(path: Path) -> str:
             "print(chr(10).join((p.extract_text() or '') for p in r.pages))"
         )
         res = subprocess.run([PYTHON_EXE, "-c", code, str(path)],
-                             capture_output=True, text=True, timeout=120)
+                             capture_output=True, creationflags=_NO_WIN, text=True, timeout=120)
         if res.returncode == 0 and res.stdout.strip():
             return res.stdout
         raise RuntimeError(res.stderr.strip()[-200:] or "PDF không có lớp chữ (scan ảnh?)")
@@ -349,7 +349,7 @@ def _extract_text(path: Path) -> str:
             "print(chr(10).join(p.text for p in d.paragraphs if p.text.strip()))"
         )
         res = subprocess.run([PYTHON_EXE, "-c", code, str(path)],
-                             capture_output=True, text=True, timeout=60)
+                             capture_output=True, creationflags=_NO_WIN, text=True, timeout=60)
         if res.returncode == 0 and res.stdout.strip():
             return res.stdout
         raise RuntimeError(res.stderr.strip()[-200:] or "DOCX rỗng")
@@ -396,7 +396,7 @@ def extract_message_files(msg: dict) -> str:
         try:
             info = subprocess.run(
                 [PYTHON_EXE, NETCHAT_SCRIPT, "file_info", fid],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, creationflags=_NO_WIN, text=True, timeout=30,
             )
             if info.returncode != 0:
                 raise RuntimeError("file_info failed")
@@ -410,7 +410,7 @@ def extract_message_files(msg: dict) -> str:
             if not dest.exists():
                 dl = subprocess.run(
                     [PYTHON_EXE, NETCHAT_SCRIPT, "download", fid, str(dest)],
-                    capture_output=True, text=True, timeout=120,
+                    capture_output=True, creationflags=_NO_WIN, text=True, timeout=120,
                 )
                 if dl.returncode != 0:
                     raise RuntimeError("download failed")
@@ -517,7 +517,7 @@ def _msg_files_are_images(msg: dict) -> bool:
         try:
             info = subprocess.run(
                 [PYTHON_EXE, NETCHAT_SCRIPT, "file_info", fid],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, creationflags=_NO_WIN, text=True, timeout=30,
             )
             if info.returncode != 0:
                 return False
@@ -655,7 +655,7 @@ def read_channel_messages(count=10):
         try:
             result = subprocess.run(
                 [PYTHON_EXE, NETCHAT_SCRIPT, "read", cid, str(count)],
-                capture_output=True,
+                capture_output=True, creationflags=_NO_WIN,
                 text=True,
                 timeout=30,
             )
@@ -788,7 +788,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
         if confirmed_token:
             cmd.extend(["--confirmed", confirmed_token])
 
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, creationflags=_NO_WIN, text=True, timeout=30)
 
         if result.returncode == 0:
             return _parse(result.stdout)
@@ -804,7 +804,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
                     if not is_dm:
                         cmd_with_confirm.append("--to-channel")
                     cmd_with_confirm.extend(["--confirmed", token])
-                    result2 = subprocess.run(cmd_with_confirm, capture_output=True, text=True, timeout=30)
+                    result2 = subprocess.run(cmd_with_confirm, capture_output=True, creationflags=_NO_WIN, text=True, timeout=30)
                     if result2.returncode == 0:
                         return _parse(result2.stdout)
                     # (31/10/2026) 403 bot_private_channel → fallback DM chủ sở hữu
@@ -815,7 +815,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
                             print("   📨 Kênh riêng tư → gửi qua DM chủ sở hữu thay thế")
                             r3 = subprocess.run(
                                 [PYTHON_EXE, NETCHAT_SCRIPT, "send", dm, text],
-                                capture_output=True, text=True, timeout=30,
+                                capture_output=True, creationflags=_NO_WIN, text=True, timeout=30,
                                 encoding="utf-8", errors="replace",
                             )
                             out3 = (r3.stdout or "") + (r3.stderr or "")
@@ -826,7 +826,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
                                 r4 = subprocess.run(
                                     [PYTHON_EXE, NETCHAT_SCRIPT, "send", dm, text,
                                      "--confirmed", m3.group(1)],
-                                    capture_output=True, text=True, timeout=30,
+                                    capture_output=True, creationflags=_NO_WIN, text=True, timeout=30,
                                     encoding="utf-8", errors="replace",
                                 )
                                 if r4.returncode == 0:
@@ -842,7 +842,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
                 print("   📨 Kênh riêng tư → gửi qua DM chủ sở hữu thay thế")
                 rd = subprocess.run(
                     [PYTHON_EXE, NETCHAT_SCRIPT, "send", dm, text],
-                    capture_output=True, text=True, timeout=30,
+                    capture_output=True, creationflags=_NO_WIN, text=True, timeout=30,
                     encoding="utf-8", errors="replace",
                 )
                 outd = (rd.stdout or "") + (rd.stderr or "")
@@ -853,7 +853,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
                     rd2 = subprocess.run(
                         [PYTHON_EXE, NETCHAT_SCRIPT, "send", dm, text,
                          "--confirmed", md.group(1)],
-                        capture_output=True, text=True, timeout=30,
+                        capture_output=True, creationflags=_NO_WIN, text=True, timeout=30,
                         encoding="utf-8", errors="replace",
                     )
                     if rd2.returncode == 0:

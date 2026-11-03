@@ -26,7 +26,7 @@ if "%GEMINI_API_KEY%"=="" call :LoadUserEnv
 REM ---- [0/5] Ollama (port 11434, C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe): kiem tra + start bang python ----
 echo [0/5] Kiem tra Ollama (BGE-M3 embedding)...
 if exist "C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe" (
-    ".venv\Scripts\python.exe" tools\khoi_dong_ollama.py
+    ".venv\Scripts\pythonw.exe" tools\khoi_dong_ollama.py
 )
 echo    (chi tiet xem logs\khoi_dong_ollama.log)
 

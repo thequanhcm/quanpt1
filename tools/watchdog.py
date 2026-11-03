@@ -41,7 +41,7 @@ CONFIG = {
     # The previous venv_python pointed to C:\Users\DELL\.venv which does NOT
     # exist — auto-restart would have failed silently forever.
     "server_script": os.path.join(BASE_DIR, "start_dual_servers.py"),
-    "venv_python": os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe"),
+    "venv_python": os.path.join(BASE_DIR, ".venv", "Scripts", "pythonw.exe"),
     "workdir": BASE_DIR,
     "port": 8765,
     "second_port": 8766,

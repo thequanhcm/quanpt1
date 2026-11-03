@@ -6,4 +6,4 @@ cd /d "E:\BRAIN"
 chcp 65001 >nul
 set PYTHONIOENCODING=utf-8
 set PYTHONUTF8=1
-.venv\Scripts\python.exe tools\morning_report.py >> logs\morning_report.log 2>&1
+.venv\Scripts\pythonw.exe tools\morning_report.py >> logs\morning_report.log 2>&1
