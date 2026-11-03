@@ -25,6 +25,7 @@ import sqlite3
 import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 UTC = timezone.utc
@@ -65,7 +66,11 @@ class KnowledgeGapScanner:
         con.row_factory = sqlite3.Row
         gaps: list[KnowledgeGap] = []
         try:
-            # 1) Lessons từ kinh nghiệm chưa được chuyển thành knowledge
+            # 1) Lessons từ kinh nghiệm chưa được chuyển thành knowledge.
+            # Episode experience_lesson chỉ chứa metadata ("sinh từ task X") —
+            # nội dung bài học thật nằm ở durable_tasks.goal (tasks.db cạnh
+            # brain.db). Ưu tiên goal thật; fallback về summary nếu không tra
+            # được task (honest: ghi rõ trong evidence).
             rows = con.execute(
                 "SELECT id, summary, created_at_utc FROM episodes "
                 "WHERE kind='experience_lesson' ORDER BY created_at_utc DESC LIMIT ?",
@@ -75,13 +80,18 @@ class KnowledgeGapScanner:
                 topic = self._topic_from_summary(r["summary"])
                 if not topic:
                     continue
+                # Tra nội dung thật của lesson qua task reference trong summary
+                task_ref, goal = self._lesson_content(r["summary"])
+                if goal:
+                    topic = self._topic_from_summary(goal)
                 if self._topic_known(topic, known_sets):
                     continue  # đã có knowledge tương đương — không phải gap
                 gaps.append(KnowledgeGap(
                     gap_id=f"gap-{r['id'][:12] if r['id'] else 'x'}",
                     topic=topic,
                     source="episodes:experience_lesson",
-                    evidence=f"lesson {r['created_at_utc'][:10]}: {r['summary'][:140]}",
+                    evidence=(f"lesson {r['created_at_utc'][:10]} (task {task_ref}): "
+                              f"{(goal or r['summary'])[:140]}"),
                     priority=2))
         finally:
             con.close()
@@ -95,6 +105,31 @@ class KnowledgeGapScanner:
             seen.add(key)
             unique.append(g)
         return unique[:limit]
+
+    def _lesson_content(self, summary: str) -> tuple[str, str]:
+        """Trích task reference từ summary và tra goal thật trong tasks.db.
+
+        Episode summary dạng 'Experience lesson candidate sinh từ task
+        task_xxx (COMPLETED)' — metadata không học được gì; goal của task mới
+        là nội dung bài học. Trả về (task_ref, goal) — goal rỗng nếu không tra
+        được (fallback dùng summary).
+        """
+        m = re.search(r"task_[0-9a-f]{8,}", summary or "")
+        if not m:
+            return "", ""
+        task_ref = m.group(0)
+        try:
+            tasks_db = Path(self.db_path).parent / "tasks.db"
+            tcon = sqlite3.connect(str(tasks_db))
+            try:
+                row = tcon.execute(
+                    "SELECT goal FROM durable_tasks WHERE task_id = ?", (task_ref,)
+                ).fetchone()
+                return task_ref, (row[0] or "").strip() if row else ""
+            finally:
+                tcon.close()
+        except sqlite3.Error:
+            return task_ref, ""
 
     def _known_word_sets(self, con: sqlite3.Connection) -> list[set[str]]:
         sets: list[set[str]] = []
