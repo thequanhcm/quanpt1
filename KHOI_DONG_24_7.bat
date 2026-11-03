@@ -36,25 +36,25 @@ REM (30/10/2026) may moi Windows 11 26300: wmic da bi loai bo -> dung helper
 REM PowerShell ensure_single_instance.ps1 (exit 0 = da co, exit 1 = chua co).
 REM 28/10/2026: guard chong khoi dong trung — idempotent tuyet doi.
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "start_dual_servers" >nul 2>&1
-if errorlevel 1 start "QAB-DualServers" /MIN ".venv\Scripts\pythonw.exe" start_dual_servers.py
+if errorlevel 1 start "" /B ".venv\Scripts\pythonw.exe" start_dual_servers.py
 ping -n 9 127.0.0.1 >nul
 
 REM ---- [2/5] NetChat Auto-Responder ----
 echo [2/5] Khoi dong NetChat Auto-Responder (bot_tony)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "netchat_auto_responder" >nul 2>&1
-if errorlevel 1 start "QAB-NetChatBot" /MIN ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
+if errorlevel 1 start "" /B ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
 ping -n 4 127.0.0.1 >nul
 
 REM ---- [3/5] Learning Daemon ----
 echo [3/5] Khoi dong Learning Daemon (tu hoc moi 5 phut)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "learning_daemon.py" >nul 2>&1
-if errorlevel 1 start "QAB-Learning" /MIN ".venv\Scripts\pythonw.exe" tools\learning_daemon.py
+if errorlevel 1 start "" /B ".venv\Scripts\pythonw.exe" tools\learning_daemon.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [4/5] Watchdog ----
 echo [4/5] Khoi dong Watchdog (tu restart, cap 5/gio)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "tools\watchdog.py" >nul 2>&1
-if errorlevel 1 start "QAB-Watchdog" /MIN ".venv\Scripts\pythonw.exe" tools\watchdog.py
+if errorlevel 1 start "" /B ".venv\Scripts\pythonw.exe" tools\watchdog.py
 ping -n 3 127.0.0.1 >nul
 
 REM ---- [5/5] Backup 2AM (QUAN_AI_BRAIN_BACKUP_2AM) + Report 8AM (Task Scheduler, idempotent) ----
@@ -63,7 +63,7 @@ echo [5/5] Dat lich backup 2AM + report 8AM (Task Scheduler)...
 
 echo.
 echo ============================================================
-echo    HOAN TAT! He thong dang chay ngam (4 cua so MINIMIZED):
+echo    HOAN TAT! He thong dang chay ngam (hoan toan an, khong cua so):
 echo      - QAB-DualServers : http://127.0.0.1:8765 + 8766
 echo      - QAB-NetChatBot  : Bot TONY (NetChat 24/7)
 echo      - QAB-Learning    : Tu hoc lien tuc
