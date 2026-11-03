@@ -88,10 +88,14 @@ SYSTEM_CAPABILITIES: list[SystemCapability] = [
         name="Động Cơ Tự Học & Nâng Cấp (Self-Learning Engine V1)",
         description="Tự quan sát lỗi, tự nghiên cứu tài liệu, tự sinh bản vá (diff) và cách ly tri thức ứng viên chờ Chủ nhân duyệt.",
         domain="Evolution & Learning",
-        status=CapabilityStatus.IMPLEMENTED_UNTESTED,
+        status=CapabilityStatus.VERIFIED_ACTIVE,
         risk_level=2,
-        dependencies=("SelfLearningEngine", "data/learning_sandbox.db"),
-        evidence_notes="Code implemented (autonomous_mind.py 250 lines); learning_reports.db minimal (28KB) — full learning pipeline pending Sprint 5",
+        dependencies=("SelfLearningEngine", "cognition/self_study.py", "candidate_knowledge"),
+        evidence_notes=("Self-Study Engine V2 (02/11): chu trình SCAN→STUDY→SYNTHESIZE→"
+                        "DEDUP→QUARANTINE→REPORT chạy thử THẬT trên copy brain.db — "
+                        "7/7 test, demo web_search thật quarantine 2 knowledge có "
+                        "provenance (conf 0.7); dedup word-set chống dupes 44%. "
+                        "Kiến thức mới luôn quarantined chờ Quanpt1 duyệt (§XI)."),
     ),
     SystemCapability(
         capability_id="web_ui_voice",

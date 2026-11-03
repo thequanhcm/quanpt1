@@ -64,3 +64,14 @@ Phương pháp: SQL trực tiếp + import API + probe Pi5. Mỗi kết luận c
   module lỗi, evidence production rỗng, Pi5 kênh đóng, daemon scorecard không tồn tại)
 - **Số liệu episodes/facts/knowledge đã tăng** — hệ thống vẫn ghi nhận, không đứng
 - **SPRINT 1 ưu tiên:** Tool Registry auto-load + QPIG wire vào /api/chat
+
+## 9. BỔ SUNG 03/11 (Self-Study V2 + tồn tại vận hành)
+
+- Tự học: `autonomous_mind.py` cogitate() **hardcoded 3 kịch bản** (KHÔNG học)
+  → đã xây `cognition/self_study.py` chu trình SCAN→STUDY→SYNTHESIZE→DEDUP→
+  QUARANTINE→REPORT; demo web_search thật quarantine 2 knowledge conf=0.7 —
+  **OBSERVED** (7/7 test, production DB không bị đụng)
+- Backup 2AM đêm qua **KHÔNG chạy**: 0x800710E0 do điều kiện "No Start On
+  Batteries" chặn — đã tắt 2 điều kiện battery trong task XML, chạy thử tay
+  Last Result 0 — **VERIFIED**; backup mới nhất brain_20261103_010239.db
+- Capability `self_learning_v1`: IMPLEMENTED_UNTESTED → **VERIFIED_ACTIVE**
