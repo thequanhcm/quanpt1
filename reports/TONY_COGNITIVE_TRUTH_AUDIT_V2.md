@@ -75,3 +75,13 @@ Phương pháp: SQL trực tiếp + import API + probe Pi5. Mỗi kết luận c
   Batteries" chặn — đã tắt 2 điều kiện battery trong task XML, chạy thử tay
   Last Result 0 — **VERIFIED**; backup mới nhất brain_20261103_010239.db
 - Capability `self_learning_v1`: IMPLEMENTED_UNTESTED → **VERIFIED_ACTIVE**
+
+## 10. PHÊ DUYỆT OWNER (03/11 08:14 ICT)
+
+- **appr_de50ca6a6a00: PENDING → APPROVED** bởi quanpt1 — lệnh chat desktop
+  nguyên văn: "Duyệt card sprint CAI V3 SPRINT 1"; evidence ghi vết trong
+  card_events (brain.db) + governance.approval_granted (governance.db)
+- Đây là card PENDING DUY NHẤT trong hệ thống (nội dung: duyệt xây dựng QPIG
+  V2.0 đã trình 02/11); TONY KHÔNG tự duyệt — decided_by=quanpt1, self-approval
+  bị chặn bằng code (approval_service.py:308)
+- Card chưa consume — sẽ consume khi bắt đầu thực thi hành động R4 tiếp theo
