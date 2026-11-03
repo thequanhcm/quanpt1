@@ -206,7 +206,7 @@ class SelfCareEngine:
                 message=f"Web:{port} offline",
             )
 
-    def check_pi5_connection(self, pi_ip: str = "192.168.1.21", port: int = 8768) -> HealthCheck:
+    def check_pi5_connection(self, pi_ip: str = "100.100.83.59", port: int = 8768) -> HealthCheck:
         """Check Pi 5 connection."""
         check_id = f"health_{int(time.time()*1000)}"
         timestamp = datetime.now(timezone.utc).isoformat()
@@ -270,25 +270,25 @@ class SelfCareEngine:
         return alerts
 
     def _attempt_auto_recovery(self, alert: Alert) -> None:
-        """Attempt auto-recovery for level 0-2 issues."""
+        """Attempt auto-recovery for level 0-2 issues.
+
+        M4 (trung thực): hành động recovery CHƯA có executor thật — chỉ ghi nhận
+        đề xuất, KHÔNG BAO GIỜ set auto_recovered=True. Cờ này chỉ được bật khi
+        một hành động phục hồi thật sự đã chạy và được xác minh (Q/M-A chờ duyệt).
+        """
         if alert.severity == HealthLevel.DOWN:
-            # Level 2: Auto-recovery for critical issues
             component = alert.component
             if component == "ollama" and "ollama_offline" in self._auto_recovery_policies:
-                # Simulate restart (in production, would call actual restart)
-                alert.action_taken = "Attempted Ollama restart (simulated)"
-                alert.auto_recovered = True
-                logger.info(f"Auto-recovery attempted for {component}")
+                alert.action_taken = "PENDING: đề xuất restart Ollama (chưa có executor thật — chờ phê duyệt)"
+                logger.info(f"Recovery PENDING for {component} (no real executor)")
 
             elif component.startswith("web_") and "web_offline" in self._auto_recovery_policies:
-                alert.action_taken = "Attempted web server restart (simulated)"
-                alert.auto_recovered = True
-                logger.info(f"Auto-recovery attempted for {component}")
+                alert.action_taken = "PENDING: đề xuất restart web server (chưa có executor thật — chờ phê duyệt)"
+                logger.info(f"Recovery PENDING for {component} (no real executor)")
 
             elif component == "pi5" and "pi5_disconnected" in self._auto_recovery_policies:
-                alert.action_taken = "Attempted Pi 5 reconnection (simulated)"
-                alert.auto_recovered = True
-                logger.info(f"Auto-recovery attempted for {component}")
+                alert.action_taken = "PENDING: đề xuất kiểm tra kết nối Pi 5 (chưa có executor thật — chờ phê duyệt)"
+                logger.info(f"Recovery PENDING for {component} (no real executor)")
 
         elif alert.severity in [HealthLevel.WARNING, HealthLevel.DEGRADED]:
             # Level 1: Recommend only

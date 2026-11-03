@@ -84,7 +84,7 @@ def test_reprobe_reports_honest_offline() -> None:
     'chưa xác minh' (offline) or honest ONLINE (heartbeat-connected)."""
     cc.stage_pending_action("ch5", "probe", "reprobe_pi5")
     _, reply = cc.route_message("ok", chat_session_id="ch5")
-    assert ("chưa xác minh được" in reply) or ("ONLINE" in reply)
+    assert ("chưa xác minh được" in reply) or ("HOẠT ĐỘNG" in reply)
     # Không bao giờ nói sai bản chất "port 8768 trên PC"
     assert "port 8768" not in reply
 
@@ -122,7 +122,7 @@ def test_responder_autoruns_probe_when_ai_asks_permission() -> None:
     assert out is not None
     assert "Đã xác nhận" in out
     assert "chờ lệnh" not in out  # permission beg removed
-    assert ("vẫn OFFLINE" in out) or ("ONLINE" in out)
+    assert ("vẫn MẤT KẾT NỐI" in out) or ("HOẠT ĐỘNG" in out)
 
 
 def test_responder_keeps_normal_ai_replies_untouched() -> None:

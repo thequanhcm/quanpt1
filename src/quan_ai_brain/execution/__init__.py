@@ -24,6 +24,14 @@ from quan_ai_brain.execution.staging import (
     ProductionExecutionProhibitedError,
     StageStatus,
 )
+from quan_ai_brain.execution.windows_job_object import (
+    JobExecutionResult,
+    JobLimitConfigurationError,
+    JobObjectCreationError,
+    ProcessAssignmentError,
+    WindowsJobObjectBackend,
+    WindowsJobObjectError,
+)
 
 __all__ = [
     "JOB_OBJECT_LIMIT_ACTIVE_PROCESS",
@@ -38,7 +46,11 @@ __all__ = [
     "ExecutionStageResult",
     "InertProcessBackend",
     "IsolatedStagingExecutor",
+    "JobExecutionResult",
+    "JobLimitConfigurationError",
+    "JobObjectCreationError",
     "NetworkPolicy",
+    "ProcessAssignmentError",
     "ProcessBackendInterface",
     "ProcessContainmentConfig",
     "ProductionExecutionProhibitedError",
@@ -46,4 +58,6 @@ __all__ = [
     "ResourceBudgetPolicy",
     "ResourceBudgetValidator",
     "StageStatus",
+    "WindowsJobObjectBackend",
+    "WindowsJobObjectError",
 ]

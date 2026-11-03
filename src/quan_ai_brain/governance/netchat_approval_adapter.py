@@ -14,6 +14,7 @@ An toàn (V3 Section 5.2):
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -27,12 +28,24 @@ if str(_SRC) not in sys.path:
 
 from quan_ai_brain.governance.approval_cards import ApprovalCardStore  # noqa: E402
 
-CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"
+# (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
+CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
 OWNER_NETCHAT_USER_ID = "3b1ughs36i8e9p46im8opnms8w"  # quanpt1
-BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
+# (02/11/2026) Thay bot_quanpt1 thanh bot_tony
+BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
 
-NETCHAT_SCRIPT = r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
-AGENT_PY = r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
+_local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
+_script_cand = [
+    _local_appdata / "netmind_desktop" / "skills" / "bot-netchat" / "netchat_bot.py",
+    Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"),
+]
+NETCHAT_SCRIPT = str(next((p for p in _script_cand if p.exists()), _script_cand[0]))
+
+_py_cand = [
+    _local_appdata / "netmind_desktop" / "netmind-agent" / "venv" / "Scripts" / "python.exe",
+    Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"),
+]
+AGENT_PY = str(next((p for p in _py_cand if p.exists()), _py_cand[0]))
 
 # Trạng thái tiếng Việt cho giải thích
 _STATUS_VI = {

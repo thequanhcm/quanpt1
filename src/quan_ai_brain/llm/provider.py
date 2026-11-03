@@ -15,6 +15,47 @@ from typing import Any, Iterator
 
 NETMIND_CHAT_MODELS = (NETMIND_CHAT_MODEL, NETMIND_DEEP_REASONING_MODEL)
 
+# (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG khi NetMind cloud chết:
+# chuỗi ưu tiên local — model suy luận 7B trước, rồi nhỏ, rồi llama/mistral.
+# Chỉ chọn model CÓ THẬT trong Ollama tại thời điểm fail (không đoán mò).
+LOCAL_FALLBACK_ORDER = (
+    "qwen2.5:7b",
+    "llama3.1:latest",
+    "qwen2.5:3b",
+    "qwen2.5:1.5b",
+    "qwen2.5:0.5b",
+    "mistral:latest",
+    "qwen:latest",
+)
+
+
+def _pick_local_fallback(client: "OllamaClient") -> str | None:
+    """Trả model local đầu tiên có thật trong Ollama theo LOCAL_FALLBACK_ORDER."""
+    return next(_local_fallback_candidates(client), None)
+
+
+def _local_fallback_candidates(client: "OllamaClient"):
+    """Sinh lần lượt các model dự phòng CÓ THẬT trong Ollama theo ưu tiên.
+
+    (01/11/2026) Model lớn có thể fail khi load (RAM busy) → caller phải thử
+    model tiếp theo trong thứ tự cho tới khi một model sinh văn bản thành công.
+    """
+    try:
+        if not client.ping(timeout=1.5):
+            return
+        names = {m.name.lower() for m in client.list_models(timeout=2.0)}
+    except Exception:
+        return
+    for cand in LOCAL_FALLBACK_ORDER:
+        base = cand.lower()
+        base_root = base.split(":")[0]
+        for name in names:  # giữ THỨ TỰ ƯU TIÊN của LOCAL_FALLBACK_ORDER (không sort)
+            name_root = name.split(":")[0]
+            # khớp CHÍNH XÁC name: hoặc cùng gốc VÀ candidate KHÔNG chỉ định tag
+            if name == base or (":" not in cand and name_root == base_root):
+                yield name  # dùng đúng tên thật (vd llama3.1:latest)
+                break
+
 
 class LLMProvider:
     """Facade for LLM inference. Mediates between local Ollama, NetMind cloud, and offline Mock provider."""
@@ -103,7 +144,57 @@ class LLMProvider:
         if isinstance(request, str):
             request = LLMRequest(prompt=request, model=self.default_model, **kwargs)
         if self.netmind is not None and request.model in NETMIND_CHAT_MODELS:
-            yield from self.netmind.stream_chat(request)
+            buffered: list[dict[str, Any]] = []
+            error_event: dict[str, Any] | None = None
+            for event in self.netmind.stream_chat(request):
+                if event.get("type") == "error":
+                    error_event = event
+                    break
+                buffered.append(event)
+            if error_event is None:
+                yield from buffered
+                return
+            # (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG LOCAL cho stream:
+            # cloud chết giữa dòng → thử Ollama local trước khi báo error.
+            if allow_fallback is None:
+                fallback = self.fallback_mode != FallbackMode.NEVER
+            else:
+                fallback = bool(allow_fallback)
+            if fallback:
+                local_model = _pick_local_fallback(self.client)
+                if local_model:
+                    local_req = LLMRequest(
+                        prompt=request.prompt,
+                        system_prompt=request.system_prompt,
+                        model=local_model,
+                        metadata=request.metadata,
+                    )
+                    resp = self.client.generate(local_req)
+                    if resp.success:
+                        yield {
+                            "type": "meta",
+                            "model": local_model,
+                            "note": (
+                                f"FALLBACK LOCAL — NetMind failed with [{error_event.get('code')}], "
+                                f"dùng model dự phòng Ollama '{local_model}'."
+                            ),
+                        }
+                        yield {"type": "delta", "text": resp.text}
+                        yield {
+                            "type": "final",
+                            "model": local_model,
+                            "elapsed_ms": resp.elapsed_ms,
+                            "completion_tokens": None,
+                            "finish_reason": "stop",
+                            "provider": "ollama",
+                            "is_mock": False,
+                            "warning": (
+                                f"FALLBACK LOCAL — NetMind failed with [{error_event.get('code')}], "
+                                f"dùng model dự phòng Ollama '{local_model}' (chất lượng thấp hơn GLM-5.3-Flash)."
+                            ),
+                        }
+                        return
+            yield error_event
             return
         # Non-cloud models: single-shot generate, re-emitted as one delta event.
         resp = self.generate(request, allow_fallback=allow_fallback)
@@ -140,11 +231,30 @@ class LLMProvider:
             nm_resp = self.netmind.generate(request)
             if nm_resp.success:
                 return nm_resp
+            # (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG LOCAL: cloud chết
+            # → thử Ollama local trước khi chấp nhận mock. Provenance vẫn rõ.
             if fallback:
+                for local_model in _local_fallback_candidates(self.client):
+                    _to = request.timeout_seconds
+                    _to_kw = {"timeout_seconds": _to} if isinstance(_to, (int, float)) and _to > 0 else {}
+                    local_req = LLMRequest(
+                        prompt=request.prompt,
+                        system_prompt=request.system_prompt,
+                        model=local_model,
+                        metadata=request.metadata,
+                        **_to_kw,
+                    )
+                    local_resp = self.client.generate(local_req)
+                    if local_resp.success:
+                        local_resp.warning = (
+                            f"FALLBACK LOCAL — NetMind failed with [{nm_resp.error_code}], "
+                            f"dùng model dự phòng Ollama '{local_model}' (chất lượng thấp hơn GLM-5.3-Flash)."
+                        )
+                        return local_resp
                 mock_resp = self.mock.generate(request)
                 mock_resp.warning = (
                     f"MOCK FALLBACK — NetMind request failed with [{nm_resp.error_code}], "
-                    "mock provider used instead. NO REAL LLM INFERENCE."
+                    "local Ollama fallback unavailable, mock provider used instead. NO REAL LLM INFERENCE."
                 )
                 return mock_resp
             return nm_resp

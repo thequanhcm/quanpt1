@@ -11,8 +11,8 @@ from pathlib import Path
 
 def main() -> int:
     """Print manual setup instructions."""
-    base_dir = r"E:\AI\QUAN AI BRAIN"
-    venv_python = r"C:\Users\DELL\.venv\Scripts\python.exe"
+    base_dir = r"E:\BRAIN"
+    venv_python = r"E:\BRAIN\.venv\Scripts\python.exe"
     watchdog = os.path.join(base_dir, "tools", "watchdog.py")
     backup_script = os.path.join(base_dir, "tools", "backup_database.py")
     
@@ -69,7 +69,7 @@ def main() -> int:
     print("  5. Actions: New...")
     print(f"     - Program: {venv_python}")
     print(f"     - Arguments: \"{backup_script}\"")
-    print("     - Start in: E:\\AI\\QUAN AI BRAIN")
+    print("     - Start in: E:\\BRAIN")
     print("  6. Click OK")
     
     print("\n" + "-" * 70)
@@ -78,7 +78,7 @@ def main() -> int:
     print("  2. Paste content:")
     print("""
 # Backup script for QUAN AI BRAIN
-$baseDir = \"E:\\AI\\QUAN AI BRAIN\"
+$baseDir = \"E:\\BRAIN\"
 $dbPath = \"$baseDir\\data\\brain.db\"
 $backupDir = \"$baseDir\\backups\"
 $timestamp = Get-Date -Format \"yyyy-MM-dd_HHmmss\"

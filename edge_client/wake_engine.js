@@ -59,6 +59,11 @@ class WakeWordEngine {
         if (cfg.silence_timeout_seconds || cfg.silence_timeout_sec) {
           this.options.silenceTimeoutSeconds = cfg.silence_timeout_seconds || cfg.silence_timeout_sec;
         }
+        // (31/10/2026) Owner policy: TONY CHỈ phản hồi khi được gọi qua mic.
+        // config.enabled=false => engine KHÔNG được tự lắng nghe khi khởi động.
+        if (cfg.enabled === false) {
+          this.options.autoStart = false;
+        }
         if (typeof cfg.chime_enabled === "boolean") {
           this.options.chimeEnabled = cfg.chime_enabled;
         }
@@ -202,40 +207,25 @@ class WakeWordEngine {
       }
     };
 
+    // (31/10/2026) Owner policy mic-only: KHÔNG tự hồi phục recognition khi hết
+    // phiên (tránh STT nền 24/7 nghe nhầm tiếng ồn). Chỉ LISTENING chủ động
+    // (được gọi qua nút mic/wake) mới được nạp lại.
     this.recognition.onend = () => {
-      if (this.state !== "DISABLED" && this.state !== "ERROR") {
+      if (this.state === "LISTENING" && !this.isTtsSpeaking && this.recognition) {
         setTimeout(() => {
-          try {
-            if (!this.isTtsSpeaking && this.recognition) {
-              this.recognition.start();
-            }
-          } catch (_) {}
+          try { this.recognition.start(); } catch (_) {}
         }, 200);
       }
     };
 
-    try {
-      this.recognition.start();
-    } catch (e) {
-      console.warn("Recognition initial start error:", e);
-    }
+    // (31/10/2026) initRecognition KHÔNG tự start — chỉ nạp cấu hình. Phiên nghe
+    // bắt đầu khi: nút mic trên màn hình, hoặc wake_by_voice từ Vosk service.
+    // try { this.recognition.start(); } catch (e) { console.warn("Recognition initial start error:", e); }
   }
 
   handleSpeechResult(event) {
-    // Sprint 2 barge-in: human voice interrupts the assistant's TTS playback.
-    // Guards: the engine must be running, a wake word engine exists, and the
-    // audio must actually be playing (not just any SpeechRecognition noise).
     if (this.isTtsSpeaking || this.state === "SPEAKING") {
-      const interrupted = (typeof window !== "undefined" && typeof window.bargeInStopSpeaking === "function")
-        ? window.bargeInStopSpeaking()
-        : false;
-      if (interrupted) {
-        console.log("[Pi5 Barge-in] Human voice detected — TTS cancelled.");
-        this.isTtsSpeaking = false;
-        this.startFollowUpWindow();
-        return;
-      }
-      return; // spurious result while blocked — ignore
+      return;
     }
 
     let transcript = "";
@@ -259,10 +249,7 @@ class WakeWordEngine {
       return;
     }
     if (clean.includes("dừng đọc") || clean.includes("dừng nói") || clean.includes("stop speaking")) {
-      const stopped = (typeof window !== "undefined" && typeof window.bargeInStopSpeaking === "function")
-        ? window.bargeInStopSpeaking()
-        : false;
-      if (!stopped && window.speechSynthesis) window.speechSynthesis.cancel();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
       this.isTtsSpeaking = false;
       this.startFollowUpWindow();
       return;

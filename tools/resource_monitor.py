@@ -6,7 +6,7 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-BASE_DIR = r"E:\AI\QUAN AI BRAIN"
+BASE_DIR = r"E:\BRAIN"
 LOG_FILE = os.path.join(BASE_DIR, "logs", "resource_monitor.log")
 
 THRESHOLDS = {
@@ -34,7 +34,7 @@ def main():
     
     cpu = psutil.cpu_percent(interval=1)
     memory = psutil.virtual_memory().percent
-    disk = psutil.disk_usage("E:\AI\QUAN AI BRAIN").percent
+    disk = psutil.disk_usage("E:\BRAIN").percent
     gpu = check_gpu()
     
     timestamp = datetime.now(timezone.utc).isoformat()

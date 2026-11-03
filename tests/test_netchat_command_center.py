@@ -120,10 +120,10 @@ def test_handle_approve_drains_fifo(consultations_db):
 
 def test_handle_status_reports_live_probes(consultations_db):
     reply = handle_status()
-    # Format ngắn gọn (27/10): 🟢 ONLINE / 🔴 OFFLINE / 📋 Nhiệm vụ
-    assert "ONLINE" in reply and "OFFLINE" in reply
-    assert "core_server" in reply
-    assert "ollama_daemon" in reply  # honesty: offline is reported
+    # (01/11/2026) Chuẩn hoá tiếng Việt: 🟢 HOẠT ĐỘNG / 🔴 MẤT KẾT NỐI / 📋 Nhiệm vụ
+    assert "HOẠT ĐỘNG" in reply and "MẤT KẾT NỐI" in reply
+    assert "máy chủ chính" in reply
+    assert "Ollama" in reply  # honesty: offline is reported
     assert "Nhiệm vụ" in reply
 
 

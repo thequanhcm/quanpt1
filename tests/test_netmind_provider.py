@@ -46,6 +46,16 @@ def _fake_http(body: dict, status: int = 200):
 def _clear_netmind_env(monkeypatch) -> None:
     for var in ("NETMIND_API_KEY", "HERMES_CUSTOM_NETMIND_API_KEY", "NETMIND_EXTERNAL_DATA_ALLOWED", "NETMIND_BASE_URL"):
         monkeypatch.delenv(var, raising=False)
+    # (01/11/2026, M5) Registry fallback (HKCU\Environment) cũng phải "trống"
+    # trong test — monkeypatch winreg để QueryValueEx raise FileNotFoundError.
+    import winreg as _wr
+    class _FakeKey:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    def _raise_not_found(*a, **k):
+        raise FileNotFoundError()
+    monkeypatch.setattr(_wr, "OpenKey", _raise_not_found)
+    monkeypatch.setattr(_wr, "QueryValueEx", _raise_not_found)
 
 
 # ---------------------------------------------------------------- policy gates
@@ -87,8 +97,15 @@ def test_missing_key_returns_no_api_key(monkeypatch):
     assert resp.error_code == "NO_API_KEY"
 
 
-def test_model_allowlist_rejects_unknown_model():
-    """Only exact catalog IDs pass. Unknown or unverified model IDs are rejected."""
+def test_model_allowlist_rejects_unknown_model(monkeypatch):
+    """Only exact catalog IDs pass. Unknown or unverified model IDs are rejected.
+
+    (31/10/2026) Fix flaky: test này phải chạy CÓ key (giả) — provider kiểm
+    allowlist catalog TRƯỚC khi gọi API, nhưng nếu env KHÔNG có key thì nó trả
+    NO_API_KEY trước khi chạm tới nhánh catalog. Trước đây test PASS nhờ env
+    terminal tình cờ có key thật (không deterministic) → set key giả cứng."""
+    _clear_netmind_env(monkeypatch)
+    monkeypatch.setenv("NETMIND_API_KEY", "test-only-dummy-key-for-allowlist-check")
     provider = _make_provider()
     for bad in ("zai-org/GLM-5.3", "zai-org/GLM-5.3-FlashX", "gpt-4o", "qwen2.5:7b"):
         resp = provider.generate(LLMRequest(prompt="test", model=bad))

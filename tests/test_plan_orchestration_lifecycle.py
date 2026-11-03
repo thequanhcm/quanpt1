@@ -127,7 +127,7 @@ def test_execute_lifecycle_r0_r2_happy_path(orchestrator: PlanOrchestrator) -> N
     # Verify database state
     refreshed_task = orchestrator.task_registry.get_task(task_rec.task_id)
     assert refreshed_task is not None
-    assert refreshed_task.status == TaskStatus.COMPLETED
+    assert refreshed_task.status == TaskStatus.COMPLETED_VERIFIED
     assert refreshed_task.completed_at_utc is not None
 
     steps = orchestrator.task_registry.list_steps_for_task(task_rec.task_id)
@@ -231,7 +231,7 @@ def test_execute_lifecycle_r4_approval_gate_wait_and_resume(orchestrator: PlanOr
 
     final_task = orchestrator.task_registry.get_task(task_rec.task_id)
     assert final_task is not None
-    assert final_task.status == TaskStatus.COMPLETED
+    assert final_task.status == TaskStatus.COMPLETED_VERIFIED
 
 
 def test_execute_lifecycle_dependency_failure_blocks_dependent_step(orchestrator: PlanOrchestrator) -> None:
@@ -444,5 +444,5 @@ def test_execute_lifecycle_r4_auto_creates_consultation_ticket_and_resumes_on_ti
 
     final_task = orchestrator.task_registry.get_task(task_rec.task_id)
     assert final_task is not None
-    assert final_task.status == TaskStatus.COMPLETED
+    assert final_task.status == TaskStatus.COMPLETED_VERIFIED
 

@@ -26,8 +26,8 @@ def main() -> int:
     trig.UserId = "DELL"
     trig.Enabled = True
     action = td.Actions.Create(0)
-    action.Path = r"E:\AI\QUAN AI BRAIN\KHOI_DONG_24_7.bat"
-    action.WorkingDirectory = r"E:\AI\QUAN AI BRAIN"
+    action.Path = r"E:\BRAIN\KHOI_DONG_24_7.bat"
+    action.WorkingDirectory = r"E:\BRAIN"
     root.RegisterTaskDefinition(TASK_NAME, td, 6, None, None, 3)  # 6 = update-or-create
     print(f"{TASK_NAME}: created OK (logon trigger, chạy KHOI_DONG_24_7.bat)")
     return 0

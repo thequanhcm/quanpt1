@@ -18,7 +18,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-ROOT = Path(r"E:\AI\QUAN AI BRAIN")
+ROOT = Path(r"E:\BRAIN")
 SKILL = ROOT / "Skill"
 DB = ROOT / "data" / "brain.db"
 

@@ -30,16 +30,49 @@ import time
 import traceback
 from datetime import datetime, timezone
 from pathlib import Path
+
+# (30/10/2026) May moi 16GB: gioi han thread BLAS tranh cap RAM voi server
+# (nguyen nhan crash "OpenBLAS error: Memory allocation still failed").
+os.environ.setdefault("OMP_NUM_THREADS", "2")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "2")
+os.environ.setdefault("MKL_NUM_THREADS", "2")
+
+# (29/10/2026) pythonw windowless mode: sys.stdout là None dưới pythonw.exe —
+# print() sẽ crash service im lặng. Redirect ra log file.
+if sys.stdout is None or sys.stderr is None:
+    _LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
+    try:
+        _LOG_DIR.mkdir(parents=True, exist_ok=True)
+        sys.stdout = open(_LOG_DIR / "learning_daemon_stdout.log", "a", buffering=1, encoding="utf-8", errors="replace")
+        sys.stderr = sys.stdout
+    except Exception:
+        pass
+
+# (29/10/2026) pythonw: không còn console cha — mỗi subprocess.run sẽ tạo cửa
+# sổ console riêng (nháy). Patch toàn bộ subprocess.run của process này.
+_orig_subprocess_run = subprocess.run
+
+def _subprocess_run_no_window(*args, **kwargs):
+    kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    return _orig_subprocess_run(*args, **kwargs)
+
+subprocess.run = _subprocess_run_no_window
 from typing import Any
 
 sys.path.insert(0, "src")
+# (01/11/2026) FIX giống responder: PYTHONPATH thừa hưởng (netmind-agent có
+# package `tools` riêng) có thể che package `src` — ép BRAIN root lên đầu.
+_BRAIN_ROOT = str(Path(__file__).resolve().parent.parent)
+if _BRAIN_ROOT in sys.path:
+    sys.path.remove(_BRAIN_ROOT)
+sys.path.insert(0, _BRAIN_ROOT)
 
 from quan_ai_brain.memory.knowledge_ingestion import KnowledgeIngestionEngine, KnowledgeSource
 from quan_ai_brain.memory.sqlite_store import MemoryStore
 
 # Configuration
 CONFIG = {
-    "workspace": Path(r"E:\AI\QUAN AI BRAIN"),
+    "workspace": Path(r"E:\BRAIN"),
     "db_path": "data/brain.db",
     "owner_id": "Quanpt1",
     "consolidation_interval": 300,  # 5 minutes
@@ -144,29 +177,40 @@ def ingest_git_history(engine: KnowledgeIngestionEngine) -> int:
 
 
 def ingest_test_results(engine: KnowledgeIngestionEngine) -> int:
-    """Ingest recent test results."""
-    try:
-        result = subprocess.run(
-            [".\\.venv\\Scripts\\python.exe", "-m", "pytest", "-q", "tests", "--tb=no"],
-            cwd=CONFIG["workspace"],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
+    """Ingest recent test results.
 
-        # Parse pytest output
-        output = result.stdout
-        match = re.search(r"(\d+)\s+passed,?\s*(\d*)\s+skipped,?\s*(\d*)\s+failed", output)
+    (31/10/2026) FIX TREO MÁY NGHIÊM TRỌNG trên máy 16GB: trước đây hàm này
+    TỰ CHẠY full pytest suite mỗi chu kỳ học (5 phút). pytest + chromadb +
+    onnxruntime phình tới 34,6 GB commit → cạn bộ nhớ ảo toàn hệ thống
+    (commit limit 41,8 GB) → MÁY BỊ TREO. Đã bắt quả tang live (PID 10452).
+    Sửa gốc: KHÔNG bao giờ tự chạy pytest nữa — đọc kết quả MỚI NHẤT từ
+    reports/TEST_RUN_LATEST.txt do tools/validate_and_report.py sinh ra khi
+    anh chủ động chạy kiểm định. Chỉ đọc file, tốn ~0 MB.
+    """
+    try:
+        report = Path(CONFIG["workspace"]) / "reports" / "TEST_RUN_LATEST.txt"
+        if not report.exists():
+            return 0
+        # Chỉ đọc nếu báo cáo còn mới (<= 7 ngày)
+        age_days = (time.time() - report.stat().st_mtime) / 86400
+        if age_days > 7:
+            return 0
+        output = report.read_text(encoding="utf-8", errors="replace")[-4000:]
+        match = re.search(
+            r"(\d+)\s+passed(?:,\s*(\d+)\s+skipped)?(?:,\s*(\d+)\s+failed)?", output
+        )
         if match:
-            passed, skipped, failed = match.groups()
-            stmt = f"Test suite: {passed} passed, {skipped or 0} skipped, {failed or 0} failed"
+            passed = match.group(1)
+            skipped = match.group(2) or "0"
+            failed = match.group(3) or "0"
+            stmt = f"Test suite: {passed} passed, {skipped} skipped, {failed} failed"
             engine.ingest(
                 content=stmt,
                 source_type=KnowledgeSource.TEST_EVIDENCE,
-                source_ref="pytest:latest",
+                source_ref=f"pytest:latest (báo cáo {age_days:.0f} ngày)",
                 source_version=datetime.now(timezone.utc).isoformat(),
                 tags=["testing", "pytest", "quality"],
-                skip_duplicates=False,  # kết quả test MỚI là tri thức mới (có version)
+                skip_duplicates=False,
             )
             return 1
 

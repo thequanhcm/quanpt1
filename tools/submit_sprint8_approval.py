@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-WORKSPACE = Path(r"E:\AI\QUAN AI BRAIN")
+WORKSPACE = Path(r"E:\BRAIN")
 sys.path.insert(0, str(WORKSPACE / "src"))
 
 from quan_ai_brain.governance.approval_cards import ApprovalCardStore

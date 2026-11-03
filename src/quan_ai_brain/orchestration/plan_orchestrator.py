@@ -52,6 +52,7 @@ class PlanOrchestrator:
         approval_gate: ApprovalGate | None = None,
         governance_store: GovernanceStateStore | None = None,
         consultation_store: ConsultationStore | None = None,
+        approval_cards: Any | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve() if workspace else Path.cwd().resolve()
         self.task_registry = task_registry
@@ -59,6 +60,8 @@ class PlanOrchestrator:
         self.approval_gate = approval_gate or self.sandbox.approval_gate
         self.governance_store = governance_store or GovernanceStateStore(self.workspace / "data" / "governance.db", workspace=self.workspace)
         self.consultation_store = consultation_store or ConsultationStore(self.workspace / "data" / "consultations.db")
+        # DEOM M4: ApprovalCardService (tùy chọn — None giữ hành vi cũ)
+        self.approval_cards = approval_cards
 
     def submit_plan(
         self,
@@ -222,6 +225,11 @@ class PlanOrchestrator:
         for step in steps:
             if step.status == TaskStatus.COMPLETED:
                 continue
+            # DEOM V4 G-C (ADV): step FAILED là trạng thái chốt của lần chạy này —
+            # KHÔNG được lifecycle "chữa lành" ngầm bằng cách chạy lại. Bước sau
+            # phụ thuộc nó sẽ bị chặn ở dependency check bên dưới (fail-honest).
+            if step.status == TaskStatus.FAILED:
+                continue
 
             # Check Dependencies
             if step.dependencies:
@@ -353,8 +361,26 @@ class PlanOrchestrator:
             }
             self.task_registry.update_task_status(
                 task_id,
-                TaskStatus.COMPLETED,
+                TaskStatus.VERIFYING,
                 result_payload=summary_payload,
+                evidence_ref=f"evidence:plan_execution_{task_id}",
+            )
+            # DEOM M2 — Task Verifier: tất cả step COMPLETED + evidence → COMPLETED_VERIFIED,
+            # ngược lại COMPLETED_UNVERIFIED (fail-honest, không tự phong VERIFIED).
+            evidence_ok = all(
+                (bool(s.verification_method) or bool(s.expected_output))
+                and s.result_payload.get("status") == "success"
+                for s in refreshed_steps
+            )
+            self.task_registry.verify_task(
+                task_id,
+                evidence_ok=evidence_ok,
+                note=(
+                    "mọi step có verification_method + result_payload"
+                    if evidence_ok
+                    else "thiếu verification_method/result_payload ở ít nhất 1 step"
+                ),
+                actor="plan_orchestrator",
                 evidence_ref=f"evidence:plan_execution_{task_id}",
             )
 
@@ -375,6 +401,17 @@ class PlanOrchestrator:
                     TaskStatus.CANCELLED,
                     error_message=reason,
                 )
+
+        # DEOM V4 G-C state machine: task đã terminal (COMPLETED_VERIFIED…) không
+        # hủy được nữa — trả trạng thái hiện tại thay vì 500 ở API.
+        current = self.task_registry.get_task(task_id)
+        if current and current.status in (
+            TaskStatus.COMPLETED_VERIFIED,
+            TaskStatus.COMPLETED_UNVERIFIED,
+            TaskStatus.REJECTED,
+            TaskStatus.EXPIRED,
+        ):
+            return current
 
         updated = self.task_registry.update_task_status(
             task_id,
@@ -398,6 +435,16 @@ class PlanOrchestrator:
     # Private Helpers
     # -------------------------------------------------------------------------
 
+    def step_action_fingerprint(self, step: TaskStepRecord, task_id: str) -> str:
+        """DEOM V4 §6.2 — vân tay nội dung bước R4; nguồn duy nhất cho card + consume."""
+        from quan_ai_brain.governance.approval_service import compute_action_fingerprint
+
+        return compute_action_fingerprint(
+            action_summary=step.name,
+            scope=[step.description or ""],
+            params={"task_id": task_id, "step_id": step.step_id},
+        )
+
     def _check_step_approval(self, step: TaskStepRecord, task: TaskRecord) -> bool:
         """Checks if a valid, unconsumed approval exists in ConsultationStore or ApprovalGate."""
         # 1. Check ConsultationStore if ticket was approved by owner
@@ -406,6 +453,26 @@ class PlanOrchestrator:
             try:
                 ticket = self.consultation_store.get_ticket(ticket_id)
                 if ticket and ticket.status.value in ("APPROVED", "DIRECTED"):
+                    return True
+            except Exception:
+                pass
+
+        # 1.5. DEOM M4: ApprovalCardService — card APPROVED + chưa consumed
+        # được tạo bởi TONY (requested_by) và owner duyệt (decided_by=quanpt1).
+        # One-time use: consume ngay khi xác nhận hợp lệ.
+        # DEOM V4 §6.2: consume kèm fingerprint nội dung bước — hành động đổi
+        # sau khi duyệt → consume bị từ chối, bước giữ WAITING_APPROVAL.
+        if self.approval_cards is not None:
+            try:
+                step_fingerprint = self.step_action_fingerprint(step, task.task_id)
+                for card in self.approval_cards.list_cards(state="APPROVED", limit=200):
+                    if card.task_id != task.task_id or card.consumed_at_utc:
+                        continue
+                    if getattr(card, "risk_level", "") != "R4":
+                        continue
+                    self.approval_cards.consume(
+                        card.approval_id, actor="plan_orchestrator", action_fingerprint=step_fingerprint
+                    )
                     return True
             except Exception:
                 pass
@@ -483,6 +550,20 @@ class PlanOrchestrator:
             TaskStatus.CANCELLED: TaskState.CANCELLED,
             TaskStatus.OUTCOME_UNKNOWN: TaskState.OUTCOME_UNKNOWN,
             TaskStatus.BLOCKED: TaskState.BLOCKED,
+            # DEOM M2: các trạng thái mới map về state tương đương có sẵn
+            TaskStatus.RECEIVED: TaskState.RECEIVED,
+            TaskStatus.UNDERSTANDING: TaskState.RECEIVED,
+            TaskStatus.ANALYZING: TaskState.RECEIVED,
+            TaskStatus.PLANNING: TaskState.RECEIVED,
+            TaskStatus.READY: TaskState.AUTHORIZED,
+            TaskStatus.VERIFYING: TaskState.RUNNING,
+            TaskStatus.NEEDS_INFORMATION: TaskState.WAITING_FOR_APPROVAL,
+            TaskStatus.PAUSED: TaskState.RUNNING,
+            TaskStatus.EXPIRED: TaskState.CANCELLED,
+            TaskStatus.REJECTED: TaskState.CANCELLED,
+            TaskStatus.COMPLETED_VERIFIED: TaskState.SUCCEEDED,
+            TaskStatus.COMPLETED_PARTIALLY: TaskState.SUCCEEDED,
+            TaskStatus.COMPLETED_UNVERIFIED: TaskState.SUCCEEDED,
         }
         state = state_map.get(task.status, TaskState.OUTCOME_UNKNOWN)
 

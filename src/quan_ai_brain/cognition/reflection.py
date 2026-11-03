@@ -59,10 +59,15 @@ class ReflectionLoop:
         now = datetime.now(timezone.utc).isoformat()
         terminal = task.status in (
             TaskStatus.COMPLETED,
+            TaskStatus.COMPLETED_VERIFIED,
+            TaskStatus.COMPLETED_PARTIALLY,
+            TaskStatus.COMPLETED_UNVERIFIED,
             TaskStatus.FAILED,
             TaskStatus.CANCELLED,
             TaskStatus.BLOCKED,
             TaskStatus.OUTCOME_UNKNOWN,
+            TaskStatus.EXPIRED,
+            TaskStatus.REJECTED,
         )
 
         answers: dict[str, Any] = {
@@ -116,7 +121,7 @@ class ReflectionLoop:
                     for s in steps
                     if s.requires_approval and s.status != TaskStatus.COMPLETED
                 ]
-                + (["promotion_of_lessons_to_semantic_memory"] if task.status == TaskStatus.COMPLETED else [])
+                + (["promotion_of_lessons_to_semantic_memory"] if ReflectionLoop._is_completed(task.status) else [])
             ),
         }
 
@@ -183,6 +188,39 @@ class ReflectionLoop:
             import sqlite3
             import uuid
 
+            # (01/11/2026, M2 FIX) Không hard-code brain.db path: nếu memory_store
+            # được inject từ factory (path khác workspace/data/brain.db), dùng
+            # chính DB của store đó — tránh INSERT vào DB rỗng không có bảng.
+            store = None
+            if self._memory_store_factory is not None:
+                try:
+                    store = self._memory_store_factory()
+                except Exception:
+                    store = None
+            if store is not None and hasattr(store, "_connection"):
+                conn = store._connection
+                count = 0
+                for hyp in report["lessons_hypothesis"]:
+                    conn.execute(
+                        """
+                        INSERT INTO candidate_knowledge(
+                            id, statement, source_ref, rationale,
+                            status, created_at_utc
+                        ) VALUES(?,?,?,?, 'quarantined', ?)
+                        """,
+                        (
+                            f"hyp_{uuid.uuid4().hex[:12]}",
+                            f"[HYPOTHESIS][{task_id}] {hyp}",
+                            f"cognitive_loop:{task_id}",
+                            "Auto-quarantined reflection hypothesis; needs owner verification",
+                            datetime.now(timezone.utc).isoformat(),
+                        ),
+                    )
+                    count += 1
+                conn.commit()
+                return count
+
+            # Fallback: path chuẩn trong workspace (behavior cũ)
             db = self.workspace / "data" / "brain.db"
             if not db.exists() or not report["lessons_hypothesis"]:
                 return 0
@@ -193,14 +231,13 @@ class ReflectionLoop:
                     conn.execute(
                         """
                         INSERT INTO candidate_knowledge(
-                            id, statement, source_type, source_ref, rationale,
+                            id, statement, source_ref, rationale,
                             status, created_at_utc
-                        ) VALUES(?,?,?,?,?, 'quarantined', ?)
+                        ) VALUES(?,?,?,?, 'quarantined', ?)
                         """,
                         (
                             f"hyp_{uuid.uuid4().hex[:12]}",
                             f"[HYPOTHESIS][{task_id}] {hyp}",
-                            "reflection",
                             f"cognitive_loop:{task_id}",
                             "Auto-quarantined reflection hypothesis; needs owner verification",
                             datetime.now(timezone.utc).isoformat(),
@@ -215,8 +252,18 @@ class ReflectionLoop:
             return 0
 
     @staticmethod
+    def _is_completed(status: Any) -> bool:
+        """DEOM M2: COMPLETED* (VERIFIED/PARTIALLY/UNVERIFIED) đều là hoàn tất."""
+        return status in (
+            TaskStatus.COMPLETED,
+            TaskStatus.COMPLETED_VERIFIED,
+            TaskStatus.COMPLETED_PARTIALLY,
+            TaskStatus.COMPLETED_UNVERIFIED,
+        )
+
+    @staticmethod
     def _effective_decisions(task: Any, steps: list[Any]) -> list[str] | str:
-        if task.status == TaskStatus.COMPLETED and steps:
+        if ReflectionLoop._is_completed(task.status) and steps:
             return [f"step '{s.name}' verified OK" for s in steps if s.status == TaskStatus.COMPLETED]
         return "CHƯA CÓ DỮ LIỆU ĐỦ"
 
@@ -244,7 +291,7 @@ class ReflectionLoop:
     @staticmethod
     def _lessons(task: Any, steps: list[Any]) -> list[str]:
         lessons: list[str] = []
-        if task.status == TaskStatus.COMPLETED:
+        if ReflectionLoop._is_completed(task.status):
             lessons.append(
                 f"Task '{task.goal}' completed with {len(steps)} verified steps in inert sandbox."
             )
@@ -258,7 +305,7 @@ class ReflectionLoop:
     @staticmethod
     def _hypotheses(task: Any, steps: list[Any]) -> list[str]:
         hyps: list[str] = []
-        if task.status == TaskStatus.COMPLETED:
+        if ReflectionLoop._is_completed(task.status):
             hyps.append(
                 "Same plan shape will succeed for similar goals (UNPROVEN — requires more samples)."
             )

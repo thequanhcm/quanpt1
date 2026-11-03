@@ -1,0 +1,11 @@
+SKIPPED [1] tests\test_v41_image_ocr.py:45: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:54: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:62: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+3370 passed, 45 skipped, 3 warnings in 297.36s (0:04:57)
+SKIPPED [1] tests\test_v41_image_ocr.py:45: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:54: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:62: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+3370 passed, 45 skipped, 3 warnings in 297.36s (0:04:57)
+

@@ -20,6 +20,7 @@ from typing import Any
 
 class TTSProvider(str, Enum):
     EDGE_TTS = "edge-tts"
+    PIPER = "piper"
     BROWSER_SPEECH = "browser-speech-synthesis"
     MOCK = "mock"
 
@@ -71,6 +72,76 @@ STANDARD_VIETNAMESE_VOICES: list[TTSVoiceInfo] = [
         description="Giọng nam Việt Nam tự nhiên, phong thái nghiêm túc.",
     ),
 ]
+
+
+# (31/10/2026) BỘ GIỌNG ĐA NGÔN NGỮ — chuyển thể giao tiếp trơn chu cho các
+# ngôn ngữ ngoài Việt Nam (owner yêu cầu bổ sung đầy đủ ngôn ngữ giọng nói).
+# Tiếng Việt giữ 2 giọng chuẩn riêng (STANDARD_VIETNAMESE_VOICES).
+MULTI_LANGUAGE_VOICES: list[TTSVoiceInfo] = [
+    TTSVoiceInfo("en-US-AvaMultilingualNeural", "Ava (EN, Multilingual)", "en-US", "female", "edge-tts", True, "Giọng nữ Anh-US đa ngôn ngữ."),
+    TTSVoiceInfo("en-US-AndrewMultilingualNeural", "Andrew (EN, Multilingual)", "en-US", "male", "edge-tts", True, "Giọng nam Anh-US đa ngôn ngữ."),
+    TTSVoiceInfo("ja-JP-NanamiNeural", "Nanami (JA)", "ja-JP", "female", "edge-tts", True, "Giọng nữ Nhật Bản."),
+    TTSVoiceInfo("zh-CN-XiaoxiaoNeural", "Xiaoxiao (ZH)", "zh-CN", "female", "edge-tts", True, "Giọng nữ Trung Quốc."),
+    TTSVoiceInfo("ko-KR-HyunsuMultilingualNeural", "Hyunsu (KO, Multilingual)", "ko-KR", "male", "edge-tts", True, "Giọng nam Hàn Quốc đa ngôn ngữ."),
+    TTSVoiceInfo("fr-FR-VivienneMultilingualNeural", "Vivienne (FR, Multilingual)", "fr-FR", "female", "edge-tts", True, "Giọng nữ Pháp đa ngôn ngữ."),
+    TTSVoiceInfo("de-DE-SeraphinaMultilingualNeural", "Seraphina (DE, Multilingual)", "de-DE", "female", "edge-tts", True, "Giọng nữ Đức đa ngôn ngữ."),
+    TTSVoiceInfo("th-TH-PremwadeeNeural", "Premwadee (TH)", "th-TH", "female", "edge-tts", True, "Giọng nữ Thái Lan."),
+    TTSVoiceInfo("ru-RU-SvetlanaNeural", "Svetlana (RU)", "ru-RU", "female", "edge-tts", True, "Giọng nữ Nga."),
+    TTSVoiceInfo("es-ES-ElviraNeural", "Elvira (ES)", "es-ES", "female", "edge-tts", True, "Giọng nữ Tây Ban Nha."),
+]
+
+# Bảng tra nhanh locale → voice mặc định (fallback về tiếng Việt nếu thiếu):
+LANGUAGE_VOICE_MAP: dict[str, str] = {
+    "vi": "vi-VN-HoaiMyNeural",
+    "vi-VN": "vi-VN-HoaiMyNeural",
+    "en": "en-US-AvaMultilingualNeural",
+    "en-US": "en-US-AvaMultilingualNeural",
+    "ja": "ja-JP-NanamiNeural",
+    "ja-JP": "ja-JP-NanamiNeural",
+    "zh": "zh-CN-XiaoxiaoNeural",
+    "zh-CN": "zh-CN-XiaoxiaoNeural",
+    "ko": "ko-KR-HyunsuMultilingualNeural",
+    "ko-KR": "ko-KR-HyunsuMultilingualNeural",
+    "fr": "fr-FR-VivienneMultilingualNeural",
+    "fr-FR": "fr-FR-VivienneMultilingualNeural",
+    "de": "de-DE-SeraphinaMultilingualNeural",
+    "de-DE": "de-DE-SeraphinaMultilingualNeural",
+    "th": "th-TH-PremwadeeNeural",
+    "th-TH": "th-TH-PremwadeeNeural",
+    "ru": "ru-RU-SvetlanaNeural",
+    "ru-RU": "ru-RU-SvetlanaNeural",
+    "es": "es-ES-ElviraNeural",
+    "es-ES": "es-ES-ElviraNeural",
+}
+
+
+def get_voice_for_language(language: str, gender: str = "female") -> str:
+    """Chọn voice phù hợp ngôn ngữ (owner 31/10: chuyển thể đa ngôn ngữ trơn chu).
+
+    Ưu tiên: map chuẩn → quét catalog đa ngôn ngữ → giọng nam nếu yêu cầu →
+    cuối cùng luôn rơi về giọng tiếng Việt chuẩn (không bao giờ trả rỗng).
+    """
+    lang = (language or "vi").strip()
+    candidates = [
+        lang, lang.split("-")[0],
+        f"{lang.split('-')[0]}-{lang.split('-')[0].upper()}" if "-" not in lang else lang,
+    ]
+    for cand in candidates:
+        if cand in LANGUAGE_VOICE_MAP:
+            voice_id = LANGUAGE_VOICE_MAP[cand]
+            # (31/10) tiếng Việt có giọng nam chuẩn riêng — tôn trọng gender:
+            if gender == "male" and lang.split("-")[0] == "vi":
+                return "vi-VN-NamMinhNeural"
+            return voice_id
+    for v in MULTI_LANGUAGE_VOICES:
+        if v.locale.split("-")[0] == lang.split("-")[0]:
+            if gender == "male" and v.gender == TTSGender.MALE.value:
+                return v.voice_id
+            return v.voice_id
+    # Fallback tiếng Việt chuẩn
+    if gender == "male":
+        return "vi-VN-NamMinhNeural"
+    return "vi-VN-HoaiMyNeural"
 
 
 @dataclass
@@ -277,12 +348,12 @@ class TTSManager:
         text: str,
         voice_id: str | None = None,
     ) -> tuple[bytes | None, str]:
-        """Synthesize Vietnamese speech audio.
-        
+        """Synthesize speech audio (Vietnamese mặc định + đa ngôn ngữ).
+
         Guarantees:
         - Input text diacritics are 100% preserved.
-        - Strict Vietnamese female voice preference (vi-VN-HoaiMyNeural).
-        - Rejects invalid voices or non-Vietnamese locales with clear error.
+        - Vietnamese female voice preference (vi-VN-HoaiMyNeural) mặc định.
+        - (31/10/2026) Cho phép giọng đa ngôn ngữ trong MULTI_LANGUAGE_VOICES.
         - Sets TTS_UNAVAILABLE on connection/network failure rather than falling back to English.
         - Returns (audio_bytes, error_message).
         """
@@ -290,16 +361,22 @@ class TTSManager:
             return None, "TTS hiện đang bị tắt trong cấu hình."
 
         target_voice_id = voice_id or self.active_voice_id
-        # Verify target voice
+        # Verify target voice — (31/10/2026) ĐA NGÔN NGỮ (owner): cho phép cả
+        # giọng tiếng Việt chuẩn lẫn catalog đa ngôn ngữ; chỉ từ chối voice lạ.
         voice_info = None
         for v in self.available_voices:
             if v.voice_id == target_voice_id:
                 voice_info = v
                 break
+        if voice_info is None:
+            for v in MULTI_LANGUAGE_VOICES:
+                if v.voice_id == target_voice_id:
+                    voice_info = v
+                    break
 
-        if not voice_info or not voice_info.locale.startswith("vi"):
+        if not voice_info:
             self.config.status = TTSStatus.ERROR.value
-            err = f"Giọng đọc '{target_voice_id}' không hợp lệ hoặc không phải tiếng Việt."
+            err = f"Giọng đọc '{target_voice_id}' không có trong danh mục giọng được phép."
             self.config.last_error = err
             return None, err
 
@@ -358,20 +435,81 @@ class TTSManager:
                 except RuntimeError:
                     return asyncio.run(coro)
 
-            try:
-                self.config.status = TTSStatus.SPEAKING.value
-                audio_bytes = _run_coroutine(_do_synth())
-                if audio_bytes and len(audio_bytes) > 0:
-                    self.config.status = TTSStatus.READY.value
-                    self.config.connection_status = "CONNECTED"
-                    self.config.last_error = ""
-                    return audio_bytes, ""
-                else:
-                    self.mark_unavailable("Microsoft Edge TTS không trả về luồng âm thanh.")
-                    return None, self.config.last_error
-            except Exception as exc:
-                self.mark_unavailable(f"Lỗi kết nối Microsoft Edge TTS: {exc}")
+            # (31/10/2026) FIX LOA PI5 KHÔNG PHÁT: Microsoft Edge TTS thi thoảng
+            # trả "No audio was received" (flakiness DRM token — đo được ~20-80%
+            # fail tùy thời điểm). Retry tối đa 5 lần, backoff ngắn, trước khi bỏ.
+            import time as _time
+            last_err: str = ""
+            for attempt in range(5):
+                try:
+                    self.config.status = TTSStatus.SPEAKING.value
+                    audio_bytes = _run_coroutine(_do_synth())
+                    if audio_bytes and len(audio_bytes) > 0:
+                        self.config.status = TTSStatus.READY.value
+                        self.config.connection_status = "CONNECTED"
+                        self.config.last_error = ""
+                        return audio_bytes, ""
+                    last_err = "Microsoft Edge TTS không trả về luồng âm thanh."
+                except Exception as exc:
+                    last_err = f"Lỗi kết nối Microsoft Edge TTS: {exc}"
+                if attempt < 4:
+                    _time.sleep(0.5)
+            self.mark_unavailable(last_err)
+            return None, self.config.last_error
+
+        # Handle Piper provider — (01/11/2026, Q-3 ĐÃ DUYỆT) fallback LOCAL khi
+        # Edge-TTS 403 bền: piper-tts + voice vi_VN-vais1000-medium trong
+        # data/piper_voices/. Không phụ thuộc mạng Microsoft. Xuất WAV 22050Hz
+        # mono 16-bit; client pi5 phát trực tiếp (daemon hỗ trợ wav qua ffmpeg).
+        if self.config.provider == TTSProvider.PIPER.value:
+            import subprocess as _sp
+            import sys as _sys
+            import tempfile as _tempfile
+            from pathlib import Path as _P
+            model = _P(__file__).resolve().parents[3] / "data" / "piper_voices" / "vi_VN-vais1000-medium.onnx"
+            if not model.exists():
+                self.mark_unavailable(f"Piper voice model không tồn tại: {model.name}. Chạy cài đặt Q-3.")
                 return None, self.config.last_error
+            try:
+                rate_scale = max(0.5, min(2.0, 1.0 / max(0.5, min(2.0, self.config.rate))))
+                # piper CLI '-f -' lỗi PermissionError trên Windows (wave.py mở
+                # temp file) → synth ra file tạm rồi đọc bytes, xoá sau.
+                with _tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as _tf:
+                    tmp_path = _tf.name
+                try:
+                    cmd = [
+                        _sys.executable, "-m", "piper",
+                        "-m", str(model),
+                        "--length-scale", f"{rate_scale:.2f}",
+                        "-f", tmp_path,
+                    ]
+                    proc = _sp.run(cmd, input=clean_text.encode("utf-8"),
+                                   capture_output=True, timeout=30)
+                    if proc.returncode != 0:
+                        err = f"Piper synth lỗi rc={proc.returncode}: {proc.stderr[:200]}"
+                        self.config.status = TTSStatus.ERROR.value
+                        self.config.last_error = err
+                        return None, err
+                    audio = _P(tmp_path).read_bytes()
+                finally:
+                    try:
+                        _P(tmp_path).unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                if not audio:
+                    err = "Piper trả về WAV rỗng."
+                    self.config.status = TTSStatus.ERROR.value
+                    self.config.last_error = err
+                    return None, err
+                self.config.status = TTSStatus.READY.value
+                self.config.connection_status = "CONNECTED"
+                self.config.last_error = ""
+                return audio, ""
+            except Exception as exc:
+                err = f"Lỗi Piper TTS local: {exc}"
+                self.config.status = TTSStatus.ERROR.value
+                self.config.last_error = err
+                return None, err
 
         # Handle Browser-Speech (client side only)
         if self.config.provider == TTSProvider.BROWSER_SPEECH.value:

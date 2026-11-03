@@ -14,6 +14,9 @@ from quan_ai_brain.contract.models import TaskOutcome, TaskState
 from quan_ai_brain.governance.policy import PolicyEngine, RiskLevel
 from quan_ai_brain.governance.state_store import GovernanceStateStore
 from quan_ai_brain.learning.periodic_reporter import PeriodicLearningReporter
+from quan_ai_brain.orchestration.agent_dispatcher import AgentDispatcher, AgentProfile
+from quan_ai_brain.orchestration.dependency_manager import DependencyManager
+from quan_ai_brain.orchestration.task_feedback import safe_record_feedback
 from quan_ai_brain.orchestration.models import (
     AutonomyLevel,
     SupervisorState,
@@ -36,6 +39,9 @@ class ContinuousAutonomySupervisor:
         coordinator: ExecutiveCoordinator | None = None,
         learning_reporter: PeriodicLearningReporter | None = None,
         policy_engine: PolicyEngine | None = None,
+        dispatcher: AgentDispatcher | None = None,
+        dependency_manager: DependencyManager | None = None,
+        feedback_recorder: Any | None = None,
     ) -> None:
         self.workspace = Path(workspace).resolve()
         self.task_registry = task_registry
@@ -43,6 +49,12 @@ class ContinuousAutonomySupervisor:
         self.coordinator = coordinator or ExecutiveCoordinator(self.workspace)
         self.learning_reporter = learning_reporter or PeriodicLearningReporter(self.workspace)
         self.policy_engine = policy_engine or PolicyEngine(self.workspace)
+        # DEOM M3: dispatcher + dependency manager (mặc định pool rỗng → hành vi
+        # giống pre-M3: mọi task do supervisor tự chạy khi eligibility đạt).
+        self.dispatcher = dispatcher or AgentDispatcher()
+        self.dependency_manager = dependency_manager or DependencyManager(task_registry)
+        # DEOM M6: feedback recorder (tùy chọn — None giữ hành vi cũ)
+        self.feedback_recorder = feedback_recorder
 
         self._state = SupervisorState.STARTING
         self._current_task: TaskRecord | None = None
@@ -116,12 +128,36 @@ class ContinuousAutonomySupervisor:
 
         if self._state in (SupervisorState.READY, SupervisorState.IDLE):
             self.transition_to(SupervisorState.SELECTING_TASK, "Scanning for pending eligible tasks")
-            pending = self.task_registry.list_tasks(status=TaskStatus.PENDING, limit=1)
-            if not pending:
-                self._current_task = None
-                self.transition_to(SupervisorState.IDLE, "No pending tasks found. Awaiting directives.")
-                return self._state
-            self._current_task = pending[0]
+            # DEOM M3: work queue theo priority/deadline + eligibility phụ thuộc
+            # + dispatch agent. Không agent/depmanager khớp → task ở lại queue.
+            candidates = self.task_registry.work_queue(limit=5)
+            selected: TaskRecord | None = None
+            for candidate in candidates:
+                check = self.dependency_manager.eligible(candidate)
+                if not check.ok:
+                    # dep thiếu hẳn trong registry → BLOCKED có audit (fail-honest)
+                    self.dependency_manager.block_on_missing_dependencies(candidate)
+                    continue
+                assignment = self.dispatcher.dispatch(candidate, registry=self.task_registry)
+                if not assignment.ok:
+                    continue
+                err = self.dispatcher.assign(
+                    candidate, assignment.agent,
+                    assign_task=assignment.recorder,
+                )
+                if err:
+                    continue
+                selected = candidate
+                break
+            if not selected:
+                pending = self.task_registry.list_tasks(status=TaskStatus.PENDING, limit=1)
+                if not pending:
+                    self._current_task = None
+                    self.transition_to(SupervisorState.IDLE, "No pending tasks found. Awaiting directives.")
+                    return self._state
+                # Pool dispatcher rỗng/không khớp → fallback hành vi pre-M3
+                selected = pending[0]
+            self._current_task = selected
             self.transition_to(
                 SupervisorState.PLANNING,
                 f"Selected task {self._current_task.task_id}: {self._current_task.goal}",
@@ -171,6 +207,17 @@ class ContinuousAutonomySupervisor:
                 self.transition_to(SupervisorState.READY)
                 return self._state
 
+            # DEOM V4 G-C state machine: RUNNING_AUTHORIZED_TASK có thể vào từ
+            # task READY (M6 wire) hoặc APPROVED — chuẩn hoá task sang
+            # IN_PROGRESS trước khi kết luận outcome (supervisor là actor hợp lệ).
+            if self._current_task.status in (TaskStatus.READY, TaskStatus.APPROVED):
+                self._current_task = self.task_registry.update_task_status(
+                    self._current_task.task_id,
+                    TaskStatus.IN_PROGRESS,
+                    actor="supervisor",
+                    reason="bắt đầu thực thi trong sandbox (authorized)",
+                )
+
             # In dry-run mode, safely simulate execution without side effects
             simulated_success = True
             result = {
@@ -181,19 +228,26 @@ class ContinuousAutonomySupervisor:
 
             self.transition_to(SupervisorState.VERIFYING_RESULT, "Verifying execution outcome and evidence")
             if simulated_success:
-                self.task_registry.update_task_status(
+                refreshed = self.task_registry.update_task_status(
                     self._current_task.task_id,
                     TaskStatus.COMPLETED,
                     result_payload=result,
                     evidence_ref="evidence:verified_safe_run",
                 )
+                # DEOM M3: mở khóa task phụ thuộc + trả agent
+                self.dependency_manager.unblock_dependents(self._current_task.task_id)
+                self.dispatcher.release(self._current_task.task_id)
+                # DEOM M6: ghi kinh nghiệm sau task (fail-safe, không giết flow)
+                safe_record_feedback(self.feedback_recorder, refreshed)
                 self.transition_to(SupervisorState.READY, f"Task {self._current_task.task_id} completed successfully")
             else:
-                self.task_registry.update_task_status(
+                refreshed = self.task_registry.update_task_status(
                     self._current_task.task_id,
                     TaskStatus.FAILED,
                     error_message="Verification criteria not satisfied",
                 )
+                self.dispatcher.release(self._current_task.task_id)
+                safe_record_feedback(self.feedback_recorder, refreshed)
                 self.transition_to(SupervisorState.LEARNING, "Task failed; routing outcome to SelfLearningEngine")
             return self._state
 

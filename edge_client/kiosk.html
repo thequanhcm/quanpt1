@@ -2,6 +2,9 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
+  <!-- (31/10/2026) Chặn Google Translate tự dịch giao diện -->
+  <meta name="google" content="notranslate">
+  <meta http-equiv="Content-Language" content="vi">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>QUAN AI BRAIN — Raspberry Pi 5 Edge Kiosk</title>
   <link rel="stylesheet" href="/kiosk.css">
@@ -11,49 +14,56 @@
     <!-- Top System Header Bar -->
     <header class="kiosk-header">
       <div class="header-left">
-        <span class="status-indicator-dot online" id="core-status-dot"></span>
-        <span class="status-label" id="core-status-text">CORE: ONLINE (127.0.0.1:8766)</span>
-        <span class="device-pill" id="device-id-tag">EDGE-PI5-DESK</span>
+        <span class="device-pill" id="device-id-tag">TONY ASSISTANT - QUANPT1 - VIETTEL</span>
+      </div>
+      <!-- (31/10 ~19:30) VU MIC/LOA NGANG: nằm giữa header, ngang hàng đồng hồ -->
+      <div class="header-center">
+        <canvas id="kiosk-waveform" width="150" height="18" class="kiosk-waveform"></canvas>
+        <span class="vu-caption">MIC / LOA</span>
       </div>
       <div class="header-right">
         <span class="clock-display" id="kiosk-clock">--:--:--</span>
       </div>
     </header>
 
-    <!-- Main Avatar Stage -->
-    <main class="kiosk-stage">
-      <div class="avatar-card">
-        <!-- Digital Human (Avatar V2 - Cybernetic Assistant) Viewport -->
-        <div class="kiosk-avatar-viewport digital-human-viewport state-idle" id="avatar-viewport">
-          <canvas id="kiosk-avatar-canvas" width="720" height="720" class="digital-human-canvas"></canvas>
-        </div>
+    <!-- Main Body: Sidebar trái (CORE + Nhiệm vụ + Thông báo) | Avatar | VU dọc -->
+    <div class="kiosk-body">
+      <!-- (31/10) SIDEBAR TRÁI: trạng thái kết nối + nhiệm vụ + thông báo dồn sát trái -->
+      <aside class="kiosk-sidebar" id="kiosk-sidebar">
 
-        <!-- Audio Waveform Glow Line -->
-        <div class="kiosk-waveform-wrap">
-          <canvas id="kiosk-waveform" width="280" height="20" class="kiosk-waveform"></canvas>
+        <div class="side-block notice-side" id="notice-side">
+          <!-- (31/10) Thông báo/đề xuất: hiển thị sát trái, dưới nhiệm vụ -->
+          <div class="consultation-banner hidden" id="consultation-banner">
+            <span class="banner-icon">📬</span>
+            <span class="banner-text" id="consultation-banner-text">Có 1 đề xuất nâng cấp cần Anh duyệt trên PC</span>
+          </div>
         </div>
-      </div>
-    </main>
+      </aside>
 
-    <!-- Consultation Notification Banner (if pending) -->
-    <div class="consultation-banner hidden" id="consultation-banner">
-      <span class="banner-icon">📬</span>
-      <span class="banner-text" id="consultation-banner-text">Có 1 đề xuất nâng cấp cần Anh duyệt trên PC</span>
+      <!-- Avatar Stage (giữa, rộng nhất) -->
+      <main class="kiosk-stage">
+        <div class="avatar-card">
+          <!-- Digital Human (Avatar V2 - Cybernetic Assistant) Viewport -->
+          <div class="kiosk-avatar-viewport digital-human-viewport state-idle" id="avatar-viewport">
+            <canvas id="kiosk-avatar-canvas" width="720" height="720" class="digital-human-canvas"></canvas>
+          </div>
+        </div>
+      </main>
+
     </div>
 
-    <!-- Bottom Touch Control Bar -->
+    <!-- Bottom Touch Control Bar — nút dồn PHẢI -->
     <footer class="kiosk-footer">
+      <!-- (31/10 ~19:30) TONY ƠI sát góc trái dưới -->
       <button class="kiosk-btn btn-wake" id="btn-touch-wake" title="Chạm để bắt đầu nói">
         <span class="btn-icon">🎤</span>
         <span class="btn-text">TONY ƠI...</span>
       </button>
-
-      <div class="task-summary-glance" id="task-glance">
-        <span class="task-glance-lbl">Nhiệm vụ:</span>
-        <span class="task-glance-val" id="task-glance-text">Giám sát & Điều hành trợ lý</span>
+      <!-- MARQUEE HỘI THOẠI TIẾNG ANH: GIỮA footer, dịch trực tiếp khi hội thoại -->
+      <div class="footer-marquee" id="footer-marquee">
+        <span class="marquee-track" id="marquee-track">TONY ASSISTANT READY</span>
       </div>
-
-      <button class="kiosk-btn btn-stop" id="btn-touch-stop" title="Dừng khẩn cấp toàn bộ tác vụ">
+      <button class="kiosk-btn btn-stop" id="btn-touch-stop" title="Thoát giao diện hiển thị — gọi TONY ơi để mở lại">
         <span class="btn-icon">🛑</span>
         <span class="btn-text">STOP</span>
       </button>
@@ -71,9 +81,10 @@
     </div>
   </div>
 
-  <script src="/avatar_engine.js?v=model_a_final_v3"></script>
-  <script src="/wake_engine.js?v=model_a_final_v3"></script>
-  <script src="/kiosk.js?v=model_a_final_v3"></script>
+  <script src="/avatar_engine.js?v=stopexit_01nov_r1"></script>
+  <!-- (31/10/2026) mic-only: engine nạp LƯỚI khi bấm nút mic (kiosk.js) —
+       trình duyệt không giữ mic stream nền 24/7 -->
+  <script>window.__WAKE_ENGINE_DEFERRED__ = true;</script>
+  <script src="/kiosk.js?v=stopexit_01nov_r1"></script>
 </body>
 </html>
-

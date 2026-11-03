@@ -1,0 +1,1475 @@
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  7%]
+........................................................................ [  9%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 17%]
+........................................................................ [ 19%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+.................................................................sss.... [ 27%]
+......................s...................................s...........s. [ 29%]
+..ss....s.ssssss.ss..................................................... [ 32%]
+.ssss.s.....ss.......................................................... [ 34%]
+........................................................................ [ 37%]
+........................................................................ [ 39%]
+.................................................................s...... [ 42%]
+..s........s.s....s.s................................................... [ 44%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 67%]
+.................................................s...................... [ 69%]
+...........................................E.E.E.E.EFEFE.EFE.E.E.EFEFE.. [ 71%]
+....................................................................s... [ 74%]
+...........s...........................ss..........s...s................ [ 76%]
+........................................................................ [ 79%]
+........................................................................ [ 81%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 89%]
+........................................................................ [ 91%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+..........s............................................................. [ 99%]
+..................                                                       [100%]
+=================================== ERRORS ====================================
+___ ERROR at teardown of TestLongTermMemoryStore.test_store_initialization ____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1fgigt9b\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE1B0CC0>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1fgigt9b\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1fgigt9b\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE481700>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1fgigt9b\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+_____ ERROR at teardown of TestLongTermMemoryStore.test_add_single_memory _____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp5tzp596\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE57EF20>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp5tzp596\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp5tzp596\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE62F480>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp5tzp596\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+____ ERROR at teardown of TestLongTermMemoryStore.test_add_batch_memories _____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpsrfhxp5p\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE57F420>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpsrfhxp5p\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpsrfhxp5p\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE5D43C0>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpsrfhxp5p\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+______ ERROR at teardown of TestLongTermMemoryStore.test_semantic_search ______
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp_zb8yr2e\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BC4AB6A0>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp_zb8yr2e\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp_zb8yr2e\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE42D4C0>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp_zb8yr2e\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+____ ERROR at teardown of TestLongTermMemoryStore.test_search_with_filters ____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpcw237fu6\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE08C720>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpcw237fu6\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpcw237fu6\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE677D40>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpcw237fu6\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+___ ERROR at teardown of TestLongTermMemoryStore.test_search_user_provided ____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpls6u9752\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE457EC0>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpls6u9752\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpls6u9752\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE766880>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpls6u9752\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+_________ ERROR at teardown of TestLongTermMemoryStore.test_get_stats _________
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp2w32n69\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE08C720>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp2w32n69\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp2w32n69\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261A0A62680>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpp2w32n69\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+_______ ERROR at teardown of TestLongTermMemoryStore.test_delete_chunk ________
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1lbozx_1\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BDFC3560>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1lbozx_1\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1lbozx_1\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE5C2180>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmp1lbozx_1\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+_______ ERROR at teardown of TestLongTermMemoryStore.test_export_import _______
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmplq9ga4k6\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BDFC3420>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmplq9ga4k6\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmplq9ga4k6\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE759280>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmplq9ga4k6\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+---------------------------- Captured stdout call -----------------------------
+⚠️ Memory store reset
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+_____ ERROR at teardown of TestMemoryTieringEngine.test_tier_to_long_term _____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmphbkjof6m\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE0EAB60>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmphbkjof6m\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmphbkjof6m\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE785140>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmphbkjof6m\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+_____ ERROR at teardown of TestMemoryTieringEngine.test_tier_to_verified ______
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpvgt_dm_l\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BDFC3C40>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpvgt_dm_l\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpvgt_dm_l\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE0EC180>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpvgt_dm_l\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+___ ERROR at teardown of TestMemoryTieringEngine.test_retrieve_with_tiering ___
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpl_pioxq3\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE457BA0>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpl_pioxq3\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpl_pioxq3\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE62D800>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpl_pioxq3\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+____ ERROR at teardown of TestMemoryTieringEngine.test_retrieve_all_tiers _____
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpbwjpb7ws\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE08C5E0>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpbwjpb7ws\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpbwjpb7ws\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BC5FEF80>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpbwjpb7ws\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+-------------------------- Captured stdout teardown ---------------------------
+⚠️ Memory store reset
+______ ERROR at teardown of TestIntegration.test_full_ingestion_pipeline ______
+
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpj22eualb\\test_vector_db'
+onerror = <function TemporaryDirectory._rmtree.<locals>.onerror at 0x00000261BE57F4C0>
+
+    def _rmtree_unsafe(path, onerror):
+        try:
+            with os.scandir(path) as scandir_it:
+                entries = list(scandir_it)
+        except OSError:
+            onerror(os.scandir, path, sys.exc_info())
+            entries = []
+        for entry in entries:
+            fullname = entry.path
+            if _rmtree_isdir(entry):
+                try:
+                    if entry.is_symlink():
+                        # This can only happen if someone replaces
+                        # a directory with a symlink after the call to
+                        # os.scandir or entry.is_dir above.
+                        raise OSError("Cannot call rmtree on a symbolic link")
+                except OSError:
+                    onerror(os.path.islink, fullname, sys.exc_info())
+                    continue
+                _rmtree_unsafe(fullname, onerror)
+            else:
+                try:
+>                   os.unlink(fullname)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpj22eualb\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:632: PermissionError
+
+During handling of the above exception, another exception occurred:
+
+    @pytest.fixture
+    def temp_db_path():
+        """Create temporary database path for testing."""
+>       with tempfile.TemporaryDirectory() as tmpdir:
+
+tests\test_v37_2_vector_memory.py:27: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:943: in __exit__
+    self.cleanup()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:947: in cleanup
+    self._rmtree(self.name, ignore_errors=self._ignore_cleanup_errors)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:929: in _rmtree
+    _shutil.rmtree(name, onerror=onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:787: in rmtree
+    return _rmtree_unsafe(path, onerror)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:629: in _rmtree_unsafe
+    _rmtree_unsafe(fullname, onerror)
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\shutil.py:634: in _rmtree_unsafe
+    onerror(os.unlink, fullname, sys.exc_info())
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+func = <built-in function unlink>
+path = 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpj22eualb\\test_vector_db\\chroma.sqlite3'
+exc_info = (<class 'PermissionError'>, PermissionError(13, 'The process cannot access the file because it is being used by another process'), <traceback object at 0x00000261BE4D0700>)
+
+    def onerror(func, path, exc_info):
+        if issubclass(exc_info[0], PermissionError):
+            if repeated and path == name:
+                if ignore_errors:
+                    return
+                raise
+    
+            try:
+                if path != name:
+                    _resetperms(_os.path.dirname(path))
+                _resetperms(path)
+    
+                try:
+>                   _os.unlink(path)
+E                   PermissionError: [WinError 32] The process cannot access the file because it is being used by another process: 'C:\\Users\\DELL\\AppData\\Local\\Temp\\tmpj22eualb\\test_vector_db\\chroma.sqlite3'
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\tempfile.py:893: PermissionError
+---------------------------- Captured stdout call -----------------------------
+✅ Long-term memory store initialized: 0 chunks
+================================== FAILURES ===================================
+______________ TestLongTermMemoryStore.test_search_user_provided ______________
+
+self = <test_v37_2_vector_memory.TestLongTermMemoryStore object at 0x00000261B9D7F510>
+memory_store = <quan_ai_brain.memory.vector_store.LongTermMemoryStore object at 0x00000261BE4BCD50>
+
+    def test_search_user_provided(self, memory_store):
+        """Test searching USER_PROVIDED knowledge."""
+        chunk = MemoryChunk(
+            id="user_knowledge",
+            content="Anh dạy: ATS chuyển nguồn khi điện áp dưới 180V.",
+>           memory_type=MemoryType.RULE.value,
+                        ^^^^^^^^^^^^^^^
+            source_ref="owner_chat",
+            verification_status=VerificationStatus.USER_PROVIDED.value,
+            tags=["ats", "owner"],
+            metadata={}
+        )
+
+tests\test_v37_2_vector_memory.py:227: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <enum 'MemoryType'>, name = 'RULE'
+
+    def __getattr__(cls, name):
+        """
+        Return the enum member matching `name`
+    
+        We use __getattr__ instead of descriptors or inserting into the enum
+        class' __dict__ in order to support `name` and `value` being both
+        properties for enum members (which live in the class' __dict__) and
+        enum members themselves.
+        """
+        if _is_dunder(name):
+            raise AttributeError(name)
+        try:
+            return cls._member_map_[name]
+        except KeyError:
+>           raise AttributeError(name) from None
+E           AttributeError: RULE
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\enum.py:786: AttributeError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+___________________ TestLongTermMemoryStore.test_get_stats ____________________
+
+self = <test_v37_2_vector_memory.TestLongTermMemoryStore object at 0x00000261B9D7F2D0>
+memory_store = <quan_ai_brain.memory.vector_store.LongTermMemoryStore object at 0x00000261A0EC75D0>
+
+    def test_get_stats(self, memory_store):
+        """Test statistics retrieval."""
+        # Add some memories
+        for i in range(3):
+            chunk = MemoryChunk(
+                id=f"stat_{i}",
+                content=f"Test content {i}",
+                memory_type=MemoryType.SEMANTIC.value,
+                source_ref="test",
+                verification_status=VerificationStatus.USER_PROVIDED.value,
+                tags=[],
+                metadata={}
+            )
+            memory_store.add_memory(chunk)
+    
+        stats = memory_store.get_stats()
+    
+        assert stats["total_chunks"] == 3
+>       assert stats["by_verification"][VerificationStatus.USER_PROVIDED.value] == 3
+E       assert 0 == 3
+
+tests\test_v37_2_vector_memory.py:259: AssertionError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+_________________ TestLongTermMemoryStore.test_export_import __________________
+
+self = <test_v37_2_vector_memory.TestLongTermMemoryStore object at 0x00000261B9D7FB90>
+memory_store = <quan_ai_brain.memory.vector_store.LongTermMemoryStore object at 0x00000261BE0EC190>
+temp_db_path = WindowsPath('C:/Users/DELL/AppData/Local/Temp/tmplq9ga4k6/test_vector_db')
+
+    def test_export_import(self, memory_store, temp_db_path):
+        """Test export and import functionality."""
+        # Add memories
+        chunk = MemoryChunk(
+            id="export_test",
+            content="Content to export and import.",
+            memory_type=MemoryType.SEMANTIC.value,
+            source_ref="test",
+            verification_status=VerificationStatus.VERIFIED.value,
+            tags=["export"],
+            metadata={"custom": "data"}
+        )
+        memory_store.add_memory(chunk)
+    
+        # Export
+        export_path = temp_db_path / "export.json"
+        count = memory_store.export_to_json(str(export_path))
+    
+        assert count == 1
+        assert export_path.exists()
+    
+        # Clear store
+        memory_store.reset()
+>       assert memory_store.collection.count() == 0
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_v37_2_vector_memory.py:305: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\chromadb\api\models\Collection.py:55: in count
+    return self._client._count(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <chromadb.api.rust.RustBindingsAPI object at 0x00000261BE6755D0>
+collection_id = UUID('550f1fd7-1e63-455e-92cd-f51228f2ea76')
+tenant = 'default_tenant', database = 'default_database'
+read_level = <ReadLevel.INDEX_AND_WAL: 'index_and_wal'>
+
+    @override
+    def _count(
+        self,
+        collection_id: UUID,
+        tenant: str = DEFAULT_TENANT,
+        database: str = DEFAULT_DATABASE,
+        read_level: ReadLevel = ReadLevel.INDEX_AND_WAL,
+    ) -> int:
+>       return self.bindings.count(str(collection_id), tenant, database)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       chromadb.errors.NotFoundError: Collection [550f1fd7-1e63-455e-92cd-f51228f2ea76] does not exist.
+
+.venv\Lib\site-packages\chromadb\api\rust.py:397: NotFoundError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+---------------------------- Captured stdout call -----------------------------
+⚠️ Memory store reset
+_______________ TestMemoryTieringEngine.test_retrieve_all_tiers _______________
+
+self = <test_v37_2_vector_memory.TestMemoryTieringEngine object at 0x00000261B9D910D0>
+memory_store = <quan_ai_brain.memory.vector_store.LongTermMemoryStore object at 0x00000261A0925C50>
+
+    def test_retrieve_all_tiers(self, memory_store):
+        """Test retrieval from all tiers."""
+        engine = MemoryTieringEngine(memory_store)
+    
+        # Add mixed verification statuses
+        for i, status in enumerate([
+            VerificationStatus.VERIFIED.value,
+            VerificationStatus.USER_PROVIDED.value,
+            VerificationStatus.INFERRED.value
+        ]):
+            chunk = MemoryChunk(
+                id=f"tier_{i}",
+                content=f"Content with {status} status.",
+                memory_type=MemoryType.SEMANTIC.value,
+                source_ref="test",
+                verification_status=status,
+                tags=[],
+                metadata={}
+            )
+            memory_store.add_memory(chunk)
+    
+        # Retrieve without verification requirement
+>       results = engine.retrieve_with_tiering("content", require_verified=False)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_v37_2_vector_memory.py:413: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\quan_ai_brain\memory\vector_store.py:471: in retrieve_with_tiering
+    sorted_results = sorted(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+x = 'ids'
+
+        key=lambda x: (
+>           status_priority.get(x.get("verification_status"), 0),
+                                ^^^^^
+            x.get("similarity", 0)
+        ),
+        reverse=True
+    )
+E   AttributeError: 'str' object has no attribute 'get'
+
+src\quan_ai_brain\memory\vector_store.py:474: AttributeError
+---------------------------- Captured stdout setup ----------------------------
+✅ Long-term memory store initialized: 0 chunks
+________________ TestIntegration.test_full_ingestion_pipeline _________________
+
+self = <test_v37_2_vector_memory.TestIntegration object at 0x00000261B9D91850>
+temp_db_path = WindowsPath('C:/Users/DELL/AppData/Local/Temp/tmpj22eualb/test_vector_db')
+mock_embedding_service = <test_v37_2_vector_memory.mock_embedding_service.<locals>.MockEmbeddingService object at 0x00000261BE4D2D50>
+
+    def test_full_ingestion_pipeline(self, temp_db_path, mock_embedding_service):
+        """Test complete memory ingestion pipeline."""
+        store = LongTermMemoryStore(
+            db_path=str(temp_db_path),
+            embedding_service=mock_embedding_service
+        )
+        engine = MemoryTieringEngine(store)
+    
+        # Simulate owner providing knowledge
+        owner_knowledge = {
+            "id": "owner_123",
+            "content": "ATS should switch to backup when voltage drops below 180V for more than 5 seconds.",
+>           "memory_type": MemoryType.RULE.value,
+                           ^^^^^^^^^^^^^^^
+            "source_ref": "owner_chat_2026-10-28",
+            "verification_status": VerificationStatus.USER_PROVIDED.value,
+            "tags": ["ats", "rule", "owner"],
+            "created_at_utc": "2026-10-28T10:00:00Z"
+        }
+
+tests\test_v37_2_vector_memory.py:436: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <enum 'MemoryType'>, name = 'RULE'
+
+    def __getattr__(cls, name):
+        """
+        Return the enum member matching `name`
+    
+        We use __getattr__ instead of descriptors or inserting into the enum
+        class' __dict__ in order to support `name` and `value` being both
+        properties for enum members (which live in the class' __dict__) and
+        enum members themselves.
+        """
+        if _is_dunder(name):
+            raise AttributeError(name)
+        try:
+            return cls._member_map_[name]
+        except KeyError:
+>           raise AttributeError(name) from None
+E           AttributeError: RULE
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\enum.py:786: AttributeError
+---------------------------- Captured stdout call -----------------------------
+✅ Long-term memory store initialized: 0 chunks
+============================== warnings summary ===============================
+src\quan_ai_brain\analytics\statistical_engine.py:20
+  E:\AI\QUAN AI BRAIN\src\quan_ai_brain\analytics\statistical_engine.py:20: PytestCollectionWarning: cannot collect test class 'TestType' because it has a __init__ constructor (from: tests/test_v39_analytics_engine.py)
+    class TestType(Enum):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_v14_ui_integration.py:23: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:27: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:31: API integration pending - placeholder test
+SKIPPED [1] tests\test_v15_knowledge_graph.py:182: Database lock issue - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:80: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:261: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:317: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:321: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:92: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:109: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:113: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:121: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:125: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:129: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:133: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:158: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:166: Complex test - fix pending
+SKIPPED [1] tests\test_v21_final_integration.py:46: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:50: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:54: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:62: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:73: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:153: Performance test - manual run only
+SKIPPED [1] tests\test_v21_final_integration.py:157: Performance test - manual run only
+SKIPPED [1] tests\test_v25_analytics.py:109: Complex dataclass test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:251: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:372: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:383: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:449: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:460: Complex integration test - manual verification
+SKIPPED [1] tests\test_v36_asr.py:256: Azure Speech SDK not installed
+SKIPPED [1] tests\test_v39_analytics_engine.py:686: Small sample regression handled separately
+SKIPPED [1] tests\test_v39_creativity_engine.py:224: Domain synthesis tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:258: Solution generation tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:263: Troubleshooting workflow tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:459: Problem solving pipeline tested in unit tests
+SKIPPED [1] tests\test_v39_decision_engine.py:516: Zero cost edge case handled separately
+SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_store_initialization
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_add_single_memory
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_add_batch_memories
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_semantic_search
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_search_with_filters
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_search_user_provided
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_get_stats
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_delete_chunk
+ERROR tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_export_import
+ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_tier_to_long_term
+ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_tier_to_verified
+ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_retrieve_with_tiering
+ERROR tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_retrieve_all_tiers
+ERROR tests/test_v37_2_vector_memory.py::TestIntegration::test_full_ingestion_pipeline
+FAILED tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_search_user_provided
+FAILED tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_get_stats
+FAILED tests/test_v37_2_vector_memory.py::TestLongTermMemoryStore::test_export_import
+FAILED tests/test_v37_2_vector_memory.py::TestMemoryTieringEngine::test_retrieve_all_tiers
+FAILED tests/test_v37_2_vector_memory.py::TestIntegration::test_full_ingestion_pipeline
+5 failed, 2841 passed, 38 skipped, 1 warning, 14 errors in 183.64s (0:03:03)

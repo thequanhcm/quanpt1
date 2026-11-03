@@ -151,11 +151,14 @@ def git_info() -> dict[str, Any]:
 
 
 def run_tests() -> tuple[int, str, str]:
-    command = [sys.executable, "-m", "pytest", "-q", "tests"]
+    python_exe = ROOT / ".venv" / "Scripts" / "python.exe"
+    if not python_exe.exists():
+        python_exe = Path(sys.executable)
+    command = [str(python_exe), "-m", "pytest", "-q", "tests"]
     try:
         result = subprocess.run(
             command, cwd=ROOT, capture_output=True, text=True,
-            timeout=180, check=False,
+            timeout=900, check=False,  # (30/10/2026) 2912 tests can ~330s tren may 16GB; 180s khong du
         )
         output = (result.stdout or "") + ("\n" + result.stderr if result.stderr else "")
         output = redact_text(output).strip() or "(pytest không sinh output)"
@@ -166,7 +169,7 @@ def run_tests() -> tuple[int, str, str]:
         partial = exc.stdout or ""
         if isinstance(partial, bytes):
             partial = partial.decode("utf-8", errors="replace")
-        return 124, " ".join(command), "TEST TIMEOUT sau 180 giây. Output: " + redact_text(str(partial))[-4000:]
+        return 124, " ".join(command), "TEST TIMEOUT sau 900 giây. Output: " + redact_text(str(partial))[-4000:]
 
 
 def parse_pytest_summary(output: str, exit_code: int) -> dict[str, Any]:
@@ -379,7 +382,7 @@ def build_report(exit_code: int, command: str, test_output: str) -> str:
         "| **Safe Tool Sandbox & Verifier** | `src/quan_ai_brain/tools` | `TESTED / IMPLEMENTED` | 49 bài test sandbox, approval, delegation & verifier đạt |",
         "| **Isolated Staging Executor** | `src/quan_ai_brain/execution` | `TESTED / IMPLEMENTED` | 11 bài test inert staging & sign-off pending đạt |",
         "| **Windows Process Containment Adapter** | `src/quan_ai_brain/execution/process_containment.py` | `TESTED / IMPLEMENTED` | 9 bài test process containment & inert backend đạt |",
-        "| **Ollama / Qwen2.5:7b** | `E:\\AI\\Ollama` | `IMPLEMENTED (local-only)` | Client + Mock tested; daemon runtime status: xem `llm-health` tại thời điểm chạy (đã xác minh online 2026-10-25) |",
+        "| **Ollama / Qwen2.5:7b** | `C:\\Users\\DELL\\AppData\\Local\\Programs\\Ollama` | `IMPLEMENTED (local-only)` | Client + Mock tested; daemon runtime status: xem `llm-health` tại thời điểm chạy (đã xác minh online 2026-10-25) |",
         "| **NetMind GLM-5.3-Flash (cloud)** | `src/quan_ai_brain/llm/netmind_provider.py` | `IMPLEMENTED (fail-closed)` | 18 test đạt; E2E xác minh 2026-10-25; mặc định DISABLED_BY_POLICY đến khi chủ sở hữu bật |",
         "| **Kernel L3** | `BAT-AI-2026-Repo\\...\\os_kernel` | `NOT_IMPLEMENTED` | Đọc tài liệu; không sửa trực tiếp |",
         "| **DC-COMMAND / CLAE** | `DATA CENTER AI OPERATING SYSTEM` | `PARTIALLY_IMPLEMENTED` | Cơ chế Quarantine tuân thủ nguyên tắc CLAE |",
@@ -399,7 +402,7 @@ def build_report(exit_code: int, command: str, test_output: str) -> str:
         "- **Cấm ghi đè tệp:** `file_write_new` từ chối ghi đè tệp đã tồn tại.",
         "- **Chống phát lại (Anti-replay):** Token approval và chữ ký chỉ sử dụng một lần và gắn với fingerprint chính xác của tham số.",
         "- **Dừng khẩn cấp:** `STOP` và `FREEZE` lập tức chặn mọi hành vi thực thi công cụ.",
-        "- **Bảo vệ ranh giới workspace:** `PathGuard` từ chối mọi đường dẫn thoát ra ngoài `E:\\AI\\QUAN AI BRAIN`.",
+        "- **Bảo vệ ranh giới workspace:** `PathGuard` từ chối mọi đường dẫn thoát ra ngoài `E:\\BRAIN`.",
         "- **Ranh giới mạng LLM:** `OllamaClient` chặn đứng mọi host không phải localhost/127.0.0.1.",
         "- **Bảo vệ bí mật:** Tự động che giấu token, mật khẩu, api_key trước khi ghi vào log hoặc CSDL.",
         "",
@@ -420,7 +423,7 @@ def build_report(exit_code: int, command: str, test_output: str) -> str:
         "",
         "```yaml",
         "PROJECT: QUAN AI BRAIN (Digital Executive Assistant)",
-        "WORKSPACE: E:\\AI\\QUAN AI BRAIN",
+        "WORKSPACE: E:\\BRAIN",
         "CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object",
         "PYTHON_VERSION: 3.11.9 x64",
         "TEST_SUMMARY:",

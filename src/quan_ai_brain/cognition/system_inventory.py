@@ -155,7 +155,10 @@ class SystemInventory:
         ))
 
         # Key packages
-        packages = ["pytest", "sqlite3", "requests"]
+        # (01/11/2026, M4-C fix) sqlite3 là stdlib — importlib.metadata không thấy
+        # nhưng import luôn OK; check bằng import thay vì metadata để không báo
+        # sai "sqlite3 not installed" trong self model.
+        packages = ["pytest", "requests"]
         for pkg in packages:
             try:
                 version = importlib.metadata.version(pkg)
@@ -181,6 +184,31 @@ class SystemInventory:
                     known_limitations=[f"{pkg} not installed"],
                     confidence=1.0,
                 ))
+        # sqlite3 — stdlib, verify bằng import thật
+        try:
+            import sqlite3 as _sqlite3_mod
+            self._add_component(SystemComponent(
+                component_id="package_sqlite3",
+                name="Package: sqlite3 (stdlib)",
+                component_type=ComponentType.MODULE,
+                location=f"stdlib ({_sqlite3_mod.__file__})",
+                version=_sqlite3_mod.sqlite_version,
+                status=ComponentStatus.HEALTHY,
+                verification_method="import sqlite3 + sqlite_version",
+                evidence_refs=[],
+                confidence=1.0,
+            ))
+        except Exception as _e:
+            self._add_component(SystemComponent(
+                component_id="package_sqlite3",
+                name="Package: sqlite3 (stdlib)",
+                component_type=ComponentType.MODULE,
+                location="import failed",
+                version="none",
+                status=ComponentStatus.FAILED,
+                known_limitations=[f"sqlite3 import lỗi: {type(_e).__name__}"],
+                confidence=1.0,
+            ))
 
     def _scan_services(self) -> None:
         """Scan local services: Ollama, web servers, Pi 5."""
@@ -257,6 +285,21 @@ class SystemInventory:
             pass  # Ollama offline, skip
 
         # NetMind cloud models
+        # (01/11/2026, M4-C fix) "Requires API key" chỉ còn là limitation khi key
+        # THẬT SỰ thiếu: check User environment registry (key sống ở HKCU\Environment,
+        # không nằm trong process env của daemon spawn riêng lẻ).
+        _netmind_limitations = ["External dependency"]
+        try:
+            import winreg as _winreg
+            _rk = _winreg.OpenKey(_winreg.HKEY_CURRENT_USER, "Environment")
+            try:
+                _winreg.QueryValueEx(_rk, "NETMIND_API_KEY")
+            except FileNotFoundError:
+                _netmind_limitations.insert(0, "Requires API key (NETMIND_API_KEY missing)")
+            finally:
+                _rk.Close()
+        except Exception:
+            _netmind_limitations.insert(0, "Requires API key (không kiểm tra được registry)")
         self._add_component(SystemComponent(
             component_id="model_glm_flash",
             name="Model: zai-org/GLM-5.3-Flash",
@@ -266,7 +309,7 @@ class SystemInventory:
             status=ComponentStatus.UNKNOWN,  # Need to probe
             capabilities=["text_generation", "chat", "streaming", "vietnamese"],
             dependencies=["service_netmind_gateway"],
-            known_limitations=["Requires API key", "External dependency"],
+            known_limitations=_netmind_limitations,
             verification_method="NetMind API /chat/completions",
             confidence=0.7,
         ))
@@ -309,7 +352,7 @@ class SystemInventory:
 
     def _scan_pi5_device(self) -> None:
         """Scan Raspberry Pi 5 edge device."""
-        pi_ip = "192.168.1.21"
+        pi_ip = "100.100.83.59"
         pi_healthy = self._check_http_endpoint(pi_ip, 8768, timeout=3)
         self._add_component(SystemComponent(
             component_id="device_pi5",

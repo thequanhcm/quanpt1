@@ -164,11 +164,13 @@ class DigitalHumanAvatar {
       { key: "portrait", src: `${this.basePath}/avatar_v2_portrait.png`, fallback: `${this.basePath}/model_f_portrait.png` },
       { key: "portrait_happy", src: `${this.basePath}/avatar_v2_happy.png`, fallback: `${this.basePath}/model_f_happy.png` },
       { key: "portrait_thinking", src: `${this.basePath}/avatar_v2_thinking.png`, fallback: `${this.basePath}/model_f_thinking.png` },
-      { key: "portrait_warning", src: `${this.basePath}/avatar_v2_warning.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      // (31/10) avatar_v2_warning.png gốc là ảnh CƯỜI → dùng confused (trầm tư nghiêm túc)
+      { key: "portrait_warning", src: `${this.basePath}/avatar_v2_confused.png`, fallback: `${this.basePath}/avatar_v2_warning.png` },
       { key: "portrait_empathic", src: `${this.basePath}/avatar_v2_empathic.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
       { key: "portrait_confused", src: `${this.basePath}/avatar_v2_confused.png`, fallback: `${this.basePath}/avatar_v2_thinking.png` },
       { key: "portrait_surprised", src: `${this.basePath}/avatar_v2_surprised.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
-      { key: "portrait_error", src: `${this.basePath}/avatar_v2_error.png`, fallback: `${this.basePath}/avatar_v2_warning.png` },
+      // (31/10) error dùng thinking (suy tư nghiêm) + aura đỏ phân biệt
+      { key: "portrait_error", src: `${this.basePath}/avatar_v2_thinking.png`, fallback: `${this.basePath}/avatar_v2_error.png` },
       { key: "portrait_blink", src: `${this.basePath}/avatar_v2_blink.png`, fallback: `${this.basePath}/model_f_blink.png` },
       { key: "portrait_speaking", src: `${this.basePath}/avatar_v2_portrait.png`, fallback: `${this.basePath}/model_f_speaking.png` },
       { key: "eyes_blink", src: `${this.basePath}/eyes_closed.png`, fallback: null },
@@ -227,9 +229,17 @@ class DigitalHumanAvatar {
   }
 
   _startRenderLoop() {
+    // (31/10/2026) AUDIT HIỆU NĂNG: 60 FPS trên SwiftShader (software GL) ngốn
+    // ~300% CPU → nhiệt 66°C, phản ứng chậm. Màn DSI 800x480 không cần 60 FPS:
+    // giới hạn 15 FPS (66ms/frame) — mắt thường vẫn mượt, CPU giảm ~4 lần.
+    const FRAME_MIN_INTERVAL_MS = 66;
+    let _lastFrameTs = 0;
     const loop = (timestamp) => {
-      this._update(timestamp);
-      this._render(timestamp);
+      if (timestamp - _lastFrameTs >= FRAME_MIN_INTERVAL_MS) {
+        _lastFrameTs = timestamp;
+        this._update(timestamp);
+        this._render(timestamp);
+      }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -262,30 +272,35 @@ class DigitalHumanAvatar {
 
   extractVietnameseEmotion(text) {
     if (!text || typeof text !== "string") return "NEUTRAL";
-    const lower = text.toLowerCase();
+    let lower = text.toLowerCase();
+    // (31/10) TTS/telemetry hay gửi text KHÔNG DẤU — chuẩn hóa: bỏ dấu để
+    // regex tiếng Việt có dấu khớp cả hai dạng.
+    try {
+      lower = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+    } catch (_) {}
 
     // 1. Alert / Warning / Safety Block / Prohibited
-    if (/cảnh báo|chú ý|lưu ý|nguy hiểm|rủi ro|không được|chặn|thất bại|lỗi|bất thường|sự cố|dừng|khẩn cấp|nghiêm cấm/.test(lower)) {
+    if (/canh bao|chuy|luu y|nguy hiem|rui ro|khong duoc|chan|that bai|loi |bi loi|bat thuong|su co|dung |khan cap|nghiem cam/.test(lower)) {
       return "SERIOUS_ALERT";
     }
 
     // 2. Success / Accomplished / Certified / 100% / Excellent
-    if (/hoàn thành|thành công|chính xác|đạt chuẩn|vượt qua|tốt đẹp|100%|xuất sắc|hoàn hảo|thắng lợi/.test(lower)) {
+    if (/hoan thanh|thanh cong|chinh xac|dat chuan|vuot qua|tot dep|100%|xuat sac|hoan hao|thang loi/.test(lower)) {
       return "CONFIDENT_SUCCESS";
     }
 
     // 3. Analytical / Data / Metrics / Architecture / Reasoning
-    if (/phân tích|dữ liệu|kết quả|nghiên cứu|thuật toán|kiến trúc|thông số|đo lường|logic|thống kê|chi tiết|báo cáo|kiểm tra|xác nhận|chỉ số/.test(lower)) {
+    if (/phan tich|du lieu|ket qua|nghien cuu|thuat toan|kien truc|thong so|do luong|logic|thong ke|chi tiet|bao cao|kiem tra|xac nhan|chi so/.test(lower)) {
       return "ANALYTICAL_THINKING";
     }
 
     // 4. Consultation / Proposal / Inquiring Owner
-    if (/kính trình|đề xuất|chờ anh|xin ý kiến|phê duyệt|chỉ đạo|chờ xác nhận|tham vấn/.test(lower)) {
+    if (/inh trinh|de xuat|cho anh|xin kien|phe duyet|chi dao|cho xac nhan|tham van/.test(lower)) {
       return "CONSULTATIVE_INQUIRING";
     }
 
     // 5. Warm Greeting / Politeness / Readiness
-    if (/chào|xin chào|dạ|vâng|rất vui|hân hạnh|sẵn sàng|chúc|em đây|vâng ạ|em nghe|tuyệt vời|cảm ơn/.test(lower)) {
+    if (/chao|xin chao|da |vang |rat vui|han hanh|san sang|chuc|em day|em nghe|tuyet voi|cam on/.test(lower)) {
       return "WARM_GREETING";
     }
 
@@ -354,7 +369,19 @@ class DigitalHumanAvatar {
   }
 
   _update(now) {
-    const config = this.STATE_CONFIGS[this.state] || this.STATE_CONFIGS.IDLE;
+    let config = this.STATE_CONFIGS[this.state] || this.STATE_CONFIGS.IDLE;
+
+    // (31/10) TONE AURA OVERRIDE: màu hào quang/viền theo CẢM XÚC CÂU NÓI
+    // (khách quan nhìn thấy ngay cả khi portrait nền không đổi được):
+    if (this.activeEmotionTone === "SERIOUS_ALERT") {
+      config = { ...config, auraColor: "#ef4444", haloSpeed: 0.05, symbol: "⚠️" };
+    } else if (this.activeEmotionTone === "CONFIDENT_SUCCESS") {
+      config = { ...config, auraColor: "#10b981", haloSpeed: 0.07 };
+    } else if (this.activeEmotionTone === "ANALYTICAL_THINKING") {
+      config = { ...config, auraColor: "#a855f7" };
+    } else if (this.activeEmotionTone === "CONSULTATIVE_INQUIRING") {
+      config = { ...config, auraColor: "#eab308" };
+    }
 
     // Halo rotation
     this.haloAngle += (config.haloSpeed || 0.025);

@@ -107,7 +107,7 @@ def test_tick_completes_r0_task_in_inert_sandbox(loop_env):
     snap = loop.tick(result["task_id"])
     task = registry.get_task(result["task_id"])
     # Inert sandbox: step verifies, task reaches terminal COMPLETED
-    assert task.status == TaskStatus.COMPLETED
+    assert task.status == TaskStatus.COMPLETED_VERIFIED
     assert snap["lifecycle_state"] == "COMPLETED"
 
 
@@ -205,7 +205,7 @@ def test_reflection_completed_task_has_verified_lessons(loop_env):
     )
     loop.tick(result["task_id"])
     report = loop.reflect(result["task_id"])
-    assert report["task_status"] == "COMPLETED"
+    assert report["task_status"] == "COMPLETED_VERIFIED"
     assert report["lessons_verified"], "completed task must yield verified lessons"
     assert any("completed" in l for l in report["lessons_verified"])
 

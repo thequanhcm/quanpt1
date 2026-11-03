@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-BASE_DIR = r"E:\AI\QUAN AI BRAIN"
+BASE_DIR = r"E:\BRAIN"
 DB_PATH = os.path.join(BASE_DIR, "data", "brain.db")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 

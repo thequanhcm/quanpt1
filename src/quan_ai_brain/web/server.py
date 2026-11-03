@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import socket
 import socketserver
+import subprocess
 import sys
 import threading
 import time
@@ -27,6 +28,117 @@ from quan_ai_brain.cognition import (
 )
 from quan_ai_brain.cognition.session_memory import SessionMemoryManager
 from quan_ai_brain.core.autonomic import GLOBAL_AUTONOMIC_SYSTEM
+
+# Edge authentication
+try:
+    from edge_client.auth import EdgeHMACAuth
+    from edge_client.config import EdgeConfig
+except (ImportError, ModuleNotFoundError):
+    EdgeHMACAuth = None  # type: ignore
+    EdgeConfig = None  # type: ignore
+
+# M6-B1 (01/11/2026, duyệt bởi Quanpt1): HMAC enforcement cho mọi request
+# tự xưng là Edge device. Secret nguồn = data/edge_hmac_secret.txt (copy từ
+# config.json của Pi5) hoặc env EDGE_HMAC_SECRET — KHÔNG dùng placeholder.
+# Suy giảm: file/env không có → verify được đánh dấu DISABLED (log WARNING),
+# vẫn ghi nhận telemetry nhưng không cấp pending_commands (fail-closed).
+_EDGE_HMAC_SECRET_FILE = Path(__file__).resolve().parents[3] / "data" / "edge_hmac_secret.txt"
+_EDGE_HMAC_MAX_DRIFT_SEC = 300.0  # PC↔Pi đo lệch ~1s; 300s đủ dư cho NTP hiccup
+_EDGE_HMAC_REPLAY_WINDOW_SEC = 600.0
+
+
+def _load_edge_hmac_secret() -> str:
+    env_secret = os.environ.get("EDGE_HMAC_SECRET", "").strip()
+    if env_secret:
+        return env_secret
+    try:
+        if _EDGE_HMAC_SECRET_FILE.exists():
+            return _EDGE_HMAC_SECRET_FILE.read_text(encoding="utf-8").strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _edge_hmac_verify(
+    self: "BrainAPIHandler",
+) -> tuple[bool, str, str]:
+    """Verify HMAC của request tự nhận là Edge device.
+
+    Trả (ok, device_id, error). Chỉ xét header HMAC nếu có đủ 4 header ký;
+    request chỉ mang device header mà thiếu signature → từ chối (fail-closed).
+    """
+    device_id = (
+        self.headers.get("X-QuanAI-Device")
+        or self.headers.get("X-Quan-Device-Id")
+        or self.headers.get("X-QuanAI-Device-Id")
+        or ""
+    ).strip()
+    if not device_id:
+        return True, "", ""  # traffic UI nội bộ — không phải edge
+
+    if EdgeHMACAuth is None:
+        return False, device_id, "HMAC_MODULE_UNAVAILABLE"
+
+    sig = self.headers.get(EdgeHMACAuth.HEADER_SIGNATURE, "")
+    ts = self.headers.get(EdgeHMACAuth.HEADER_TIMESTAMP, "")
+    nonce = self.headers.get(EdgeHMACAuth.HEADER_NONCE, "")
+    if not (sig and ts and nonce):
+        return False, device_id, "MISSING_HMAC_HEADERS"
+
+    secret = _load_edge_hmac_secret()
+    if not secret:
+        return False, device_id, "HMAC_SECRET_NOT_CONFIGURED"
+
+    payload_bytes = b""
+    try:
+        length_header = self.headers.get("Content-Length")
+        if length_header:
+            payload_bytes = self.rfile.read(int(length_header))
+            # Stash để do_POST dùng lại (stream chỉ đọc được một lần).
+            self._edge_hmac_body_raw = payload_bytes  # type: ignore[attr-defined]
+    except Exception:
+        payload_bytes = b""
+
+    verifier = EdgeHMACAuth(
+        device_id=device_id, secret=secret, max_drift_seconds=_EDGE_HMAC_MAX_DRIFT_SEC
+    )
+    ok, err = verifier.verify_request(
+        headers={
+            EdgeHMACAuth.HEADER_DEVICE_ID: device_id,
+            EdgeHMACAuth.HEADER_TIMESTAMP: ts,
+            EdgeHMACAuth.HEADER_NONCE: nonce,
+            EdgeHMACAuth.HEADER_SIGNATURE: sig,
+        },
+        payload_bytes=payload_bytes,
+    )
+    if not ok:
+        return False, device_id, err
+
+    # Anti-replay toàn process: nonce đã dùng trong cửa sổ drift*2 → chặn.
+    now = time.time()
+    with _EDGE_HMAC_NONCE_LOCK:
+        for n in [n for n, exp in _EDGE_HMAC_USED_NONCES.items() if exp < now]:
+            _EDGE_HMAC_USED_NONCES.pop(n, None)
+        if nonce in _EDGE_HMAC_USED_NONCES:
+            return False, device_id, "REPLAY_DETECTED_NONCE_ALREADY_USED"
+        _EDGE_HMAC_USED_NONCES[nonce] = now + _EDGE_HMAC_REPLAY_WINDOW_SEC
+    return True, device_id, ""
+
+
+_EDGE_HMAC_USED_NONCES: dict[str, float] = {}
+_EDGE_HMAC_NONCE_LOCK = threading.Lock()
+_EDGE_HMAC_STATE = {"disabled_logged": False}
+
+
+def _log_hmac_state_once(state: str, detail: str) -> None:
+    if _EDGE_HMAC_STATE.get("disabled_logged"):
+        return
+    _EDGE_HMAC_STATE["disabled_logged"] = True
+    print(
+        f"[M6-B1][HMAC] state={state} detail={detail} "
+        f"at {datetime.now(timezone.utc).isoformat()}",
+        flush=True,
+    )
 from quan_ai_brain.core.guardrails import OutputGuardrails
 from quan_ai_brain.core.redaction import redact_text
 from quan_ai_brain.daemon.health import health_as_dict
@@ -94,12 +206,67 @@ from quan_ai_brain.voice.tts_config import (
     TTSStatus,
     normalize_text_for_vietnamese_tts,
 )
+from quan_ai_brain.media.youtube_music import (
+    search_youtube_music,
+    looks_like_music_request,
+    dispatch_play_music_to_pi5,
+    dispatch_stop_music_to_pi5,
+)
 from quan_ai_brain.voice.voice_pipeline import XiaoZhiVoicePipeline
 from quan_ai_brain.web.edge_monitor import (
     EdgeAlertCode,
     EdgeConnectionMonitor,
     EdgeConnectionState,
 )
+
+# --- M1 System Health Intelligence (đọc-only + alert DM) ---
+from quan_ai_brain.monitoring import get_global_aggregator
+from quan_ai_brain.monitoring.alert_engine import AlertEngine
+from quan_ai_brain.monitoring.health_monitor import HealthMonitor
+from quan_ai_brain.monitoring.rca_engine import build_rca
+
+_GLOBAL_HEALTH_AGGREGATOR = get_global_aggregator()
+_GLOBAL_ALERT_ENGINE: AlertEngine | None = None
+_GLOBAL_HEALTH_MONITOR: HealthMonitor | None = None
+
+
+def _get_alert_engine() -> AlertEngine:
+    """Lazy-init AlertEngine (cần workspace path — có sau khi handler biết root)."""
+    global _GLOBAL_ALERT_ENGINE
+    if _GLOBAL_ALERT_ENGINE is None:
+        _GLOBAL_ALERT_ENGINE = AlertEngine(_find_workspace_root())
+    return _GLOBAL_ALERT_ENGINE
+
+
+# --- M4: SelfCareEngine toàn cục (health checks TCP thật mỗi cycle HealthMonitor) ---
+_GLOBAL_SELF_CARE_ENGINE: Any = None
+
+
+def _get_self_care_engine() -> Any:
+    """Lazy-init SelfCareEngine. Kể từ M4, engine này chạy THẬT trong HealthMonitor;
+    auto-recovery vẫn PENDING (chưa có executor thật — đúng governed autonomy)."""
+    global _GLOBAL_SELF_CARE_ENGINE
+    if _GLOBAL_SELF_CARE_ENGINE is None:
+        from quan_ai_brain.cognition.self_care_engine import SelfCareEngine
+        _GLOBAL_SELF_CARE_ENGINE = SelfCareEngine(str(_find_workspace_root()))
+    return _GLOBAL_SELF_CARE_ENGINE
+
+
+def start_health_monitor(cycle_sec: float = 120.0) -> HealthMonitor:
+    """Khởi động vòng đánh giá sức khỏe định kỳ (daemon thread). Idempotent."""
+    global _GLOBAL_HEALTH_MONITOR
+    if _GLOBAL_HEALTH_MONITOR is not None and _GLOBAL_HEALTH_MONITOR.status()["running"]:
+        return _GLOBAL_HEALTH_MONITOR
+    monitor = HealthMonitor(
+        _find_workspace_root(),
+        _GLOBAL_HEALTH_AGGREGATOR,
+        cycle_sec=cycle_sec,
+        alert_engine=_get_alert_engine(),
+        self_care=_get_self_care_engine(),
+    )
+    monitor.start()
+    _GLOBAL_HEALTH_MONITOR = monitor
+    return monitor
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 _GLOBAL_WAKE_CONFIG = WakeWordConfig(enabled=False)
@@ -117,9 +284,44 @@ _GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
     "pending_commands": [],
     "target_avatar_state": "IDLE",
     "transcript": "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.",
-    "face_only_mode": True,
+    "face_only_mode": False,
 }
+_GLOBAL_HDMI_STATE: dict = {"last_ask": 0.0, "awaiting_approval": False}
 _GLOBAL_ROLE_ORCHESTRATOR = ExecutiveRoleOrchestrator(edge_telemetry=_GLOBAL_EDGE_TELEMETRY)
+
+# (31/10/2026) MARQUEE TIẾNG ANH TRÊN KIOSK: owner yêu cầu khung hội thoại
+# đang giao tiếp hiển thị bằng TIẾNG ANH. Dịch VI→EN bằng Google gtx endpoint
+# (free, PC được phép — Pi bị block) + cache theo text để không gọi mỗi heartbeat.
+_TRANSLATE_EN_CACHE: dict[str, str] = {}
+
+
+def _translate_to_english(text: str) -> str:
+    """Dịch transcript VI→EN cho marquee kiosk. Fail → trả text gốc."""
+    clean = (text or "").strip()
+    if not clean:
+        return ""
+    if clean in _TRANSLATE_EN_CACHE:
+        return _TRANSLATE_EN_CACHE[clean]
+    try:
+        import urllib.parse
+        import urllib.request
+        q = urllib.parse.quote(clean[:300])
+        url = (f"https://translate.googleapis.com/translate_a/single"
+               f"?client=gtx&sl=vi&tl=en&dt=t&q={q}")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        parts = data[0] if isinstance(data, list) and data else []
+        translated = "".join(p[0] for p in parts if isinstance(p, list) and p)
+        translated = translated.strip() or clean
+        if len(_TRANSLATE_EN_CACHE) > 200:
+            _TRANSLATE_EN_CACHE.clear()
+        _TRANSLATE_EN_CACHE[clean] = translated
+        return translated
+    except Exception:
+        return clean
+
+
 _GLOBAL_VOICE_PIPELINE = XiaoZhiVoicePipeline(
     role_orchestrator=_GLOBAL_ROLE_ORCHESTRATOR,
     mouth_sync=_GLOBAL_MOUTH_SYNC,
@@ -147,6 +349,46 @@ def _get_global_supervisor():
             governance_store=gov_store,
         )
     return _GLOBAL_SUPERVISOR
+
+
+def _upload_image_to_pi_for_show(raw_url: str) -> tuple[str | None, str]:
+    """(31/10/2026) Đưa ảnh về Pi 5 để show_image hiển thị.
+
+    - raw_url đã là URL Pi tương đối (/assets/avatar/...) → trả nguyên.
+    - raw_url là đường dẫn file trên PC (absolute hoặc /data/...) → đọc file,
+      upload lên Pi qua /api/kiosk/files/upload (filename an toàn, đuôi ảnh),
+      trả URL Pi tương đối từ API. Không đọc secret; chỉ file ảnh đuôi phổ biến.
+    """
+    import base64 as _b64
+    from pathlib import Path as _Path
+
+    if raw_url.startswith("/assets/avatar/"):
+        return raw_url, ""
+
+    allowed_exts = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
+    ext = _Path(raw_url).suffix.lower()
+    if ext not in allowed_exts:
+        return None, f"extension not allowed: {ext or '(khong ro)'}"
+
+    p = _Path(raw_url)
+    if not p.is_absolute():
+        # relative → tính từ workspace root (server chạy trong workspace)
+        ws = _Path(__file__).resolve().parents[3]
+        p = ws / raw_url.lstrip("/")
+    if not p.exists() or not p.is_file():
+        return None, f"file not found: {p}"
+    if p.stat().st_size > 20 * 1024 * 1024:
+        return None, "file too large (>20MB)"
+
+    data_b64 = _b64.b64encode(p.read_bytes()).decode("ascii")
+    fname = f"dmcapture_{int(time.time())}{ext}"
+    payload = {"filename": fname, "content_b64": data_b64}
+    resp = _send_edge_request("/api/kiosk/files/upload", method="POST",
+                              data=payload, timeout=15.0)
+    if not isinstance(resp, dict) or not resp.get("success"):
+        return None, str((resp or {}).get("error", "upload failed"))[:200]
+    url_out = str(resp.get("url") or f"/assets/avatar/{fname}")
+    return url_out, ""
 
 
 def _send_edge_request(path: str, method: str = "GET", data: dict | None = None, timeout: float = 3.0) -> dict:
@@ -227,15 +469,27 @@ def push_avatar_expression(state: str, transcript: str = "", timeout: float = 1.
         return False
 
 
-def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0) -> bool:
-    """Đẩy lời thoại hiển thị + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
+def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float = 3.0, synthesize_tts: bool = True) -> bool:
+    """Đẩy lời thoại hiển thị + âm thanh Edge-TTS + biểu cảm SPEAKING xuống Pi 5 (auto-reset IDLE phía daemon).
 
     Cập nhật cả telemetry transcript/state để heartbeat không đè bằng giá trị cũ.
     Sau duration_ms, PC tự đặt IDLE vào telemetry (daemon tự reset phía Pi).
     """
     try:
         _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
-        _GLOBAL_EDGE_TELEMETRY["transcript"] = text[:300]
+        _GLOBAL_EDGE_TELEMETRY["transcript"] = text
+        _translate_to_english(text)  # làm nóng cache EN[:300]
+
+        audio_b64 = None
+        if synthesize_tts and text:
+            try:
+                import base64
+                clean_speech = re.sub(r"[\*#_`]", "", text[:300]).strip()
+                audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(clean_speech, voice_id="vi-VN-HoaiMyNeural")
+                if audio_bytes:
+                    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+            except Exception:
+                pass
 
         def _reset_after_speech() -> None:
             import time as _time
@@ -248,7 +502,14 @@ def push_avatar_speech(text: str, duration_ms: int | None = None, timeout: float
 
         _threading.Thread(target=_reset_after_speech, daemon=True).start()
 
-        data: dict[str, Any] = {"action": "speak", "text": text[:600], "state": "SPEAKING"}
+        data: dict[str, Any] = {
+            "action": "speak",
+            "text": text[:600],
+            "state": "SPEAKING",
+            "force_hardware": True,
+        }
+        if audio_b64:
+            data["audio_base64"] = audio_b64
         if duration_ms:
             data["duration_ms"] = int(duration_ms)
         resp = _send_edge_request(
@@ -265,6 +526,14 @@ def push_avatar_thinking(context_note: str = "") -> None:
 
 
 def _find_workspace_root() -> Path:
+    # V6 hotfix (27/10/2026): env override cho test isolation — không cho
+    # test suite ghi task thật vào data/tasks.db của production (nguồn gốc
+    # 294 task trùng lặp 'năng lượng' — daemon chạy pytest mỗi cycle).
+    override = os.environ.get("QUAN_AI_BRAIN_WORKSPACE", "").strip()
+    if override:
+        candidate = Path(override).resolve()
+        if candidate.exists():
+            return candidate
     current = Path.cwd().resolve()
     if (current / "src" / "quan_ai_brain").exists():
         return current
@@ -323,6 +592,21 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
+
+        # M6-B1: HMAC gate — mọi request tự xưng Edge phải ký hợp lệ.
+        hmac_ok, hmac_device, hmac_err = _edge_hmac_verify(self)
+        if not hmac_ok:
+            _log_hmac_state_once("ENFORCED", f"GET {path} rejected: {hmac_err}")
+            try:
+                _GLOBAL_EDGE_MONITOR.record_auth_failure(
+                    f"HMAC verify thất bại ({hmac_err})",
+                    metadata={"device_id": hmac_device, "path": path, "method": "GET"},
+                )
+            except Exception:
+                pass
+            self._send_error_json(f"HMAC verification failed: {hmac_err}", 401)
+            return
+
         port = self.server.server_address[1] if hasattr(self.server, "server_address") else 8765
 
         if path in ("/", "/index.html"):
@@ -334,6 +618,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path in ("/executive", "/executive.html"):
             self._serve_file(STATIC_DIR / "executive.html")
+            return
+
+        # M1.7: trang Sức khoẻ Hệ thống (PC + Pi5, dữ liệu thật).
+        if path in ("/health", "/health.html", "/health_dashboard.html"):
+            self._serve_file(STATIC_DIR / "health_dashboard.html")
             return
 
         if path.startswith("/static/"):
@@ -351,6 +640,26 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/health":
             self._handle_api_health()
+            return
+
+        # M1: System Health Intelligence — snapshot máy + Pi5 theo ngưỡng.
+        if path == "/api/health/machine":
+            self._handle_api_health_machine(parsed.query)
+            return
+
+        # M1: lịch sử telemetry.
+        if path == "/api/health/history":
+            self._handle_api_health_history(parsed.query)
+            return
+
+        # M1: root cause analysis (OBSERVED_FACT / POSSIBLE_CAUSE).
+        if path == "/api/health/rca":
+            self._handle_api_health_rca()
+            return
+
+        # M1: trạng thái vòng monitor + lịch sử alert.
+        if path == "/api/health/monitor":
+            self._handle_api_health_monitor()
             return
 
         if path == "/api/memories":
@@ -375,6 +684,22 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/capabilities":
             self._handle_api_executive_capabilities()
+            return
+
+        # M4: Self Model & Autonomous Learning — read-only introspection (GET)
+        if path == "/api/self/model":
+            self._handle_api_self_model()
+            return
+        if path == "/api/self/state":
+            self._handle_api_self_state()
+            return
+        if path == "/api/self/learning":
+            self._handle_api_self_learning()
+            return
+
+        # V6: Skill Registry — read-only listing (GET)
+        if path == "/api/skills":
+            self._handle_api_skills()
             return
 
         if path == "/api/executive/consultations":
@@ -418,6 +743,19 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Sprint 15 (d): session coordination — detect duplicate goals (GET, read-only)
         if path == "/api/executive/tasks/duplicates":
             self._handle_api_executive_task_duplicates()
+            return
+
+        # DEOM M2 (01/11/2026): NL task intake + transition log + work queue (GET, read-only)
+        if path == "/api/executive/tasks/intake":
+            self._handle_api_task_intake(parsed.query)
+            return
+
+        if path == "/api/executive/tasks/transitions":
+            self._handle_api_task_transitions(parsed.query)
+            return
+
+        if path == "/api/executive/work-queue":
+            self._handle_api_work_queue(parsed.query)
             return
 
         if path == "/api/executive/supervisor":
@@ -522,6 +860,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_todos_list()
             return
 
+        if path == "/api/music/status":
+            self._handle_api_music_status()
+            return
+
         # Sprint 9 (A): Workbench overview — tổng hợp thật, fail-honest
         if path == "/api/workbench/overview":
             self._handle_api_workbench_overview()
@@ -595,12 +937,32 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
+        # M6-B1: HMAC gate (trước khi đọc body vào do_POST; _edge_hmac_verify
+        # đã đọc và stash body vào self._edge_hmac_body_raw nếu có).
+        hmac_ok, hmac_device, hmac_err = _edge_hmac_verify(self)
+        if not hmac_ok:
+            _log_hmac_state_once("ENFORCED", f"POST {path} rejected: {hmac_err}")
+            try:
+                _GLOBAL_EDGE_MONITOR.record_auth_failure(
+                    f"HMAC verify thất bại ({hmac_err})",
+                    metadata={"device_id": hmac_device, "path": path, "method": "POST"},
+                )
+            except Exception:
+                pass
+            self._send_error_json(f"HMAC verification failed: {hmac_err}", 401)
+            return
+
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length > 10_000_000:
             self._send_error_json("Payload too large", 413)
             return
 
-        body_raw = self.rfile.read(content_length).decode("utf-8", errors="replace")
+        # M6-B1: tái sử dụng body đã đọc trong _edge_hmac_verify (nếu có) để
+        # tránh đọc stream hai lần (rfile chỉ đọc được một lần).
+        body_raw_bytes = getattr(self, "_edge_hmac_body_raw", None)
+        if body_raw_bytes is None:
+            body_raw_bytes = self.rfile.read(content_length)
+        body_raw = body_raw_bytes.decode("utf-8", errors="replace")
         try:
             body = json.loads(body_raw) if body_raw else {}
         except json.JSONDecodeError:
@@ -629,6 +991,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/persona":
             self._handle_api_executive_persona_update(body)
+            return
+
+        # M1: MAINTENANCE toggle — owner-gated (approved_by_owner='Quanpt1').
+        if path == "/api/health/maintenance":
+            self._handle_api_health_maintenance(body)
             return
 
         if path == "/api/executive/netchat/send":
@@ -745,12 +1112,34 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_edge_heartbeat(body)
             return
 
+        # V41: Edge Agent gửi events tự thu thập lên Brain
+        if path == "/api/executive/edge/events":
+            self._handle_api_edge_events(body)
+            return
+
         if path == "/api/executive/edge/mouth-sync":
             self._handle_api_edge_mouth_sync(body)
             return
 
         if path == "/api/executive/edge/control":
             self._handle_api_edge_control(body)
+            return
+
+        # (31/10/2026, owner) HDMI cắm/rút từ daemon Pi → xin phê duyệt owner
+        if path == "/api/executive/edge/hdmi_event":
+            self._handle_api_edge_hdmi_event(body)
+            return
+
+        # (01/11/2026, owner) THOẠI 2 CHIỀU: lệnh giọng nói từ mic Pi 5 →
+        # STT → chạy như tin DM → trả lời bằng giọng qua loa BT
+        if path == "/api/executive/edge/voice_command":
+            self._handle_api_edge_voice_command(body)
+            return
+
+        # (01/11/2026, owner) HỘI THOẠI LIÊN TỤC: 1 câu nói WAV từ vòng VAD
+        # trên Pi → STT → xử lý → trả lời text (daemon tự TTS + phát loa)
+        if path == "/api/executive/edge/converse":
+            self._handle_api_edge_converse(body)
             return
 
         if path == "/api/executive/edge/startup-sequence":
@@ -823,6 +1212,18 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/edge/release/rollback":
             self._handle_api_edge_release_rollback(body)
+            return
+
+        if path == "/api/music/search":
+            self._handle_api_music_search(body)
+            return
+
+        if path == "/api/music/play":
+            self._handle_api_music_play(body)
+            return
+
+        if path == "/api/music/stop":
+            self._handle_api_music_stop()
             return
 
         self.send_error(404, "Endpoint not found")
@@ -936,6 +1337,89 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "overall_status": overall,
             "components": components,
         })
+
+    def _handle_api_health_machine(self, query: str) -> None:
+        """M1.1+1.2: GET /api/health/machine — snapshot PC + Pi5 + Network +
+        Services + Databases + Voice đo thật.
+
+        Query ?force=1 bỏ cache. Trạng thái phân loại theo ngưỡng aggregator
+        (NORMAL/WARNING/CRITICAL/UNKNOWN/MAINTENANCE — fail-honest khi thiếu
+        dữ liệu)."""
+        try:
+            force = "force=1" in (query or "")
+            snap = _GLOBAL_HEALTH_AGGREGATOR.snapshot(force=force)
+            self._send_json({"success": True, **snap})
+        except Exception as exc:
+            self._send_json({
+                "success": False,
+                "error": f"health_machine_error:{type(exc).__name__}:{exc}",
+            })
+
+    def _handle_api_health_history(self, query: str) -> None:
+        """M1: GET /api/health/history?limit=120 — lịch sử telemetry."""
+        try:
+            limit = 120
+            if "limit=" in (query or ""):
+                try:
+                    limit = max(1, min(2000, int(query.split("limit=")[1].split("&")[0])))
+                except ValueError:
+                    pass
+            rows = _GLOBAL_HEALTH_AGGREGATOR.history(limit=limit)
+            self._send_json({"success": True, "count": len(rows), "history": rows})
+        except Exception as exc:
+            self._send_json({
+                "success": False,
+                "error": f"health_history_error:{type(exc).__name__}:{exc}",
+            })
+
+    def _handle_api_health_rca(self) -> None:
+        """M1.8: GET /api/health/rca — phân tích nguyên nhân khả năng
+        (OBSERVED_FACT / POSSIBLE_CAUSE / CONFIRMED_CAUSE — không tự phóng đại)."""
+        try:
+            snap = _GLOBAL_HEALTH_AGGREGATOR.snapshot()
+            self._send_json({"success": True,
+                             "measured_at": snap.get("measured_at"),
+                             "rca": build_rca(snap)})
+        except Exception as exc:
+            self._send_json({
+                "success": False,
+                "error": f"health_rca_error:{type(exc).__name__}:{exc}",
+            })
+
+    def _handle_api_health_maintenance(self, body: dict) -> None:
+        """POST /api/health/maintenance — bật/tắt chế độ MAINTENANCE.
+        Owner-gated: chỉ chấp nhận approved_by_owner='Quanpt1' (giống persona update)."""
+        try:
+            approved = str(body.get("approved_by_owner", "")).strip()
+            if approved != "Quanpt1":
+                self._send_error_json(
+                    "Bật/tắt MAINTENANCE bị từ chối: phải có approved_by_owner='Quanpt1'.",
+                    403)
+                return
+            enable = bool(body.get("enabled", False))
+            _GLOBAL_HEALTH_AGGREGATOR.set_maintenance(enable)
+            self._send_json({"success": True, "maintenance": enable})
+        except Exception as exc:
+            self._send_json({
+                "success": False,
+                "error": f"maintenance_error:{type(exc).__name__}:{exc}",
+            })
+
+    def _handle_api_health_monitor(self) -> None:
+        """M1.5: GET /api/health/monitor — trạng thái vòng monitor + alerts."""
+        try:
+            monitor = _GLOBAL_HEALTH_MONITOR
+            status = monitor.status() if monitor is not None else {
+                "running": False, "cycle_sec": None,
+                "cycles_done": 0, "last_overall_status": "UNKNOWN",
+                "recent_alerts": [],
+            }
+            self._send_json({"success": True, **status})
+        except Exception as exc:
+            self._send_json({
+                "success": False,
+                "error": f"health_monitor_error:{type(exc).__name__}:{exc}",
+            })
 
     def _handle_api_status(self) -> None:
         try:
@@ -1289,7 +1773,113 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as _rag_exc:
                 doc_rag_info["error"] = str(_rag_exc)[:160]
 
+            # 2.9 Knowledge Base RAG (V41, 30/10/2026) — câu hỏi tri thức chuyên môn
+            # → retrieve từ kho kho_tai_lieu (34k+ chunks: AI course, RAN, VT-CNTT...),
+            # đưa bằng chứng CÓ DẪN CHỨNG [tài liệu, trang] vào context.
+            # Fail-closed: lỗi/không đủ score → không evidence, không giết chat.
+            kb_rag_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.knowledge.knowledge_query import KnowledgeQueryEngine
+                from pathlib import Path as _KBPath
+
+                _kb_engine = KnowledgeQueryEngine(
+                    db_path=_KBPath(str(workspace)) / "data" / "knowledge_db"
+                )
+                _kb_results = _kb_engine.search(query, top_k=5, min_score=0.55)
+                kb_rag_info["attempted"] = True
+                if _kb_results:
+                    kb_rag_info["chunks"] = len(_kb_results)
+                    kb_rag_info["best_score"] = _kb_results[0].score
+                    kb_rag_info["citations"] = [r.citation() for r in _kb_results[:3]]
+                    _kb_block = _kb_engine.render_evidence_block(_kb_results)
+                    context.system_instructions = (
+                        context.system_instructions + "\n" + _kb_block
+                    )
+                else:
+                    kb_rag_info["note"] = "không tìm thấy bằng chứng đủ tốt trong kho tri thức"
+            except Exception as _kb_exc:
+                kb_rag_info["error"] = str(_kb_exc)[:160]
+
+            # 2.85 YouTube Music detection & Pi 5 streaming dispatch
+            music_info: dict[str, Any] = {"requested": False}
+            try:
+                is_music, song_target = looks_like_music_request(query)
+                if is_music:
+                    music_info["requested"] = True
+                    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+                    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                    if song_target == "STOP":
+                        dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+                        music_info["action"] = "stop"
+                        music_block = "[EVIDENCE ÂM NHẠC: Đã gửi lệnh DỪNG PHÁT NHẠC trên loa Raspberry Pi 5 theo yêu cầu của Anh. Hãy thông báo ngắn gọn, xác nhận đã dừng bài hát.]"
+                        context.system_instructions = context.system_instructions + "\n" + music_block
+                    else:
+                        music_info["action"] = "play"
+                        music_info["song_query"] = song_target
+                        yt_results = search_youtube_music(song_target, max_results=3)
+                        if yt_results:
+                            top_track = yt_results[0]
+                            dispatch_play_music_to_pi5(
+                                video_id=top_track["video_id"],
+                                title=top_track["title"],
+                                url=top_track["url"],
+                                edge_ip=edge_ip,
+                                edge_port=edge_port,
+                            )
+                            music_info["track"] = top_track
+                            music_info["playing"] = True
+                            music_block = (
+                                f"[EVIDENCE ÂM NHẠC YOUTUBE — ĐÃ TÌM THẤY VÀ KÍCH HOẠT PHÁT TRÊN PI 5:\n"
+                                f"- Tên bài hát/video: {top_track['title']}\n"
+                                f"- Kênh: {top_track.get('channel', 'YouTube')}\n"
+                                f"- Thời lượng: {top_track.get('duration', '')}\n"
+                                f"- URL: {top_track['url']}\n"
+                                f"- Trạng thái: Lệnh phát nhạc đã gửi tới loa Raspberry Pi 5 thành công qua Wi-Fi.\n"
+                                f"HÃY BÁO CÁO VUI VẺ, LỊCH SỰ XÁC NHẬN BÀI HÁT ĐANG PHÁT TRÊN LOA PI 5 ĐỂ ANH VÀ CHỊ THƯỞNG THỨC.]"
+                            )
+                            context.system_instructions = context.system_instructions + "\n" + music_block
+            except Exception as _m_err:
+                music_info["error"] = str(_m_err)[:120]
+
+            # 2.95 CAI V3.0 SPRINT 1 — QPIG Tool Bridge (§IV): chèn tool evidence
+            # vào context TRƯỚC LLM call. Chỉ tool AUTO (không cần ticket) mới
+            # tự execute; tool R3+ chỉ đề xuất + yêu cầu ticket Quanpt1.
+            tool_calls_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.tools.chat_bridge import (
+                    ChatToolBridge, ToolRegistryLoader, ToolSelector,
+                )
+                _loader = ToolRegistryLoader(qpig=self.qpig if hasattr(self, "qpig") else None)
+                _loader.load()
+                _selector = ToolSelector(_loader.registry)
+                _bridge = ChatToolBridge(self.qpig if hasattr(self, "qpig") else _loader.qpig,
+                                         _selector)
+                _calls = _bridge.process(query, max_calls=2)
+                _block = _bridge.render_context_block(_calls)
+                if _block:
+                    context.system_instructions = context.system_instructions + "\n" + _block
+                tool_calls_info = {
+                    "attempted": True,
+                    "n_calls": len(_calls),
+                    "auto_executed": sum(1 for c in _calls if c.evidence_id is not None),
+                    "require_approval": [c.directive_name for c in _calls
+                                         if c.evidence_id is None and c.note.startswith("cần")],
+                    "evidence_ids": [c.evidence_id for c in _calls if c.evidence_id is not None],
+                }
+            except Exception as _tool_exc:
+                tool_calls_info["error"] = str(_tool_exc)[:160]
+
             # 3. LLM Generation
+            # (02/11/2026, owner yêu cầu) VN-LANG: ghép thêm rào ngôn ngữ vào
+            # system prompt — mọi câu trả lời chat/DM luôn thuần tiếng Việt
+            # (quy tắc 12 trong DEFAULT_SYSTEM_INSTRUCTIONS đã có; rào này đảm
+            # bảo cả khi context builder bị thay thế/bypass).
+            context.system_instructions = (
+                context.system_instructions
+                + "\n\n[NGÔN NGỮ — BẮT BUỘC (02/11/2026)] Trả lời HOÀN TOÀN bằng tiếng Việt "
+                "có dấu, trôi chảy tự nhiên, xưng 'em' gọi 'anh'. KHÔNG trộn tiếng Anh "
+                "không cần thiết (tên riêng kỹ thuật giữ nguyên). Không dùng văn phong dịch máy."
+            )
             req = LLMRequest(
                 prompt=context.rendered_context,
                 system_prompt=context.system_instructions,
@@ -1395,8 +1985,101 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     except Exception as clo_err:
                         # Non-blocking: log but don't fail the request
                         all_warnings.append(f"CLO session trigger: {str(clo_err)[:100]}")
+
+                    # V6: TaskPipeline evidence trail — pipeline gắn với task vừa đăng ký
+                    try:
+                        from quan_ai_brain.cognition.task_pipeline import (
+                            TaskPipelineEngine,
+                            PipelineStage,
+                        )
+
+                        _tp_engine = TaskPipelineEngine()
+                        _tp = _tp_engine.create_pipeline(
+                            owner_request=query,
+                            task_goal=task_rec.goal if hasattr(task_rec, "goal") else query,
+                            acceptance_criteria=[
+                                "Task đã đăng ký vào DurableTaskRegistry với task_id hợp lệ",
+                            ],
+                            risk_level=str(task_rec.risk_level),
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.DECOMPOSE,
+                            notes=f"Decomposed by ExecutiveCoordinator.plan() ({len(task_rec.approved_scope)} DAG steps)",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.DISCOVER,
+                            notes="Existing tools reused: ExecutiveCoordinator, PlanOrchestrator, DurableTaskRegistry",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.PLAN,
+                            notes=f"Plan registered with risk {task_rec.risk_level}",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        for _s in (PipelineStage.LEARN, PipelineStage.BUILD, PipelineStage.TEST):
+                            _tp_engine.advance(_tp, _s, notes="", skipped_reason="registration path — execution handled by durable task runner")
+                        _tp_engine.advance(
+                            _tp, PipelineStage.ANALYZE,
+                            notes=f"Task {task_rec.task_id} registered; awaiting execution evidence",
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        # VERIFY fail-honest: chưa có bằng chứng thực thi → NOT_VERIFIED
+                        _crit = _tp.spec.acceptance_criteria[0]
+                        _tp_engine.advance(
+                            _tp, PipelineStage.VERIFY,
+                            notes="Task registered but not yet executed — honest not_verified",
+                            validation={"criteria": {
+                                _crit: {"passed": False, "not_verified": True,
+                                        "reason": "durable task execution pending"},
+                            }},
+                            evidence_refs=[f"task_id:{task_rec.task_id}"],
+                        )
+                        # ADVISE + REUSE — ghi khuyến nghị trung thực
+                        _tp_engine.advance(
+                            _tp, PipelineStage.ADVISE,
+                            notes=f"Task {task_rec.task_id} chờ thực thi theo DAG đã duyệt; theo dõi tại /api/executive/tasks",
+                        )
+                        _tp_engine.advance(
+                            _tp, PipelineStage.REUSE,
+                            notes="", skipped_reason="no reusable asset generated at registration time",
+                        )
+                        # Gắn pipeline vào response (truy vết bằng chứng)
+                        if isinstance(durable_task_dict, dict):
+                            durable_task_dict["task_pipeline"] = {
+                                "pipeline_id": _tp.pipeline_id,
+                                "stages_completed": len(_tp.stage_history),
+                                "final_recommendation": _tp.final_recommendation,
+                                "verify_status": "NOT_VERIFIED (execution pending)",
+                            }
+                    except Exception as tp_err:
+                        # Non-blocking: pipeline chỉ là evidence trail, không chặn chat
+                        all_warnings.append(f"TaskPipeline trail: {str(tp_err)[:100]}")
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
+
+                # V7 Cấp 2: chain skill kiểm tra tiến độ — chạy khi query khớp
+                # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
+                # fail-honest, không chặn chat (lỗi chỉ append warning).
+                try:
+                    from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR
+                    from quan_ai_brain.cognition.v7_skills import run_progress_check_chain as _v7_chain
+
+                    _v7_ws = _find_workspace_root()
+                    _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
+                    if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
+                        _v7_result = _v7_chain(query or "", _v7_ws)
+                        response_data["progress_check"] = {
+                            "chain": _v7_result["chain"],
+                            "conclusion": _v7_result["reconciliation"]["conclusion"],
+                            "records_matched": _v7_result["reconciliation"]["records_matched"],
+                            "sources_accessed": _v7_result["reconciliation"]["sources_accessed"],
+                            "sources_blocked": _v7_result["reconciliation"]["sources_blocked"],
+                            "risk_summary": _v7_result["risk_summary"],
+                            "report_md": _v7_result["report_md"],
+                        }
+                except Exception as v7_err:
+                    all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
@@ -1450,6 +2133,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "tool_calls": tool_calls_info,
+                "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
@@ -1519,10 +2204,20 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             selected_model = decision.model
             self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
 
+            # 1.5 Owner teach detection (V8 parity)
+            teach_note = None
+            try:
+                from quan_ai_brain.cognition.owner_teach import detect_teaching
+                teach = detect_teaching(query)
+                if teach:
+                    teach_note = f"Đã ghi nhận kiến thức dạy từ Anh ({teach.content[:80]})."
+            except Exception:
+                pass
+
             # 2. Memory retrieval & session history.
             with MemoryStore(db_path, workspace=workspace) as store:
                 session_mgr = SessionMemoryManager(store)
-                recent_history = session_mgr.get_recent_session_history(session_id, limit=3)
+                recent_history = session_mgr.get_recent_session_history(session_id, limit=6)
                 retriever = CognitiveRetriever(store)
                 m_query = MemoryQuery(query=query, project_scope=scope, top_k=5, max_chars=4000)
                 retrieval = retriever.retrieve(m_query)
@@ -1534,6 +2229,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     project_scope=scope,
                     conversation_history=recent_history,
                 )
+
+            # 2.5 Living Grounding Facts (V8 parity)
+            try:
+                from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
+                grounding_block = render_grounding_block(collect_grounding_facts(current_model=selected_model))
+                context.system_instructions = grounding_block + "\n\n" + context.system_instructions
+            except Exception:
+                pass
 
             # 2.55 Avatar: THINKING ngay khi nhận câu hỏi (stream path).
             try:
@@ -1557,7 +2260,76 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+            # 2.7 TTNS lookup (V8 parity)
+            try:
+                from quan_ai_brain.tools.ttns_lookup import looks_like_ttns_query, ttns_lookup
+                if looks_like_ttns_query(query):
+                    _ttns = ttns_lookup(query)
+                    if _ttns and _ttns.get("answer"):
+                        context.system_instructions += "\n[EVIDENCE TTNS NỘI BỘ]\n" + _ttns["answer"][:6000]
+            except Exception:
+                pass
+
+            # 2.8 Document RAG evidence (V8 parity)
+            try:
+                from quan_ai_brain.cognition.document_rag import DocumentRAG
+                _rag = DocumentRAG(workspace=str(workspace))
+                if _rag.count_chunks() > 0:
+                    _rr = _rag.retrieve(query)
+                    if _rr.has_evidence:
+                        context.system_instructions += "\n" + _rr.render_evidence_block()
+            except Exception:
+                pass
+
+            # 2.85 YouTube Music detection & Pi 5 streaming dispatch (stream path)
+            music_info_stream: dict[str, Any] = {"requested": False}
+            try:
+                is_music, song_target = looks_like_music_request(query)
+                if is_music:
+                    music_info_stream["requested"] = True
+                    edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+                    edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                    if song_target == "STOP":
+                        dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+                        music_info_stream["action"] = "stop"
+                        music_block = "[EVIDENCE ÂM NHẠC: Đã gửi lệnh DỪNG PHÁT NHẠC trên loa Raspberry Pi 5 theo yêu cầu của Anh. Hãy thông báo ngắn gọn, xác nhận đã dừng bài hát.]"
+                        context.system_instructions = context.system_instructions + "\n" + music_block
+                    else:
+                        music_info_stream["action"] = "play"
+                        music_info_stream["song_query"] = song_target
+                        yt_results = search_youtube_music(song_target, max_results=3)
+                        if yt_results:
+                            top_track = yt_results[0]
+                            dispatch_play_music_to_pi5(
+                                video_id=top_track["video_id"],
+                                title=top_track["title"],
+                                url=top_track["url"],
+                                edge_ip=edge_ip,
+                                edge_port=edge_port,
+                            )
+                            music_info_stream["track"] = top_track
+                            music_info_stream["playing"] = True
+                            music_block = (
+                                f"[EVIDENCE ÂM NHẠC YOUTUBE — ĐÃ TÌM THẤY VÀ KÍCH HOẠT PHÁT TRÊN PI 5:\n"
+                                f"- Tên bài hát/video: {top_track['title']}\n"
+                                f"- Kênh: {top_track.get('channel', 'YouTube')}\n"
+                                f"- Thời lượng: {top_track.get('duration', '')}\n"
+                                f"- URL: {top_track['url']}\n"
+                                f"- Trạng thái: Lệnh phát nhạc đã gửi tới loa Raspberry Pi 5 thành công qua Wi-Fi.\n"
+                                f"HÃY BÁO CÁO VUI VẺ, LỊCH SỰ XÁC NHẬN BÀI HÁT ĐANG PHÁT TRÊN LOA PI 5 ĐỂ ANH VÀ CHỊ THƯỞNG THỨC.]"
+                            )
+                            context.system_instructions = context.system_instructions + "\n" + music_block
+            except Exception as _m_err:
+                music_info_stream["error"] = str(_m_err)[:120]
+
             # 3. Streamed generation (NetMind SSE) — deltas forwarded as they come.
+            # (02/11/2026, owner yêu cầu) VN-LANG: rào ngôn ngữ tiếng Việt như đường non-stream.
+            context.system_instructions = (
+                context.system_instructions
+                + "\n\n[NGÔN NGỮ — BẮT BUỘC (02/11/2026)] Trả lời HOÀN TOÀN bằng tiếng Việt "
+                "có dấu, trôi chảy tự nhiên, xưng 'em' gọi 'anh'. KHÔNG trộn tiếng Anh "
+                "không cần thiết (tên riêng kỹ thuật giữ nguyên). Không dùng văn phong dịch máy."
+            )
             req = LLMRequest(
                 prompt=context.rendered_context,
                 system_prompt=context.system_instructions,
@@ -1591,6 +2363,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     return
 
             full_text = OutputGuardrails.sanitize("".join(parts))[0]
+            if teach_note:
+                full_text = (teach_note + "\n\n" + full_text)
             grounding_analysis = OutputGuardrails.analyze_grounding(full_text, context=context)
 
             # 4. Persist the COMPLETE answer only after stream completion.
@@ -1614,6 +2388,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "session_id": session_id,
                 "routing": {"tier": decision.tier, "model": decision.model, "is_fallback": decision.is_fallback},
                 "persistence": persistence_info,
+                "music_playback": music_info_stream.get("track") if music_info_stream.get("playing") else ({"action": "stop", "playing": False} if music_info_stream.get("action") == "stop" else None),
             })
             self.wfile.write(_sse(final_event))
             self.wfile.flush()
@@ -1817,6 +2592,361 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_error_json(f"NetChat messages error: {exc}", 502)
 
+    def _handle_api_edge_hdmi_event(self, body: dict) -> None:
+        """(31/10/2026, owner) Daemon Pi báo HDMI cắm/rút.
+
+        connected  → ghi pending approval + DM hỏi anh 'có muốn xuất hình lên
+                     HDMI?' — chỉ bật mirror khi anh phê duyệt.
+        disconnected → tắt mirror (daemon tự làm) + DM báo.
+        """
+        event = str(body.get("event", "")).strip()
+        ports = body.get("ports") or []
+        try:
+            from quan_ai_brain.integration.netchat_bridge import (
+                DEFAULT_CHANNEL_ID,
+                send_message,
+            )
+
+            if event == "connected":
+                # chống spam: chỉ hỏi 1 lần trong 10 phút
+                now = time.time()
+                last = _GLOBAL_HDMI_STATE.get("last_ask", 0.0)
+                if now - last > 600:
+                    _GLOBAL_HDMI_STATE["last_ask"] = now
+                    _GLOBAL_HDMI_STATE["awaiting_approval"] = True
+                    msg = ("🖥️ Anh ơi, em phát hiện màn hình cắm vào cổng HDMI của "
+                           "Pi 5. Anh có muốn em xuất hình thể (avatar) lên màn "
+                           "HDMI không?\n\n"
+                           "• Phê duyệt: nhắn 'phê duyệt hdmi' hoặc 'ok'\n"
+                           "• Bỏ qua: không cần trả lời (hình vẫn trên màn Pi 5).\n"
+                           "Khi đã bật, hình sẽ hiển thị LIÊN TỤC trên HDMI cho đến "
+                           "khi anh nhắn 'tắt hdmi'.")
+                    send_message(DEFAULT_CHANNEL_ID, msg)
+                    self._send_json({"success": True, "asked_owner": True})
+                else:
+                    self._send_json({"success": True, "asked_owner": False,
+                                     "reason": "đã hỏi trong 10 phút"})
+            elif event == "disconnected":
+                _GLOBAL_HDMI_STATE["awaiting_approval"] = False
+                try:
+                    send_message(DEFAULT_CHANNEL_ID,
+                                 "🔌 Màn HDMI đã rút khỏi Pi 5 — em đã tắt hình "
+                                 "trên HDMI, hình thể vẫn trên màn Pi 5.")
+                except Exception:
+                    pass
+                self._send_json({"success": True})
+            else:
+                self._send_json({"success": False, "error": f"event lạ: {event}"})
+        except Exception as exc:
+            self._send_error_json(f"HDMI event error: {exc}", 502)
+
+    def _run_chat_once(self, query: str, port: int = 8766,
+                       model: str | None = None) -> dict:
+        """(01/11/2026) Gọi nội bộ /api/chat (loopback) — server là
+        ThreadedHTTPServer nên an toàn; dùng cho lệnh thoại không khớp intent
+        để LLM trả lời tự nhiên. Timeout gọn (45s), fail-honest.
+        port=8765 + model GLM = đường responder DM dùng (trả lời tiếng Việt
+        tốt); port=8766 (mặc định) = Ollama nội bộ."""
+        import urllib.request as _ur
+
+        payload: dict = {
+            "query": query,
+            "fallback": True,
+            "timeout": 40.0,
+        }
+        if model:
+            payload["model"] = model
+            payload["reasoning_effort"] = "low"
+        try:
+            req = _ur.Request(
+                f"http://127.0.0.1:{port}/api/chat",
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur.urlopen(req, timeout=45) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            return {"success": False, "answer": "", "error": str(exc)[:120]}
+
+    def _handle_api_edge_voice_command(self, body: dict) -> None:
+        """(01/11/2026, owner) Lệnh giọng nói từ mic trên loa BT Pi 5.
+
+        Daemon ghi WAV 16k mono sau wake → POST lên đây (content_b64) →
+        STT faster-whisper (tools/voice_stt.py) → lệnh khớp intent DM thì
+        chạy như tin nhắn chữ; không khớp → GLM chat trả lời → KẾT QUẢ phát
+        giọng về loa BT qua push_avatar_speech (Edge-TTS vi-VN-HoaiMyNeural).
+        Fail-honest: không có text → không bịa lệnh.
+        """
+        content_b64 = str(body.get("content_b64", "")).strip()
+        if not content_b64:
+            self._send_error_json("Missing content_b64", 400)
+            return
+        import base64 as _b64
+
+        workspace = _find_workspace_root()
+        voice_dir = workspace / "data" / "edge_media" / "voice"
+        voice_dir.mkdir(parents=True, exist_ok=True)
+        wav_path = voice_dir / f"vc_{time.strftime('%Y%m%d_%H%M%S')}.wav"
+        try:
+            wav_path.write_bytes(_b64.b64decode(content_b64))
+        except Exception as exc:
+            self._send_error_json(f" WAV decode lỗi: {exc}", 400)
+            return
+        if wav_path.stat().st_size < 1000:
+            self._send_error_json("WAV rỗng/quá nhỏ — mic không ghi được", 503)
+            return
+
+        # 1) STT (model nạp lần đầu ~55s, sau đó 2–4s) — chạy bằng venv BRAIN
+        stt_text = ""
+        try:
+            stt_script = (
+                "import sys; sys.path.insert(0, r'%s'); "
+                "from tools.voice_stt import transcribe; "
+                "print(transcribe(r'%s'))" % (str(workspace), str(wav_path))
+            )
+            venv_py = workspace / ".venv" / "Scripts" / "python.exe"
+            proc = subprocess.run(
+                [str(venv_py), "-c", stt_script],
+                capture_output=True, text=True, timeout=180,
+                encoding="utf-8", errors="replace",
+            )
+            for line in (proc.stdout or "").strip().splitlines():
+                if line and not line.startswith("[STT]"):
+                    stt_text = line.strip()
+        except Exception:
+            stt_text = ""
+
+        if not stt_text:
+            try:
+                from quan_ai_brain.integration.netchat_bridge import (
+                    DEFAULT_CHANNEL_ID,
+                    send_message,
+                )
+                send_message(
+                    DEFAULT_CHANNEL_ID,
+                    "🎤 Anh ơi, em nghe không rõ lệnh thoại vừa rồi (tiếng ồn "
+                    "hoặc anh nói xa mic loa). Anh nói lại gần loa hơn nhé!",
+                )
+            except Exception:
+                pass
+            push_avatar_speech(
+                "Em chưa nghe rõ lệnh của anh, anh nói lại giúp em nhé!",
+                duration_ms=3500,
+            )
+            self._send_json({
+                "success": False, "stt_text": "", "reply": "",
+                "message": "STT không nhận được text — đã thông báo owner",
+            })
+            return
+
+        # 2) Route như tin DM (intent có sẵn → chạy); không có intent → GLM chat
+        intent = None
+        reply = ""
+        # M5 (G-12): câu hỏi về BẢN THÂN → trả từ dữ liệu sống, không để LLM đoán
+        try:
+            from quan_ai_brain.cognition.self_qa import SelfQA
+            _self_reply = SelfQA(workspace).answer(stt_text)
+            if _self_reply:
+                reply = _self_reply
+        except Exception:
+            pass
+        if not reply:
+            try:
+                sys.path.insert(0, str(workspace))
+                from tools.netchat_command_center import route_message as _route
+
+                intent, reply = _route(stt_text)
+            except Exception:
+                intent, reply = None, ""
+        if not reply:
+            # M5 (G-22): có đại từ → bọc ngữ cảnh lượt trước cho LLM hiểu liền mạch
+            _llm_query = stt_text
+            try:
+                from quan_ai_brain.cognition.conversation_state import (
+                    ConversationStateManager,
+                )
+                _conv = ConversationStateManager(workspace)
+                _llm_query = _conv.build_contextualized_query("voice", stt_text)
+            except Exception:
+                _llm_query = stt_text
+            try:
+                resp = self._run_chat_once(_llm_query)
+                reply = str(resp.get("answer") or resp.get("reply") or "").strip()
+            except Exception:
+                reply = ""
+        if not reply:
+            reply = "Em chưa xử lý được lệnh này, anh thử lại nhé."
+
+        # M5: ghi state hội thoại lượt này (fire-and-forget, fail-honest)
+        try:
+            from quan_ai_brain.cognition.conversation_state import (
+                ConversationStateManager,
+            )
+            ConversationStateManager(workspace).update("voice", stt_text, reply, intent)
+        except Exception:
+            pass
+
+        # 3) Phát giọng qua loa BT + hiển thị transcript trên kiosk
+        speak_ms = max(2500, min(15000, len(reply) * 90))
+        spoke = push_avatar_speech(reply, duration_ms=speak_ms)
+
+        # 4) Log DM để anh đọc lại (fire-and-forget, không chặn)
+        try:
+            from quan_ai_brain.integration.netchat_bridge import (
+                DEFAULT_CHANNEL_ID,
+                send_message,
+            )
+            send_message(
+                DEFAULT_CHANNEL_ID,
+                f"🎤 Anh vừa nói: \"{stt_text}\"\n🤖 Em: {reply[:400]}",
+            )
+        except Exception:
+            pass
+
+        self._send_json({
+            "success": True,
+            "stt_text": stt_text,
+            "intent": intent,
+            "reply": reply[:600],
+            "spoken_on_speaker": bool(spoke),
+        })
+
+    def _handle_api_edge_converse(self, body: dict) -> None:
+        """(01/11/2026, owner) HỘI THOẠI LIÊN TỤC — 1 câu nói WAV từ vòng VAD.
+
+        Daemon gửi PCM/WAV 1 câu (VAD cắt theo im lặng) → ở đây STT
+        (faster-whisper) → xử lý NHƯ TIN DM (intent có sẵn chạy luôn; không
+        khớp → GLM) → trả về reply TEXT. Việc tổng hợp giọng + phát loa do
+        daemon tự làm (đã đóng mic nên không dội âm).
+        Fail-honest: không có text → success=false, không bịa lệnh.
+        """
+        content_b64 = str(body.get("content_b64", "")).strip()
+        if not content_b64:
+            self._send_error_json("Missing content_b64", 400)
+            return
+        import base64 as _b64
+
+        workspace = _find_workspace_root()
+        voice_dir = workspace / "data" / "edge_media" / "voice"
+        voice_dir.mkdir(parents=True, exist_ok=True)
+        wav_path = voice_dir / f"cv_{time.strftime('%Y%m%d_%H%M%S')}.wav"
+        try:
+            wav_path.write_bytes(_b64.b64decode(content_b64))
+        except Exception as exc:
+            self._send_error_json(f"WAV decode lỗi: {exc}", 400)
+            return
+        if wav_path.stat().st_size < 1000:
+            self._send_error_json("WAV rỗng/quá nhỏ — mic không ghi được", 503)
+            return
+
+        # 1) STT — subprocess venv BRAIN (model faster-whisper cache 1 lần)
+        stt_text = ""
+        try:
+            stt_script = (
+                "import sys; sys.path.insert(0, r'%s'); "
+                "from tools.voice_stt import transcribe; "
+                "print(transcribe(r'%s'))" % (str(workspace), str(wav_path))
+            )
+            venv_py = workspace / ".venv" / "Scripts" / "python.exe"
+            proc = subprocess.run(
+                [str(venv_py), "-c", stt_script],
+                capture_output=True, text=True, timeout=180,
+                encoding="utf-8", errors="replace",
+            )
+            for line in (proc.stdout or "").strip().splitlines():
+                if line and not line.startswith("[STT]"):
+                    stt_text = line.strip()
+        except Exception:
+            stt_text = ""
+
+        if not stt_text:
+            self._send_json({
+                "success": False, "stt_text": "", "reply": "",
+                "message": "STT không nhận được text",
+            })
+            return
+
+        # 2) Xử lý NHƯ TIN DM — route_message (intent) trước, GLM sau
+        intent = None
+        reply = ""
+        # M5 (G-12): câu hỏi về BẢN THÂN → trả từ dữ liệu sống, không để LLM đoán
+        try:
+            from quan_ai_brain.cognition.self_qa import SelfQA
+            _self_reply = SelfQA(workspace).answer(stt_text)
+            if _self_reply:
+                reply = _self_reply
+        except Exception:
+            pass
+        if not reply:
+            try:
+                sys.path.insert(0, str(workspace))
+                from tools.netchat_command_center import route_message as _route
+
+                intent, reply = _route(stt_text)
+            except Exception:
+                intent, reply = None, ""
+        if not reply:
+            # M5 (G-22): có đại từ → bọc ngữ cảnh lượt trước cho GLM hiểu liền mạch
+            _llm_query = stt_text
+            try:
+                from quan_ai_brain.cognition.conversation_state import (
+                    ConversationStateManager,
+                )
+                _conv = ConversationStateManager(workspace)
+                _llm_query = _conv.build_contextualized_query("voice", stt_text)
+            except Exception:
+                _llm_query = stt_text
+            # GLM (server 8765 — cùng đường responder DM dùng, trả lời
+            # tiếng Việt tự nhiên ~4s) → Ollama 8766 là fallback cuối.
+            try:
+                resp = self._run_chat_once(_llm_query, port=8765,
+                                           model="zai-org/GLM-5.3-Flash")
+                reply = str(resp.get("answer") or resp.get("reply") or "").strip()
+                if resp.get("is_mock"):
+                    reply = ""
+            except Exception:
+                reply = ""
+        if not reply:
+            try:
+                resp = self._run_chat_once(_llm_query)
+                reply = str(resp.get("answer") or resp.get("reply") or "").strip()
+                if "[MOCK]" in reply or resp.get("is_mock"):
+                    reply = ""
+            except Exception:
+                reply = ""
+        if not reply:
+            reply = "Em chưa xử lý được lệnh này, anh thử lại nhé."
+
+        # M5: ghi state hội thoại lượt này (fire-and-forget, fail-honest)
+        try:
+            from quan_ai_brain.cognition.conversation_state import (
+                ConversationStateManager,
+            )
+            ConversationStateManager(workspace).update("voice", stt_text, reply, intent)
+        except Exception:
+            pass
+
+        # 3) Log DM để anh đọc lại hội thoại (fire-and-forget)
+        try:
+            from quan_ai_brain.integration.netchat_bridge import (
+                DEFAULT_CHANNEL_ID,
+                send_message,
+            )
+            send_message(
+                DEFAULT_CHANNEL_ID,
+                f"🎤 Anh vừa nói: \"{stt_text}\"\n🤖 Em: {reply[:400]}",
+            )
+        except Exception:
+            pass
+
+        self._send_json({
+            "success": True,
+            "stt_text": stt_text,
+            "intent": intent,
+            "reply": reply[:600],
+        })
+
     def _handle_api_executive_netchat_send(self, body: dict) -> None:
         try:
             from quan_ai_brain.integration.netchat_bridge import (
@@ -1856,6 +2986,91 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
     def _handle_api_executive_capabilities(self) -> None:
         caps = CapabilityRegistry().list_capabilities()
         self._send_json({"success": True, "capabilities": [c.to_dict() for c in caps]})
+
+    def _handle_api_self_model(self) -> None:
+        """M4: GET /api/self/model — Self Model sống: identity + deployment + inventory
+        quét thật lúc gọi, capability registry, limitations, confidence. Read-only."""
+        try:
+            from quan_ai_brain.cognition.self_model_engine import SelfModelEngine
+
+            workspace = _find_workspace_root()
+            engine = SelfModelEngine(str(workspace))
+            model = engine.generate_self_model()
+            self._send_json({"success": True, "model": model.to_dict()})
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]})
+
+    def _handle_api_self_state(self) -> None:
+        """M4: GET /api/self/state — trả lời 12 câu tự nhận thức bằng probe thật
+        (services, DB, Pi5, approvals, test baseline). Fail-honest: không đo được → UNKNOWN."""
+        try:
+            from quan_ai_brain.cognition.self_model_engine import SelfModelEngine
+
+            workspace = _find_workspace_root()
+            engine = SelfModelEngine(str(workspace))
+            self._send_json({"success": True, "state": engine.answer_state_questions()})
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]})
+
+    def _handle_api_self_learning(self) -> None:
+        """M4: GET /api/self/learning — dữ liệu học thật: CLO checkpoints, candidate
+        knowledge theo trạng thái, skills registry, review sessions. Read-only."""
+        try:
+            import sqlite3
+
+            workspace = _find_workspace_root()
+            learning: dict[str, Any] = {"generated_at": datetime.now(timezone.utc).isoformat()}
+
+            # CLO checkpoints — một nguồn sự thật duy nhất: SelfModelEngine (fail-honest)
+            from quan_ai_brain.cognition.self_model_engine import SelfModelEngine
+            learning.update(SelfModelEngine(str(workspace)).get_learning_checkpoint_state(workspace))
+
+            # Candidate knowledge theo trạng thái (brain.db, mode=ro)
+            brain = workspace / "data" / "brain.db"
+            learning["candidates"] = {"approved": 0, "quarantined": 0, "total": 0}
+            if brain.exists():
+                con = sqlite3.connect(f"file:{brain}?mode=ro", uri=True)
+                try:
+                    cur = con.cursor()
+                    rows = cur.execute(
+                        "SELECT status, COUNT(*) FROM candidate_knowledge GROUP BY status").fetchall()
+                    cd = dict(rows)
+                    learning["candidates"] = {
+                        "approved": int(cd.get("approved", 0)),
+                        "quarantined": int(cd.get("quarantined", 0)),
+                        "total": sum(int(n) for _, n in rows),
+                    }
+                finally:
+                    con.close()
+
+            # Skill registry
+            from quan_ai_brain.cognition.skill_registry import SkillRegistry
+            reg = SkillRegistry(workspace / "data" / "skill_registry.json")
+            skills = reg.list_skills()
+            by_status: dict[str, int] = {}
+            for s in skills:
+                by_status[s.status.value] = by_status.get(s.status.value, 0) + 1
+            learning["skills"] = {"total": len(skills), "by_status": by_status}
+
+            self._send_json({"success": True, "learning": learning})
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]})
+
+    def _handle_api_skills(self) -> None:
+        """V6: GET /api/skills — danh sách Skill trong registry (read-only)."""
+        try:
+            from quan_ai_brain.cognition.skill_registry import SkillRegistry
+
+            workspace = _find_workspace_root()
+            registry = SkillRegistry(workspace / "data" / "skill_registry.json")
+            skills = registry.list_skills()
+            self._send_json({
+                "success": True,
+                "total": len(skills),
+                "skills": [s.to_dict() for s in skills],
+            })
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]})
 
     def _handle_api_executive_consultations(self, query_str: str) -> None:
         workspace = _find_workspace_root()
@@ -1936,6 +3151,82 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Error triggering learning cycle: {exc}", 500)
         finally:
             reporter.close()
+
+    # ------------------------------------------------------------------
+    # DEOM M2 (01/11/2026) — NL intake + transition log + work queue
+    # ------------------------------------------------------------------
+
+    def _handle_api_task_intake(self, query) -> None:
+        """GET /api/executive/tasks/intake?text=... — parse câu giao việc tiếng Việt
+        thành task RECEIVED (không tự chạy). Owner-intake only, R1."""
+        from urllib.parse import parse_qs, unquote
+
+        params = parse_qs(query)
+        text = unquote(params.get("text", [""])[0]).strip()
+        if not text:
+            self._send_error_json("Thiếu text câu giao việc", 400)
+            return
+        try:
+            from quan_ai_brain.orchestration.nl_intake import intake_task
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            workspace = _find_workspace_root()
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            result = intake_task(registry, text)
+            self._send_json({"success": True, "intake": result.to_dict()})
+        except Exception as exc:
+            self._send_error_json(f"Lỗi intake: {exc}", 500)
+
+    def _handle_api_task_transitions(self, query) -> None:
+        """GET /api/executive/tasks/transitions?task_id=... — log chuyển trạng thái."""
+        from urllib.parse import parse_qs
+
+        params = parse_qs(query)
+        task_id = params.get("task_id", [""])[0].strip()
+        if not task_id:
+            self._send_error_json("Thiếu task_id", 400)
+            return
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            workspace = _find_workspace_root()
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            task = registry.get_task(task_id)
+            if task is None:
+                self._send_error_json("Không tìm thấy task", 404)
+                return
+            transitions = registry.list_transitions(task_id)
+            self._send_json({
+                "success": True,
+                "task_id": task_id,
+                "current_status": task.status.value,
+                "transitions": [t.to_dict() for t in transitions],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi đọc transition log: {exc}", 500)
+
+    def _handle_api_work_queue(self, query) -> None:
+        """GET /api/executive/work-queue — hàng đợi 4 bậc ưu tiên DEOM §7.2."""
+        from urllib.parse import parse_qs
+
+        params = parse_qs(query)
+        try:
+            limit = max(1, min(50, int(params.get("limit", ["20"])[0])))
+        except ValueError:
+            limit = 20
+        try:
+            from quan_ai_brain.orchestration.task_registry import DurableTaskRegistry
+
+            workspace = _find_workspace_root()
+            registry = DurableTaskRegistry(workspace / "data" / "tasks.db", workspace=workspace)
+            queue = registry.work_queue(limit=limit)
+            self._send_json({
+                "success": True,
+                "count": len(queue),
+                "queue": [t.to_dict() for t in queue],
+            })
+        except Exception as exc:
+            self._send_error_json(f"Lỗi đọc work queue: {exc}", 500)
 
     def _handle_api_executive_task_create(self, body: dict) -> None:
         goal = str(body.get("goal", "")).strip()
@@ -2243,6 +3534,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             or self.headers.get("X-Quan-Device-Id")
             or self.headers.get("X-QuanAI-Device-Id")
         )
+        # M6-B1 (01/11/2026): HMAC verify chạy TẬP TRUNG ở gate do_GET/do_POST
+        # (401 fail-closed). Request tới đây mang device header đã được xác
+        # thực; telemetry ghi nhận bình thường, không verify lại ở handler.
+
         if device_hdr:
             _GLOBAL_EDGE_TELEMETRY["packets_in"] += 1
             if hasattr(self, "client_address") and self.client_address:
@@ -2320,6 +3615,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "current_task": current_task_info,
             "target_avatar_state": _GLOBAL_EDGE_TELEMETRY.get("target_avatar_state", "IDLE"),
             "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
+            "transcript_en": _translate_to_english(_GLOBAL_EDGE_TELEMETRY.get("transcript", "")),
             "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
             "remote_command": cmd,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -2359,6 +3655,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = state
                 if transcript:
                     _GLOBAL_EDGE_TELEMETRY["transcript"] = transcript
+                    _translate_to_english(transcript)  # làm nóng cache EN
                 _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
                     "action": "set_expression",
                     "state": state,
@@ -2434,6 +3731,117 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi tín hiệu tải lại giao diện Kiosk trên Pi 5."})
                 return
 
+            if action == "open_url":
+                # (31/10/2026) Owner ra lệnh mở URL/trang web trên màn Pi 5
+                # (YouTube, Google, trang tin...). Forward nguyên URL xuống
+                # kiosk daemon — daemon tự wake màn hình nếu đang SLEEPING.
+                url = str(body.get("url", "")).strip()
+                if not (url.startswith("http://") or url.startswith("https://")):
+                    self._send_error_json("open_url requires an http(s) URL", 400)
+                    return
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
+                    "action": "open_url",
+                    "url": url,
+                })
+                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "open_url", "url": url})
+                self._send_json({"success": True, "action": "open_url", "url": url})
+                return
+
+            if action == "show_image":
+                # (31/10/2026) Hiển thị ảnh trên màn Pi 5 N giây rồi tự về avatar.
+                # url có thể là: (a) path PC tuyệt đối / relative workspace
+                # (/data/netchat_files/xxx.jpg hoặc D:\...\xxx.jpg) — server tự
+                # upload ảnh lên Pi qua /api/kiosk/files/upload rồi gửi url Pi;
+                # (b) URL Pi tương đối (/assets/avatar/...) — forward nguyên.
+                raw_url = str(body.get("url", "")).strip()
+                if not raw_url:
+                    self._send_error_json("show_image requires url", 400)
+                    return
+                try:
+                    duration = float(body.get("duration_sec", 15.0))
+                except (TypeError, ValueError):
+                    duration = 15.0
+                duration = max(3.0, min(600.0, duration))
+                pi_url, err = _upload_image_to_pi_for_show(raw_url)
+                if pi_url is None:
+                    self._send_error_json(f"show_image upload failed: {err}", 502)
+                    return
+                resp = _send_edge_request("/api/kiosk/control", method="POST", data={
+                    "action": "show_image", "url": pi_url, "duration_sec": duration,
+                })
+                self._send_json({"success": True, "action": "show_image",
+                                 "url": pi_url, "duration_sec": duration,
+                                 "pi5_result": resp})
+                return
+
+            if action == "close_web_overlay":
+                # (31/10/2026) Đóng overlay web trên Pi 5 — hình thể quay lại.
+                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "close_web_overlay"})
+                self._send_json({"success": True, "action": "close_web_overlay"})
+                return
+
+            if action == "pi_media_capture":
+                # (31/10/2026) Chụp ảnh / quay video TRỰC TIẾP từ Pi theo lệnh DM.
+                # kind='photo'|'video'; sau khi capture, TẢI file về PC lưu
+                # logs/pi5_media/ (lưu trữ 2 bên Pi + PC như owner yêu cầu).
+                kind = str(body.get("kind", "photo")).strip().lower()
+                try:
+                    duration = float(body.get("duration_sec", 5.0))
+                except (TypeError, ValueError):
+                    duration = 5.0
+                duration = max(3.0, min(30.0, duration))
+                api_action = "photo" if kind == "photo" else "audio" if kind == "audio" else "video"
+                mic_kind = str(body.get("mic_kind", "auto")).strip().lower()
+                if mic_kind not in ("auto", "usb", "bt"):
+                    mic_kind = "auto"
+                resp = _send_edge_request(
+                    "/api/kiosk/media/record", method="POST",
+                    data={"action": api_action, "duration_sec": duration,
+                          "mic_kind": mic_kind},
+                    timeout=float(duration) + 40.0)
+                if not resp.get("success"):
+                    self._send_error_json(
+                        f"pi_media_capture failed: {resp.get('error', 'không rõ')}", 502)
+                    return
+                # Tải file về PC (lưu trữ phía core máy tính):
+                saved_path = ""
+                try:
+                    from pathlib import Path as _Path
+                    fname = str(resp.get("filename", ""))
+                    dl = f"/api/kiosk/media/file?name={fname}"
+                    media_resp = _send_edge_request(dl, method="GET", timeout=30.0)
+                    raw = media_resp.get("_raw_bytes")
+                    if not raw:
+                        # _send_edge_request trả dict JSON — với file nhị phân cần
+                        # tải trực tiếp qua urllib:
+                        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "")
+                        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+                        import urllib.request as _ur
+                        with _ur.urlopen(f"http://{edge_ip}:{edge_port}{dl}",
+                                         timeout=30) as fr:
+                            raw = fr.read()
+                    if raw:
+                        media_dir = _Path(__file__).resolve().parents[3] / "logs" / "pi5_media"
+                        media_dir.mkdir(parents=True, exist_ok=True)
+                        dest = media_dir / fname
+                        dest.write_bytes(raw)
+                        saved_path = str(dest)
+                except Exception as exc:
+                    saved_path = f"(lưu PC lỗi: {type(exc).__name__}: {exc})"
+                self._send_json({
+                    "success": True, "action": "pi_media_capture", "kind": kind,
+                    "filename": resp.get("filename", ""),
+                    "pi_path": resp.get("path", ""),
+                    "pc_path": saved_path,
+                    "size_bytes": resp.get("size_bytes", 0),
+                    "duration_sec": resp.get("duration_sec", duration if kind == "video" else 0),
+                    "has_audio": resp.get("has_audio"),
+                    "mic_kind": resp.get("mic_kind", mic_kind),
+                    "mic_target": resp.get("mic_target", ""),
+                    "message": resp.get("message", ""),
+                })
+                return
+
             if action == "pause":
                 _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SLEEPING"
                 _GLOBAL_EDGE_TELEMETRY["transcript"] = "Trợ lý đang tạm nghỉ ngơi theo chỉ đạo của Anh."
@@ -2476,6 +3884,22 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _GLOBAL_EDGE_TELEMETRY["transcript"] = "Giao diện hình thể đã đóng theo lệnh của Anh."
                 resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "close_kiosk"})
                 self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi lệnh tắt hẳn giao diện Kiosk trên Pi 5."})
+                return
+
+            # (31/10/2026) HDMI OUT: bật/tắt mirror kiosk trên cổng HDMI của Pi 5
+            if action in ("hdmi_show", "show_on_hdmi", "hdmi_hide", "hide_hdmi"):
+                resp = _send_edge_request(
+                    "/api/kiosk/control", method="POST", data={"action": action})
+                ok = bool(resp.get("success"))
+                conns = resp.get("hdmi_connected", [])
+                msg = resp.get("message", "")
+                if action in ("hdmi_show", "show_on_hdmi") and ok:
+                    _GLOBAL_EDGE_TELEMETRY["hdmi_mirror"] = True
+                elif action in ("hdmi_hide", "hide_hdmi") and ok:
+                    _GLOBAL_EDGE_TELEMETRY["hdmi_mirror"] = False
+                self._send_json({"success": True, "action": action,
+                                 "pi5_result": resp, "hdmi_connected": conns,
+                                 "message": msg or ("Đã gửi lệnh HDMI" if ok else "Pi 5 từ chối lệnh HDMI")})
                 return
 
             if action == "poweroff_pi":
@@ -2535,14 +3959,57 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         )
         _GLOBAL_EDGE_TELEMETRY["packets_out"] += 1
         cmd = _GLOBAL_EDGE_TELEMETRY["pending_commands"].pop(0) if _GLOBAL_EDGE_TELEMETRY["pending_commands"] else None
+        # V41: lưu telemetry Edge Agent nếu heartbeat có kèm (5 năng lực chủ động)
+        agent_payload = body.get("edge_agent")
+        if isinstance(agent_payload, dict):
+            _GLOBAL_EDGE_TELEMETRY["last_edge_agent"] = agent_payload
         self._send_json({
             "success": True,
             "edge_status": status,
             "target_avatar_state": _GLOBAL_EDGE_TELEMETRY.get("target_avatar_state", "IDLE"),
             "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
+            "transcript_en": _translate_to_english(_GLOBAL_EDGE_TELEMETRY.get("transcript", "")),
             "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
             "remote_command": cmd,
         })
+
+    def _handle_api_edge_events(self, body: dict) -> None:
+        """V41: nhận batch events Edge Agent tự thu thập (tự phối hợp năng lực 4).
+
+        Lưu vào edge monitor alert history (severity CRITICAL/WARNING → alert record
+        ghi nhận; INFO chỉ đếm). Fail-closed: lỗi không giết server.
+        """
+        try:
+            device_id = str(body.get("device_id", "EDGE-UNKNOWN")).strip()
+            events = body.get("events", [])
+            if not isinstance(events, list):
+                events = []
+            accepted = 0
+            for ev in events[:50]:  # giới hạn batch
+                if not isinstance(ev, dict):
+                    continue
+                accepted += 1
+                etype = str(ev.get("type", "UNKNOWN"))
+                severity = str(ev.get("severity", "INFO")).upper()
+                details = ev.get("details", {})
+                if severity in ("CRITICAL", "WARNING"):
+                    _GLOBAL_EDGE_MONITOR._trigger_alert(  # noqa: SLF001 — internal API
+                        code=(
+                            EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT
+                            if etype == "BRAIN_CONNECTION_LOST"
+                            else EdgeAlertCode.ALERT_C_CHANNEL_DEGRADED
+                        ),
+                        title=f"Edge Agent: {etype}",
+                        message=str(details.get("desc", etype)),
+                        severity="CRITICAL" if severity == "CRITICAL" else "WARNING",
+                        metadata={"agent_event": ev, "device_id": device_id},
+                    )
+            _GLOBAL_EDGE_TELEMETRY["edge_events_received"] = (
+                _GLOBAL_EDGE_TELEMETRY.get("edge_events_received", 0) + accepted
+            )
+            self._send_json({"success": True, "accepted": accepted})
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)})
 
     def _handle_api_edge_mouth_sync(self, body: dict) -> None:
         action = str(body.get("action", "generate")).strip().lower()
@@ -2711,6 +4178,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             return
 
         voice_id = body.get("voice_id")
+        # (01/11/2026, Q-3 ĐÃ DUYỆT) cho phép client chọn provider piper (fallback
+        # local khi Edge-TTS 403 bền) — không đổi config toàn cục nếu chỉ 1 request.
+        provider = body.get("provider")
+        if provider == "piper" and GLOBAL_TTS_MANAGER.config.provider != "piper":
+            GLOBAL_TTS_MANAGER.update_config(provider="piper")
         audio_bytes, err = GLOBAL_TTS_MANAGER.synthesize_audio(text, voice_id=voice_id)
         if not audio_bytes:
             status_code = 400 if GLOBAL_TTS_MANAGER.config.status == TTSStatus.ERROR.value else 503
@@ -2981,6 +4453,47 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _GLOBAL_EDGE_MONITOR.record_mic_fault(resp["error"])
 
         self._send_json(resp)
+
+    def _handle_api_music_search(self, body: dict) -> None:
+        query = str(body.get("query", "")).strip()
+        limit = int(body.get("limit", 5))
+        if not query:
+            self._send_error_json("Missing search query", 400)
+            return
+        results = search_youtube_music(query, max_results=limit)
+        self._send_json({"success": True, "query": query, "count": len(results), "results": results})
+
+    def _handle_api_music_play(self, body: dict) -> None:
+        video_id = str(body.get("video_id", "")).strip()
+        title = str(body.get("title", "")).strip()
+        url = str(body.get("url", "")).strip()
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        if not url and video_id:
+            url = f"https://www.youtube.com/watch?v={video_id}"
+        if not url and not video_id:
+            query = str(body.get("query", "")).strip()
+            if query:
+                results = search_youtube_music(query, max_results=1)
+                if results:
+                    video_id = results[0]["video_id"]
+                    title = results[0]["title"]
+                    url = results[0]["url"]
+        if not url:
+            self._send_error_json("Could not find music to play", 400)
+            return
+        res = dispatch_play_music_to_pi5(video_id=video_id, title=title, url=url, edge_ip=edge_ip, edge_port=edge_port)
+        self._send_json({"success": True, "title": title, "url": url, "video_id": video_id, "pi5_response": res})
+
+    def _handle_api_music_stop(self) -> None:
+        edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
+        edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
+        res = dispatch_stop_music_to_pi5(edge_ip=edge_ip, edge_port=edge_port)
+        self._send_json({"success": True, "playing": False, "pi5_response": res})
+
+    def _handle_api_music_status(self) -> None:
+        res = _send_edge_request("/api/kiosk/music/status", method="GET")
+        self._send_json({"success": True, "edge_music": res.get("music"), "playing": res.get("playing", False)})
 
     def _handle_api_edge_camera_status(self) -> None:
         """Fetch remote camera status from Pi 5."""
@@ -4510,6 +6023,14 @@ def run_executive_server(port: int = 8766, open_browser: bool = True, host: str 
     print(f"======================================================================\n")
 
     _GLOBAL_EDGE_MONITOR.start_watchdog(interval_sec=0.5)
+
+    # M1: vòng đánh giá sức khỏe định kỳ (PC + Pi5 + alert DM chống spam).
+    try:
+        health_mon = start_health_monitor()
+        print(f"  He thong suc khoe:     HealthMonitor bat dau (chu ky "
+              f"{health_mon.cycle_sec:.0f}s, PC+Pi5, alert qua NetChat DM)")
+    except Exception as _hm_exc:
+        print(f"  [WARN] HealthMonitor khong khoi dong duoc: {_hm_exc}")
 
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(local_url)).start()

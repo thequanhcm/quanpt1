@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/executive.css">
+  <link rel="stylesheet" href="/static/executive.css?v=5.0-light">
   <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png">
   <script>
     window.switchTab = function(tabId) {
@@ -77,7 +77,6 @@
           <span class="wake-dot" id="wake-dot-indicator"></span>
           <span class="pill-label">Đánh Thức:</span>
           <button class="wake-toggle-btn" id="btn-toggle-wake">OFF</button>
-          <span class="wake-state-label" id="wake-state-text">TẮT</span>
         </div>
         <a href="http://127.0.0.1:8765/" target="_blank" class="nav-switch-link" title="Mở Web Chat Console nhanh">
           💬 Chat Cục Bộ (:8765) ↗
@@ -95,7 +94,7 @@
             <div class="avatar-identity">
               <span class="live-dot pulse"></span>
               <strong>TONY</strong>
-              <span class="avatar-role-tag">DIGITAL HUMAN (MẪU A — DỊU DÀNG, THÂN THIỆN)</span>
+              <span class="avatar-role-tag" title="DIGITAL HUMAN (MẪU A — DỊU DÀNG, THÂN THIỆN)">DIGITAL HUMAN · MẪU A</span>
             </div>
             <div class="avatar-state-tag state-idle" id="avatar-state-tag">
               <span class="state-icon" id="avatar-state-icon">●</span>
@@ -227,7 +226,7 @@
               <button class="btn btn-edge-addon" id="btn-open-edge-addon" onclick="window.switchTab('tab-edge-sync'); return false;" title="Mở bảng điều khiển, truyền dữ liệu và biểu cảm Mẫu A trên Pi 5">
                 ⚡ ĐIỀU KHIỂN &amp; TRUYỀN TIN PI 5
               </button>
-              <button class="btn btn-edge-addon" id="btn-quick-open-camera" style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.25), rgba(0, 229, 255, 0.35)); border-color: #00e5ff; color: #e0f2fe; font-weight: 700;" title="Mở nhanh khung hình trực tiếp và chụp ảnh camera Pi 5">
+              <button class="btn btn-edge-addon" id="btn-quick-open-camera" style="background: linear-gradient(135deg, #0284c7, #06b6d4); border-color: #0369a1; color: #ffffff; font-weight: 700;" title="Mở nhanh khung hình trực tiếp và chụp ảnh camera Pi 5">
                 📷 XEM CAMERA PI 5 TRỰC TIẾP
               </button>
             </div>
@@ -257,44 +256,49 @@
     <nav class="executive-nav">
       <button class="nav-tab active" data-tab="tab-persona" id="nav-btn-persona">
         <span class="tab-icon">👤</span>
-        <span class="tab-text">Nhân Sự Số Điều Hành</span>
+        <span class="tab-text">Nhân Sự Số</span>
       </button>
       <button class="nav-tab" data-tab="tab-consultation" id="nav-btn-consultation">
         <span class="tab-icon">📬</span>
-        <span class="tab-text">Hộp Thư Tham Vấn & Phê Duyệt</span>
+        <span class="tab-text">Tham Vấn & Duyệt</span>
         <span class="tab-badge" id="badge-consultation-counter">0</span>
       </button>
       <button class="nav-tab" data-tab="tab-learning" id="nav-btn-learning">
         <span class="tab-icon">🔬</span>
-        <span class="tab-text">Báo Cáo Tự Học Định Kỳ</span>
+        <span class="tab-text">Báo Cáo Tự Học</span>
       </button>
       <button class="nav-tab" data-tab="tab-orchestration" id="nav-btn-orchestration">
         <span class="tab-icon">⚙️</span>
-        <span class="tab-text">Điều Hành & Ranh Giới An Toàn</span>
+        <span class="tab-text">Điều Hành & An Toàn</span>
       </button>
       <button class="nav-tab" data-tab="tab-dialogue" id="nav-btn-dialogue">
         <span class="tab-icon">💬</span>
-        <span class="tab-text">Hội Thoại Trực Tiếp Với Bản Sao</span>
+        <span class="tab-text">Hội Thoại Trực Tiếp</span>
       </button>
       <button class="nav-tab" data-tab="tab-netchat" id="nav-btn-netchat">
         <span class="tab-icon">📡</span>
-        <span class="tab-text">Quản Trị Kênh NetChat</span>
+        <span class="tab-text">Kênh NetChat</span>
         <span class="tab-badge badge-green" id="badge-netchat-status">—</span>
       </button>
       <button class="nav-tab" data-tab="tab-edge-sync" id="nav-btn-edge-sync">
         <span class="tab-icon">📡</span>
-        <span class="tab-text">Đồng Bộ &amp; Truyền Tin Pi 5</span>
+        <span class="tab-text">Đồng Bộ Pi 5</span>
         <span class="tab-badge badge-green" id="badge-edge-tab-status">LIVE</span>
       </button>
       <button class="nav-tab" data-tab="tab-pi5-embodiment" id="nav-btn-pi5-embodiment">
         <span class="tab-icon">✨</span>
-        <span class="tab-text">Bật/Tắt Hình Thể Pi 5</span>
-        <span class="tab-badge" id="badge-tab-embodiment-state" style="background: rgba(148, 163, 184, 0.2); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3);">STANDBY</span>
+        <span class="tab-text">Hình Thể Pi 5</span>
+        <span class="tab-badge" id="badge-tab-embodiment-state" style="background: rgba(100, 116, 139, 0.25); color: #334155; border: 1px solid rgba(100, 116, 139, 0.35);">STANDBY</span>
       </button>
       <button class="nav-tab" data-tab="tab-workbench" id="nav-btn-workbench">
         <span class="tab-icon">🧰</span>
-        <span class="tab-text">Workbench — Môi Trường Làm Việc</span>
-        <span class="tab-badge" id="badge-workbench-overview" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3);">—</span>
+        <span class="tab-text">Workbench</span>
+        <span class="tab-badge" id="badge-workbench-overview" style="background: rgba(59, 130, 246, 0.2); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.3);">—</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-deep-memory" id="nav-btn-deep-memory">
+        <span class="tab-icon">🧠</span>
+        <span class="tab-text">Trí Nhớ Sâu V9</span>
+        <span class="tab-badge" id="badge-deep-memory-questions" style="background: rgba(245, 158, 11, 0.2); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3);">—</span>
       </button>
     </nav>
 
@@ -404,7 +408,7 @@
       <section id="tab-learning" class="tab-content">
         <div class="section-intro flex-between">
           <div>
-            <h2>Báo Cáo Tự Học Định Kỳ & Hồ Sơ Nâng Cấp Hệ Thống</h2>
+            <h2>Báo Cáo Tự Học & Hồ Sơ Nâng Cấp Hệ Thống</h2>
             <p>Hệ thống tự học có giám sát: phát hiện lỗi lặp lại, nghiên cứu tài liệu, tự sinh bản vá và cách ly an toàn.</p>
           </div>
           <button class="btn btn-primary" id="btn-trigger-learning-cycle">
@@ -537,17 +541,17 @@
             </div>
 
             <!-- Inline Task Creator Form -->
-            <div id="box-create-task-form" style="display: none; background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 16px; margin: 16px 0;">
-              <h4 style="margin-top: 0; color: #38bdf8; font-size: 14px;">➕ Khởi Tạo Kế Hoạch Nhiệm Vụ Mới (DAG Decomposition)</h4>
+            <div id="box-create-task-form" style="display: none; background: rgba(255, 255, 255, 0.75); border: 1px solid rgba(2, 132, 199, 0.35); border-radius: 8px; padding: 16px; margin: 16px 0;">
+              <h4 style="margin-top: 0; color: #0369a1; font-size: 14px;">➕ Khởi Tạo Kế Hoạch Nhiệm Vụ Mới (DAG Decomposition)</h4>
               <div style="display: flex; flex-direction: column; gap: 10px;">
                 <div>
-                  <label style="font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px;">Mục tiêu nhiệm vụ (Goal):</label>
-                  <input type="text" id="input-task-goal" placeholder="Ví dụ: Rà soát hiệu năng hệ thống, kiểm toán bảo mật và lập báo cáo kỹ thuật..." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 13px; box-sizing: border-box;" />
+                  <label style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Mục tiêu nhiệm vụ (Goal):</label>
+                  <input type="text" id="input-task-goal" placeholder="Ví dụ: Rà soát hiệu năng hệ thống, kiểm toán bảo mật và lập báo cáo kỹ thuật..." style="width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; background: #ffffff; color: #0f172a; font-size: 13px; box-sizing: border-box;" />
                 </div>
                 <div style="display: flex; gap: 16px; align-items: center; flex-wrap: wrap;">
                   <div>
-                    <label style="font-size: 12px; color: #94a3b8; display: block; margin-bottom: 4px;">Mức tự chủ (Autonomy Level):</label>
-                    <select id="select-task-autonomy" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #f8fafc; font-size: 13px;">
+                    <label style="font-size: 12px; color: #64748b; display: block; margin-bottom: 4px;">Mức tự chủ (Autonomy Level):</label>
+                    <select id="select-task-autonomy" style="padding: 6px 10px; border-radius: 6px; border: 1px solid #334155; background: #ffffff; color: #0f172a; font-size: 13px;">
                       <option value="LEVEL_A" selected>LEVEL_A — Giám Sát Kỷ Luật (Khuyến nghị)</option>
                       <option value="LEVEL_B">LEVEL_B — Bán Tự Động (R0-R2 tự hành)</option>
                       <option value="LEVEL_C">LEVEL_C — Tự Chủ Có Ranh Giới (Chặn cứng R4/R5)</option>
@@ -565,7 +569,7 @@
             <div class="tasks-table-wrapper" style="overflow-x: auto; margin-top: 12px;">
               <table class="table-custom" style="width: 100%; border-collapse: collapse; font-size: 13px;">
                 <thead>
-                  <tr style="border-bottom: 1px solid rgba(148, 163, 184, 0.2); text-align: left; color: #94a3b8;">
+                  <tr style="border-bottom: 1px solid rgba(100, 116, 139, 0.25); text-align: left; color: #64748b;">
                     <th style="padding: 10px;">Mã Nhiệm Vụ</th>
                     <th style="padding: 10px;">Mục Tiêu</th>
                     <th style="padding: 10px;">Rủi Ro</th>
@@ -586,9 +590,9 @@
             </div>
 
             <!-- Task Step DAG Detail Drawer -->
-            <div id="box-task-steps-detail" style="display: none; margin-top: 20px; border-top: 1px solid rgba(148, 163, 184, 0.2); padding-top: 16px;">
+            <div id="box-task-steps-detail" style="display: none; margin-top: 20px; border-top: 1px solid rgba(100, 116, 139, 0.25); padding-top: 16px;">
               <div class="flex-between">
-                <h4 style="margin: 0; color: #38bdf8; font-size: 14px;" id="detail-task-title">Chi Tiết Các Bước DAG: task_xxx</h4>
+                <h4 style="margin: 0; color: #0369a1; font-size: 14px;" id="detail-task-title">Chi Tiết Các Bước DAG: task_xxx</h4>
                 <button class="btn btn-sm btn-outline" id="btn-close-task-detail" style="padding: 4px 10px; font-size: 12px;">✕ Đóng</button>
               </div>
               <div id="container-dag-steps" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;"></div>
@@ -602,12 +606,13 @@
         <div class="dialogue-container">
           <div class="dialogue-header">
             <div>
-              <h3>Bàn Hội Thoại Trực Tiếp Với Bản Sao Nhân Sự Số</h3>
+              <h3>Bàn Hội Thoại Trực Tiếp Nhân Sự Số</h3>
               <p>Hỏi đáp kế hoạch, trao đổi chiến lược, chỉ đạo công việc. Phản hồi luôn tuân thủ nguyên tắc kỷ luật.</p>
             </div>
             <div class="dialogue-tools">
               <span class="wake-badge" id="dialogue-wake-badge" title="Trạng thái lắng nghe từ khóa">🎙️ Đánh thức: TẮT</span>
               <button class="btn btn-sm btn-outline" id="btn-dialogue-tts-toggle" title="Bật/Tắt đọc thành tiếng (TTS)">🔊 Đọc: BẬT</button>
+              <button class="btn btn-sm btn-outline" id="btn-conv-mode" title="Hội thoại liên tục: nói → nghe trả lời → tự nghe tiếp, không cần bấm mic hay gọi wake word">💬 Hội thoại: TẮT</button>
               <button class="btn btn-sm btn-outline" id="btn-clear-dialogue">🗑️ Xóa hội thoại</button>
             </div>
           </div>
@@ -635,7 +640,7 @@
       <!-- ================= TAB: NETCHAT CHANNEL COMMAND CENTER ================= -->
       <section id="tab-netchat" class="tab-content">
         <div class="section-intro">
-          <h2>Quản Trị Kênh NetChat "Trợ lý Tony Pham" (24/7)</h2>
+          <h2>Kênh NetChat "Trợ lý Tony Pham" (24/7)</h2>
           <p>Kênh làm việc hai chiều giữa Anh và Trợ lý số: gõ lệnh hoặc hội thoại tự do (không cần @bot). Từ tab này Anh có thể đọc, gửi và chạy lệnh điều khiển trực tiếp.</p>
         </div>
 
@@ -852,7 +857,7 @@
               <button class="btn btn-outline" id="btn-resume-pi-avatar" style="border-color: #10b981; color: #10b981;" title="Đánh thức trợ lý trở lại trạng thái sẵn sàng hoạt động">
                 ▶️ Kích Hoạt Hoạt Động
               </button>
-              <button class="btn btn-outline" id="btn-setup-audio-pi" style="border-color: #38bdf8; color: #38bdf8;" title="Tự động cấu hình và định tuyến Loa & Micro mặc định sang USB Audio trên Pi 5">
+              <button class="btn btn-outline" id="btn-setup-audio-pi" style="border-color: #0369a1; color: #0369a1;" title="Tự động cấu hình và định tuyến Loa & Micro mặc định sang USB Audio trên Pi 5">
                 🎧 Định Tuyến USB Audio
               </button>
               <button class="btn btn-outline" id="btn-shutdown-pi-kiosk" style="border-color: #ef4444; color: #ef4444;" title="Tắt hẳn hình thể Kiosk hoặc tắt nguồn an toàn Raspberry Pi 5">
@@ -862,7 +867,7 @@
             <div class="volume-group" style="display:flex; align-items:center; gap:8px;">
               <span class="note-sub">🔊 Loa Pi 5:</span>
               <input type="range" id="slider-pi-volume" min="0" max="100" value="85" style="width:100px; cursor:pointer;" />
-              <span class="note-sub" id="lbl-pi-volume" style="font-weight:700; color:#38bdf8;">85%</span>
+              <span class="note-sub" id="lbl-pi-volume" style="font-weight:700; color:#0369a1;">85%</span>
             </div>
           </div>
         </div>
@@ -879,7 +884,7 @@
               <button class="btn btn-primary" id="btn-trigger-upload">
                 📤 Tải Lên Tệp Mới
               </button>
-              <button class="btn btn-outline" id="btn-sync-all-assets" style="border-color: #00e5ff; color: #00e5ff;">
+              <button class="btn btn-outline" id="btn-sync-all-assets" style="border-color: #0e7490; color: #0e7490;">
                 🔄 Đồng Bộ Toàn Bộ Sang Pi 5
               </button>
               <button class="btn btn-outline btn-sm" id="btn-refresh-file-list" title="Tải lại danh sách tệp">
@@ -946,7 +951,7 @@
             <div class="voice-workflow-box mt-16">
               <div class="voice-workflow-title">
                 <span class="workflow-badge">CHU TRÌNH 4 BƯỚC</span>
-                <strong style="color:#f8fafc; font-size:0.85rem;">Chu Trình Tương Tác Giọng Nói Sau Khi Kích Hoạt</strong>
+                <strong style="color:#0f172a; font-size:0.85rem;">Chu Trình Tương Tác Giọng Nói Sau Khi Kích Hoạt</strong>
               </div>
               <div class="voice-steps-grid mt-12">
                 <div class="voice-step-card">
@@ -1006,7 +1011,7 @@
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <span class="badge" id="badge-mic-state" style="background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid #10b981;">🟢 READY</span>
-              <span class="badge" id="badge-wake-state" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">🎙️ WAKE: BẬT</span>
+              <span class="badge" id="badge-wake-state" style="background: rgba(2, 132, 199, 0.14); color: #0369a1; border: 1px solid #0369a1;">🎙️ WAKE: BẬT</span>
               <span class="badge" id="badge-listen-mode" style="background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid #a855f7;">CHẾ ĐỘ: WAKE WORD</span>
             </div>
           </div>
@@ -1032,12 +1037,12 @@
           </div>
 
           <!-- Audio Level Meter Bar -->
-          <div class="audio-meter-wrap mt-16" style="background: rgba(15, 23, 42, 0.6); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(0, 229, 255, 0.2);">
+          <div class="audio-meter-wrap mt-16" style="background: rgba(255, 255, 255, 0.7); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(0, 229, 255, 0.2);">
             <div class="flex-between" style="margin-bottom: 6px;">
-              <span style="font-size: 0.8rem; font-weight: 600; color: #94a3b8; display:flex; align-items:center; gap:6px;">
+              <span style="font-size: 0.8rem; font-weight: 600; color: #64748b; display:flex; align-items:center; gap:6px;">
                 📊 Audio Level Meter (Cường độ âm thanh thực từ Hardware Micro):
               </span>
-              <span id="lbl-meter-db" style="font-size: 0.85rem; font-weight: 700; color: #38bdf8;">-18.0 dB (Chuẩn hoạt động)</span>
+              <span id="lbl-meter-db" style="font-size: 0.85rem; font-weight: 700; color: #0369a1;">-18.0 dB (Chuẩn hoạt động)</span>
             </div>
             <div class="meter-bar-container" style="height: 16px; background: rgba(30, 41, 59, 0.8); border-radius: 4px; overflow: hidden; position: relative;">
               <div id="meter-bar-fill" style="width: 65%; height: 100%; background: linear-gradient(90deg, #10b981 0%, #06b6d4 70%, #f59e0b 90%, #ef4444 100%); transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);"></div>
@@ -1071,7 +1076,7 @@
             <button class="btn btn-primary" id="btn-mic-ptt" style="background: linear-gradient(135deg, #0284c7, #0369a1);">
               ⚡ PUSH TO TALK (NÓI NGAY)
             </button>
-            <button class="btn btn-outline" id="btn-test-mic" style="border-color: #38bdf8; color: #38bdf8;">
+            <button class="btn btn-outline" id="btn-test-mic" style="border-color: #0369a1; color: #0369a1;">
               🧪 KIỂM TRA MICRO (1 GIÂY)
             </button>
             <button class="btn btn-outline btn-sm" id="btn-refresh-audio" title="Tải lại trạng thái âm thanh">
@@ -1089,20 +1094,20 @@
               <h3>Quan Sát Hình Ảnh Camera Pi 5 Trực Tiếp &amp; Chụp Ảnh Snapshot</h3>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <a href="/api/executive/edge/camera/stream" target="_blank" class="btn btn-sm btn-outline" style="border-color:#38bdf8; color:#38bdf8;" title="Mở luồng hình ảnh camera trong tab trình duyệt riêng">🔗 Mở Tab Khung Hình Riêng</a>
-              <span class="badge" id="badge-camera-state" style="background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid #64748b;">🔴 CAMERA OFF</span>
-              <span class="badge" id="badge-camera-node" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">/dev/video0 (V4L2)</span>
+              <a href="/api/executive/edge/camera/stream" target="_blank" class="btn btn-sm btn-outline" style="border-color:#0369a1; color:#0369a1;" title="Mở luồng hình ảnh camera trong tab trình duyệt riêng">🔗 Mở Tab Khung Hình Riêng</a>
+              <span class="badge" id="badge-camera-state" style="background: rgba(100, 116, 139, 0.25); color: #64748b; border: 1px solid #64748b;">🔴 CAMERA OFF</span>
+              <span class="badge" id="badge-camera-node" style="background: rgba(2, 132, 199, 0.14); color: #0369a1; border: 1px solid #0369a1;">/dev/video0 (V4L2)</span>
             </div>
           </div>
 
           <div class="camera-content-grid mt-16" style="display:grid; grid-template-columns: minmax(320px, 1.2fr) minmax(300px, 1fr); gap: 20px;">
             <!-- Column 1: Live Viewport Box -->
-            <div class="camera-viewport-card" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 12px; display:flex; flex-direction:column; gap:10px;">
+            <div class="camera-viewport-card" style="background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(0, 229, 255, 0.3); border-radius: 12px; padding: 12px; display:flex; flex-direction:column; gap:10px;">
               <div class="camera-screen-box" style="width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 8px; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
                 <img id="camera-live-img" src="/static/assets/avatar/camera_snapshot.jpg" alt="Pi 5 Camera View" style="width:100%; height:100%; object-fit:contain; display:none;" onerror="this.style.display='none'; document.getElementById('camera-placeholder-box').style.display='flex';" />
                 <div id="camera-placeholder-box" style="display:flex; flex-direction:column; align-items:center; justify-content:center; color: #64748b; gap: 8px; padding: 20px; text-align:center;">
                   <span style="font-size: 2.4rem;">📷</span>
-                  <strong style="color: #94a3b8; font-size: 0.95rem;" id="camera-placeholder-text">Camera đang ở chế độ TẮT (Camera OFF)</strong>
+                  <strong style="color: #64748b; font-size: 0.95rem;" id="camera-placeholder-text">Camera đang ở chế độ TẮT (Camera OFF)</strong>
                   <span style="font-size: 0.78rem; color: #475569; max-width: 280px;">Bấm "BẬT CAMERA" và "BẮT ĐẦU XEM" để quan sát trực tiếp hoặc chụp snapshot khung hình.</span>
                 </div>
                 <div class="camera-overlay-badge" style="position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); border: 1px solid rgba(255,255,255,0.2); color: #fff;">
@@ -1113,16 +1118,16 @@
                 </div>
               </div>
 
-              <div class="camera-telemetry-row flex-between" style="font-size: 0.78rem; color: #94a3b8; padding: 0 4px;">
-                <span>Thiết bị: <strong id="lbl-camera-device-name" style="color:#38bdf8;">Sirius USB2.0 Camera</strong></span>
+              <div class="camera-telemetry-row flex-between" style="font-size: 0.78rem; color: #64748b; padding: 0 4px;">
+                <span>Thiết bị: <strong id="lbl-camera-device-name" style="color:#0369a1;">Sirius USB2.0 Camera</strong></span>
                 <span>Thời điểm: <strong id="lbl-camera-timestamp">Chưa có khung hình</strong></span>
               </div>
             </div>
 
             <!-- Column 2: Controls & Snapshot Metadata -->
             <div class="camera-controls-card" style="display:flex; flex-direction:column; gap:14px;">
-              <div class="ctrl-subcard" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
-                <span class="ctrl-group-lbl" style="font-size:0.8rem; font-weight:700; color:#38bdf8; display:block; margin-bottom:10px;">Thao Tác Điều Khiển Camera:</span>
+              <div class="ctrl-subcard" style="background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                <span class="ctrl-group-lbl" style="font-size:0.8rem; font-weight:700; color:#0369a1; display:block; margin-bottom:10px;">Thao Tác Điều Khiển Camera:</span>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                   <button class="btn btn-outline" id="btn-camera-on" style="border-color: #10b981; color: #10b981;">
                     📷 BẬT CAMERA
@@ -1136,13 +1141,13 @@
                   <button class="btn btn-outline" id="btn-camera-stop-live">
                     ⏹️ DỪNG XEM
                   </button>
-                  <button class="btn btn-outline" id="btn-camera-capture" style="border-color: #00e5ff; color: #00e5ff;">
+                  <button class="btn btn-outline" id="btn-camera-capture" style="border-color: #0e7490; color: #0e7490;">
                     📸 CHỤP SNAPSHOT
                   </button>
                   <button class="btn btn-outline" id="btn-camera-save-core" style="border-color: #a855f7; color: #c084fc;">
                     💾 LƯU VỀ CORE
                   </button>
-                  <button class="btn btn-outline" id="btn-test-camera" style="border-color: #38bdf8; color: #38bdf8;">
+                  <button class="btn btn-outline" id="btn-test-camera" style="border-color: #0369a1; color: #0369a1;">
                     🧪 TEST CAMERA
                   </button>
                   <button class="btn btn-outline" id="btn-camera-clear">
@@ -1152,23 +1157,23 @@
               </div>
 
               <!-- Snapshot Inspection Box -->
-              <div class="ctrl-subcard" id="box-snapshot-meta" style="background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
-                <span class="ctrl-group-lbl" style="font-size:0.8rem; font-weight:700; color:#38bdf8; display:block; margin-bottom:8px;">Chi Tiết Khung Hình Snapshot:</span>
+              <div class="ctrl-subcard" id="box-snapshot-meta" style="background: rgba(255, 255, 255, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 12px;">
+                <span class="ctrl-group-lbl" style="font-size:0.8rem; font-weight:700; color:#0369a1; display:block; margin-bottom:8px;">Chi Tiết Khung Hình Snapshot:</span>
                 <div style="display:flex; flex-direction:column; gap:6px; font-size:0.78rem;">
                   <div class="flex-between">
-                    <span style="color:#94a3b8;">Mã Snapshot:</span>
+                    <span style="color:#64748b;">Mã Snapshot:</span>
                     <strong id="lbl-snap-id" style="color:var(--text-bright);">Chưa chụp</strong>
                   </div>
                   <div class="flex-between">
-                    <span style="color:#94a3b8;">Dung Lượng:</span>
+                    <span style="color:#64748b;">Dung Lượng:</span>
                     <strong id="lbl-snap-size">0 bytes</strong>
                   </div>
                   <div class="flex-between">
-                    <span style="color:#94a3b8;">Mã Băm SHA-256:</span>
-                    <code id="lbl-snap-hash" style="color:#00e5ff; font-size:0.72rem; max-width:180px; overflow:hidden; text-overflow:ellipsis;">--</code>
+                    <span style="color:#64748b;">Mã Băm SHA-256:</span>
+                    <code id="lbl-snap-hash" style="color:#0e7490; font-size:0.72rem; max-width:180px; overflow:hidden; text-overflow:ellipsis;">--</code>
                   </div>
                   <div class="flex-between">
-                    <span style="color:#94a3b8;">Xác Minh Toàn Vẹn:</span>
+                    <span style="color:#64748b;">Xác Minh Toàn Vẹn:</span>
                     <span class="badge badge-ready" id="lbl-snap-verif" style="font-size:0.7rem; padding:1px 6px;">CHỜ XÁC MINH</span>
                   </div>
                 </div>
@@ -1186,7 +1191,7 @@
               <h3>Kho Dữ Liệu Hình Ảnh Snapshot Đã Lưu Trữ Trên PC Core</h3>
             </div>
             <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-              <span class="note-sub" id="lbl-library-quota" style="color: #38bdf8; font-weight: 600;">Dung lượng: 0 KB / 500 MB</span>
+              <span class="note-sub" id="lbl-library-quota" style="color: #0369a1; font-weight: 600;">Dung lượng: 0 KB / 500 MB</span>
               <button class="btn btn-outline btn-sm" id="btn-refresh-library" title="Làm mới danh sách ảnh đã lưu">
                 🔄 Làm Mới Thư Viện
               </button>
@@ -1228,18 +1233,18 @@
         </div>
 
         <!-- Policy Banner: On-Demand Boot Configuration -->
-        <div class="policy-notice-card mb-20" style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 18px 22px; display: flex; align-items: flex-start; gap: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
+        <div class="policy-notice-card mb-20" style="background: rgba(255, 255, 255, 0.92); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 18px 22px; display: flex; align-items: flex-start; gap: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);">
           <div style="font-size: 2rem; line-height: 1;">⚡</div>
           <div style="flex: 1;">
             <div style="font-weight: 700; color: #34d399; font-size: 0.98rem; margin-bottom: 6px;">
               Chế Độ Tiết Kiệm Năng Lượng &amp; Khởi Động Hình Thể Theo Yêu Cầu (On-Demand Mode)
             </div>
-            <div style="font-size: 0.84rem; color: #94a3b8; line-height: 1.55;">
+            <div style="font-size: 0.84rem; color: #64748b; line-height: 1.55;">
               Khi cấp nguồn Raspberry Pi 5, tiến trình nền Daemon sẽ kết nối sẵn sàng với PC Core, nhưng <strong>Giao Diện Hình Thể Kiosk 7" DSI sẽ KHÔNG tự khởi động</strong> để tránh tiêu hao tài nguyên và bảo vệ tuổi thọ màn hình. Hình thể chỉ hiển thị khi Anh thao tác kích hoạt từ Tab này.
             </div>
           </div>
           <div class="badge-status-wrap">
-            <span class="badge" id="badge-embodiment-pill" style="background: rgba(100, 116, 139, 0.3); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.4); padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px;">
+            <span class="badge" id="badge-embodiment-pill" style="background: rgba(100, 116, 139, 0.35); color: #334155; border: 1px solid rgba(100, 116, 139, 0.4); padding: 8px 14px; border-radius: 20px; font-weight: 700; font-size: 0.8rem; letter-spacing: 0.5px;">
               CHẾ ĐỘ CHỜ (STANDBY)
             </span>
           </div>
@@ -1261,10 +1266,10 @@
               <div class="embodiment-avatar-halo" id="embodiment-avatar-halo" style="width: 120px; height: 120px; margin: 0 auto 16px auto; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0) 70%); border: 2px dashed rgba(16, 185, 129, 0.4); position: relative; transition: all 0.3s ease;">
                 <span id="embodiment-icon-status" style="font-size: 3.2rem;">💤</span>
               </div>
-              <div id="embodiment-main-text" style="font-size: 1.2rem; font-weight: 700; color: #f8fafc; margin-bottom: 6px;">
+              <div id="embodiment-main-text" style="font-size: 1.2rem; font-weight: 700; color: #0f172a; margin-bottom: 6px;">
                 Hình Thể Đang Ở Chế Độ Nghỉ (Standby)
               </div>
-              <div id="embodiment-sub-text" style="font-size: 0.82rem; color: #94a3b8; max-width: 380px; margin: 0 auto; line-height: 1.5;">
+              <div id="embodiment-sub-text" style="font-size: 0.82rem; color: #64748b; max-width: 380px; margin: 0 auto; line-height: 1.5;">
                 Màn hình 7" DSI đang tắt nguồn hiển thị (DPMS off). Bấm nút kích hoạt bên cạnh để bật trợ lý Model A.
               </div>
             </div>
@@ -1277,7 +1282,7 @@
               </div>
               <div class="stat-box">
                 <span class="stat-lbl">Tiến Trình Chromium:</span>
-                <strong class="stat-val" id="stat-embodiment-process" style="color: #94a3b8;">ĐÃ DỪNG</strong>
+                <strong class="stat-val" id="stat-embodiment-process" style="color: #64748b;">ĐÃ DỪNG</strong>
               </div>
               <div class="stat-box">
                 <span class="stat-lbl">Màn Hình Hiển Thị:</span>
@@ -1320,20 +1325,20 @@
                   <div style="font-size: 1rem; font-weight: 700;">
                     TẮT GIAO DIỆN HÌNH THỂ (KIOSK SLEEP)
                   </div>
-                  <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 4px; line-height: 1.4;">
+                  <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px; line-height: 1.4;">
                     Đóng trình duyệt Chromium và đưa màn hình 7" vào chế độ nghỉ (DPMS off), Pi 5 vẫn duy trì kết nối
                   </div>
                 </div>
               </button>
 
               <!-- Action 3: STARTUP SEQUENCE & HARDWARE SELF-TEST -->
-              <button class="btn btn-outline" id="btn-tab-startup-sequence" style="display: flex; align-items: center; gap: 14px; padding: 14px 20px; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(56, 189, 248, 0.5); color: #38bdf8; border-radius: 12px; cursor: pointer; text-align: left; transition: all 0.25s ease;" title="Phát câu chào 'Chào anh ạ, rất vui được gặp anh' và tự kiểm tra mic/camera báo cáo qua loa">
+              <button class="btn btn-outline" id="btn-tab-startup-sequence" style="display: flex; align-items: center; gap: 14px; padding: 14px 20px; background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(2, 132, 199, 0.5); color: #0369a1; border-radius: 12px; cursor: pointer; text-align: left; transition: all 0.25s ease;" title="Phát câu chào 'Chào anh ạ, rất vui được gặp anh' và tự kiểm tra mic/camera báo cáo qua loa">
                 <span style="font-size: 1.8rem; line-height: 1;">🔊</span>
                 <div style="flex: 1;">
                   <div style="font-size: 0.95rem; font-weight: 700;">
                     CHÀO &amp; TỰ KIỂM TRA PHẦN CỨNG (SELF-TEST)
                   </div>
-                  <div style="font-size: 0.76rem; color: #94a3b8; margin-top: 3px; line-height: 1.35;">
+                  <div style="font-size: 0.76rem; color: #64748b; margin-top: 3px; line-height: 1.35;">
                     Phát loa 'Chào anh ạ, rất vui được gặp anh', kiểm tra tín hiệu Micro, Camera và báo cáo hiện trạng qua loa Pi
                   </div>
                 </div>
@@ -1341,7 +1346,7 @@
 
               <!-- Secondary Row -->
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px;">
-                <button class="btn btn-outline" id="btn-tab-reload-kiosk" style="border-color: rgba(56, 189, 248, 0.5); color: #38bdf8; padding: 12px; font-size: 0.85rem; font-weight:600;" title="Tải lại trang giao diện Kiosk">
+                <button class="btn btn-outline" id="btn-tab-reload-kiosk" style="border-color: rgba(2, 132, 199, 0.5); color: #0369a1; padding: 12px; font-size: 0.85rem; font-weight:600;" title="Tải lại trang giao diện Kiosk">
                   🔄 Tải Lại Kiosk
                 </button>
                 <button class="btn btn-outline" id="btn-tab-audio-config" style="border-color: rgba(168, 85, 247, 0.5); color: #c084fc; padding: 12px; font-size: 0.85rem; font-weight:600;" title="Định tuyến USB Audio mặc định">
@@ -1350,7 +1355,7 @@
               </div>
 
               <!-- Poweroff Safe Action -->
-              <button class="btn btn-outline" id="btn-tab-poweroff-pi" style="border-color: rgba(239, 68, 68, 0.5); color: #f87171; padding: 12px; font-size: 0.85rem; font-weight:600; margin-top: 4px; display:flex; align-items:center; justify-content:center; gap:8px;" title="Tắt nguồn toàn bộ thiết bị Pi 5">
+              <button class="btn btn-outline" id="btn-tab-poweroff-pi" style="border-color: rgba(239, 68, 68, 0.5); color: #dc2626; padding: 12px; font-size: 0.85rem; font-weight:600; margin-top: 4px; display:flex; align-items:center; justify-content:center; gap:8px;" title="Tắt nguồn toàn bộ thiết bị Pi 5">
                 🔌 Tắt Nguồn Toàn Bộ Thiết Bị Pi 5 (Safe Poweroff)
               </button>
             </div>
@@ -1361,7 +1366,7 @@
       <!-- ================= TAB: WORKBENCH (Sprint 9) ================= -->
       <section id="tab-workbench" class="tab-content">
         <div class="section-intro">
-          <h2>🧰 Workbench — Môi Trường Làm Việc</h2>
+          <h2>🧰 Workbench</h2>
           <p>Tổng hợp số liệu <strong>thật</strong> từ tasks / tham vấn / to-do / phê duyệt.
              Nguồn nào lỗi sẽ hiện <strong>CHƯA XÁC MINH</strong> — không bao giờ hiển thị 0 thay cho dữ liệu không xác minh được.
              Phê duyệt qua dashboard chỉ hoạt động từ <strong>localhost</strong> (giới hạn thật của API, không phải xác thực danh tính mạnh).</p>
@@ -1370,28 +1375,28 @@
         <!-- Tổng quan -->
         <div class="wb-grid" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:18px;">
           <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
-            <div style="font-size:0.78rem; color:#94a3b8;">NHIỆM VỤ ĐANG MỞ</div>
-            <div id="wb-tasks-open" style="font-size:1.7rem; font-weight:700; color:#e2e8f0;">—</div>
-            <div id="wb-tasks-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+            <div style="font-size:0.78rem; color:#64748b;">NHIỆM VỤ ĐANG MỞ</div>
+            <div id="wb-tasks-open" style="font-size:1.7rem; font-weight:700; color:#1e293b;">—</div>
+            <div id="wb-tasks-detail" style="font-size:0.72rem; color:#64748b; margin-top:4px;">đang tải…</div>
           </div>
           <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
-            <div style="font-size:0.78rem; color:#94a3b8;">CHỜ PHÊ DUYỆT</div>
-            <div id="wb-approvals-pending" style="font-size:1.7rem; font-weight:700; color:#fbbf24;">—</div>
-            <div id="wb-approvals-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+            <div style="font-size:0.78rem; color:#64748b;">CHỜ PHÊ DUYỆT</div>
+            <div id="wb-approvals-pending" style="font-size:1.7rem; font-weight:700; color:#b45309;">—</div>
+            <div id="wb-approvals-detail" style="font-size:0.72rem; color:#64748b; margin-top:4px;">đang tải…</div>
           </div>
           <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
-            <div style="font-size:0.78rem; color:#94a3b8;">VIỆC CẦN LÀM (TO-DO)</div>
+            <div style="font-size:0.78rem; color:#64748b;">VIỆC CẦN LÀM (TO-DO)</div>
             <div id="wb-todos-open" style="font-size:1.7rem; font-weight:700; color:#93c5fd;">—</div>
-            <div id="wb-todos-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+            <div id="wb-todos-detail" style="font-size:0.72rem; color:#64748b; margin-top:4px;">đang tải…</div>
           </div>
           <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
-            <div style="font-size:0.78rem; color:#94a3b8;">THÔNG TIN CÒN THIẾU</div>
-            <div id="wb-gaps" style="font-size:1.7rem; font-weight:700; color:#f87171;">—</div>
-            <div id="wb-gaps-detail" style="font-size:0.72rem; color:#94a3b8; margin-top:4px;">đang tải…</div>
+            <div style="font-size:0.78rem; color:#64748b;">THÔNG TIN CÒN THIẾU</div>
+            <div id="wb-gaps" style="font-size:1.7rem; font-weight:700; color:#dc2626;">—</div>
+            <div id="wb-gaps-detail" style="font-size:0.72rem; color:#64748b; margin-top:4px;">đang tải…</div>
           </div>
           <div class="wb-card" style="background:rgba(30,41,59,0.6); border:1px solid rgba(148,163,184,0.25); border-radius:10px; padding:14px;">
-            <div style="font-size:0.78rem; color:#94a3b8;">DỊCH VỤ CỤC BỘ</div>
-            <div id="wb-services" style="font-size:0.85rem; font-weight:600; color:#e2e8f0; margin-top:6px;">đang tải…</div>
+            <div style="font-size:0.78rem; color:#64748b;">DỊCH VỤ CỤC BỘ</div>
+            <div id="wb-services" style="font-size:0.85rem; font-weight:600; color:#1e293b; margin-top:6px;">đang tải…</div>
           </div>
         </div>
 
@@ -1399,8 +1404,8 @@
           <!-- Nhiệm vụ -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-              <h3 style="margin:0; font-size:0.95rem; color:#e2e8f0;">📋 Nhiệm vụ (data/tasks.db)</h3>
-              <select id="wb-task-filter" style="background:rgba(15,23,42,0.8); color:#cbd5e1; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
+              <h3 style="margin:0; font-size:0.95rem; color:#1e293b;">📋 Nhiệm vụ (data/tasks.db)</h3>
+              <select id="wb-task-filter" style="background:rgba(255,255,255,0.9); color:#334155; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
                 <option value="">Tất cả trạng thái</option>
                 <option value="PENDING">PENDING</option>
                 <option value="IN_PROGRESS">IN_PROGRESS</option>
@@ -1411,14 +1416,14 @@
                 <option value="BLOCKED">BLOCKED</option>
               </select>
             </div>
-            <div id="wb-tasks-list" style="font-size:0.8rem; color:#cbd5e1; max-height:260px; overflow-y:auto;">đang tải…</div>
+            <div id="wb-tasks-list" style="font-size:0.8rem; color:#334155; max-height:260px; overflow-y:auto;">đang tải…</div>
           </div>
 
           <!-- Approval Center -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(251,191,36,0.25); border-radius:10px; padding:14px;">
-            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#fbbf24;">🔐 Approval Center</h3>
-            <div id="wb-approvals-list" style="font-size:0.8rem; color:#cbd5e1; max-height:260px; overflow-y:auto;">đang tải…</div>
-            <div id="wb-approval-result" style="margin-top:8px; font-size:0.78rem; color:#f87171;"></div>
+            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#b45309;">🔐 Approval Center</h3>
+            <div id="wb-approvals-list" style="font-size:0.8rem; color:#334155; max-height:260px; overflow-y:auto;">đang tải…</div>
+            <div id="wb-approval-result" style="margin-top:8px; font-size:0.78rem; color:#dc2626;"></div>
           </div>
 
           <!-- To-do -->
@@ -1428,65 +1433,130 @@
               <button id="wb-todo-refresh" style="background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.3); border-radius:6px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">↻ Làm mới</button>
             </div>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
-              <input id="wb-todo-input" placeholder="Việc mới…" style="flex:1; background:rgba(15,23,42,0.8); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:6px 10px; font-size:0.8rem;">
-              <input id="wb-todo-due" type="date" style="background:rgba(15,23,42,0.8); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
-              <button id="wb-todo-add" style="background:rgba(34,197,94,0.2); color:#86efac; border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:4px 12px; font-size:0.8rem; cursor:pointer;">+ Thêm</button>
+              <input id="wb-todo-input" placeholder="Việc mới…" style="flex:1; background:rgba(255,255,255,0.9); color:#1e293b; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:6px 10px; font-size:0.8rem;">
+              <input id="wb-todo-due" type="date" style="background:rgba(255,255,255,0.9); color:#1e293b; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
+              <button id="wb-todo-add" style="background:rgba(34,197,94,0.2); color:#15803d; border:1px solid rgba(34,197,94,0.3); border-radius:6px; padding:4px 12px; font-size:0.8rem; cursor:pointer;">+ Thêm</button>
             </div>
-            <div id="wb-todos-list" style="font-size:0.8rem; color:#cbd5e1; max-height:220px; overflow-y:auto;">đang tải…</div>
-            <div id="wb-todo-result" style="margin-top:6px; font-size:0.75rem; color:#f87171;"></div>
+            <div id="wb-todos-list" style="font-size:0.8rem; color:#334155; max-height:220px; overflow-y:auto;">đang tải…</div>
+            <div id="wb-todo-result" style="margin-top:6px; font-size:0.75rem; color:#dc2626;"></div>
           </div>
 
           <!-- Sprint 11: Experience Memory — lessons -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px; margin-top:14px;">
             <h3 style="margin:0 0 8px 0; font-size:0.85rem;">📚 Kinh nghiệm (Experience Memory)
-              <button id="wb-lessons-refresh" style="margin-left:8px; background:transparent; color:#94a3b8; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:2px 8px; font-size:0.7rem; cursor:pointer;">↻</button>
+              <button id="wb-lessons-refresh" style="margin-left:8px; background:transparent; color:#64748b; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:2px 8px; font-size:0.7rem; cursor:pointer;">↻</button>
             </h3>
             <p style="margin:0 0 8px 0; color:#64748b; font-size:0.7rem;">Bài học từ nhiệm vụ thành công/thất bại — ứng viên CHƯA duyệt không dùng làm căn cứ mạnh; chỉ anh duyệt mới nâng thành kinh nghiệm xác nhận.</p>
-            <div id="wb-lessons-list" style="font-size:0.78rem; color:#e2e8f0; margin-bottom:8px;">Đang tải…</div>
+            <div id="wb-lessons-list" style="font-size:0.78rem; color:#1e293b; margin-bottom:8px;">Đang tải…</div>
             <div style="display:flex; gap:6px; margin-bottom:6px;">
-              <input id="wb-expq" placeholder="Tìm kinh nghiệm (semantic BGE-M3)…" style="flex:1; background:rgba(15,23,42,0.6); color:#e2e8f0; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:4px 8px; font-size:0.75rem;">
+              <input id="wb-expq" placeholder="Tìm kinh nghiệm (semantic BGE-M3)…" style="flex:1; background:rgba(255,255,255,0.7); color:#1e293b; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:4px 8px; font-size:0.75rem;">
               <button id="wb-expq-go" style="background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.35); border-radius:6px; padding:3px 10px; font-size:0.72rem; cursor:pointer;">Tìm</button>
             </div>
-            <div id="wb-expq-result" style="font-size:0.75rem; color:#94a3b8; margin-bottom:6px;"></div>
-            <div id="wb-lessons-result" style="font-size:0.75rem; color:#94a3b8; margin-top:6px;"></div>
+            <div id="wb-expq-result" style="font-size:0.75rem; color:#64748b; margin-bottom:6px;"></div>
+            <div id="wb-lessons-result" style="font-size:0.75rem; color:#64748b; margin-top:6px;"></div>
           </div>
 
           <!-- Sprint 12: Web & Intranet read-only -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px; margin-top:14px;">
-            <h3 style="margin:0 0 8px 0; font-size:0.85rem;">🌐 Web &amp; Intranet <span style="font-size:0.7rem; color:#38bdf8; font-weight:700;">READ-ONLY</span></h3>
+            <h3 style="margin:0 0 8px 0; font-size:0.85rem;">🌐 Web &amp; Intranet <span style="font-size:0.7rem; color:#0369a1; font-weight:700;">READ-ONLY</span></h3>
             <p style="margin:0 0 8px 0; color:#64748b; font-size:0.7rem;">Chỉ GET công khai — không form/login/ghi ngoài; SSRF-guard + robots.txt; dữ liệu ngoài luôn "chưa xác minh".</p>
             <div style="display:flex; gap:6px; margin-bottom:8px;">
-              <input id="wb-web-q" placeholder="Tìm kiếm web (VD: Viettel IDC tuyển dụng)" style="flex:1; background:rgba(15,23,42,0.6); border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:6px 10px; font-size:0.78rem; color:#e2e8f0;">
-              <button id="wb-web-search" style="background:rgba(56,189,248,0.15); color:#7dd3fc; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">🔍 Tìm</button>
+              <input id="wb-web-q" placeholder="Tìm kiếm web (VD: Viettel IDC tuyển dụng)" style="flex:1; background:rgba(255,255,255,0.7); border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:6px 10px; font-size:0.78rem; color:#1e293b;">
+              <button id="wb-web-search" style="background:rgba(56,189,248,0.15); color:#0369a1; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:4px 12px; font-size:0.75rem; cursor:pointer;">🔍 Tìm</button>
             </div>
-            <div id="wb-web-result" style="font-size:0.75rem; color:#94a3b8; max-height:260px; overflow-y:auto;"></div>
+            <div id="wb-web-result" style="font-size:0.75rem; color:#64748b; max-height:260px; overflow-y:auto;"></div>
           </div>
 
           <!-- Sprint 13: Continuous Improvement -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px; margin-top:14px;">
             <h3 style="margin:0 0 8px 0; font-size:0.85rem;">📈 Continuous Improvement
-              <button id="wb-impr-refresh" style="margin-left:8px; background:transparent; color:#94a3b8; border:1px solid rgba(148,163,184,0.3); border-radius:6px; padding:2px 8px; font-size:0.7rem; cursor:pointer;">↻</button>
-              <button id="wb-impr-export" style="margin-left:4px; background:rgba(56,189,248,0.15); color:#7dd3fc; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:2px 10px; font-size:0.7rem; cursor:pointer;">⬇ Xuất báo cáo .md</button>
+              <button id="wb-impr-refresh" style="margin-left:8px; background:transparent; color:#64748b; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:2px 8px; font-size:0.7rem; cursor:pointer;">↻</button>
+              <button id="wb-impr-export" style="margin-left:4px; background:rgba(56,189,248,0.15); color:#0369a1; border:1px solid rgba(56,189,248,0.3); border-radius:6px; padding:2px 10px; font-size:0.7rem; cursor:pointer;">⬇ Xuất báo cáo .md</button>
             </h3>
             <p style="margin:0 0 8px 0; color:#64748b; font-size:0.7rem;">Tự đánh giá bằng dữ liệu thật — mỗi mục kèm bằng chứng truy vết; không tự khen, không 0 giả.</p>
             <div id="wb-impr-matrix" style="font-size:0.75rem; margin-bottom:8px;">Đang tải…</div>
-            <div id="wb-impr-improvements" style="font-size:0.72rem; color:#fbbf24;"></div>
-            <div id="wb-impr-result" style="font-size:0.72rem; color:#94a3b8; margin-top:6px;"></div>
+            <div id="wb-impr-improvements" style="font-size:0.72rem; color:#b45309;"></div>
+            <div id="wb-impr-result" style="font-size:0.72rem; color:#64748b; margin-top:6px;"></div>
           </div>
 
           <!-- Email intake (mock) -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(148,163,184,0.2); border-radius:10px; padding:14px;">
-            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#e2e8f0;">📨 Email Intake <span style="font-size:0.7rem; color:#f87171; font-weight:700;">VMAIL: BLOCKED</span></h3>
-            <div id="wb-email-status" style="font-size:0.78rem; color:#94a3b8; margin-bottom:6px;">Vmail bị chặn vì mật khẩu SSO đã lộ — chờ anh đổi mật khẩu. Connector mock sẵn sàng.</div>
+            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#1e293b;">📨 Email Intake <span style="font-size:0.7rem; color:#dc2626; font-weight:700;">VMAIL: BLOCKED</span></h3>
+            <div id="wb-email-status" style="font-size:0.78rem; color:#64748b; margin-bottom:6px;">Vmail bị chặn vì mật khẩu SSO đã lộ — chờ anh đổi mật khẩu. Connector mock sẵn sàng.</div>
             <button id="wb-email-sync" style="background:rgba(59,130,246,0.2); color:#93c5fd; border:1px solid rgba(59,130,246,0.3); border-radius:6px; padding:4px 10px; font-size:0.75rem; cursor:pointer;">↻ Sync mock intake</button>
-            <div id="wb-email-list" style="font-size:0.78rem; color:#cbd5e1; max-height:180px; overflow-y:auto; margin-top:8px;">đang tải…</div>
+            <div id="wb-email-list" style="font-size:0.78rem; color:#334155; max-height:180px; overflow-y:auto; margin-top:8px;">đang tải…</div>
           </div>
 
           <!-- Sprint 10: Đề xuất xử lý email -->
           <div style="background:rgba(30,41,59,0.4); border:1px solid rgba(168,85,247,0.25); border-radius:10px; padding:14px; grid-column:1 / -1;">
-            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#d8b4fe;">🧠 Đề Xử Lý Email (Email Intelligence — mock mode) <span style="font-size:0.7rem; color:#f87171;">VMAIL: BLOCKED</span></h3>
-            <div id="wb-proposals-list" style="font-size:0.8rem; color:#cbd5e1; max-height:320px; overflow-y:auto;">đang tải…</div>
-            <div id="wb-proposal-result" style="margin-top:6px; font-size:0.75rem; color:#f87171;"></div>
+            <h3 style="margin:0 0 8px 0; font-size:0.95rem; color:#d8b4fe;">🧠 Đề Xử Lý Email (Email Intelligence — mock mode) <span style="font-size:0.7rem; color:#dc2626;">VMAIL: BLOCKED</span></h3>
+            <div id="wb-proposals-list" style="font-size:0.8rem; color:#334155; max-height:320px; overflow-y:auto;">đang tải…</div>
+            <div id="wb-proposal-result" style="margin-top:6px; font-size:0.75rem; color:#dc2626;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= TAB: DEEP MEMORY (V9) ================= -->
+      <section id="tab-deep-memory" class="tab-content">
+        <div class="section-intro flex-between">
+          <div>
+            <h2>🧠 Trí Nhớ Chuyên Sâu — Deep Cognitive Memory (V9)</h2>
+            <p>Tri thức có nguồn gốc, quan hệ có căn cứ, suy luận có bằng chứng. Mỗi kết luận truy vết được về nguồn; mâu thuẫn không tự chọn phía.</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-primary" id="btn-deep-extract">⏬ Trích Xuất Tri Thức</button>
+            <button class="btn btn-primary" id="btn-deep-review">🔄 Chạy Sàng Lọc</button>
+          </div>
+        </div>
+
+        <div id="deep-overview" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:16px;">
+          <!-- Số liệu thật từ /api/memory/deep/stats -->
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+          <div class="card" style="padding:14px;">
+            <div class="card-header flex-between">
+              <h3 style="margin:0; font-size:0.95rem;">📚 Knowledge Explorer</h3>
+              <select id="deep-units-filter" style="background:rgba(255,255,255,0.7); color:#1e293b; border:1px solid rgba(100,116,139,0.35); border-radius:6px; padding:4px 8px; font-size:0.78rem;">
+                <option value="">Mọi trạng thái</option>
+                <option value="EXTRACTED">EXTRACTED</option>
+                <option value="VERIFIED">VERIFIED</option>
+                <option value="INFERRED">INFERRED</option>
+                <option value="CONFLICTED">CONFLICTED</option>
+                <option value="NEEDS_OWNER_REVIEW">NEEDS_OWNER_REVIEW</option>
+                <option value="SUPERSEDED">SUPERSEDED</option>
+                <option value="CANDIDATE">CANDIDATE</option>
+              </select>
+            </div>
+            <div id="deep-units-list" style="font-size:0.78rem; color:#334155; max-height:360px; overflow-y:auto; margin-top:8px;">đang tải…</div>
+          </div>
+
+          <div class="card" style="padding:14px;">
+            <div class="card-header">
+              <h3 style="margin:0; font-size:0.95rem;">❓ Memory Review Center — Câu Hỏi Chờ Anh</h3>
+            </div>
+            <div id="deep-questions-list" style="font-size:0.78rem; color:#334155; max-height:360px; overflow-y:auto; margin-top:8px;">đang tải…</div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:14px; margin-top:14px;">
+          <h3 style="margin:0 0 8px 0; font-size:0.95rem;">🕐 Memory Timeline</h3>
+          <div id="deep-timeline" style="font-size:0.75rem; color:#64748b; max-height:220px; overflow-y:auto;">đang tải…</div>
+        </div>
+
+        <!-- V10: Owner-Gated Memory Review — đợt sàng lọc mẫu theo lệnh SÀNG LỌC -->
+        <div class="card" style="padding:14px; margin-top:14px; border-color: rgba(147, 197, 253, 0.35);">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <h3 style="margin:0; font-size:0.95rem;">🔎 Sàng Lọc Trí Nhớ (Owner-Gated)</h3>
+            <button class="btn btn-primary" id="btn-deep-owner-review">+ Sàng Lọc Trí Nhớ</button>
+          </div>
+          <p style="margin:6px 0 10px 0; font-size:0.72rem; color:#64748b;">
+            Lệnh <b>SÀNG LỌC</b> (chat hoặc nút) tạo đợt mẫu giới hạn: phân tích CHỈ ĐỌC → hiển thị 4 nhóm
+            (tri thức · quan hệ/mâu thuẫn · suy luận+bằng chứng · câu hỏi cần anh) → anh phản hồi từng mục →
+            xác nhận lần 2 trước khi ghi → lịch sử trước–sau + hoàn tác. Không tự sửa toàn bộ trí nhớ.
+          </p>
+          <div id="deep-review-panel" style="max-height:520px; overflow-y:auto; font-size:0.75rem;">
+            <div style="color:#64748b;">IDLE — chưa có đợt sàng lọc.</div>
           </div>
         </div>
       </section>
@@ -1498,7 +1568,7 @@
   <div class="modal-overlay hidden" id="modal-pi-shutdown">
     <div class="modal-card" style="max-width: 520px; border-color: rgba(239, 68, 68, 0.4);">
       <div class="modal-header flex-between">
-        <h3 style="color: #f87171; display:flex; align-items:center; gap:8px; margin:0; font-size:1.1rem;">
+        <h3 style="color: #dc2626; display:flex; align-items:center; gap:8px; margin:0; font-size:1.1rem;">
           🛑 Quản Trị Tắt Hình Thể / Nguồn Pi 5
         </h3>
         <button class="modal-close" id="btn-close-shutdown-modal">&times;</button>
@@ -1508,19 +1578,19 @@
           Anh muốn tắt riêng <strong>Giao Diện Hình Thể Kiosk</strong> hay tắt nguồn toàn bộ thiết bị <strong>Raspberry Pi 5</strong>?
         </p>
         <div class="shutdown-options-grid" style="display:flex; flex-direction:column; gap:12px;">
-          <div class="shutdown-opt-box" id="opt-close-kiosk" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;">
+          <div class="shutdown-opt-box" id="opt-close-kiosk" style="background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;">
             <div style="font-weight: 700; color: #f59e0b; margin-bottom: 4px;">
               🌙 Tắt Riêng Giao Diện Hình Thể (Kiosk Sleep)
             </div>
-            <div style="font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
+            <div style="font-size: 0.78rem; color: #64748b; line-height: 1.4;">
               Đóng trình duyệt Chromium Kiosk và đưa màn hình 7" DSI vào chế độ nghỉ (DPMS off). Pi 5 vẫn duy trì kết nối mạng Wi-Fi và có thể bật lại bất cứ lúc nào.
             </div>
           </div>
-          <div class="shutdown-opt-box" id="opt-poweroff-pi" style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;">
+          <div class="shutdown-opt-box" id="opt-poweroff-pi" style="background: rgba(255, 255, 255, 0.9); border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;">
             <div style="font-weight: 700; color: #ef4444; margin-bottom: 4px;">
               🔌 Tắt Nguồn Hoàn Toàn Pi 5 (Safe Poweroff)
             </div>
-            <div style="font-size: 0.78rem; color: #94a3b8; line-height: 1.4;">
+            <div style="font-size: 0.78rem; color: #64748b; line-height: 1.4;">
               Thực hiện lệnh tắt nguồn hệ thống an toàn (<code>sudo poweroff</code>) để bảo vệ thẻ nhớ/SSD và phần cứng Pi 5.
             </div>
           </div>
@@ -1533,8 +1603,8 @@
     </div>
   </div>
 
-  <script src="/static/wake_engine.js?v=4.0"></script>
-  <script src="/static/avatar_engine.js?v=4.0"></script>
-  <script src="/static/executive.js?v=4.0"></script>
+  <script src="/static/wake_engine.js?v=5.0"></script>
+  <script src="/static/avatar_engine.js?v=5.0"></script>
+  <script src="/static/executive.js?v=5.0"></script>
 </body>
 </html>

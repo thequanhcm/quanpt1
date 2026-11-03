@@ -289,7 +289,7 @@ def main() -> int:
         "display_orientation": "landscape",
         "screen_width": 1280,
         "screen_height": 720,
-        "wake_word": "Tony ơi",
+        "wake_word": "TONY ơi",
         "follow_up_window_sec": 15.0,
         "core_version": "0.2.0",
         "edge_client_version": "0.2.0",

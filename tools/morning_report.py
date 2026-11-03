@@ -15,6 +15,7 @@ import json
 import sqlite3
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -48,9 +49,9 @@ def _ollama_status() -> str:
         ) as resp:
             data = json.loads(resp.read().decode())
             models = ", ".join(m.get("name", "?") for m in data.get("models", [])[:3])
-            return f"🟢 ONLINE ({models})" if models else "🟢 ONLINE"
+            return f"🟢 HOẠT ĐỘNG ({models})" if models else "🟢 HOẠT ĐỘNG"
     except Exception:
-        return "🔴 OFFLINE"
+        return "🔴 MẤT KẾT NỐI"
 
 
 def _backup_status() -> str:
@@ -67,7 +68,7 @@ def _backup_status() -> str:
             ["schtasks", "/query", "/tn", "QUAN_AI_BRAIN_BACKUP_2AM", "/fo", "CSV", "/nh"],
             capture_output=True, text=True, timeout=15,
         )
-        task_ok = "✅ Ready" if (r.returncode == 0 and "Ready" in r.stdout) else "⚠️ KHÔNG Ready"
+        task_ok = "✅ SẴN SÀNG" if (r.returncode == 0 and "Ready" in r.stdout) else "⚠️ CHƯA SẴN SÀNG"
     except Exception:
         task_ok = "chưa xác minh được"
     return f"{task_ok} | backup gần nhất {newest.name} ({age_h:.0f}h trước)"
@@ -138,6 +139,24 @@ def collect_report() -> str:
             lines.append("• Việc cần làm: không có việc quá hạn/hạn hôm nay")
     except Exception:
         lines.append("• Việc cần làm: chưa xác minh được (DB lỗi)")
+
+    # (02/11/2026) Chỉ thị owner: báo cáo kỹ thuật tự động lưu thư mục riêng —
+    # morning report nhắc đường dẫn báo cáo MỚI NHẤT sinh trong 24h qua.
+    try:
+        from tools.technical_report_generator import month_subdir
+
+        report_dir = month_subdir()
+        reports = sorted(
+            report_dir.glob("BAO_CAO_*.md"),
+            key=lambda p: p.stat().st_mtime, reverse=True)
+        if reports:
+            latest = reports[0]
+            age_h = (time.time() - latest.stat().st_mtime) / 3600
+            if age_h < 24:
+                lines.append(f"• 📄 Báo cáo kỹ thuật mới nhất: {latest.name}")
+        lines.append(f"• Thư mục báo cáo: bao cao xay dung he thong/{report_dir.parent.name}/tiến độ phát triển")
+    except Exception:
+        pass
 
     lines.append("— Chi tiết: hỏi em trực tiếp hoặc xem dashboard 8765.")
     return "\n".join(lines)

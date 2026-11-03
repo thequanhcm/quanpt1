@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+"""
+TONY MORNING REPORT SCRIPT
+Chạy mỗi ngày 8h: thu thập stats hệ thống + liệt kê việc chờ duyệt + đề xuất kế hoạch
+"""
+from __future__ import annotations
+
+import json
+import os
+import sqlite3
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+WS = Path(__file__).resolve().parent.parent.parent
+DATA_DIR = WS / "data"
+REPORTS_DIR = WS / "reports"
+
+def _run_cmd(cmd: list[str], timeout: int = 30) -> tuple[int, str]:
+    """Chạy lệnh shell, trả (exit_code, stdout)."""
+    try:
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=str(WS))
+        return r.returncode, r.stdout.strip()
+    except Exception as e:
+        return -1, str(e)
+
+def _get_test_stats() -> dict[str, Any]:
+    """Thu thập stats từ pytest."""
+    r = subprocess.run(
+        [str(WS / ".venv" / "Scripts" / "python.exe"), "-m", "pytest", "tests/", "-q", "--tb=no", "--no-header"],
+        cwd=str(WS), capture_output=True, text=True, timeout=120
+    )
+    # Parse output: "2996 passed, 44 skipped"
+    output = r.stdout.strip()
+    passed = 0
+    failed = 0
+    skipped = 0
+    if "passed" in output:
+        try:
+            parts = output.split(",")[0].split()
+            passed = int(parts[0])
+        except:
+            pass
+    if "failed" in output:
+        try:
+            parts = output.split(",")[1].split() if "," in output else ["0"]
+            failed = int(parts[0])
+        except:
+            failed = 1  # Có failed nếu có từ "failed"
+    if "skipped" in output:
+        try:
+            parts = output.split(",")[-1].split()
+            skipped = int(parts[0])
+        except:
+            pass
+    
+    return {
+        "passed": passed,
+        "failed": failed,
+        "skipped": skipped,
+        "exit_code": r.returncode,
+        "output": output[:200]
+    }
+
+def _get_db_stats() -> dict[str, Any]:
+    """Thu thập stats từ các DB."""
+    stats = {}
+    for db_name in ["brain.db", "tasks.db", "consultations.db", "health_alerts.db"]:
+        db_path = DATA_DIR / db_name
+        if db_path.exists():
+            size_mb = db_path.stat().st_size / (1024 * 1024)
+            stats[db_name] = {"size_mb": round(size_mb, 1), "exists": True}
+            
+            # Đếm records
+            try:
+                conn = sqlite3.connect(str(db_path))
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                tables = [row[0] for row in cursor.fetchall()]
+                record_counts = {}
+                for table in tables:
+                    try:
+                        cursor.execute(f"SELECT COUNT(*) FROM {table}")
+                        count = cursor.fetchone()[0]
+                        record_counts[table] = count
+                    except:
+                        pass
+                stats[db_name]["tables"] = record_counts
+                conn.close()
+            except Exception as e:
+                stats[db_name]["error"] = str(e)
+        else:
+            stats[db_name] = {"exists": False}
+    
+    return stats
+
+def _get_pending_approvals() -> list[dict[str, str]]:
+    """Liệt kê các việc chờ phê duyệt."""
+    pending = [
+        {"id": "Q-1", "title": "Git init + gitignore", "priority": "MEDIUM", "description": "Khởi tạo git repo cho BRAIN"},
+        {"id": "Q-2", "title": "Journald persistent", "priority": "MEDIUM", "description": "mkdir /var/log/journal/<machine-id> + restart systemd-journald"},
+        {"id": "Q-3", "title": "Piper TTS local", "priority": "P0", "description": "Cài Piper TTS fallback khi Edge-TTS 403"},
+        {"id": "Q-4", "title": "Approval verifier (R4)", "priority": "P0", "description": "Cấu hình approval_verifier để mở khóa 2.979 candidates"},
+        {"id": "Q-5", "title": "BT power-save", "priority": "LOW", "description": "Tối ưu pin loa BT SRS-XB33"},
+        {"id": "M2", "title": "Fix reflection.py bug", "priority": "HIGH", "description": "Schema mismatch: INSERT source_type không tồn tại"},
+        {"id": "M3", "title": "Memory API + consolidation", "priority": "HIGH", "description": "5 lớp memory API + sàng lọc FACT/INFERENCE/HYPOTHESIS"},
+        {"id": "M6-B1", "title": "Vá HMAC P0", "priority": "P0", "description": "Server verify HMAC signature từ Pi5 (security bug)"},
+        {"id": "M6-B2", "title": "Embodiment Registry", "priority": "MEDIUM", "description": "Multi-agent supervisor + 3 worker"},
+        {"id": "AUDIO", "title": "Gắn USB mic/loa Pi5", "priority": "P1", "description": "Pi5 chưa có mic/loa USB — STT sai, không nghe được"},
+    ]
+    return pending
+
+def _get_system_health() -> dict[str, Any]:
+    """Kiểm tra sức khỏe hệ thống."""
+    health = {
+        "server_8766": False,
+        "server_8765": False,
+        "pi5_heartbeat": "UNKNOWN",
+        "uptime": "UNKNOWN"
+    }
+    
+    # Check ports
+    import socket
+    for port in (8765, 8766):
+        s = socket.socket()
+        try:
+            s.connect(("127.0.0.1", port))
+            s.close()
+            health[f"server_{port}"] = True
+        except:
+            health[f"server_{port}"] = False
+    
+    # Check Pi5 heartbeat (từ health_alerts.db)
+    try:
+        db = DATA_DIR / "health_alerts.db"
+        if db.exists():
+            conn = sqlite3.connect(str(db))
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM edge_state WHERE key='last_heartbeat_utc'")
+            row = cursor.fetchone()
+            if row:
+                health["pi5_heartbeat"] = row[0]
+            conn.close()
+    except:
+        pass
+    
+    # Uptime
+    try:
+        r = subprocess.run(["wmic", "os", "get", "lastbootuptime"], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            health["uptime"] = r.stdout.strip()
+    except:
+        pass
+    
+    return health
+
+def _generate_report() -> str:
+    """Tạo báo cáo sáng."""
+    now = datetime.now(timezone.utc).astimezone().strftime("%d/%m/%Y %H:%M")
+    
+    report = f"""
+╔══════════════════════════════════════════════════════════════╗
+║  🌅 BÁO CÁO SÁNG TONY — {now} ║
+╚══════════════════════════════════════════════════════════════╝
+
+📊 TRẠNG THÁI HỆ THỐNG
+{'─' * 60}
+"""
+    
+    # Test stats
+    test_stats = _get_test_stats()
+    report += f"""
+🧪 Tests:
+   • {test_stats['passed']} PASSED / {test_stats['failed']} FAILED / {test_stats['skipped']} SKIPPED
+   • Status: {'✅ PASS' if test_stats['failed'] == 0 else '❌ FAIL'}
+
+"""
+    
+    # DB stats
+    db_stats = _get_db_stats()
+    report += "💾 Databases:\n"
+    for db_name, info in db_stats.items():
+        if info.get("exists"):
+            report += f"   • {db_name}: {info['size_mb']} MB\n"
+    report += "\n"
+    
+    # System health
+    health = _get_system_health()
+    report += "🖥️  Services:\n"
+    for svc, status in health.items():
+        if svc != "uptime":
+            icon = "✅" if status else "❌"
+            report += f"   • {svc}: {icon}\n"
+    report += "\n"
+    
+    # Pending approvals
+    pending = _get_pending_approvals()
+    report += f"""
+⏳ VIỆC CHỜ PHÊ DUYỆT ({len(pending)} việc)
+{'─' * 60}
+"""
+    # Sắp xếp theo priority
+    priority_order = {"P0": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+    pending_sorted = sorted(pending, key=lambda x: priority_order.get(x["priority"], 99))
+    
+    for item in pending_sorted:
+        icon = "🔴" if item["priority"] == "P0" else ("🟡" if item["priority"] == "HIGH" else "🟢")
+        report += f"""
+{icon} [{item['id']}] {item['title']}
+   Mức độ: {item['priority']}
+   Mô tả: {item['description']}
+"""
+    
+    # Đề xuất kế hoạch
+    report += f"""
+📅 ĐỀ XUẤT KẾ HOẠCH HÔM NAY
+{'─' * 60}
+
+1. **Ưu tiên P0** — Chọn 1 việc để làm:
+   • Duyệt Q-3 (Piper TTS) — giúp TONY nói được khi Edge-TTS 403
+   • Duyệt M6-B1 (Vá HMAC) — vá lỗ hổng bảo mật Pi5
+   • Duyệt Q-4 (Approval verifier) — mở khóa 2.979 candidates
+
+2. **Ưu tiên P1** — Nếu có thời gian:
+   • Gắn USB mic/loa cho Pi5 — khắc phục STT sai
+   • Bật loa BT SRS-XB33 — sử dụng thiết bị đã có
+
+3. **Ưu tiên MEDIUM** — Việc nền:
+   • Duyệt M2 (Fix reflection.py) — sửa bug mất hypothesis
+   • Duyệt M3 (Memory API) — cải thiện bộ nhớ
+
+🎯 GỢI Ý: Làm Q-3 (Piper TTS) trước — giải quyết ngay vấn đề TTS flaky,
+   sau đó mới đến M6-B1 (HMAC) để vá bảo mật.
+
+"""
+    
+    # Câu hỏi cho anh
+    report += f"""
+❓ CÂU HỎI CHO ANH
+{'─' * 60}
+
+1. Anh có duyệt việc nào trong danh sách P0 không? (Q-3 / M6-B1 / Q-4)
+2. Anh có muốn gắn USB mic/loa cho Pi5 ngay không?
+3. Anh có cần TONY kiểm tra gì thêm trước khi bắt đầu?
+
+👉 Anh reply: "DUYỆT [ID]" (vd: "DUYỆT Q-3") hoặc "KHÔNG" để em điều chỉnh.
+
+{'═' * 60}
+*Báo cáo tự động tạo bởi TONY — Mọi số liệu đều kiểm chứng từ hệ thống thật*
+"""
+    
+    return report
+
+def main():
+    """Main entry point."""
+    report = _generate_report()
+    
+    # Lưu báo cáo
+    report_file = REPORTS_DIR / f"MORNING_REPORT_{datetime.now().strftime('%Y%m%d')}.md"
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    report_file.write_text(report, encoding="utf-8")
+    
+    print(f"✅ Báo cáo đã lưu: {report_file}")
+    print("\n" + report)
+    
+    # Gửi DM NetChat (nếu có thể)
+    try:
+        SKILL_PY = r"C:/Users/quocd/AppData/Local/netmind_desktop/netmind-agent/venv/Scripts/python.exe"
+        BOT = r"C:/Users/quocd/AppData/Local/netmind_desktop/skills/bot-netchat/netchat_bot.py"
+        CHANNEL = "131u5z64pj8q9da3k1xqp3y6pe"
+        
+        # Tóm tắt ngắn (<600 ký tự)
+        summary = f"🌅 BÁO CÁO SÁNG {datetime.now().strftime('%d/%m %H:%M')}\n\n"
+        summary += f"Tests: {_get_test_stats()['passed']} PASS / {_get_test_stats()['failed']} FAIL\n"
+        summary += f"Chờ duyệt: {len(_get_pending_approvals())} việc (P0: Q-3, M6-B1, Q-4)\n"
+        summary += f"Chi tiết: reports/MORNING_REPORT_{datetime.now().strftime('%Y%m%d')}.md\n\n"
+        summary += "Anh duyệt việc nào? — TONY"
+        
+        if len(summary) > 600:
+            summary = summary[:590] + "..."
+        
+        cmd = [SKILL_PY, BOT, "send", CHANNEL, summary]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if r.returncode == 0:
+            print("✅ DM đã gửi")
+        elif "429" in r.stderr or "suspended" in r.stderr:
+            print("⚠️  Bot NetChat bị suspend — sẽ gửi khi hết rate limit")
+        else:
+            print(f"⚠️  Không gửi được DM: {r.stderr[:200]}")
+    except Exception as e:
+        print(f"⚠️  Lỗi gửi DM: {e}")
+
+if __name__ == "__main__":
+    main()

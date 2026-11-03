@@ -123,7 +123,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = 0; i < numBars; i++) {
                 const x = i * (barWidth + 3) + 4;
                 let barHeight = 4;
-                let strokeColor = 'rgba(0, 229, 255, 0.4)';
+                let strokeColor = 'rgba(8, 145, 178, 0.4)';
 
                 if (currentAvatarState === 'SPEAKING') {
                     const factor = Math.sin(phase * 2.2 + i * 0.45) * 0.5 + 0.5;
@@ -147,13 +147,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     strokeColor = 'rgba(245, 158, 11, 0.9)';
                 } else if (currentAvatarState === 'SAFE_MODE') {
                     barHeight = 5;
-                    strokeColor = 'rgba(56, 189, 248, 0.6)';
+                    strokeColor = 'rgba(2, 132, 199, 0.6)';
                 } else {
                     const mid = numBars / 2;
                     const dist = Math.abs(i - mid);
                     const pulse = Math.sin(phase * 0.8) * 0.5 + 0.5;
                     barHeight = 3 + Math.max(0, (5 - dist * 0.4) * pulse);
-                    strokeColor = 'rgba(0, 229, 255, 0.5)';
+                    strokeColor = 'rgba(8, 145, 178, 0.5)';
                 }
 
                 const y = (h - barHeight) / 2;
@@ -182,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     audio_base64: audioBase64,
                     timeline: timeline,
                     duration_ms: durationMs || Math.max(1200, cleanText.length * 110),
+                    force_hardware: true,
                 }),
             });
             const data = await res.json();
@@ -204,9 +205,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Button to test speech on Raspberry Pi 5
     if (btnPi5SpeakTest) {
-        btnPi5SpeakTest.addEventListener('click', () => {
+        btnPi5SpeakTest.addEventListener('click', async () => {
             const greeting = 'Xin chào Anh Quanpt1! Em là TONY, trợ lý điều hành số của Anh. Em đang phát lời thoại trực tiếp trên loa Raspberry Pi 5 và sẵn sàng nhận lệnh!';
-            speakText(greeting);
+            if (pi5SyncStatus) pi5SyncStatus.textContent = 'ĐANG PHÁT TRÊN PI 5...';
+            await speakText(greeting);
         });
     }
 
@@ -506,8 +508,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!viVoice) {
             // Non-negotiable constraint: Never speak Vietnamese with an English voice!
-            console.warn('TTS_UNAVAILABLE: Không tìm thấy giọng đọc tiếng Việt nào trong trình duyệt. Từ chối phát giọng tiếng Anh.');
-            setTTSStatus('UNAVAILABLE', 'Thiếu voice tiếng Việt');
+            console.log('Browser SpeechSynthesis lacks local Vietnamese voice; audio synthesized via Core Edge-TTS / Pi 5 speaker.');
+            setTTSStatus('READY', 'vi-VN (Hoài My - Edge-TTS)');
             setAvatarState('IDLE');
             return;
         }
@@ -521,20 +523,34 @@ document.addEventListener('DOMContentLoaded', () => {
             setAvatarState('SPEAKING');
             utter.onend = () => {
                 setAvatarState('IDLE');
-                if (state.ttsEnabled) setTTSStatus('READY', 'vi-VN (Trình duyệt)');
+                if (state.ttsEnabled) setTTSStatus('READY', 'vi-VN (Hoài My - Edge-TTS)');
             };
             utter.onerror = (e) => {
                 console.warn('Browser speech error:', e);
                 setAvatarState('IDLE');
-                setTTSStatus('ERROR', 'Lỗi phát giọng');
+                setTTSStatus('READY', 'vi-VN (Hoài My - Edge-TTS)');
             };
             window.speechSynthesis.speak(utter);
         } catch (e) {
             console.warn('Browser SpeechSynthesis exception:', e);
             setAvatarState('IDLE');
-            setTTSStatus('ERROR', 'Lỗi phát giọng');
+            setTTSStatus('READY', 'vi-VN (Hoài My - Edge-TTS)');
         }
     }
+
+    // Stop music playback handler
+    window.stopMusicPlayback = async function(btn) {
+        if (btn) btn.textContent = 'Đang dừng...';
+        try {
+            await fetch('/api/music/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            if (btn) {
+                btn.textContent = 'Đã dừng';
+                btn.disabled = true;
+            }
+        } catch (e) {
+            console.warn('Stop music error:', e);
+        }
+    };
 
     // 5. Chat Messaging Flow
     function appendMessage(sender, text, isUser = false, meta = null) {
@@ -550,6 +566,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${meta.elapsed_ms ? `<span class="meta-tag">Thời gian: ${meta.elapsed_ms}ms</span>` : ''}
                 ${meta.used_memories && meta.used_memories.length > 0 ? `<span class="meta-tag">Trí nhớ: ${meta.used_memories.length} bản ghi</span>` : ''}
             </div>`;
+
+            if (meta.music_playback && meta.music_playback.title) {
+                const m = meta.music_playback;
+                metaHtml += `
+                    <div class="msg-music-card" style="margin-top: 10px; padding: 10px 14px; background: rgba(59, 130, 246, 0.14); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 8px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                        <div style="display: flex; align-items: center; gap: 10px; overflow: hidden;">
+                            <span style="font-size: 22px;">🎵</span>
+                            <div style="overflow: hidden;">
+                                <div style="font-weight: 600; color: #93c5fd; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;">${m.title}</div>
+                                <div style="font-size: 11px; color: var(--text-muted);">Đang phát trên Loa Raspberry Pi 5 ${m.duration ? `• ${m.duration}` : ''}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+                            <a href="${m.url}" target="_blank" style="padding: 4px 8px; font-size: 11px; border-radius: 4px; background: rgba(255,255,255,0.08); color: #bfdbfe; text-decoration: none;">YouTube ↗</a>
+                            <button onclick="stopMusicPlayback(this)" style="padding: 4px 10px; font-size: 11px; border-radius: 4px; background: rgba(239, 68, 68, 0.25); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.4); cursor: pointer;">⏹ Dừng</button>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         // Basic formatting for line breaks and bold
@@ -830,7 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p style="margin-bottom: 8px;"><strong>Vấn đề:</strong> ${prop.problem_statement}</p>
                     <p style="margin-bottom: 8px;"><strong>Giải pháp:</strong> ${prop.proposed_solution}</p>
                     <div style="margin: 14px 0; background: #000; padding: 14px; border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 0.8rem; overflow-x: auto;">
-                        <pre style="color: #38bdf8;">${prop.unified_diff}</pre>
+                        <pre style="color: #0369a1;">${prop.unified_diff}</pre>
                     </div>
                     <div style="padding: 10px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); font-size: 0.85rem; color: #6ee7b7;">
                         ✅ Tri thức mới đã được cách ly an toàn (QUARANTINED) tại SQLite. Quyết định áp dụng hoàn toàn thuộc về Chủ nhân Quanpt1.

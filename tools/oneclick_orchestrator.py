@@ -69,8 +69,8 @@ def ensure_ollama() -> bool:
         return True
 
     print("  [i] Ollama chưa chạy, đang tự động kích hoạt dịch vụ...")
-    ollama_app = Path(r"E:\AI\Ollama\ollama app.exe")
-    ollama_cli = Path(r"E:\AI\Ollama\ollama.exe")
+    ollama_app = Path(r"C:\Users\DELL\AppData\Local\Programs\Ollama\ollama app.exe")
+    ollama_cli = Path(r"C:\Users\DELL\AppData\Local\Programs\Ollama\ollama.exe")
 
     if ollama_app.exists():
         subprocess.Popen([str(ollama_app)], cwd=str(ollama_app.parent), close_fds=True)
@@ -81,7 +81,7 @@ def ensure_ollama() -> bool:
         try:
             subprocess.Popen(["ollama", "serve"], close_fds=True)
         except Exception:
-            print("  ⚠️ Không tìm thấy đường dẫn Ollama tại E:\\AI\\Ollama. Tiếp tục chế độ CPU Fallback.")
+            print("  ⚠️ Không tìm thấy đường dẫn Ollama tại C:\\Users\\DELL\\AppData\\Local\\Programs\\Ollama. Tiếp tục chế độ CPU Fallback.")
             return False
 
     # Wait for Ollama to become ready

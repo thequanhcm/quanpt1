@@ -13,7 +13,11 @@ RESTART_TOOL = WORKSPACE_ROOT / "tools" / "restart_system.py"
 
 def test_restart_script_exists() -> None:
     assert RESTART_TOOL.exists()
-    assert (WORKSPACE_ROOT / "KHOI_DONG_QUAN_AI_BRAIN.bat").exists()
+    # (30/10/2026) Launcher chuẩn hiện tại là TONY_START.bat; bat cũ
+    # KHOI_DONG_QUAN_AI_BRAIN.bat đã bị xóa trong cleanup b63d62d.
+    assert (WORKSPACE_ROOT / "TONY_START.bat").exists() or (
+        WORKSPACE_ROOT / "KHOI_DONG_QUAN_AI_BRAIN.bat"
+    ).exists()
     assert (
         (WORKSPACE_ROOT / "TU_DONG_KHOI_DONG_LAI_HE_THONG.bat").exists()
         or (WORKSPACE_ROOT / "tools" / "legacy_launchers" / "TU_DONG_KHOI_DONG_LAI_HE_THONG.bat").exists()

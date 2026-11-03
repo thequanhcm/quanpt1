@@ -15,6 +15,8 @@ Security notes:
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
 import threading
 import time
@@ -24,22 +26,95 @@ from typing import Any
 
 from quan_ai_brain.core.audit import AuditLogger
 
-NETCHAT_SCRIPT = Path(
-    r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
-)
-NETCHAT_PYTHON = Path(
-    r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
-)
+_local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
+_script_cand = [
+    _local_appdata / "netmind_desktop" / "skills" / "bot-netchat" / "netchat_bot.py",
+    Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"),
+]
+NETCHAT_SCRIPT = next((p for p in _script_cand if p.exists()), _script_cand[0])
 
-DEFAULT_CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"
+_py_cand = [
+    _local_appdata / "netmind_desktop" / "netmind-agent" / "venv" / "Scripts" / "python.exe",
+    Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"),
+]
+NETCHAT_PYTHON = next((p for p in _py_cand if p.exists()), _py_cand[0])
+
+# (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
+DEFAULT_CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
 DEFAULT_CHANNEL_NAME = "Trợ lý Tony Pham"
-BOT_USER_ID = "edojmne9d7gcxx8axu1mzas3pr"
+# (02/11/2026) Thay bot_quanpt1 thanh bot_tony
+BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
+
+# ---------------------------------------------------------------------------
+# (02/11/2026, owner yêu cầu) VN-LANG — chuẩn hoá tiếng Việt TẦNG CUỐI cho DM.
+# Mọi tin gửi owner qua bridge được dịch trạng thái/mật ngữ kỹ thuật sang
+# tiếng Việt. Số liệu, ID, tên riêng (Pi 5, Ollama, GLM…) GIỮ NGUYÊN — không
+# bao giờ biến dữ liệu kỹ thuật thành chữ khác nghĩa.
+# ---------------------------------------------------------------------------
+_VN_STATUS = {
+    "CRITICAL": "NGHIÊM TRỌNG",
+    "WARNING": "CẢNH BÁO",
+    "NORMAL": "BÌNH THƯỜNG",
+    "UNKNOWN": "KHÔNG RÕ",
+    "MAINTENANCE": "BẢO TRÌ",
+    "ONLINE": "HOẠT ĐỘNG",
+    "OFFLINE": "MẤT KẾT NỐI",
+    "READY": "SẴN SÀNG",
+    "RUNNING": "ĐANG CHẠY",
+    "STOPPED": "ĐÃ DỪNG",
+    "PAUSED": "TẠM DỪNG",
+    "OK": "BÌNH THƯỜNG",
+    "FAIL": "LỖI",
+    "FAILED": "THẤT BẠI",
+    "DOWN": "MẤT KẾT NỐI",
+    "HEALTHY": "KHỎE MẠNH",
+    "BLOCKED": "BỊ CHẶN",
+    "PENDING": "CHỜ XỬ LÝ",
+    "APPROVED": "ĐÃ DUYỆT",
+    "COMPLETED": "HOÀN THÀNH",
+    "IN_PROGRESS": "ĐANG LÀM",
+    "WAITING_APPROVAL": "CHỜ DUYỆT",
+    "ERROR": "LỖI",
+    "ACTIVE": "ĐANG HOẠT ĐỘNG",
+    "CONNECTED": "ĐÃ KẾT NỐI",
+    "DISCONNECTED": "MẤT KẾT NỐI",
+    "TIMEOUT": "QUÁ THỜI GIAN CHỜ",
+}
+_VN_COMPONENTS = {
+    "pc_host": "máy chính",
+    "pi5_edge": "Pi 5",
+    "selfcare_engine": "tự chăm sóc",
+    "ram_percent": "RAM",
+    "disk_percent": "ổ đĩa",
+    "cpu_percent": "CPU",
+    "connectivity": "kết nối",
+    "response_time": "thời gian phản hồi",
+}
+
+
+def _vn_normalize(text: str) -> str:
+    """Chuẩn hoá 1 tin DM → tiếng Việt tự nhiên (giữ số liệu + tên riêng)."""
+    out = str(text or "")
+    if not out:
+        return out
+    for en, vi in _VN_COMPONENTS.items():
+        out = out.replace(en, vi)
+    for en, vi in _VN_STATUS.items():
+        out = out.replace(f" {en}", f" {vi}").replace(f"→ {en}", f"→ {vi}")
+    return out
+
 
 # Simple single-flight lock: dashboard requests are serialized to avoid
 # hammering the NetChat API (HTTP 429 rate limit when sending in bursts).
 _NETCHAT_LOCK = threading.Lock()
 _LAST_SEND_AT = 0.0
 _MIN_SEND_INTERVAL_SEC = 3.0
+# (31/10/2026) Rate-limit protection: status cache TTL + suspended circuit
+# breaker (chi tiết ở get_status). re được import ở dưới cùng file.
+_STATUS_CACHE: dict | None = None
+_STATUS_CACHED_AT: float = 0.0
+_SUSPENDED_UNTIL: float = 0.0
 
 
 class NetChatBridgeError(RuntimeError):
@@ -63,22 +138,77 @@ def _run_script(args: list[str], timeout: float = 25.0) -> tuple[int, str, str]:
 
 
 def _parse_json_or_raise(stdout: str, stderr: str) -> Any:
+    """Parse JSON from script stdout, tolerating human-readable noise lines.
+
+    netchat_bot.py prints 'BOT: ...' / 'TARGET: ...' headers before the JSON
+    payload (confirmed-send path) — parse the LAST balanced JSON object line
+    instead of the whole stdout (root cause of 'Unparseable NetChat response'
+    on the dashboard send, 27/10/2026 — the post actually was sent).
+    """
     text = (stdout or "").strip()
     if not text:
         raise NetChatBridgeError((stderr or "Empty response from NetChat script")[:300])
     try:
         return json.loads(text)
-    except json.JSONDecodeError as exc:
-        raise NetChatBridgeError(f"Unparseable NetChat response: {text[:200]}") from exc
+    except json.JSONDecodeError:
+        pass
+    # Fallback: scan lines bottom-up for a balanced JSON object/array
+    decoder = json.JSONDecoder()
+    for line in reversed(text.splitlines()):
+        line = line.strip()
+        if not line or not (line.startswith("{") or line.startswith("[")):
+            continue
+        try:
+            obj, _end = decoder.raw_decode(line)
+            return obj
+        except json.JSONDecodeError:
+            continue
+    raise NetChatBridgeError(f"Unparseable NetChat response: {text[:200]}")
 
 
 def get_status(channel_id: str = DEFAULT_CHANNEL_ID) -> dict[str, Any]:
-    """Channel + bot status. Read-only, no message bodies."""
-    code, out, err = _run_script(["whoami"])
-    if code != 0:
-        raise NetChatBridgeError((err or out or "whoami failed")[:300])
-    me = _parse_json_or_raise(out, err)
-    return {
+    """Channel + bot status. Read-only, no message bodies.
+
+    (31/10/2026) CACHE TTL 30s + Circuit breaker 429: tab Cockpit tự refresh
+    10s/lần → mỗi lần gọi whoami THẬT qua gateway → cộng với responder poll 5s
+    → bot bị gateway đình chỉ 15 phút vì rate_limit_violation. Giờ status chỉ
+    gọi gateway tối đa 1 lần/30s; khi gặp 429 trả về trạng thái cached kèm
+    cờ suspended (không bắn tiếp request vào gateway đang phạt).
+    """
+    global _STATUS_CACHE, _STATUS_CACHED_AT, _SUSPENDED_UNTIL
+    now = time.time()
+    if _STATUS_CACHE is not None and now - _STATUS_CACHED_AT < 30:
+        cached = dict(_STATUS_CACHE)
+        cached["cached"] = True
+        if now < _SUSPENDED_UNTIL:
+            cached["suspended_until_epoch_s"] = _SUSPENDED_UNTIL
+        return cached
+
+    if now < _SUSPENDED_UNTIL:
+        # Đang trong thời gian phạt: KHÔNG gọi gateway, trả cached báo suspended
+        cached = dict(_STATUS_CACHE or {"success": True, "bot": {}, "channel": {"id": channel_id, "name": DEFAULT_CHANNEL_NAME}})
+        cached["cached"] = True
+        cached["suspended"] = True
+        cached["suspended_until_epoch_s"] = _SUSPENDED_UNTIL
+        return cached
+
+    try:
+        code, out, err = _run_script(["whoami"])
+        if code != 0:
+            raise NetChatBridgeError((err or out or "whoami failed")[:300])
+        me = _parse_json_or_raise(out, err)
+    except NetChatBridgeError as exc:
+        txt = str(exc)
+        m = re.search(r"suspended_until[\"':\s]+(\d{13})", txt)
+        if m:
+            _SUSPENDED_UNTIL = int(m.group(1)) / 1000
+            cached = dict(_STATUS_CACHE or {"success": True, "bot": {}, "channel": {"id": channel_id, "name": DEFAULT_CHANNEL_NAME}})
+            cached["cached"] = True
+            cached["suspended"] = True
+            cached["suspended_until_epoch_s"] = _SUSPENDED_UNTIL
+            return cached
+        raise
+    _STATUS_CACHE = {
         "success": True,
         "bot": {
             "id": me.get("id"),
@@ -86,9 +216,11 @@ def get_status(channel_id: str = DEFAULT_CHANNEL_ID) -> dict[str, Any]:
             "is_bot": me.get("is_bot", True),
         },
         "channel": {"id": channel_id, "name": DEFAULT_CHANNEL_NAME},
-        "responder_hint": "tools/netchat_auto_responder.py (poll 5s)",
+        "responder_hint": "tools/netchat_auto_responder.py (poll 5s, backoff 429)",
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
     }
+    _STATUS_CACHED_AT = now
+    return dict(_STATUS_CACHE)
 
 
 def get_messages(channel_id: str = DEFAULT_CHANNEL_ID, count: int = 20) -> dict[str, Any]:
@@ -117,11 +249,17 @@ def send_message(channel_id: str, text: str) -> dict[str, Any]:
 
     NetChat requires a confirmation round-trip for sends; we replay the exact
     command with --confirmed <hash>. Rate-limited to one send per 3s.
+
+    VN-LANG (02/11/2026, owner yêu cầu): TẦNG CUỐI trước khi tin rời hệ thống —
+    mọi tin gửi qua bridge được chuẩn hoá tiếng Việt (trạng thái/mật ngữ kỹ
+    thuật → tiếng Việt; số liệu + tên riêng giữ nguyên). Đây là điểm chặn duy
+    nhất mọi đường gửi DM đi qua, nên không đường nào bỏ sót.
     """
     global _LAST_SEND_AT
     text = (text or "").strip()
     if not text:
         raise NetChatBridgeError("Message is empty")
+    text = _vn_normalize(text)
     if len(text) > 3500:
         raise NetChatBridgeError("Message too long (max 3500 chars)")
 

@@ -56,6 +56,13 @@ def _patch_urlopen(monkeypatch, body: bytes, content_type: str = "text/event-str
 def _clear_env(monkeypatch) -> None:
     monkeypatch.delenv("NETMIND_API_KEY", raising=False)
     monkeypatch.delenv("HERMES_CUSTOM_NETMIND_API_KEY", raising=False)
+    # (01/11/2026, M5) Vô hiệu registry fallback (HKCU\Environment) trong test —
+    # máy thật có key nên không patch winreg sẽ lệch contract NO_API_KEY.
+    import winreg as _wr
+    def _raise_not_found(*a, **k):
+        raise FileNotFoundError()
+    monkeypatch.setattr(_wr, "OpenKey", _raise_not_found)
+    monkeypatch.setattr(_wr, "QueryValueEx", _raise_not_found)
 
 
 # ------------------------------------------------------------------ stream gates

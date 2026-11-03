@@ -1,50 +1,114 @@
-Exit code: 1
-Command: C:\Python314\python.exe -m pytest -q tests
-Timestamp UTC: 2026-10-26T17:36:41.774883+00:00
+Exit code: 0
+Command: E:\BRAIN\.venv\Scripts\python.exe -m pytest -q tests
+Timestamp UTC: 2026-11-02T10:01:54.639310+00:00
 
-....................................F........................s.......... [ 11%]
+........................................................................ [  2%]
+........................................................................ [  4%]
+........................................................................ [  6%]
+...........s............................................................ [  8%]
+........................................................................ [ 10%]
+........................................................................ [ 12%]
+........................................................................ [ 14%]
+........................................................................ [ 16%]
+........................................................................ [ 18%]
+........................................................................ [ 20%]
 ........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
+........................................................................ [ 28%]
+........................................................................ [ 30%]
 ........................................................................ [ 33%]
-........................................................................ [ 44%]
-..........................................................F............. [ 55%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+.........................sss..........................s................. [ 39%]
+..................s...........s...ss....s.ssssss.ss..................... [ 41%]
+.................................ssss.s.....ss.......................... [ 43%]
+........................................................................ [ 45%]
+........................................................................ [ 47%]
+........................................................................ [ 49%]
+.........................s........s........s.s....s.s................... [ 51%]
+........................................................................ [ 53%]
+........................................................................ [ 55%]
+........................................................................ [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
+........................................................................ [ 64%]
 ........................................................................ [ 66%]
-........................................................................ [ 78%]
-........................................................................ [ 89%]
-........s.............................................................   [100%]
-================================== FAILURES ===================================
-____________________________ test_keep_warm_pulse _____________________________
+........................................................................ [ 68%]
+........................................................................ [ 70%]
+........................................................................ [ 72%]
+.........s.............................................................. [ 74%]
+........................................................................ [ 76%]
+..............s..............s...........................ss..........s.. [ 78%]
+.s...................................................................... [ 80%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 88%]
+........................................................................ [ 90%]
+....................................ssssss.............................. [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 97%]
+...................s.................................................... [ 99%]
+...............................                                          [100%]
+============================== warnings summary ===============================
+tests\advanced\registry.py:58
+  E:\BRAIN\tests\advanced\registry.py:58: PytestCollectionWarning: cannot collect test class 'TestGovernanceError' because it has a __init__ constructor (from: tests/advanced/test_registry.py)
+    class TestGovernanceError(Exception):
 
-    def test_keep_warm_pulse():
-        mock_autonomic = MagicMock(spec=AutonomicNervousSystem)
-        mock_autonomic.ollama_host = "127.0.0.1"
-        mock_autonomic.ollama_port = 11434
-        mock_autonomic.probe_port.return_value = (True, 15.0)
-    
-        mind = AutonomousMind(autonomic_system=mock_autonomic)
->       assert mind.keep_warm_pulse() is True
-E       assert False is True
-E        +  where False = keep_warm_pulse()
-E        +    where keep_warm_pulse = <quan_ai_brain.cognition.autonomous_mind.AutonomousMind object at 0x000002C9554A1D00>.keep_warm_pulse
+tests\advanced\registry.py:62
+  E:\BRAIN\tests\advanced\registry.py:62: PytestCollectionWarning: cannot collect test class 'TestRegistry' because it has a __init__ constructor (from: tests/advanced/test_registry.py)
+    class TestRegistry:
 
-tests\test_autonomous_mind.py:145: AssertionError
-_________________ test_model_allowlist_rejects_unknown_model __________________
+src\quan_ai_brain\analytics\statistical_engine.py:20
+  E:\BRAIN\src\quan_ai_brain\analytics\statistical_engine.py:20: PytestCollectionWarning: cannot collect test class 'TestType' because it has a __init__ constructor (from: tests/test_v39_analytics_engine.py)
+    class TestType(Enum):
 
-    def test_model_allowlist_rejects_unknown_model():
-        """Only exact catalog IDs pass. Unknown or unverified model IDs are rejected."""
-        provider = _make_provider()
-        for bad in ("zai-org/GLM-5.3", "zai-org/GLM-5.3-FlashX", "gpt-4o", "qwen2.5:7b"):
-            resp = provider.generate(LLMRequest(prompt="test", model=bad))
-            assert resp.success is False
->           assert resp.error_code == "MODEL_NOT_IN_NETMIND_CATALOG"
-E           AssertionError: assert 'NO_API_KEY' == 'MODEL_NOT_IN_NETMIND_CATALOG'
-E             
-E             - MODEL_NOT_IN_NETMIND_CATALOG
-E             + NO_API_KEY
-
-tests\test_netmind_provider.py:96: AssertionError
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
 =========================== short test summary info ===========================
 SKIPPED [1] tests\test_bge_m3_embedding.py:172: Local Ollama daemon is offline; live test skipped.
-SKIPPED [1] tests\\test_vietnamese_tts.py:266: BLOCKED: Ph\u1ea7n c\u1ee9ng Raspberry Pi 5 th\u1ef1c t\u1ebf ch\u01b0a k\u1ebft n\u1ed1i m\u1ea1ng trong phi\xean ki\u1ec3m th\u1eed t\u1ef1 \u0111\u1ed9ng n\xe0y. PC Core \u0111\xe3 \u0111\u01b0\u1ee3c x\xe1c th\u1ef1c ho\xe0n ch\u1ec9nh.
-FAILED tests/test_autonomous_mind.py::test_keep_warm_pulse - assert False is ...
-FAILED tests/test_netmind_provider.py::test_model_allowlist_rejects_unknown_model
-2 failed, 642 passed, 2 skipped in 116.18s (0:01:56)
+SKIPPED [1] tests\test_v14_ui_integration.py:23: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:27: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:31: API integration pending - placeholder test
+SKIPPED [1] tests\test_v15_knowledge_graph.py:182: Database lock issue - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:80: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:261: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:317: Complex test - fix pending
+SKIPPED [1] tests\test_v17_causal_counterfactual.py:321: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:92: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:109: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:113: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:121: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:125: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:129: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:133: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:158: Complex test - fix pending
+SKIPPED [1] tests\test_v18_federated_privacy.py:166: Complex test - fix pending
+SKIPPED [1] tests\test_v21_final_integration.py:46: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:50: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:54: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:62: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:73: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:153: Performance test - manual run only
+SKIPPED [1] tests\test_v21_final_integration.py:157: Performance test - manual run only
+SKIPPED [1] tests\test_v25_analytics.py:109: Complex dataclass test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:251: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:372: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:383: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:449: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:460: Complex integration test - manual verification
+SKIPPED [1] tests\test_v36_asr.py:256: Azure Speech SDK not installed
+SKIPPED [1] tests\test_v39_analytics_engine.py:686: Small sample regression handled separately
+SKIPPED [1] tests\test_v39_creativity_engine.py:224: Domain synthesis tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:258: Solution generation tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:263: Troubleshooting workflow tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:459: Problem solving pipeline tested in unit tests
+SKIPPED [1] tests\test_v39_decision_engine.py:516: Zero cost edge case handled separately
+SKIPPED [1] tests\test_v41_image_ocr.py:26: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:30: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:35: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:45: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:54: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_v41_image_ocr.py:62: pytesseract/Pillow chưa cài
+SKIPPED [1] tests\test_vietnamese_tts.py:266: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+3442 passed, 45 skipped, 3 warnings in 423.75s (0:07:03)

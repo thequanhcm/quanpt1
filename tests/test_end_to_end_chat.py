@@ -130,6 +130,28 @@ def e2e_chat_server(tmp_path_factory: pytest.TempPathFactory):
     test_workspace = tmp_path_factory.mktemp("e2e_workspace")
     (test_workspace / "data").mkdir(parents=True, exist_ok=True)
 
+    # M6 fix (01/11/2026): stub LLMProvider.generate để E2E DỨT KHOÁT.
+    # Nguyên nhân thật (đã đo + dump stack): khi catalog NetMind cloud hiccup
+    # (GLM cold 9,5s sáng 01/11), router rơi về local Ollama — turn-1 đo thật
+    # 28,2s (context KB+grounding, CPU không GPU) > timeout 25s của test.
+    # Test PASS 11:08 / FAIL 11:23 cùng code = phụ thuộc môi trường mạng.
+    # E2E đúng nghĩa phải kiểm PIPELINE (router→guardrails→memory→HTTP);
+    # độ trễ LLM thật không phải đối tượng kiểm thử ở đây.
+    from quan_ai_brain.llm import LLMProvider, LLMResponse
+
+    def _stub_generate(self, request):  # noqa: ANN001 - giữ nguyên chữ ký thật
+        return LLMResponse(
+            text=f"[STUB-E2E] Đã nhận: {getattr(request, 'prompt', '')[:60]}",
+            model=getattr(request, "model", "stub"),
+            provider="stub",
+            is_mock=True,
+            elapsed_ms=1.0,
+            success=True,
+        )
+
+    original_generate = LLMProvider.generate
+    LLMProvider.generate = _stub_generate  # type: ignore[method-assign]
+
     server = ThreadedHTTPServer(("127.0.0.1", 0), BrainAPIHandler)
     host, port = server.server_address
     t = threading.Thread(target=server.serve_forever, daemon=True)
@@ -139,6 +161,8 @@ def e2e_chat_server(tmp_path_factory: pytest.TempPathFactory):
 
     yield base_url
 
+    # Khôi phục để không ảnh hưởng test khác trong cùng pytest process
+    LLMProvider.generate = original_generate  # type: ignore[method-assign]
     server.shutdown()
     server.server_close()
 

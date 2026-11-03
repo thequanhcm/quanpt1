@@ -1,0 +1,20 @@
+{
+  "capture_id": "cap_1793420023471",
+  "snapshot_id": "cap_1793420023471",
+  "source_device_id": "EDGE-PI5-DESK-01",
+  "captured_at": "2026-10-31T04:13:43.471280+00:00",
+  "timestamp": "2026-10-31T04:13:43.471280+00:00",
+  "received_at": "2026-10-31T04:13:37.867662+00:00",
+  "content_hash": "186643fb6d39a7143ffe82c5d21580f91423fa1d89406bbae391c5a2512e66d9",
+  "sha256": "186643fb6d39a7143ffe82c5d21580f91423fa1d89406bbae391c5a2512e66d9",
+  "sha256_hash": "186643fb6d39a7143ffe82c5d21580f91423fa1d89406bbae391c5a2512e66d9",
+  "media_type": "image/jpeg",
+  "size_bytes": 20752,
+  "capture_mode": "SNAPSHOT_ON_DEMAND",
+  "purpose": "Test mat TONY - camera Pi5 qua Tailscale",
+  "retention_policy": "OWNER_CONTROLLED_30D",
+  "verification_status": "VERIFIED_PASS",
+  "relative_file": "data/edge_media/captures/2026-10-31T04-13-43_471280+00-00_cap_1793420023471.jpg",
+  "file_path": "data/edge_media/captures/2026-10-31T04-13-43_471280+00-00_cap_1793420023471.jpg",
+  "filename": "2026-10-31T04-13-43_471280+00-00_cap_1793420023471.jpg"
+}

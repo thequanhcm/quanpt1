@@ -25,7 +25,7 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-BASE = Path(r"E:\AI\QUAN AI BRAIN")
+BASE = Path(r"E:\BRAIN")
 
 
 def _tcp(port: int, timeout: float = 3.0) -> bool:

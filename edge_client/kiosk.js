@@ -14,6 +14,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const clockEl = document.getElementById("kiosk-clock");
   const transcriptEl = document.getElementById("transcript-line");
   const taskTextEl = document.getElementById("task-glance-text");
+  const marqueeTrack = document.getElementById("marquee-track");
   const bannerEl = document.getElementById("consultation-banner");
   const bannerText = document.getElementById("consultation-banner-text");
   const overlay = document.getElementById("offline-overlay");
@@ -36,11 +37,6 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentKioskAudio = null;
   let wakeEngine = null;
 
-  // Guard chống phát đôi: lưu hash của audio đã phát gần nhất
-  // Mỗi audio_base64 có độ dài khác nhau, dùng length + 8 ký tự đầu/cuối làm fingerprint
-  let _lastPlayedAudioFingerprint = "";
-  let _lastPlayedAt = 0;  // epoch ms
-
   // Initialize Digital Human Engine (Model F) on Raspberry Pi 5
   try {
     if (typeof DigitalHumanAvatar !== "undefined") {
@@ -60,6 +56,10 @@ document.addEventListener("DOMContentLoaded", () => {
     RESEARCHING: { css: "state-researching", browL: "M 65 64 L 115 64", browR: "M 165 64 L 215 64", symbol: null },
     LEARNING: { css: "state-learning", browL: "M 65 62 L 115 64", browR: "M 165 64 L 215 62", symbol: null },
     SPEAKING: { css: "state-speaking", browL: "M 65 65 Q 90 63 115 65", browR: "M 165 65 Q 190 63 215 65", symbol: null },
+    WARNING: { css: "state-warning", browL: "M 65 74 L 115 68", browR: "M 165 68 L 215 74", symbol: "⚠️" },
+    HAPPY: { css: "state-happy", browL: "M 65 62 Q 90 58 115 62", browR: "M 165 62 Q 190 58 215 62", symbol: null },
+    CONFUSED: { css: "state-confused", browL: "M 65 64 Q 90 60 115 66", browR: "M 165 62 Q 190 66 215 64", symbol: "❓" },
+    EMPATHETIC: { css: "state-empathic", browL: "M 65 63 Q 90 60 115 64", browR: "M 165 64 Q 190 60 215 63", symbol: null },
     WAITING_FOR_OWNER: { css: "state-waiting", browL: "M 65 62 Q 90 60 115 62", browR: "M 165 62 Q 190 60 215 62", symbol: "📬" },
     BLOCKED: { css: "state-blocked", browL: "M 65 72 L 115 64", browR: "M 165 64 L 215 72", symbol: "🛡️" },
     ERROR: { css: "state-error", browL: "M 65 72 L 115 64", browR: "M 165 64 L 215 72", symbol: "⚠️" },
@@ -158,11 +158,13 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   setTimeout(triggerBlink, 3000);
 
-  // Dynamic Audio Waveform Canvas
+  // (31/10/2026) VU METER DỌC — thanh mức âm thanh dọc bên phải màn:
+  // cột bar chạy TỪ DƯỚI LÊN, thể hiện mic (LISTENING) và loa phát (SPEAKING).
   function initWaveform() {
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
-    const numBars = 24;
+    // (31/10 ~19:30) VU NGANG trong header (canvas ngang 150x18): 16 cột dọc nhỏ
+    const numBars = 16;
     let phase = 0;
 
     function render() {
@@ -171,40 +173,40 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const w = canvas.width;
       const h = canvas.height;
-      const barWidth = Math.max(3, (w - (numBars * 3)) / numBars);
+      const slot = w / numBars;
+      const barW = Math.max(3, slot - 3);
 
       for (let i = 0; i < numBars; i++) {
-        const x = i * (barWidth + 3) + 4;
-        let barHeight = 4;
+        const x = i * slot + 1;
+        let barH = 3;
         let color = "rgba(0, 229, 255, 0.4)";
 
         if (currentAvatarState === "SPEAKING") {
-          const factor = Math.sin(phase * 2.5 + i * 0.5) * 0.5 + 0.5;
-          barHeight = 5 + factor * 18;
-          color = "rgba(59, 130, 246, 0.9)";
+          const factor = Math.sin(phase * 2.5 + i * 0.55) * 0.5 + 0.5;
+          barH = 3 + factor * (h - 6);
+          color = "rgba(59, 130, 246, 0.95)";
         } else if (currentAvatarState === "LISTENING") {
-          const factor = Math.sin(phase * 3.2 + i * 0.6) * 0.5 + 0.5;
-          barHeight = 5 + factor * 16;
-          color = "rgba(6, 182, 212, 0.9)";
+          const factor = Math.sin(phase * 3.2 + i * 0.65) * 0.5 + 0.5;
+          barH = 3 + factor * (h - 6);
+          color = "rgba(6, 182, 212, 0.95)";
         } else if (currentAvatarState === "THINKING") {
-          const factor = Math.cos(phase * 1.5 + i * 0.4) * 0.5 + 0.5;
-          barHeight = 4 + factor * 12;
-          color = "rgba(168, 85, 247, 0.85)";
+          const factor = Math.cos(phase * 1.5 + i * 0.45) * 0.5 + 0.5;
+          barH = 3 + factor * (h - 6);
+          color = "rgba(168, 85, 247, 0.9)";
         } else if (currentAvatarState === "OFFLINE") {
-          barHeight = 2;
-          color = "rgba(100, 116, 139, 0.25)";
+          barH = 3;
+          color = "rgba(100, 116, 139, 0.3)";
         } else {
           const mid = numBars / 2;
           const dist = Math.abs(i - mid);
           const pulse = Math.sin(phase * 0.8) * 0.5 + 0.5;
-          barHeight = 3 + Math.max(0, (5 - dist * 0.4) * pulse);
-          color = "rgba(0, 229, 255, 0.5)";
+          barH = 2 + Math.max(1, (h * 0.55 - dist * 1.2) * pulse);
+          color = "rgba(0, 229, 255, 0.55)";
         }
 
-        const y = (h - barHeight) / 2;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.roundRect(x, y, barWidth, barHeight, 2);
+        ctx.roundRect(x, h - barH, barW, barH, 2);
         ctx.fill();
       }
 
@@ -225,7 +227,7 @@ document.addEventListener("DOMContentLoaded", () => {
   updateClock();
 
   // Play Speech Audio on Raspberry Pi 5
-  function playKioskSpeech(audioBase64, timeline) {
+  function playKioskSpeech(audioBase64, timeline, spokenText) {
     if (!audioBase64) return;
     try {
       if (currentKioskAudio) {
@@ -241,6 +243,10 @@ document.addEventListener("DOMContentLoaded", () => {
       currentKioskAudio = audio;
       setAvatarState("SPEAKING");
 
+      // (31/10) BIỂU CẢM THEO NỘI DUNG: micro-expression theo cảm xúc câu nói
+      if (window.digitalHuman && spokenText) {
+        window.digitalHuman.setContextFromText(spokenText);
+      }
       if (window.digitalHuman && timeline) {
         window.digitalHuman.setTimeline(timeline);
       }
@@ -251,6 +257,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.digitalHuman) {
           window.digitalHuman.cancelUtterance();
           window.digitalHuman.setState("IDLE");
+          window.digitalHuman.resetMicroExpression();
         }
         if (wakeEngine) {
           wakeEngine.notifySpeakingEnd();
@@ -264,8 +271,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.digitalHuman) {
           window.digitalHuman.cancelUtterance();
           window.digitalHuman.setState("IDLE");
+          window.digitalHuman.resetMicroExpression();
         }
-        if (wakeEngine) wakeEngine.notifySpeakingEnd();
+        if (wakeEngine) {
+          wakeEngine.notifySpeakingEnd();
+        }
       };
 
       audio.play().catch(e => {
@@ -274,56 +284,6 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (err) {
       console.warn("Exception playing speech on kiosk:", err);
     }
-  }
-
-  // Sprint 2 barge-in: hàm toàn cục — wake_engine gọi khi mic nghe thấy giọng
-  // người trong lúc TTS đang phát. Dừng audio kiosk + avatar về LISTENING.
-  // Trả về true nếu thực sự có audio bị dừng.
-  window.bargeInStopSpeaking = function () {
-    let stopped = false;
-    if (currentKioskAudio) {
-      try {
-        currentKioskAudio.pause();
-        currentKioskAudio.currentTime = 0;
-        stopped = true;
-      } catch (err) {
-        console.warn("[Kiosk] Barge-in stop error:", err);
-      }
-      currentKioskAudio = null;
-    }
-    if (window.digitalHuman && typeof window.digitalHuman.cancelUtterance === "function") {
-      try { window.digitalHuman.cancelUtterance(); stopped = true; } catch (_) {}
-    }
-    if (stopped) {
-      setAvatarState("LISTENING");
-      if (transcriptEl) transcriptEl.textContent = `"Dạ, em dừng lại nghe Anh ạ."`;
-      if (wakeEngine && wakeEngine.notifySpeakingEnd) wakeEngine.notifySpeakingEnd();
-    }
-    return stopped;
-  };
-
-  // Phát một lần duy nhất — dùng trong vòng lặp poll để chống phát đôi
-  function playSpeechOnce(audioBase64, timeline) {
-    if (!audioBase64) return;
-
-    // Tạo fingerprint gọn: độ dài + 12 ký tự đầu + 12 ký tự cuối
-    const fp = audioBase64.length + "|" + audioBase64.slice(0, 12) + "|" + audioBase64.slice(-12);
-    const now = Date.now();
-
-    // Nếu đã phát âm này trong vòng 500ms gần đây, bỏ qua
-    if (fp === _lastPlayedAudioFingerprint && (now - _lastPlayedAt) < 500) {
-      console.log("[Kiosk] Đã phát audio này rồi, bỏ qua trénh chồng lấn.");
-      return;
-    }
-
-    // Nếu đang phát audio và đó là cùng một audio, bỏ qua
-    if (currentKioskAudio && fp === _lastPlayedAudioFingerprint) {
-      return;
-    }
-
-    _lastPlayedAudioFingerprint = fp;
-    _lastPlayedAt = now;
-    playKioskSpeech(audioBase64, timeline);
   }
 
   // Handle User Voice Query -> Send to PC Executive Core
@@ -380,7 +340,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Initialize Wake Word Engine on Pi 5
+  function loadWakeEngineScript(cb) {
+    if (typeof WakeWordEngine !== "undefined") { cb(); return; }
+    const s = document.createElement("script");
+    s.src = "/wake_engine.js?v=mic_only_31oct_g";
+    s.onload = cb;
+    s.onerror = () => console.warn("Không nạp được wake_engine.js");
+    document.head.appendChild(s);
+  }
+
   function initVoiceEngine() {
+    // (31/10/2026) mic-only: KHÔNG nạp engine khi mở trang. Chỉ nạp khi bấm nút mic.
+    if (window.__WAKE_ENGINE_DEFERRED__) return;
     if (typeof WakeWordEngine === "undefined") {
       console.warn("WakeWordEngine script not loaded, retrying in 1s...");
       setTimeout(initVoiceEngine, 1000);
@@ -427,8 +398,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       });
 
-      // Auto-start continuous wake word listening on Pi 5
-      wakeEngine.start().then(ok => {
+      // (31/10/2026) Owner policy: CHỈ auto-listen khi config cho phép (enabled=true).
+      // Mặc định = IM LẶNG; nút mic "TONY ƠI..." trên màn hình vẫn hoạt động.
+      wakeEngine.syncConfigFromBackend().then(() => {
+        if (wakeEngine.options.autoStart === false) {
+          console.log("Voice engine auto-start DISABLED by core config (mic-only activation).");
+          return;
+        }
+        return wakeEngine.start();
+      }).then(ok => {
         if (ok) {
           console.log("QUAN AI BRAIN — Hands-Free Voice Engine ACTIVE on Raspberry Pi 5!");
         }
@@ -454,6 +432,72 @@ document.addEventListener("DOMContentLoaded", () => {
         if (wakeEngine) wakeEngine.options.coreHost = latestCoreHost;
       }
 
+      // (31/10/2026) Điều khiển từ xa: mở URL thật trên màn Pi (YouTube,
+      // Google search, trang tin...). Dùng OVERLAY IFRAME fullscreen — giữ
+      // kiosk sống (poll/status/wake engine vẫn chạy, TONY quay lại được).
+      if (data.navigation_url) {
+        console.log("Remote navigation received:", data.navigation_url);
+        let nv = document.getElementById("kiosk-web-overlay");
+        if (!nv) {
+          nv = document.createElement("iframe");
+          nv.id = "kiosk-web-overlay";
+          nv.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;"
+            + "border:none;z-index:99999;background:#000;";
+          document.body.appendChild(nv);
+        }
+        if (nv.src !== data.navigation_url) {
+          nv.src = data.navigation_url;
+        }
+      } else if (data.navigation_url === "") {
+        // Lệnh "tony về" — đóng overlay web, hiển thị lại hình thể TONY.
+        const old = document.getElementById("kiosk-web-overlay");
+        if (old) old.remove();
+        console.log("Web overlay closed — back to TONY avatar");
+      }
+
+      // (31/10/2026) Hiển thị ảnh DM trên màn Pi: image_url non-null → overlay
+      // <img> fullscreen; null/quá hạn → gỡ overlay, quay về avatar TONY.
+      // Daemon tự hết hạn theo `until` (show_image duration_sec, mặc định 15s)
+      // nên kiosk chỉ phản chiếu trạng thái — không cần timer riêng ở đây.
+      let kioskImg = document.getElementById("kiosk-image-overlay");
+      if (data.image_url) {
+        const srcUrl = data.image_url.startsWith("http")
+          ? data.image_url
+          : "http://" + location.host + data.image_url;
+        if (!kioskImg) {
+          kioskImg = document.createElement("img");
+          kioskImg.id = "kiosk-image-overlay";
+          kioskImg.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;"
+            + "object-fit:contain;background:#000;z-index:100000;";
+          kioskImg.alt = "Anh gui tu NetChat";
+          document.body.appendChild(kioskImg);
+        }
+        if (kioskImg.getAttribute("src") !== srcUrl) kioskImg.src = srcUrl;
+      } else if (kioskImg) {
+        kioskImg.remove();
+        console.log("Image overlay removed — back to TONY avatar");
+      }
+
+      // (31/10/2026) LIVE CAMERA: camera_streaming=true → overlay MJPEG fullscreen
+      // (ảnh live trực tiếp từ Camera Module 3); false → gỡ overlay về avatar.
+      let camLive = document.getElementById("kiosk-camera-live");
+      if (data.camera_streaming) {
+        if (!camLive) {
+          camLive = document.createElement("img");
+          camLive.id = "kiosk-camera-live";
+          camLive.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;"
+            + "object-fit:cover;background:#000;z-index:100001;";
+          camLive.alt = "Camera live tu Pi5";
+          document.body.appendChild(camLive);
+        }
+        const mjpegUrl = "http://" + location.host + "/api/kiosk/camera/mjpeg";
+        if (camLive.getAttribute("src") !== mjpegUrl) camLive.src = mjpegUrl;
+      } else if (camLive) {
+        camLive.src = "";
+        camLive.remove();
+        console.log("Camera live overlay removed — back to TONY avatar");
+      }
+
       if (data.need_ui_reload) {
         console.log("Remote reload signal received from PC Core...");
         location.reload();
@@ -465,6 +509,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (coreDot) { coreDot.className = "status-indicator-dot online"; }
         if (coreText) { coreText.textContent = `CORE: ONLINE (${data.core_host || "PC"})`; }
 
+        // (31/10) MARQUEE: hội thoại đang giao tiếp — bản tiếng Anh từ PC core,
+        // fallback transcript gốc nếu chưa có bản dịch.
+        if (marqueeTrack) {
+          const enText = (data.transcript_en || data.transcript || "").trim();
+          if (enText && marqueeTrack.dataset.text !== enText) {
+            marqueeTrack.dataset.text = enText;
+            marqueeTrack.textContent = enText;
+            // restart animation khi text đổi
+            marqueeTrack.style.animation = "none";
+            void marqueeTrack.offsetWidth;
+            marqueeTrack.style.animation = "";
+          }
+        }
+
         // Apply pure Face-Only mode
         if (data.face_only_mode) {
           document.body.classList.add("face-only-mode");
@@ -473,22 +531,50 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if (data.pending_audio_base64) {
-          // Dùng playSpeechOnce() — chống phát đôi khi daemon và Chromium cùng nhận audio
-          playSpeechOnce(data.pending_audio_base64, data.pending_timeline);
+          playKioskSpeech(data.pending_audio_base64, data.pending_timeline, data.transcript);
         } else if (data.avatar_state && currentAvatarState !== "SPEAKING") {
           setAvatarState(data.avatar_state);
         }
 
-        if (data.transcript && transcriptEl && currentAvatarState !== "SPEAKING" && currentAvatarState !== "THINKING") {
+        if (data.transcript && transcriptEl) {
+          // (31/10) biểu cảm LUÔN theo nội dung giao tiếp mới nhất
           transcriptEl.textContent = `"${data.transcript}"`;
           if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === "function") {
             window.digitalHuman.setContextFromText(data.transcript);
           }
         }
 
+        // Music streaming coordination on Pi 5 Kiosk
+        if (data.music && data.music.playing && data.music.video_id) {
+          if (!window._kioskCurrentVid || window._kioskCurrentVid !== data.music.video_id) {
+            window._kioskCurrentVid = data.music.video_id;
+            let mf = document.getElementById("kiosk-music-frame");
+            if (!mf) {
+              mf = document.createElement("iframe");
+              mf.id = "kiosk-music-frame";
+              mf.style.cssText = "display:none;width:0;height:0;border:none;";
+              mf.allow = "autoplay";
+              document.body.appendChild(mf);
+            }
+            mf.src = `https://www.youtube.com/embed/${data.music.video_id}?autoplay=1&playsinline=1`;
+            if (transcriptEl && currentAvatarState === "IDLE") {
+              transcriptEl.textContent = `🎵 Đang phát: ${data.music.title || "YouTube Music"}`;
+            }
+          }
+        } else if (!data.music || !data.music.playing) {
+          if (window._kioskCurrentVid) {
+            window._kioskCurrentVid = null;
+            const mf = document.getElementById("kiosk-music-frame");
+            if (mf) mf.src = "about:blank";
+          }
+        }
+
         if (data.proposals_pending > 0 && bannerEl) {
           bannerEl.classList.remove("hidden");
-          if (bannerText) bannerText.textContent = `Có ${data.proposals_pending} đề xuất cần Anh phê duyệt trên PC`;
+          // (31/10/2026) Set CỨNG mỗi vòng poll — ghi đè mọi text cũ (kể cả
+          // notification tiếng Anh còn sót từ phiên trước) để banner luôn chuẩn.
+          const wantText = `Có ${data.proposals_pending} đề xuất cần Anh phê duyệt trên PC`;
+          if (bannerText && bannerText.textContent !== wantText) bannerText.textContent = wantText;
         } else if (bannerEl) {
           bannerEl.classList.add("hidden");
         }
@@ -517,19 +603,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // Touch STOP Button
   if (btnStop) {
     btnStop.addEventListener("click", async () => {
-      setAvatarState("BLOCKED");
+      // (01/11/2026, owner) STOP = CHỈ THOÁT giao diện hiển thị hình thể:
+      // đóng chromium kiosk, màn hình + hệ thống giữ nguyên; daemon vẫn
+      // ACTIVE; không emergency, không tắt nguồn, không tắt màn.
+      // Owner gọi lại "TONY ơi" (hoặc chạm nút TONY ƠI) là giao diện mở lại.
       if (currentKioskAudio) {
         try { currentKioskAudio.pause(); } catch (_) {}
         currentKioskAudio = null;
       }
       try {
-        await fetch("/api/kiosk/emergency_stop", {
+        await fetch("/api/kiosk/control", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reason: "Quanpt1 chạm nút STOP trên màn hình cảm ứng Pi 5" })
+          body: JSON.stringify({ action: "close_kiosk",
+            reason: "Quanpt1 chạm nút STOP — thoát giao diện hiển thị" })
         });
       } catch (e) {
-        console.warn("Emergency stop failed:", e);
+        console.warn("Close kiosk failed:", e);
       }
     });
   }
@@ -537,23 +627,54 @@ document.addEventListener("DOMContentLoaded", () => {
   // Touch Wake Button ("TONY ƠI...")
   if (btnWake) {
     btnWake.addEventListener("click", async () => {
+      // (31/10/2026) Owner policy: chạm nút = GỌI TONY dậy NGAY, phản hồi như
+      // wake word "TONY ơi": bật màn + kiosk sống lại nếu đã bị STOP tắt.
       btnWake.classList.add("listening");
       setAvatarState("LISTENING");
       if (transcriptEl) transcriptEl.textContent = `"Dạ em nghe Anh! Đang lắng nghe..."`;
 
-      if (wakeEngine) {
+      try {
+        await fetch("/api/kiosk/control", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "wake_by_voice" })
+        });
+      } catch (e) {
+        console.warn("Wake request failed:", e);
+      }
+
+      // (31/10/2026) mic-only: nạp engine LẦN ĐẦU bấm nút.
+      if (!wakeEngine) {
+        loadWakeEngineScript(() => {
+          try {
+            wakeEngine = new WakeWordEngine({
+              silenceTimeoutSeconds: 15.0,
+              chimeEnabled: true,
+              lang: "vi-VN",
+              coreHost: latestCoreHost,
+              autoStart: true,
+              onWakeDetected: (keyword, payload) => {
+                setAvatarState("LISTENING");
+                if (transcriptEl) transcriptEl.textContent = `"Dạ em nghe Anh! (${keyword})"`;
+                if (payload && payload.trim().length > 2) handleUserVoiceQuery(payload.trim());
+              },
+              onCommandRecognized: (transcript) => handleUserVoiceQuery(transcript),
+              onError: (err) => console.warn("[Pi5 Voice Recognition Warning]:", err)
+            });
+            wakeEngine.start().then(() => {
+              try { if (wakeEngine.recognition) wakeEngine.recognition.start(); } catch (_) {}
+            });
+          } catch (exc) {
+            console.warn("Lazy engine init failed:", exc);
+          }
+        });
+      } else if (wakeEngine) {
         wakeEngine.playWakeChime();
         try {
           if (wakeEngine.recognition) {
             wakeEngine.recognition.start();
           }
         } catch (_) {}
-      }
-
-      try {
-        await fetch("/api/kiosk/wake", { method: "POST" });
-      } catch (e) {
-        console.warn("Wake request failed:", e);
       }
 
       setTimeout(() => {

@@ -32,7 +32,8 @@ _AGENT_PY = (
     r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
 )
 
-CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"
+# (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
+CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
 
 # Mã nhiệm vụ trong tin nhắn: TASK-xxxx (chữ/số)
 _TASK_RE = re.compile(r"TASK[-_]?([A-Za-z0-9]{3,12})", re.IGNORECASE)

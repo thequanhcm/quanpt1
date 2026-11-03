@@ -1,0 +1,93 @@
+{
+  "mode": "baseline",
+  "total": 14,
+  "passed": 3,
+  "failed": 11,
+  "checks": [
+    {
+      "group": "A",
+      "name": "[parity] teach pipeline (detect_teaching): chat=True(2) stream=False(0)",
+      "pass": false,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=0"
+    },
+    {
+      "group": "A",
+      "name": "[parity] grounding facts (BỘ SỰ THẬT SỐNG): chat=True(2) stream=False(0)",
+      "pass": false,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=0"
+    },
+    {
+      "group": "A",
+      "name": "[parity] TTNS lookup (nhân sự/lịch họp): chat=True(2) stream=False(0)",
+      "pass": false,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=0"
+    },
+    {
+      "group": "A",
+      "name": "[parity] Document RAG (kho tài liệu): chat=True(2) stream=False(0)",
+      "pass": false,
+      "evidence": "/api/chat refs=2, /api/chat/stream refs=0"
+    },
+    {
+      "group": "A",
+      "name": "[parity] V7 progress chain: chat=True(1) stream=False(0)",
+      "pass": false,
+      "evidence": "/api/chat refs=1, /api/chat/stream refs=0"
+    },
+    {
+      "group": "A",
+      "name": "[history] stream history limit>=6",
+      "pass": false,
+      "evidence": "find 'limit=6' at get_recent_session_history in stream handler"
+    },
+    {
+      "group": "B",
+      "name": "[normalize] module vietnamese_conversation tồn tại",
+      "pass": false,
+      "evidence": "ImportError — DESIGNED only"
+    },
+    {
+      "group": "B",
+      "name": "[classify] module tồn tại",
+      "pass": false,
+      "evidence": "ImportError — DESIGNED only"
+    },
+    {
+      "group": "B",
+      "name": "[guidance] block xuất hiện trong rendered_context",
+      "pass": false,
+      "evidence": "tìm '[CONVERSATION GUIDANCE' trong context query 'làm tiếp đi'"
+    },
+    {
+      "group": "B",
+      "name": "[guidance] không phá context tiếng Anh/thường",
+      "pass": true,
+      "evidence": "các block gốc vẫn còn"
+    },
+    {
+      "group": "B",
+      "name": "[tts] từ điển đọc mã (R5→đọc được)",
+      "pass": false,
+      "evidence": "out='Cổng R5 bị chặn, task TASK-123 chạy 85% trên cổng 8766, dung lượng 4GB'"
+    },
+    {
+      "group": "B",
+      "name": "[tts] không cắt giữa câu",
+      "pass": true,
+      "evidence": "out_tail=' chạy 85% trên cổng 8766, dung lượng 4GB'"
+    },
+    {
+      "group": "B",
+      "name": "[tts] đọc số/quy mô tự nhiên",
+      "pass": true,
+      "evidence": "out='Kết quả: 1071 passed, 1 skipped, tổng 1072 tests'"
+    },
+    {
+      "group": "C",
+      "name": "[live-stream-teach] dạy qua stream → episode persist (before=0, after=0)",
+      "pass": false,
+      "evidence": "reply_ok=False"
+    }
+  ],
+  "note": "Section C viết 1 episode teach thật vào brain.db (đúng chức năng owner teaching)."
+}

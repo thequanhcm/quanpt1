@@ -51,6 +51,53 @@ DEEP_REASONING_EFFORT_NONE = None  # param is ignored by this model; send nothin
 
 CHAT_MODELS = (NETMIND_CHAT_MODEL, NETMIND_DEEP_REASONING_MODEL)
 
+# ----- (01/11/2026, yêu cầu owner) LỌC METADATA RÒ RỈ RA LỜI TRẢ LỜI -----
+# Ngữ cảnh prompt chứa metadata audit (Source: ..., Status: USER_PROVIDED).
+# Model đôi khi nhắc lại dưới dạng "theo ghi nhớ anh truyền đạt:" /
+# "(nguồn: USER_PROVIDED)" — kỹ thuật nội bộ, không phải lời nhắn cho owner.
+import re as _re
+
+_PROV_PATTERNS = [
+    # (nguồn: USER_PROVIDED) / (nguồn: VERIFIED) / (nguồn: ...) — mọi status
+    _re.compile(r"\s*[（(]\s*nguồn\s*:\s*[^)）]{1,40}[)）]\s*", _re.IGNORECASE),
+    _re.compile(r"\s*[（(]\s*source\s*:\s*[^)）]{1,40}[)）]\s*", _re.IGNORECASE),
+    # "theo ghi nhớ anh truyền đạt:" / "Anh truyền đạt" / "anh dạy" / "được anh bảo" (hoa/thường)
+    _re.compile(
+        r"\s*[Tt]heo\s+ghi\s+nhớ\s+(?:được\s+)?[Aa]nh\s+(?:truyền\s+đạt|dạy|nhắn|bảo|chỉ)\s*[:,，]?\s*",
+    ),
+    _re.compile(
+        r"\s*(?:được\s+)?[Aa]nh\s+(?:truyền\s+đạt|dạy|nhắc|nhắn|bảo|chỉ)\s*(?:rằng|là|:|,|，)?\s*(?=[A-ZÀ-ỸĐa-zà-ỹđ0-9])",
+    ),
+    # "Status: USER_PROVIDED" / "Status: VERIFIED" đứng lẻ trong câu
+    _re.compile(r"\s*[（(]\s*Status\s*:\s*(?:USER_PROVIDED|VERIFIED|OBSERVED|INFERRED|QUARANTINED)[^)）]{0,30}[)）]\s*"),
+]
+
+_PROV_PREFIX_LABEL = _re.compile(
+    r"^\s*(?:Dạ[,:]?\s*)?\(?\s*[Nn]g[uữ]ồn\s*(?:thông tin)?\s*:\s*USER[_ ]PROVIDED\s*\)?\s*[.:，-]*\s*"
+)
+
+
+def strip_provenance_artifacts(text: str) -> str:
+    """Bỏ metadata provenance lộ ra lời trả lời (không đụng nội dung thật).
+
+    Lặp tối đa 3 lần vì cụm có thể dính nhau; giữ nguyên phần còn lại.
+    """
+    if not text:
+        return text
+    out = text
+    for _ in range(3):
+        prev = out
+        for pat in _PROV_PATTERNS:
+            out = pat.sub(" ", out)
+        if out == prev:
+            break
+    out = _PROV_PREFIX_LABEL.sub("", out)
+    # dọn khoảng trắng thừa + dấu câu lơ lửng sau khi cắt
+    out = _re.sub(r"[ \t]{2,}", " ", out)
+    out = _re.sub(r"\s+([.,!?；;:])", r"\1", out)
+    out = _re.sub(r"([（(])\s+([)）])", r"\1\2", out)
+    return out.strip()
+
 # Model IDs excluded from the reasoning_effort parameter (verified no-effect).
 _MODELS_IGNORE_REASONING_EFFORT = frozenset({NETMIND_DEEP_REASONING_MODEL})
 
@@ -117,9 +164,24 @@ class NetMindProvider:
     # ------------------------------------------------------------------ key
     @staticmethod
     def _get_api_key() -> str:
-        """Read the API key from the environment at call time. Never cached."""
+        """Read the API key from the environment at call time. Never cached.
+
+        (01/11/2026, M5 fix) Trên Windows, key sống ở HKCU\\Environment nhưng
+        process daemon spawn từ session cũ không kế thừa — fallback đọc registry
+        User environment (KHÔNG log/bao giờ in giá trị).
+        """
         key = os.environ.get("NETMIND_API_KEY", "") or os.environ.get("HERMES_CUSTOM_NETMIND_API_KEY", "")
-        return key.strip()
+        if key.strip():
+            return key.strip()
+        if os.name == "nt":
+            try:
+                import winreg
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as rk:
+                    val, _ = winreg.QueryValueEx(rk, "NETMIND_API_KEY")
+                    return str(val).strip()
+            except OSError:
+                pass
+        return ""
 
     # ------------------------------------------------------------- availability
     def is_online(self, timeout: float = 2.0) -> bool:
@@ -345,6 +407,7 @@ class NetMindProvider:
             payload["max_tokens"] = max_tokens
 
         # 5. Bounded retry loop.
+        # 5. Bounded retry loop.
         attempts = self.max_retries + 1
         last_code, last_msg = "UNKNOWN", "No attempt was made"
         for attempt in range(1, attempts + 1):
@@ -358,6 +421,13 @@ class NetMindProvider:
                     message = choices[0].get("message") or {}
                     content = message.get("content") or ""
                     finish_reason = choices[0].get("finish_reason")
+                # (01/11/2026, yêu cầu owner) LỌC METADATA RÒ RỈ: model đôi khi
+                # nhắc lại metadata audit của ngữ cảnh trong câu trả lời ("theo
+                # ghi nhớ anh truyền đạt:", "(nguồn: USER_PROVIDED)"). Đây là
+                # thông tin KỸ THUẬT cho em, không phải lời nhắn cho owner →
+                # làm sạch trước khi trả ra. Traceability vẫn còn nguyên trong
+                # BuiltContext (section_stats + audit table), không mất dữ liệu.
+                content = strip_provenance_artifacts(content)
                 usage = data.get("usage") or {}
                 response = LLMResponse(
                     text=content,

@@ -28,26 +28,39 @@ body {
   height: 100vh;
 }
 
+/* (31/10/2026) LAYOUT 3 VÙNG: header | body (sidebar trái + avatar + VU phải) | footer */
 .kiosk-app {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
   width: 100%;
   height: 100%;
-  padding: 12px 16px;
+  /* (31/10) MỞ RỘNG TỐI ĐA: padding/gap tối thiểu */
+  padding: 3px 5px;
+  position: relative;
+  gap: 3px;
+}
+
+.kiosk-body {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  min-height: 0;
   position: relative;
 }
 
 /* ================= HEADER BAR ================= */
 .kiosk-header {
+  /* (31/10) SÁT GÓC: bỏ khung card — badge/clock nằm sát 2 góc trên */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-glow);
-  border-radius: 10px;
-  height: 44px;
+  padding: 0 2px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  height: 26px;
+  flex-shrink: 0;
+  position: relative;
 }
 
 .header-left {
@@ -82,13 +95,14 @@ body {
 }
 
 .device-pill {
-  font-size: 0.7rem;
-  background: rgba(0, 229, 255, 0.12);
+  /* (31/10) SÁT GÓC TRẦN: bỏ khung hộp — chỉ chữ */
+  font-size: 0.68rem;
+  background: transparent;
   color: var(--cyan-primary);
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 229, 255, 0.3);
+  padding: 0;
+  border: none;
   font-family: monospace;
+  letter-spacing: 0.04em;
 }
 
 .clock-display {
@@ -98,32 +112,106 @@ body {
   color: var(--cyan-primary);
 }
 
-/* ================= MAIN AVATAR STAGE ================= */
+/* ================= SIDEBAR TRÁI (CORE + NHIỆM VỤ + THÔNG BÁO) ========= */
+/* (31/10/2026) Owner: nhiệm vụ + đề xuất/thông báo dồn SÁT TRÁI, dưới trạng
+   thái kết nối; avatar ở giữa rộng nhất; VU dọc bên phải */
+.kiosk-sidebar {
+  /* (31/10 ~19:55) chỉ còn banner đề xuất — thu nhỏ tối đa để avatar CĂN GIỮA */
+  width: 0;
+  overflow: visible;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.side-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glow);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.side-block .status-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  word-break: break-all;
+}
+
+.side-block .status-indicator-dot {
+  width: 8px;
+  height: 8px;
+}
+
+.task-side .task-glance-lbl {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+}
+
+.task-side .task-glance-val {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--cyan-primary);
+  line-height: 1.3;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notice-side {
+  flex: 1;
+  justify-content: flex-start;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* ================= MAIN AVATAR STAGE (GIỮA — RỘNG NHẤT) ================= */
 .kiosk-stage {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 0;
+  padding: 0;
+  min-height: 0;
+  min-width: 0;
 }
 
 .avatar-card {
-  width: 100%;
-  max-width: 520px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  /* (31/10 ~19:55) NHÌN TỔNG THỂ (theo mẫu 19:05): khung nhỏ lại vừa phải,
+     căn chính giữa stage — không tràn viền */
+  width: auto;
+  height: 100%;
+  aspect-ratio: 3 / 2;
+  max-width: 92%;
+  flex: 0 1 auto;
+  margin: 0 auto;
+  min-height: 160px;
+  position: relative;
+  overflow: hidden;
 }
 
 .kiosk-avatar-viewport {
+  /* (31/10) MỞ RỘNG: fill tuyệt đối trong card — KHÔNG tràn xuống footer */
+  position: absolute;
+  inset: 0;
   width: 100%;
-  max-width: 480px;
-  height: 480px;
+  height: 100%;
+  max-width: none;
+  max-height: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
+  position: absolute;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 0 36px rgba(0, 229, 255, 0.28);
@@ -136,10 +224,14 @@ body {
   display: none !important;
 }
 
+/* (31/10) contain: avatar hiển thị TRỌN VỆN (không crop đỉnh đầu/cằm) */
 .digital-human-canvas {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* (31/10 ~19:55) TỔNG THỂ (theo mẫu 19:05): contain — trọn vẹn từ đầu đến
+     vai, không cắt trán/cằm, căn chính giữa khung, còn viền nền 2 bên */
+  object-fit: contain;
+  object-position: center center;
   border-radius: 18px;
   display: block;
 }
@@ -158,7 +250,10 @@ body {
   stroke-width: 1.5;
   stroke-dasharray: 4 6;
   opacity: 0.45;
-  animation: auraRotate 20s linear infinite;
+  /* (31/10/2026) AUDIT HIỆU NĂNG: aura chạy 60FPS vô hạn trên SwiftShader làm
+     GPU-process ~280% CPU. Dùng steps(20) = 3 rotations/s thay 60fps smooth —
+     trông vẫn quay, CPU giảm mạnh. */
+  animation: auraRotate 20s steps(20) infinite;
   transform-origin: 140px 100px;
 }
 
@@ -200,16 +295,37 @@ body {
   transition: height 0.14s ease, y 0.14s ease;
 }
 
-/* Kiosk Waveform */
-.kiosk-waveform-wrap {
-  width: 240px;
-  height: 26px;
-  margin: 6px 0;
+/* (31/10) VU METER DỌC — rail bên phải màn hình */
+.vu-rail { display: none; } /* (31/10 ~19:30) VU chuyển lên header-center */
+
+.vu-rail .kiosk-waveform {
+  width: 34px;
+  height: 100%;
+  min-height: 120px;
+  flex: 1;
 }
 
+.header-center {
+  /* (31/10 ~19:30) VU MIC/LOA giữa header, ngang hàng đồng hồ */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.vu-caption {
+  font-size: 0.5rem;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
 .kiosk-waveform {
-  width: 100%;
-  height: 100%;
+  display: block;
+}
+
+.kiosk-waveform-wrap {
+  display: none;
 }
 
 /* Micro Transcript */
@@ -235,25 +351,39 @@ body {
 .state-speaking { --avatar-accent: #3b82f6; --avatar-glow: rgba(59, 130, 246, 0.65); }
 .state-waiting { --avatar-accent: #f97316; --avatar-glow: rgba(249, 115, 22, 0.7); }
 .state-blocked { --avatar-accent: #ef4444; --avatar-glow: rgba(239, 68, 68, 0.75); }
+.state-warning { --avatar-accent: #f97316; --avatar-glow: rgba(249, 115, 22, 0.8); }
+.state-happy { --avatar-accent: #10b981; --avatar-glow: rgba(16, 185, 129, 0.75); }
+.state-confused { --avatar-accent: #eab308; --avatar-glow: rgba(234, 179, 8, 0.75); }
+.state-empathic { --avatar-accent: #ec4899; --avatar-glow: rgba(236, 72, 153, 0.75); }
 .state-error { --avatar-accent: #dc2626; --avatar-glow: rgba(220, 38, 38, 0.8); }
 .state-safemode { --avatar-accent: #38bdf8; --avatar-glow: rgba(56, 189, 248, 0.5); }
 .state-offline { --avatar-accent: #64748b; --avatar-glow: rgba(100, 116, 139, 0.2); opacity: 0.6; }
 
 /* ================= CONSULTATION BANNER ================= */
+/* (31/10) Banner thông báo giờ nằm trong SIDEBAR TRÁI — xếp dọc */
+.kiosk-sidebar .consultation-banner {
+  position: absolute;
+  left: 4px;
+  top: 34px;
+  width: 150px;
+  z-index: 5;
+}
+
 .consultation-banner {
   background: rgba(245, 158, 11, 0.2);
   border: 1px solid var(--gold-accent);
   color: var(--gold-accent);
   border-radius: 8px;
-  padding: 6px 14px;
-  margin-bottom: 8px;
+  padding: 7px 9px;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 0.82rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 0.62rem;
   font-weight: 700;
-  animation: bannerGlow 1.5s infinite alternate;
+  line-height: 1.3;
+  width: 100%;
+  animation: bannerGlow 4s steps(8) infinite alternate;
 }
 
 .consultation-banner.hidden {
@@ -266,28 +396,74 @@ body {
 }
 
 /* ================= BOTTOM TOUCH BAR ================= */
+/* (31/10/2026) LAYOUT MỚI: trạng thái kết nối SÁT TRÁI, nút TONY ƠI + STOP
+   dồn SÁT PHẢI. Không còn khung nhiệm vụ ở footer (avatar mở rộng trọn màn). */
+
+/* ================= (31/10) FOOTER MARQUEE — hội thoại tiếng Anh chạy ngang ================= */
+.footer-marquee {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  margin: 0 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border-glow);
+  border-radius: 8px;
+  padding: 0 10px;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 3%, #000 94%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 3%, #000 94%, transparent 100%);
+}
+
+.marquee-track {
+  display: inline-block;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--cyan-primary);
+  animation: marqueeScroll 14s linear infinite;
+}
+
+@keyframes marqueeScroll {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
 .kiosk-footer {
+  /* (31/10 ~19:30) 3 vùng: TONY ƠI trái | marquee giữa | STOP phải */
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  height: 60px;
+  gap: 10px;
+  height: 42px;
+  flex-shrink: 0;
 }
 
+.footer-status {
+  /* (31/10) Đã chuyển lên sidebar trái */
+  display: none;
+}
+
+.footer-btns { display: contents; } /* (31/10 ~19:30) nút là con trực tiếp footer */
+
+/* (31/10) Nút gọn để 2 nút + trạng thái cùng hàng vừa 800px */
 .kiosk-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  height: 52px;
-  padding: 0 20px;
+  gap: 5px;
+  height: 36px;
+  padding: 0 9px;
   border-radius: 12px;
   border: none;
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
   cursor: pointer;
   touch-action: manipulation;
   transition: transform 0.1s ease, filter 0.2s ease;
+  white-space: nowrap;
 }
 
 .kiosk-btn:active {
@@ -311,15 +487,18 @@ body {
 }
 
 .task-summary-glance {
-  flex: 1;
+  display: none !important;
+}
+
+/* (31/10) Khung nhiệm vụ chuyển lên đè nhẹ góc trên avatar — vẫn giữ thông tin
+   nhưng không chiếm footer */
+.task-overlay-badge {
   background: var(--bg-card);
   border: 1px solid var(--border-glow);
-  border-radius: 10px;
-  height: 52px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 14px;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 0.68rem;
+  color: var(--text-dim);
 }
 
 .task-glance-lbl {
@@ -341,7 +520,6 @@ body {
   background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(239, 68, 68, 0.45);
-  min-width: 105px;
 }
 
 /* ================= OFFLINE FAIL-SAFE OVERLAY ================= */

@@ -26,7 +26,9 @@ Core Governance Rules:
 8. When the owner TEACHES you (messages like "nhớ rằng...", "ghi nhớ..."), confirm briefly what you stored. Knowledge the owner transfers directly is authoritative (USER_PROVIDED).
 9. Honesty format: khi nói về bản thân, tách rõ [CÓ BẰNG CHỨNG — probe thật] và [CẤU HÌNH — chưa kiểm chứng thực địa]. Không trộn lẫn.
 10. KHÔNG HỎI LÒNG VÒNG (yêu cầu chủ sở hữu 27/10): với việc CHỈ ĐỌC, an toàn (probe trạng thái, đọc log, kiểm tra cổng, đếm dữ liệu) — LÀM LUÔN rồi trả kết quả, KHÔNG xin phép, KHÔNG hỏi "Anh xác nhận cho em... nhé?". Chỉ hỏi xác nhận trước khi làm việc ĐỔI TRẠNG THÁI hoặc rủi ro. Khi anh trả lời ngắn ("ok", "OK", "ừ") sau lời đề nghị của em: đó là XÁC NHẬN — thực hiện ngay, không hỏi lại lần nữa. Khi anh phủ nhận kết quả của em (VD: "anh đã bật X rồi"), kiểm tra lại bằng probe mới TRƯỚC khi khẳng định kết quả cũ — kết quả probe cũ có thể đã lỗi thời.
-11. TRẢ LỜI NGẮN GỌN — ĐÚNG CÂU HỎI (yêu cầu chủ sở hữu 27/10, ưu tiên CAO): chỉ trả lời ĐÚNG nội dung câu hỏi, 2-5 câu hoặc gạch đầu dòng tối đa 5 ý. KHÔNG trình bày lại cấu trúc hệ thống, KHÔNG liệt kê các thành phần không liên quan, KHÔNG thêm khuyến cáo/dặn dò khi không được hỏi. Anh hỏi Pi 5 → chỉ nói Pi 5. Câu "kiểm tra lại" = chạy probe + báo kết quả một dòng kết luận."""
+11. TRẢ LỜI NGẮN GỌN — ĐÚNG CÂU HỎI (yêu cầu chủ sở hữu 27/10, ưu tiên CAO): chỉ trả lời ĐÚNG nội dung câu hỏi, 2-5 câu hoặc gạch đầu dòng tối đa 5 ý. KHÔNG trình bày lại cấu trúc hệ thống, KHÔNG liệt kê các thành phần không liên quan, KHÔNG thêm khuyến cáo/dặn dò khi không được hỏi. Anh hỏi Pi 5 → chỉ nói Pi 5. Câu "kiểm tra lại" = chạy probe + báo kết quả một dòng kết luận.
+12. NGÔN NGỮ PHẢN HỒI — TIẾNG VIỆT CHUẨN TRÔI CHẢY (yêu cầu chủ sở hữu 31/10, ưu tiên CAO NHẤT): LUÔN trả lời bằng TIẾNG VIỆT có dấu đầy đủ, đúng chính tả, câu văn trôi chảy tự nhiên như người Việt bản xứ. KHÔNG trộn lẫn tiếng Anh không cần thiết (thuật ngữ kỹ thuật tên riêng giữ nguyên). KHÔNG dùng văn phong dịch máy, KHÔNG lặp từ, KHÔNG câu cụt lửng. Văn phong thân thiện xưng "em" gọi "anh" khi nói với chủ sở hữu. Nếu anh yêu cầu trả lời bằng ngôn ngữ khác (Anh, Nhật, Trung, Hàn, Pháp, Đức, Thái, Nga, Tây Ban Nha) mới chuyển ngôn ngữ tương ứng.
+13. KHÔNG LIỆT KÊ NGUỒN/TRẠNG THÁI LƯU TRỮ (yêu cầu chủ sở hữu 01/11, ưu tiên CAO): metadata kỹ thuật như (Source: ...), (nguồn: USER_PROVIDED), Status: VERIFIED, "theo ghi nhớ anh truyền đạt" là thông tin NỘI BỘ cho em tra cứu — TUYỆT ĐỐI KHÔNG nhắc lại trong lời trả lời. Anh hỏi gì thì trả lời nấy trực tiếp (VD: "Em sinh ngày 20/10/2026 ạ.") — không mở đầu bằng cụm dẫn nguồn, không đóng ngoặc chú thích nguồn, không nói "theo ghi nhớ/theo dữ liệu đã lưu". Chỉ nêu nguồn khi anh HỎI ROÀNG về nguồn hoặc độ tin cậy của thông tin."""
 
 
 class PromptContextBuilder:
@@ -34,7 +36,9 @@ class PromptContextBuilder:
 
     def __init__(
         self,
-        default_max_chars: int = 4000,
+        # (31/10) 4000 → 8000: system prompt giờ có LANGUAGE RULE (3647 chars)
+        # — budget 4000 khiến MỌI memory bị budget_exceeded
+        default_max_chars: int = 8000,
         system_instructions: str = DEFAULT_SYSTEM_INSTRUCTIONS,
         capability_registry: CapabilityRegistry | None = None,
         persona: ExecutivePersona | None = None,
@@ -282,6 +286,26 @@ class PromptContextBuilder:
         sec_request = f"[USER REQUEST]\n{safe_query}"
         sections.append(sec_request)
         section_stats["user_request"] = len(sec_request)
+
+        # V8 P2: [CONVERSATION GUIDANCE] — tiếng Việt tự nhiên, đúng trọng tâm,
+        # không bịa (master prompt V8 §III/§IV/§V). Inject SAO CHÉP quy tắc vào
+        # prompt LLM, không đụng nội dung trả lời; tắt được qua flag env.
+        try:
+            import os as _v8_os
+
+            from quan_ai_brain.cognition.vietnamese_conversation import (
+                build_guidance_block,
+                classify_request,
+                should_inject_guidance,
+            )
+
+            if not _v8_os.environ.get("QUAN_AI_BRAIN_V8_GUIDANCE_OFF") and should_inject_guidance(safe_query):
+                _v8_kind = classify_request(safe_query)
+                sec_guidance = build_guidance_block(_v8_kind)
+                sections.append(sec_guidance)
+                section_stats["conversation_guidance"] = len(sec_guidance)
+        except Exception:
+            pass  # guidance là lớp tăng cường — không bao giờ làm chết context
 
         # Assemble complete context text
         rendered_context = "\n\n".join(sections)

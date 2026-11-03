@@ -1,0 +1,479 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-27T16:04:10.680455+00:00",
+  "skills": [
+    {
+      "skill_id": "skill_956691fa41",
+      "name": "TASK_STATUS_RECONCILIATION",
+      "goal": "Đối chiếu trạng thái công việc giữa email yêu cầu và nguồn dữ liệu được cấp quyền; phát hiện mâu thuẫn; fail-honest khi thiếu bằng chứng",
+      "trigger_patterns": [
+        "kiểm tra tiến độ",
+        "kiểm tra trạng thái",
+        "progress audit",
+        "tiến độ công việc",
+        "trạng thái công việc",
+        "đối chiếu tiến độ"
+      ],
+      "inputs": {
+        "source": "data/tasks.db (đã verify) hoặc nguồn email khi Vmail mở"
+      },
+      "steps": [
+        "UNDERSTAND: ghi nguyên văn yêu cầu chủ nhân làm bằng chứng gốc",
+        "DECOMPOSE: đếm task theo status; liệt kê task PENDING mới nhất",
+        "DISCOVER: sqlite3 stdlib + data/tasks.db (không cần connector ngoài)",
+        "PLAN: GROUP BY status + top PENDING theo created_at_utc",
+        "ANALYZE: tổng hợp số liệu kèm nguồn",
+        "VERIFY: đối chiếu tiêu chí; thiếu nguồn chéo -> NOT_VERIFIED (fail-honest)",
+        "ADVISE: khuyến nghị có nguồn; KHÔNG tự archive/delete — chờ chủ quyết định",
+        "REUSE: ghi procedure đã kiểm chứng vào registry"
+      ],
+      "tools": [
+        "sqlite3",
+        "data/tasks.db"
+      ],
+      "acceptance_criteria": [
+        "Số liệu khớp DB nguồn khi query lại",
+        "Mọi kết luận đều ghi kèm nguồn bằng chứng"
+      ],
+      "status": "AVAILABLE",
+      "version": "0.1.0",
+      "evidence_refs": [
+        "procedure:task_progress_audit_tasksdb",
+        "reports/TOOL_SKILL_FACTORY_TEST_RESULTS.md"
+      ],
+      "known_limits": [
+        "Vmail/Outlook BLOCKED — phân tích email dựa trên text chủ cung cấp trực tiếp",
+        "không tự sửa task/deadline",
+        "một nguồn số liệu -> cross-check hạn chế"
+      ],
+      "source_ref": "V6 smoke 27/10/2026 (553 task thật)",
+      "created_at": "2026-10-27T15:48:35.667272+00:00",
+      "updated_at": "2026-10-27T16:04:10.657179+00:00",
+      "change_notes": [
+        "2026-10-27T15:48:35.667272+00:00: registered as IMPLEMENTED_IN_SANDBOX",
+        "2026-10-27T15:48:35.667272+00:00: -> TESTED: Smoke thật 27/10: 11/11 stage, số liệu khớp DB; unit 16/16 pipeline",
+        "2026-10-27T15:55:40.510781+00:00: -> APPROVED: Chủ nhân duyệt trực tiếp qua phiên chat 27/10/2026",
+        "2026-10-27T15:55:40.511780+00:00: -> AVAILABLE: Chủ nhân duyệt kích hoạt ngay sau APPROVED - evidence da co (smoke V6 + units + live API)",
+        "2026-10-27T16:02:34.970902+00:00: V7 rename TASK_PROGRESS_AUDIT -> TASK_STATUS_RECONCILIATION + schema V7 §3.2 (reuse, giữ skill_id + evidence)",
+        "2026-10-27T16:04:10.657179+00:00: test_result=PASS (38 passed in 0.26s)"
+      ],
+      "input_schema": {
+        "email_text": "string (nguyên văn email chủ cung cấp)",
+        "scope": "string optional (dự án/nhóm)",
+        "deadline_hint": "string optional"
+      },
+      "output_schema": {
+        "reconciliation_report": "object: per-task status email_vs_db + mâu thuẫn + mức tin cậy",
+        "unverified_items": "list",
+        "sources_accessed": "list",
+        "sources_blocked": "list"
+      },
+      "permissions_required": [
+        "read:data/tasks.db",
+        "read:data/consultations.db",
+        "read:data/todos.db",
+        "read:reports/*"
+      ],
+      "data_sources": [
+        "data/tasks.db",
+        "data/consultations.db",
+        "data/todos.db",
+        "reports/",
+        "email_text do chủ cung cấp trực tiếp"
+      ],
+      "timeout_policy": "30s per source; timeout -> source marked UNAVAILABLE, không suy diễn",
+      "error_policy": "fail_honest",
+      "risk_level": 1,
+      "test_suite_ref": "tests/test_v7_skills.py",
+      "test_result": "PASS (38 passed in 0.26s)",
+      "last_verified_at": "2026-10-27T16:04:10.657179+00:00",
+      "exception_policy": [
+        "nguồn unavailable -> ghi BLOCKED + tiếp tục nguồn còn lại",
+        "mâu thuẫn không phân xử được -> trình bày mâu thuẫn + đề xuất xác minh",
+        "dữ liệu thiếu -> UNKNOWN/NOT_VERIFIED, không đoán"
+      ],
+      "stop_conditions": [
+        "không có nguồn nào truy cập được -> dừng, báo cáo giới hạn",
+        "yêu cầu vượt quyền (ghi/sửa/gửi) -> dừng + chờ duyệt"
+      ],
+      "approval_required": false
+    },
+    {
+      "skill_id": "skill_0a7f8744c5",
+      "name": "EMAIL_ANALYSIS",
+      "goal": "Phân tích email yêu cầu: trích xuất người gửi/nội dung/dự án/người phụ trách/thời hạn/cam kết/câu hỏi/đầu ra cần tạo; phân biệt nội dung email vs suy luận",
+      "trigger_patterns": [
+        "phân tích email",
+        "email analysis",
+        "email yêu cầu"
+      ],
+      "inputs": {
+        "email_text": "nguyên văn email do chủ cung cấp trực tiếp"
+      },
+      "steps": [
+        "Trích xuất 8 trường §4.2.A",
+        "Phân biệt trực tiếp vs suy luận",
+        "Trả về cấu trúc chuẩn; trường không rõ -> UNKNOWN"
+      ],
+      "tools": [
+        "stdlib re/json"
+      ],
+      "acceptance_criteria": [
+        "Trích xuất đủ 8 trường A",
+        "Không gán suy luận thành nội dung email",
+        "UNKNOWN khi trường không rõ"
+      ],
+      "status": "TESTED",
+      "version": "0.1.0",
+      "evidence_refs": [
+        "tests/test_v7_skills.py (38 tests: 10 lớp bắt buộc §3.5)",
+        "src/quan_ai_brain/cognition/v7_skills.py (implement thật, stdlib only)"
+      ],
+      "known_limits": [
+        "CHƯA có connector Vmail — chỉ nhận text chủ cung cấp trực tiếp (nguồn thật BLOCKED)"
+      ],
+      "source_ref": "",
+      "created_at": "2026-10-27T16:02:55.564638+00:00",
+      "updated_at": "2026-10-27T16:04:10.662179+00:00",
+      "change_notes": [
+        "2026-10-27T16:02:55.564638+00:00: registered as PROPOSED",
+        "2026-10-27T16:04:10.659190+00:00: -> IMPLEMENTED_IN_SANDBOX: V7: implement thật trong cognition/v7_skills.py (38 tests)",
+        "2026-10-27T16:04:10.660179+00:00: -> TESTED: V7: test suite §3.5 PASS (38 passed in 0.26s)",
+        "2026-10-27T16:04:10.662179+00:00: test_result=PASS (38 passed in 0.26s)"
+      ],
+      "input_schema": {
+        "email_text": "string >= 20 chars"
+      },
+      "output_schema": {
+        "analysis": "object 8 trường",
+        "inferences": "list (đánh dấu là suy luận)"
+      },
+      "permissions_required": [],
+      "data_sources": [
+        "email_text do chủ cung cấp trực tiếp"
+      ],
+      "timeout_policy": "10s",
+      "error_policy": "fail_honest",
+      "risk_level": 0,
+      "test_suite_ref": "tests/test_v7_skills.py",
+      "test_result": "PASS (38 passed in 0.26s)",
+      "last_verified_at": "2026-10-27T16:04:10.662179+00:00",
+      "exception_policy": [
+        "email rỗng/quá ngắn -> từ chối phân tích"
+      ],
+      "stop_conditions": [
+        "không có email text -> dừng"
+      ],
+      "approval_required": false
+    },
+    {
+      "skill_id": "skill_232bd65725",
+      "name": "CROSS_SOURCE_EVIDENCE_ANALYSIS",
+      "goal": "Đối chiếu chéo nhiều nguồn (email, tasks.db, consultations, todos, reports); phát hiện mâu thuẫn; đánh giá nguồn theo thẩm quyền/thời điểm/bằng chứng hỗ trợ",
+      "trigger_patterns": [
+        "đối chiếu chéo",
+        "cross check",
+        "đối chiếu nguồn",
+        "mâu thuẫn"
+      ],
+      "inputs": {
+        "unified_records": "bản ghi công việc hợp nhất",
+        "sources": "danh sách nguồn đã truy cập"
+      },
+      "steps": [
+        "Chuẩn hoá bản ghi",
+        "So từng cặp nguồn",
+        "Phát hiện mâu thuẫn §4.2.D",
+        "Đánh giá độ tin cậy nguồn",
+        "Không phân xử được -> trình bày mâu thuẫn + đề xuất xác minh"
+      ],
+      "tools": [
+        "sqlite3",
+        "data/tasks.db",
+        "data/consultations.db",
+        "data/todos.db"
+      ],
+      "acceptance_criteria": [
+        "Mọi mâu thuẫn có 2 nguồn trích dẫn",
+        "Không mặc định email mới nhất đúng",
+        "UNKNOWN khi thiếu dữ liệu"
+      ],
+      "status": "TESTED",
+      "version": "0.1.0",
+      "evidence_refs": [
+        "tests/test_v7_skills.py (38 tests: 10 lớp bắt buộc §3.5)",
+        "src/quan_ai_brain/cognition/v7_skills.py (implement thật, stdlib only)"
+      ],
+      "known_limits": [],
+      "source_ref": "",
+      "created_at": "2026-10-27T16:02:55.565735+00:00",
+      "updated_at": "2026-10-27T16:04:10.667314+00:00",
+      "change_notes": [
+        "2026-10-27T16:02:55.565735+00:00: registered as PROPOSED",
+        "2026-10-27T16:04:10.664258+00:00: -> IMPLEMENTED_IN_SANDBOX: V7: implement thật trong cognition/v7_skills.py (38 tests)",
+        "2026-10-27T16:04:10.665310+00:00: -> TESTED: V7: test suite §3.5 PASS (38 passed in 0.26s)",
+        "2026-10-27T16:04:10.667314+00:00: test_result=PASS (38 passed in 0.26s)"
+      ],
+      "input_schema": {
+        "unified_records": "list[object]",
+        "sources": "list[string]"
+      },
+      "output_schema": {
+        "conflicts": "list[object]",
+        "confidence": "object",
+        "unresolved": "list"
+      },
+      "permissions_required": [
+        "read:data/tasks.db",
+        "read:data/consultations.db",
+        "read:data/todos.db"
+      ],
+      "data_sources": [
+        "data/tasks.db",
+        "data/consultations.db",
+        "data/todos.db",
+        "reports/"
+      ],
+      "timeout_policy": "30s per source",
+      "error_policy": "fail_honest",
+      "risk_level": 1,
+      "test_suite_ref": "tests/test_v7_skills.py",
+      "test_result": "PASS (38 passed in 0.26s)",
+      "last_verified_at": "2026-10-27T16:04:10.667314+00:00",
+      "exception_policy": [
+        "nguồn unavailable -> đánh dấu + tiếp tục nguồn còn lại",
+        "mâu thuẫn không phân xử -> ghi rõ"
+      ],
+      "stop_conditions": [
+        "0 nguồn truy cập được -> dừng"
+      ],
+      "approval_required": false
+    },
+    {
+      "skill_id": "skill_8f01b4d4d3",
+      "name": "PROGRESS_RISK_DETECTION",
+      "goal": "Phát hiện quá hạn, nguy cơ chậm, phụ thuộc chưa xong, báo cáo chưa cập nhật, trách nhiệm không rõ, mốc ảnh hưởng việc khác",
+      "trigger_patterns": [
+        "rủi ro tiến độ",
+        "risk detection",
+        "chậm tiến độ",
+        "quá hạn"
+      ],
+      "inputs": {
+        "unified_records": "bản ghi hợp nhất có hạn/thuộc tính/trạng thái",
+        "as_of": "ISO date đối chiếu"
+      },
+      "steps": [
+        "Kiểm tra hạn vs as_of",
+        "Kiểm tra phụ thuộc",
+        "Kiểm tra độ tươi trạng thái",
+        "Xếp hạng rủi ro có bằng chứng"
+      ],
+      "tools": [
+        "data/tasks.db",
+        "data/todos.db"
+      ],
+      "acceptance_criteria": [
+        "Mọi rủi ro có bằng chứng + nguồn",
+        "Không suy diễn phần trăm tiến độ",
+        "UNKNOWN khi thiếu hạn/ngày"
+      ],
+      "status": "TESTED",
+      "version": "0.1.0",
+      "evidence_refs": [
+        "tests/test_v7_skills.py (38 tests: 10 lớp bắt buộc §3.5)",
+        "src/quan_ai_brain/cognition/v7_skills.py (implement thật, stdlib only)"
+      ],
+      "known_limits": [],
+      "source_ref": "",
+      "created_at": "2026-10-27T16:02:55.567735+00:00",
+      "updated_at": "2026-10-27T16:04:10.671384+00:00",
+      "change_notes": [
+        "2026-10-27T16:02:55.567735+00:00: registered as PROPOSED",
+        "2026-10-27T16:04:10.669315+00:00: -> IMPLEMENTED_IN_SANDBOX: V7: implement thật trong cognition/v7_skills.py (38 tests)",
+        "2026-10-27T16:04:10.670313+00:00: -> TESTED: V7: test suite §3.5 PASS (38 passed in 0.26s)",
+        "2026-10-27T16:04:10.671384+00:00: test_result=PASS (38 passed in 0.26s)"
+      ],
+      "input_schema": {
+        "unified_records": "list[object]",
+        "as_of": "ISO date"
+      },
+      "output_schema": {
+        "risks": "list[object: type, evidence, severity]",
+        "unknowns": "list"
+      },
+      "permissions_required": [
+        "read:data/tasks.db",
+        "read:data/todos.db"
+      ],
+      "data_sources": [
+        "data/tasks.db",
+        "data/todos.db"
+      ],
+      "timeout_policy": "20s",
+      "error_policy": "fail_honest",
+      "risk_level": 1,
+      "test_suite_ref": "tests/test_v7_skills.py",
+      "test_result": "PASS (38 passed in 0.26s)",
+      "last_verified_at": "2026-10-27T16:04:10.671384+00:00",
+      "exception_policy": [
+        "thiếu hạn -> UNKNOWN không phải risk"
+      ],
+      "stop_conditions": [
+        "records rỗng -> dừng báo rỗng"
+      ],
+      "approval_required": false
+    },
+    {
+      "skill_id": "skill_f3c9fc6fec",
+      "name": "OWNER_ADVISORY_REPORT",
+      "goal": "Tổng hợp thành báo cáo tư vấn 12 mục §4.2.E; mỗi kết luận truy vết được nguồn; liệt kê nguồn chưa truy cập + giới hạn tin cậy",
+      "trigger_patterns": [
+        "báo cáo tư vấn",
+        "advisory report",
+        "tư vấn tiến độ"
+      ],
+      "inputs": {
+        "analysis": "kết quả EMAIL_ANALYSIS",
+        "reconciliation": "kết quả đối chiếu",
+        "risks": "kết quả risk detection"
+      },
+      "steps": [
+        "Tổng hợp 12 mục §4.2.E",
+        "Gắn nguồn từng kết luận",
+        "Ghi nguồn chưa truy cập",
+        "Ghi mức tin cậy + giới hạn",
+        "Đề xuất phương án (không tự thực hiện)"
+      ],
+      "tools": [
+        "reports/"
+      ],
+      "acceptance_criteria": [
+        "Đủ 12 mục",
+        "Mỗi kết luận quan trọng có nguồn",
+        "Hành động ghi/gửi ngoài KHÔNG tự thực hiện"
+      ],
+      "status": "TESTED",
+      "version": "0.1.0",
+      "evidence_refs": [
+        "tests/test_v7_skills.py (38 tests: 10 lớp bắt buộc §3.5)",
+        "src/quan_ai_brain/cognition/v7_skills.py (implement thật, stdlib only)"
+      ],
+      "known_limits": [],
+      "source_ref": "",
+      "created_at": "2026-10-27T16:02:55.568735+00:00",
+      "updated_at": "2026-10-27T16:04:10.676454+00:00",
+      "change_notes": [
+        "2026-10-27T16:02:55.568735+00:00: registered as PROPOSED",
+        "2026-10-27T16:04:10.673387+00:00: -> IMPLEMENTED_IN_SANDBOX: V7: implement thật trong cognition/v7_skills.py (38 tests)",
+        "2026-10-27T16:04:10.674388+00:00: -> TESTED: V7: test suite §3.5 PASS (38 passed in 0.26s)",
+        "2026-10-27T16:04:10.676454+00:00: test_result=PASS (38 passed in 0.26s)"
+      ],
+      "input_schema": {
+        "analysis": "object",
+        "reconciliation": "object",
+        "risks": "object"
+      },
+      "output_schema": {
+        "report_md": "string markdown 12 mục",
+        "traceability": "object"
+      },
+      "permissions_required": [
+        "write:reports/* (chỉ tạo file báo cáo mới, không ghi đè file có sẵn)"
+      ],
+      "data_sources": [
+        "kết quả các skill trước"
+      ],
+      "timeout_policy": "15s",
+      "error_policy": "fail_honest",
+      "risk_level": 1,
+      "test_suite_ref": "tests/test_v7_skills.py",
+      "test_result": "PASS (38 passed in 0.26s)",
+      "last_verified_at": "2026-10-27T16:04:10.676454+00:00",
+      "exception_policy": [
+        "thiếu input skill trước -> ghi phần đó NOT_VERIFIED"
+      ],
+      "stop_conditions": [
+        "không có kết quả phân tích nào -> dừng"
+      ],
+      "approval_required": false
+    },
+    {
+      "skill_id": "skill_1d61f77998",
+      "name": "VERIFIED_WORKFLOW_REUSE",
+      "goal": "Tái sử dụng quy trình đã kiểm chứng: phân loại bài toán -> tìm workflow/skill -> kiểm tra điều kiện áp dụng -> tái sử dụng có điều chỉnh -> đo kết quả",
+      "trigger_patterns": [
+        "tái sử dụng",
+        "reuse workflow",
+        "làm như lần trước"
+      ],
+      "inputs": {
+        "new_task": "mô tả bài toán mới",
+        "workflow_id": "id workflow đã lưu (optional)"
+      },
+      "steps": [
+        "Phân loại bài toán",
+        "Tìm workflow/skill match",
+        "Kiểm tra điều kiện áp dụng §5.5",
+        "So khác biệt bài toán mới/cũ",
+        "Tái sử dụng + điều chỉnh trong phạm vi",
+        "Đánh giá + ghi nhận fit/gap"
+      ],
+      "tools": [
+        "skill_registry"
+      ],
+      "acceptance_criteria": [
+        "Không tái sử dụng khi điều kiện áp dụng không khớp",
+        "Ghi nhận khác biệt dữ liệu/quyền/yêu cầu",
+        "Đo lường kết quả tái sử dụng"
+      ],
+      "status": "TESTED",
+      "version": "0.1.0",
+      "evidence_refs": [
+        "tests/test_v7_skills.py (38 tests: 10 lớp bắt buộc §3.5)",
+        "src/quan_ai_brain/cognition/v7_skills.py (implement thật, stdlib only)"
+      ],
+      "known_limits": [
+        "Cần workflow VERIFIED tồn tại trước (Cấp 3)"
+      ],
+      "source_ref": "",
+      "created_at": "2026-10-27T16:02:55.569735+00:00",
+      "updated_at": "2026-10-27T16:04:10.680455+00:00",
+      "change_notes": [
+        "2026-10-27T16:02:55.569735+00:00: registered as PROPOSED",
+        "2026-10-27T16:04:10.677454+00:00: -> IMPLEMENTED_IN_SANDBOX: V7: implement thật trong cognition/v7_skills.py (38 tests)",
+        "2026-10-27T16:04:10.678455+00:00: -> TESTED: V7: test suite §3.5 PASS (38 passed in 0.26s)",
+        "2026-10-27T16:04:10.680455+00:00: test_result=PASS (38 passed in 0.26s)"
+      ],
+      "input_schema": {
+        "new_task": "string",
+        "workflow_id": "string optional"
+      },
+      "output_schema": {
+        "reused": "bool",
+        "adjustments": "list",
+        "fit_assessment": "object",
+        "measurements": "object"
+      },
+      "permissions_required": [
+        "read:data/skill_registry.json"
+      ],
+      "data_sources": [
+        "data/skill_registry.json"
+      ],
+      "timeout_policy": "10s",
+      "error_policy": "fail_honest",
+      "risk_level": 0,
+      "test_suite_ref": "tests/test_v7_skills.py",
+      "test_result": "PASS (38 passed in 0.26s)",
+      "last_verified_at": "2026-10-27T16:04:10.680455+00:00",
+      "exception_policy": [
+        "workflow không match -> no_match, không ép dùng"
+      ],
+      "stop_conditions": [
+        "registry trống -> dừng báo trống"
+      ],
+      "approval_required": false
+    }
+  ]
+}

@@ -35,8 +35,8 @@ def setup_windows_service() -> bool:
     """Setup Windows Service using NSSM or Task Scheduler."""
     print("\n1. Setting up Windows Service...")
 
-    base_dir = r"E:\AI\QUAN AI BRAIN"
-    venv_python = r"C:\Users\DELL\.venv\Scripts\python.exe"
+    base_dir = r"E:\BRAIN"
+    venv_python = r"E:\BRAIN\.venv\Scripts\python.exe"
     watchdog = os.path.join(base_dir, "tools", "watchdog.py")
 
     # Check if NSSM is available
@@ -46,8 +46,8 @@ def setup_windows_service() -> bool:
         print("  ✓ NSSM found, using for service installation...")
         run(f'nssm install QUAN_AIBRAIN "{venv_python}" "{watchdog}"')
         run('nssm set QUAN_AIBRAIN Start SERVICE_AUTO_START')
-        run('nssm set QUAN_AIBRAIN AppStdout "E:\\AI\\QUAN AI BRAIN\\logs\\service.log"')
-        run('nssm set QUAN_AIBRAIN AppStderr "E:\\AI\\QUAN AI BRAIN\\logs\\service_error.log"')
+        run('nssm set QUAN_AIBRAIN AppStdout "E:\\BRAIN\\logs\\service.log"')
+        run('nssm set QUAN_AIBRAIN AppStderr "E:\\BRAIN\\logs\\service_error.log"')
         run('nssm start QUAN_AIBRAIN')
         print("  ✅ Windows Service installed and started")
         return True
@@ -70,8 +70,8 @@ def setup_daily_backup() -> bool:
     """Setup daily backup at 2AM."""
     print("\n2. Setting up daily backup...")
 
-    base_dir = r"E:\AI\QUAN AI BRAIN"
-    venv_python = r"C:\Users\DELL\.venv\Scripts\python.exe"
+    base_dir = r"E:\BRAIN"
+    venv_python = r"E:\BRAIN\.venv\Scripts\python.exe"
     backup_script = os.path.join(base_dir, "tools", "backup_database.py")
     
     # Create backup script
@@ -124,7 +124,7 @@ def setup_resource_monitor() -> bool:
     """Create resource monitoring script."""
     print("\n3. Creating resource monitor...")
 
-    base_dir = r"E:\AI\QUAN AI BRAIN"
+    base_dir = r"E:\BRAIN"
     monitor_script = os.path.join(base_dir, "tools", "resource_monitor.py")
     
     monitor_py = f'''"""Resource monitor for QUAN AI BRAIN — 24/7 stability."""
@@ -200,7 +200,7 @@ def create_health_dashboard() -> bool:
     """Create HTML health dashboard."""
     print("\n4. Creating health dashboard...")
 
-    base_dir = r"E:\AI\QUAN AI BRAIN"
+    base_dir = r"E:\BRAIN"
     dashboard_html = os.path.join(base_dir, "src", "quan_ai_brain", "web", "static", "health_dashboard.html")
     
     html_content = '''<!DOCTYPE html>
@@ -304,7 +304,7 @@ def main() -> int:
         print("\n🎉 All setup steps completed successfully!")
         print("\nNext steps:")
         print("  1. Open browser: http://127.0.0.1:8765/health_dashboard.html")
-        print("  2. Check logs: E:\\AI\\QUAN AI BRAIN\\logs\\")
+        print("  2. Check logs: E:\\BRAIN\\logs\\")
         print("  3. Monitor service: services.msc (look for QUAN_AIBRAIN)")
     else:
         print("\n⚠️ Some steps failed. Check logs for details.")

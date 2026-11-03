@@ -132,8 +132,8 @@ class SelfModelEngine:
 
         # Deployment
         deployment = {
-            "core_location": "Windows 10 PC (E:/AI/QUAN AI BRAIN)",
-            "edge_location": "192.168.1.21 (Raspberry Pi 5)",
+            "core_location": "Windows PC DESKTOP-SNMI929 (E:/BRAIN)",
+            "edge_location": "Raspberry Pi 5 quanpt1@100.100.83.59 (EDGE-PI5-DESK-01, Tailscale)",
             "architecture": "PC Core + Edge (Pi 5)",
         }
 
@@ -451,7 +451,62 @@ class SelfModelEngine:
         # Q12 — Điều gì thay đổi kể từ lần kiểm tra trước (snapshot diff)
         answers["changed_since_last_check"] = self._diff_vs_last_snapshot(ws, answers, now_iso)
 
+        # Q13 (M4) — Trạng thái tự chủ học tập (CLO checkpoints). Fail-honest:
+        # không đọc được → UNKNOWN, không bao giờ báo cáo giả "đang học".
+        try:
+            answers["q13_learning_autonomy"] = self.get_learning_checkpoint_state(ws)
+        except Exception as exc:
+            answers["q13_learning_autonomy"] = {
+                "verification_status": "UNKNOWN", "error": type(exc).__name__,
+            }
+
         return answers
+
+    def get_learning_checkpoint_state(self, workspace: str | Path | None = None) -> dict[str, Any]:
+        """M4: đọc trạng thái tự học thật từ data/learning_checkpoints.db (read-only).
+
+        Trả về: clo_sessions, clo_last_session, clo_enabled, source, verification_status.
+        Không có DB → NOT_STARTED; sai schema SQL → UNKNOWN kèm evidence_ref.
+        Không bao giờ suy diễn trạng thái học tập.
+        """
+        import sqlite3 as _sq2
+
+        ws = (
+            Path(workspace).resolve()
+            if workspace
+            else (Path(self.workspace).resolve() if getattr(self, "workspace", None) else Path.cwd().resolve())
+        )
+        ckpt = ws / "data" / "learning_checkpoints.db"
+        result: dict[str, Any] = {
+            "clo_sessions": 0,
+            "clo_last_session": None,
+            "clo_enabled": "NOT_STARTED",
+            "source": "sqlite:data/learning_checkpoints.db",
+        }
+        if not ckpt.exists():
+            result["verification_status"] = "VERIFIED_LIVE"
+            result["evidence_ref"] = f"missing_db:{ckpt.name}"
+            return result
+        con = _sq2.connect(f"file:{ckpt}?mode=ro", uri=True)
+        try:
+            cur = con.cursor()
+            result["clo_sessions"] = int(
+                cur.execute("SELECT COUNT(*) FROM learning_sessions").fetchone()[0])
+            row = cur.execute(
+                "SELECT cycle_number, started_at, status FROM learning_sessions "
+                "ORDER BY started_at DESC LIMIT 1").fetchone()
+            if row:
+                result["clo_last_session"] = {"cycle": row[0], "started_at": row[1], "status": row[2]}
+            try:
+                st = dict(cur.execute("SELECT key, value FROM learning_state").fetchall())
+                result["clo_enabled"] = st.get("CLO_ENABLED", "UNKNOWN")
+            except _sq2.OperationalError as exc:
+                result["clo_enabled"] = "UNKNOWN"
+                result["evidence_ref"] = f"learning_state_schema_error:{type(exc).__name__}"
+            result["verification_status"] = "VERIFIED_LIVE"
+        finally:
+            con.close()
+        return result
 
     def _diff_vs_last_snapshot(self, ws: Path, answers: dict[str, Any], now_iso: str) -> dict[str, Any]:
         import json as _json

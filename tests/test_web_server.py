@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import threading
 import time
@@ -17,6 +18,12 @@ def web_server_instance(tmp_path_factory: pytest.TempPathFactory):
     test_workspace = tmp_path_factory.mktemp("web_workspace")
     (test_workspace / "data").mkdir(parents=True, exist_ok=True)
 
+    # V6 hotfix (27/10/2026): isolate workspace — handler POST /api/plan
+    # phải ghi vào tasks.db của test workspace, KHÔNG ghi vào production DB
+    # (nguồn gốc 294 task trùng lặp 'năng lượng' — daemon chạy pytest mỗi cycle).
+    old_env = os.environ.get("QUAN_AI_BRAIN_WORKSPACE")
+    os.environ["QUAN_AI_BRAIN_WORKSPACE"] = str(test_workspace)
+
     # Find free port
     server = ThreadedHTTPServer(("127.0.0.1", 0), BrainAPIHandler)
     host, port = server.server_address
@@ -29,6 +36,12 @@ def web_server_instance(tmp_path_factory: pytest.TempPathFactory):
 
     server.shutdown()
     server.server_close()
+
+    # Restore env
+    if old_env is None:
+        os.environ.pop("QUAN_AI_BRAIN_WORKSPACE", None)
+    else:
+        os.environ["QUAN_AI_BRAIN_WORKSPACE"] = old_env
 
 
 def test_web_server_serves_html(web_server_instance: str) -> None:

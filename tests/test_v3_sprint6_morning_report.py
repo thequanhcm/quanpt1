@@ -20,7 +20,7 @@ def test_ollama_status_offline_when_unreachable(monkeypatch):
     def boom(url, timeout=3):
         raise OSError("no")
     monkeypatch.setattr(mr.urllib.request, "urlopen", boom)
-    assert "OFFLINE" in mr._ollama_status()
+    assert "MẤT KẾT NỐI" in mr._ollama_status()
 
 
 def test_ollama_status_online_lists_models(monkeypatch):
@@ -36,7 +36,7 @@ def test_ollama_status_online_lists_models(monkeypatch):
 
     monkeypatch.setattr(mr.urllib.request, "urlopen", lambda url, timeout=3: R())
     s = mr._ollama_status()
-    assert "ONLINE" in s and "bge-m3" in s
+    assert "HOẠT ĐỘNG" in s and "bge-m3" in s
 
 
 def test_backup_status_honest_when_no_dir(tmp_path, monkeypatch):
@@ -57,7 +57,7 @@ def test_backup_status_lists_newest(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mr.subprocess, "run", lambda *a, **k: R())
     s = mr._backup_status()
-    assert "brain_20261027_010101.db" in s and "Ready" in s
+    assert "brain_20261027_010101.db" in s and "SẴN SÀNG" in s
 
 
 def test_report_contains_mandatory_honesty_when_probe_fails(monkeypatch):

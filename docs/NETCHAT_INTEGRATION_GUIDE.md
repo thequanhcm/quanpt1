@@ -1,9 +1,9 @@
 # HƯỚNG DẪN TÍCH HỢP NETCHAT — QUAN AI BRAIN
 
 ## 🎯 MỤC TIÊU
-Kết nối trợ lý **QUAN AI BRAIN** (Tony Pham) với kênh NetChat:
+Kết nối trợ lý **QUAN AI BRAIN** (TONY) với kênh NetChat:
 - **Channel ID:** `4phc9b1mx78ajq3grccw89u94a`
-- **Channel Name:** `Trợ lý Tony Pham`
+- **Channel Name:** `TONY`
 - **Mục đích:** Anh giao tiếp với trợ lý qua NetChat
 
 ---
@@ -65,7 +65,7 @@ python -m bot_netchat whoami
 
 **Kết quả mong đợi:**
 ```
-Bot: Tony Pham Assistant (bot_xxx)
+Bot: TONY (bot_xxx)
 ID: bot_xxx
 Source: MATTERMOST_TOKEN
 ```
@@ -78,7 +78,7 @@ python -m bot_netchat list
 **Kết quả mong đợi:**
 ```
 Channels:
-  • Trợ lý Tony Pham (4phc9b1mx78ajq3grccw89u94a)
+  • TONY (4phc9b1mx78ajq3grccw89u94a)
   • ...
 ```
 
@@ -92,11 +92,11 @@ Nếu **không thấy** kênh `4phc9b1mx78ajq3grccw89u94a`:
 
 ### 4.1 Mở kênh NetChat
 1. Mở NetChat
-2. Vào kênh **Trợ lý Tony Pham** (`4phc9b1mx78ajq3grccw89u94a`)
+2. Vào kênh **TONY** (`4phc9b1mx78ajq3grccw89u94a`)
 
 ### 4.2 Invite bot
 1. Click **Add Member** (hoặc biểu tượng +)
-2. Tìm bot của anh (tên: **Tony Pham Assistant** hoặc tương tự)
+2. Tìm bot của anh (tên: **TONY** hoặc tương tự)
 3. Click **Add** / **Invite**
 4. Bot sẽ vào kênh và sẵn sàng nhận tin nhắn
 
