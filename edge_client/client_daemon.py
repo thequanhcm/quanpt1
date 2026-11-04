@@ -924,6 +924,22 @@ class EdgeDaemonState:
         # V41 EDGE AGENT — 5 năng lực chủ động (tự phản ứng/quản lý/thu thập/phối hợp/cải tiến)
         self.edge_agent = EdgeAgent(config)
 
+        # UDC-1 (04/11/2026): điều khiển thiết bị theo lệnh DM của quanpt1
+        # — read-only tự do; relay/joint/servo qua confirm 2 bước ("ok").
+        self.device_control: Any = None
+        try:
+            from edge_client.device_control import DeviceControlService
+
+            def _watcher_provider():
+                return getattr(self.edge_agent, "_device_watcher", None)
+
+            self.device_control = DeviceControlService(
+                watcher_provider=_watcher_provider,
+                actuator=getattr(self.edge_agent, "_actuator", None),
+            )
+        except Exception:
+            self.device_control = None  # fail-closed: thiếu module vẫn chạy
+
     def _active_image_url_locked(self):
         """(31/10/2026) URL ảnh đang hiển thị (hoặc None). Tự hết hạn theo
         `until` — quá hạn trả None → kiosk gỡ ảnh, quay về avatar."""
@@ -1179,7 +1195,22 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_kiosk_music_stop()
             return
 
+        # UDC-1 (04/11/2026): điều khiển/khống chế thiết bị theo DM owner
+        if path == "/api/kiosk/device":
+            self._handle_api_kiosk_device(body)
+            return
+
         self.send_error(404, "Endpoint Not Found")
+
+    def _handle_api_kiosk_device(self, body: dict[str, Any]) -> None:
+        """UDC-1: op read-only chạy ngay; relay/joint cần confirm_token từ DM."""
+        dc = getattr(self.daemon_state, "device_control", None)
+        if dc is None:
+            self._send_json({"success": False,
+                             "reason": "device_control không khả dụng (fail-closed)"})
+            return
+        result = dc.execute(body if isinstance(body, dict) else {})
+        self._send_json(result)
 
     def _handle_api_kiosk_list_files(self) -> None:
         avatar_dir = STATIC_DIR / "assets" / "avatar"

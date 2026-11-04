@@ -3931,6 +3931,29 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 self._handle_api_edge_startup_sequence(body)
                 return
 
+            # UDC-1 (04/11/2026): điều khiển/khống chế thiết bị qua kiosk
+            # — forward nguyên body op/target/value/confirm_token xuống Pi
+            #   (/api/kiosk/device). Read-only chạy ngay; WRITE do Pi tự
+            #   kiểm tra confirm_token (token stage qua DM, TTL 10 phút).
+            if action == "device":
+                resp = _send_edge_request(
+                    "/api/kiosk/device", method="POST",
+                    data={
+                        "op": str(body.get("op", "")),
+                        "target": str(body.get("target", "")),
+                        "value": body.get("value"),
+                        "confirm_token": str(body.get("confirm_token", "")),
+                    },
+                    timeout=8.0,
+                )
+                self._send_json({
+                    "success": bool(resp.get("success")),
+                    "action": "device",
+                    "op": str(body.get("op", "")),
+                    "pi5_result": resp,
+                })
+                return
+
             self._send_error_json(f"Unknown control action: {action}", 400)
 
         except Exception as exc:

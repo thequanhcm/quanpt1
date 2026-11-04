@@ -79,6 +79,18 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     # (31/10/2026) Điều khiển Pi5 mở web/YouTube/nhạc + standby từ DM
     "tony_music_stop": ("tony dừng nhạc", "tony dung nhac", "dừng nhạc", "dung nhac",
                         "tắt nhạc", "tat nhac", "stop nhạc", "stop nhac"),
+    # UDC-1 (04/11/2026): điều khiển thiết bị trên Pi5 theo lệnh DM
+    "device_list": ("thiết bị trên pi", "thiet bi tren pi", "liệt kê thiết bị",
+                    "liet ke thiet bi", "thiết bị đang cắm", "thiet bi dang cam",
+                    "danh sách thiết bị", "danh sach thiet bi", "xem thiết bị",
+                    "xem thiet bi", "thiết bị pi5", "thiet bi pi5"),
+    "relay_on": ("bật rơ le", "bat ro le", "bật relay", "bat relay",
+                 "rơ le bật", "ro le bat", "relay on"),
+    "relay_off": ("tắt rơ le", "tat ro le", "tắt relay", "tat relay",
+                  "rơ le tắt", "ro le tat", "relay off"),
+    "emergency_stop_device": ("dừng khẩn thiết bị", "dung khan thiet bi",
+                              "emergency stop device", "ngắt nguồn thiết bị",
+                              "ngat nguon thiet bi"),
     "tony_back": ("tony về", "tony ve", "về hình thể", "ve hinh the", "tắt trang web",
                   "tat trang web", "đóng trang web", "dong trang web", "tony quay lại",
                   "tony quay lai"),
@@ -146,7 +158,34 @@ STATE_CHANGING = {"approve", "tony_on", "tony_pi_live", "tony_pi_live_off", "ton
                   "tony_pause", "tony_resume", "tony_volume", "tony_youtube",
                   "tony_music_play", "tony_music_stop", "tony_websearch",
                   "tony_back", "tony_show_image", "pc_open", "pc_close",
-                  "pc_lock", "pc_screenshot"}
+                  "pc_lock", "pc_screenshot",
+                  # UDC-1 (04/11/2026): lệnh ghi thiết bị — chỉ kích hoạt khi
+                  # ĐỨNG ĐẦU câu (startswith), không match giữa câu
+                  "relay_on", "relay_off"}
+
+# UDC-1: lệnh dừng khẩn thiết bị phải ĐI TRƯỚC pattern 'stop' rộng
+# ('dừng khẩn thiết bị' chứa 'dừng' → bị stop nuốt) — xử lý đặc biệt
+# trong detect_intent ngay đầu hàm. Động từ dừng BẮT BUỘC có mặt
+# ('thiết bị trên pi' = đọc danh sách, KHÔNG phải estop); LOẠI TRỪ 'nhạc'
+# ('dừng nhạc' = tony_music_stop, không phải estop).
+_DEVICE_ESTOP_RE = re.compile(
+    r"(?:dừng|dung|ngắt|ngat|cắt|cat|stop|emergency)[^\n]{0,14}"
+    r"(?:thiết bị|thiet bi|relay|rơ\s*le|ro\s*le|device)", re.IGNORECASE)
+
+
+def _is_device_estop(t: str) -> bool:
+    """Estop thiết bị: khớp regex + KHÔNG phải 'dừng nhạc' (music stop)."""
+    if not _DEVICE_ESTOP_RE.search(t):
+        return False
+    return not re.search(r"nhạc|nhac|music|bài\s+hát|bai\s+hat", t, re.IGNORECASE)
+
+
+def _is_music_stop(t: str) -> bool:
+    """'dừng nhạc'/'tony dừng nhạc'/'tắt nhạc' — music stop TRƯỚC stop rộng
+    (pre-existing bug 04/11: 'dừng nhạc' rơi vào stop tổng — sửa kèm UDC-1)."""
+    return bool(re.search(
+        r"(?:dừng|dung|tắt|tat|stop|ngừng|ngung)[^\n]{0,10}(?:nhạc|nhac|music)"
+        r"|(?:tony\s+)?(?:dừng|dung)\s+nhạc", t, re.IGNORECASE))
 
 # (31/10/2026) Đối số lệnh: "tony nói <câu>" → text; "âm lượng <0-100>";
 # "biểu cảm <tên>" (IDLE/LISTENING/THINKING/SPEAKING/HAPPY/SLEEPING/OFFLINE/
@@ -273,11 +312,19 @@ def detect_intent(text: str) -> str | None:
       ra lệnh bằng 'Em mở firefox lên' là mệnh lệnh, không phải câu hỏi.
     """
     t = _strip_polite_prefixes(text).strip().lower()
-    # (01/11/2026) Làm sạch: owner lỡ gõ dấu '\' '/' '.' '!' cuối lệnh
+    # (01/11/2026) Làm sạch: owner lỡ gõ dấu '\\' '/' '.' '!' cuối lệnh
     # ('chụp hình\' bị rơi ra GLM) — lệnh hệ thống không chứa các ký tự này.
     t = t.strip("\\/!.?,:;")
     if not t:
         return None
+    # UDC-1 (04/11/2026): dừng khẩn THIẾT BỊ — TRƯỚC pattern 'stop' rộng
+    # ('dừng khẩn thiết bị' chứa 'dừng' → nếu không chặn sớm sẽ thành stop).
+    if not _is_question(t) and _is_device_estop(t):
+        return "emergency_stop_device"
+    # (fix kèm UDC-1): 'dừng nhạc'/'tony dừng nhạc' phải là music-stop,
+    # không được rơi vào 'stop' tổng (pre-existing bug, chủ bị 1 lần).
+    if not _is_question(t) and _is_music_stop(t):
+        return "tony_music_stop"
     # (31/10/2026) 'Tắt (cả) giao diện (Pi5)' = ngủ màn hình → standby, ƯU TIÊN
     # trước pattern rộng 'pi5' của tony_status.
     if ("tắt" in t or "tat" in t) and "giao diện" in t or ("tắt" in t or "tat" in t) and "giao dien" in t:
@@ -1195,6 +1242,101 @@ def handle_tony_music_stop(payload: dict[str, Any] | None = None) -> str:
         return f"⚠️ Không dừng được nhạc: {type(exc).__name__}: {exc}"
 
 
+# ---------------------------------------------------------------------------
+# UDC-1 (04/11/2026): điều khiển/khống chế thiết bị Pi5 theo DM của quanpt1
+# — gọi edge control API thật (server 8766 → kiosk 8768 → DeviceControlService).
+# Write ops (relay/joint) đi qua stage_pending_action: owner gõ 'ok' mới thực thi.
+# ---------------------------------------------------------------------------
+def _device_control_api(body: dict[str, Any], timeout: float = 8.0) -> dict[str, Any]:
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            "http://127.0.0.1:8766/api/executive/edge/control",
+            data=json.dumps(body).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:
+        return {"success": False, "error": f"{type(exc).__name__}: {exc}"}
+
+
+def handle_device_list(payload: dict[str, Any] | None = None) -> str:
+    """'thiết bị trên pi' — liệt kê thiết bị Pi5 đang thấy (read-only)."""
+    out = _device_control_api({"action": "device", "op": "list_devices"})
+    if not out.get("success"):
+        pi = out.get("pi5_result", out)
+        reason = pi.get("reason") or pi.get("error") or "Pi5 offline/cổng đóng"
+        return f"⚠️ Không đọc được thiết bị Pi5: {reason}"
+    data = (out.get("pi5_result") or {}).get("data", {})
+    devs = data.get("devices", [])
+    if not devs:
+        return "📭 Pi5 chưa thấy thiết bị nào (snapshot đầu chưa chạy hoặc máy trống)."
+    by_bus = data.get("by_bus", {})
+    bus_line = " | ".join(f"{k}: {v}" for k, v in sorted(by_bus.items()) if v)
+    lines = [f"🔌 Pi5 đang thấy {data.get('total', len(devs))} thiết bị"
+             + (f" ({bus_line})" if bus_line else ""), ""]
+    for d in devs[:15]:
+        lines.append(f"  • [{d.get('bus', '?')}] {d.get('name') or d.get('dev_id')}")
+    if len(devs) > 15:
+        lines.append(f"  … và {len(devs) - 15} thiết bị khác")
+    return "\n".join(lines)
+
+
+def _parse_relay_target(text: str) -> str:
+    """'rơ le 3' / 'relay 3' / 'rơ le chân 3' → relay_3; không số → relay_1."""
+    m = re.search(r"\b(\d{1})\b", text or "")
+    return f"relay_{m.group(1)}" if m else "relay_1"
+
+
+def _relay_set_response(text: str, state: str, chat_session_id: str) -> str:
+    """Stage lệnh relay + câu hỏi chờ 'ok' (không tự thực hiện lệnh ghi).
+
+    Token do PI cấp (stage_write) ngay lúc stage — lúc owner gõ 'ok', lambda
+    sẽ gửi lệnh ghi kèm token đó; token gắn đúng (op, target, value), TTL
+    10 phút, một-lần. Pi5 offline → stage thất bại, không hứa suông.
+    """
+    target = _parse_relay_target(text)
+    staged = _device_control_api(
+        {"action": "device", "op": "stage_write", "write_op": "relay_set",
+         "target": target, "value": state}, timeout=8.0)
+    pi = staged.get("pi5_result") or staged
+    token = str(pi.get("token", ""))
+    if not staged.get("success") or not token:
+        reason = pi.get("reason") or staged.get("error") or "Pi5 offline/cổng đóng"
+        return (f"⚠️ Chưa đặt được lệnh {state} {target}: {reason}.\n"
+                f"Anh kiểm tra Pi5 đang chạy (service quan_ai_edge) rồi lệnh lại.")
+    label = (f"⚙️ Chờ anh xác nhận: {state} {target} trên Pi5"
+             f" — gõ 'ok' để thực hiện, gõ lệnh khác để bỏ.")
+    stage_pending_action(chat_session_id, label,
+                         action=lambda: _device_control_api(
+                             {"action": "device", "op": "relay_set",
+                              "target": target, "value": state,
+                              "confirm_token": token}))
+    return label
+
+
+def handle_relay_on(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """'bật rơ le 3' — stage relay_set OPEN, chờ owner 'ok'."""
+    return _relay_set_response(text, "OPEN", (payload or {}).get("chat_session_id", "default"))
+
+
+def handle_relay_off(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """'tắt rơ le 3' — stage relay_set CLOSED, chờ owner 'ok'."""
+    return _relay_set_response(text, "CLOSED", (payload or {}).get("chat_session_id", "default"))
+
+
+def handle_emergency_stop_device(payload: dict[str, Any] | None = None) -> str:
+    """'dừng khẩn thiết bị' — emergency_all_stop CHẠY NGAY (an toàn, không chờ ok)."""
+    out = _device_control_api({"action": "device", "op": "emergency_stop"})
+    pi = out.get("pi5_result") or {}
+    if out.get("success") and pi.get("success", True):
+        _audit("netchat_command.device_estop", {"success": True})
+        return "🛑 Đã DỪNG KHẨN toàn bộ relay/khớp trên Pi5 (an toàn)."
+    reason = pi.get("reason") or out.get("error") or "Pi5 offline"
+    return f"⚠️ Không dừng khẩn được: {reason}"
+
+
 def handle_tony_back(payload: dict[str, Any] | None = None) -> str:
     """'tony về' — đóng overlay web trên Pi 5, hình thể TONY hiển thị lại."""
     try:
@@ -1360,6 +1502,10 @@ HANDLERS = {
     "pc_screenshot": handle_pc_screenshot,
     # (31/10/2026) Pi5 web/nhạc — music_stop không cần đối số
     "tony_music_stop": handle_tony_music_stop,
+    # UDC-1 (04/11/2026): thiết bị/khống chế theo DM — relay_on/off cần text
+    # → xử lý riêng ở route_message; list + emergency không cần đối số
+    "device_list": handle_device_list,
+    "emergency_stop_device": handle_emergency_stop_device,
     "tony_back": handle_tony_back,
     "tony_show_image": handle_tony_show_image,
     "tony_pi_photo": handle_tony_pi_photo,
@@ -1381,6 +1527,10 @@ _ARG_KEYWORD_RES: list[tuple[str, re.Pattern[str]]] = [
     # (31/10/2026) phát NGUYÊN VĂN qua loa — phải đứng TRƯỚC tony_speak/pc_open:
     ("tony_speak_verbatim", _SPEAK_VERBATIM_RE),
     ("tony_speak", re.compile(r"^\s*(?:tony\s+nói|tony\s+noi|kêu\s+tony\s+nói|keu\s+tony\s+noi)\s+(?:với\s+anh|voi\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
+    # UDC-1 (04/11/2026): relay on/off — PHẢI đứng TRƯỚC pc_open/pc_close vì
+    # động từ 'bật/tắt' trùng ('bật rơ le 3' ≠ 'bật <app>')
+    ("relay_on", re.compile(r"^\s*(?:bật|bat)\s+(?:rơ\s*le|ro\s*le|relay)\b(.*)$", re.IGNORECASE)),
+    ("relay_off", re.compile(r"^\s*(?:tắt|tat)\s+(?:rơ\s*le|ro\s*le|relay)\b(.*)$", re.IGNORECASE)),
     ("tony_face", re.compile(r"^\s*(?:biểu\s+cảm|bieu\s+cam|đổi\s+biểu\s+cảm|doi\s+bieu\s+cam|set\s+expression)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     ("tony_volume", re.compile(r"^\s*(?:âm\s+lượng|am\s+luong|volume)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     ("pc_open", re.compile(r"^\s*(?:mở|mo|bật|bat|bật\s+lên|bat\s+len|khởi\s+động|khoi\s+dong|open)\s+(.+)$", re.IGNORECASE)),
@@ -1558,6 +1708,10 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
                     return intent_arg, handle_tony_pi_video(arg_text, payload=payload)
                 if intent_arg == "tony_pi_listen":
                     return intent_arg, handle_tony_pi_listen(arg_text, payload=payload)
+                if intent_arg == "relay_on":
+                    return intent_arg, handle_relay_on(arg_text, payload=payload)
+                if intent_arg == "relay_off":
+                    return intent_arg, handle_relay_off(arg_text, payload=payload)
             except Exception as exc:
                 return intent_arg, f"⚠️ Lỗi lệnh '{intent_arg}': {type(exc).__name__}: {exc}"
 
