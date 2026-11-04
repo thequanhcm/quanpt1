@@ -232,6 +232,8 @@ class EdgeAgent:
         # Callback do daemon cài (để đóng gói tests)
         self._notify_lost_connection: Callable[[str], None] | None = None
         self._notify_temp_hot: Callable[[float], None] | None = None
+        # Kênh liên tục (04/11/2026): mốc thời gian mất mạng để tính seconds offline
+        self._offline_since_epoch: float | None = None
 
         # UDR-1 (04/11/2026): Universal Device Reader — diff thiết bị 60s/lần
         self._device_watcher: Any = None
@@ -276,6 +278,7 @@ class EdgeAgent:
     def detect_connection_lost(self, core_connected: bool, was_connected: bool) -> bool:
         """Phát hiện chuyển trạng thái CONNECTED → LOST. Trả True nếu vừa mất."""
         if was_connected and not core_connected:
+            self._offline_since_epoch = time.time()
             self.events.add(
                 "BRAIN_CONNECTION_LOST",
                 severity="CRITICAL",
@@ -287,6 +290,20 @@ class EdgeAgent:
                 except Exception:
                     pass
             return True
+        if core_connected and not was_connected and self._offline_since_epoch:
+            # Kênh liên tục (04/11/2026): ONLINE LẠI → báo khôi phục kèm thời
+            # gian offline. Buffer giữ event đến khi gửi được (retry mỗi vòng
+            # heartbeat) → khi mạng về, DM TONY nhận ngay "đã kết nối lại".
+            offline_s = max(0, int(time.time() - self._offline_since_epoch))
+            self._offline_since_epoch = None
+            self.events.add(
+                "BRAIN_CONNECTION_RESTORED",
+                severity="INFO",
+                details={
+                    "offline_seconds": offline_s,
+                    "restored_at_utc": _now_utc_iso(),
+                },
+            )
         return False
 
     # ------------------------------------------------------------------

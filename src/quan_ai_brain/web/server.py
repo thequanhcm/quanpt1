@@ -4070,6 +4070,22 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         severity="CRITICAL" if severity == "CRITICAL" else "WARNING",
                         metadata={"agent_event": ev, "device_id": device_id},
                     )
+                # Kênh liên tục (04/11/2026): Pi5 online lại sau mất mạng →
+                # ALERT_E_PI5_RECOVERED (enum sẵn có, trước đây chưa dùng).
+                if etype == "BRAIN_CONNECTION_RESTORED":
+                    try:
+                        _GLOBAL_EDGE_MONITOR._trigger_alert(  # noqa: SLF001
+                            code=EdgeAlertCode.ALERT_E_PI5_RECOVERED,
+                            title="Pi5 đã kết nối lại",
+                            message=(
+                                "Pi5 online lại sau "
+                                f"{int(details.get('offline_seconds', 0))}s offline"
+                            ),
+                            severity="INFO",
+                            metadata={"agent_event": ev, "device_id": device_id},
+                        )
+                    except Exception:
+                        pass  # fail-closed
                 # UDR-1: thiết bị cắm/rút Pi5 → lưu + DM TONY cho owner
                 if etype == "DEVICE_ADDED":
                     try:
