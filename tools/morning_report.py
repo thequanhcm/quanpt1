@@ -14,6 +14,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import subprocess
+
+# (03/11/2026) CHỐNG NHÁY: task 8AM chạy qua .vbs 0-window; subprocess con
+# python.exe phải kế thừa không-cửa-sổ (CREATE_NO_WINDOW).
+_NO_WIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 import sys
 import time
 import urllib.error
@@ -66,7 +70,7 @@ def _backup_status() -> str:
     try:
         r = subprocess.run(
             ["schtasks", "/query", "/tn", "QUAN_AI_BRAIN_BACKUP_2AM", "/fo", "CSV", "/nh"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True, creationflags=_NO_WIN, text=True, timeout=15,
         )
         task_ok = "✅ SẴN SÀNG" if (r.returncode == 0 and "Ready" in r.stdout) else "⚠️ CHƯA SẴN SÀNG"
     except Exception:
@@ -167,7 +171,7 @@ def send_to_netchat(message: str) -> bool:
     py, bot = NETCHAT_BOT
     r1 = subprocess.run(
         [py, bot, "send", CHANNEL_ID, "--to-channel", message],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, creationflags=_NO_WIN, text=True, timeout=60,
     )
     out = r1.stdout
     if "--confirmed" in out or "CONFIRM" not in out.upper():
@@ -181,7 +185,7 @@ def send_to_netchat(message: str) -> bool:
         return False
     r2 = subprocess.run(
         [py, bot, "send", CHANNEL_ID, "--to-channel", message, "--confirmed", m.group(1)],
-        capture_output=True, text=True, timeout=60,
+        capture_output=True, creationflags=_NO_WIN, text=True, timeout=60,
     )
     return r2.returncode == 0 and '"id"' in r2.stdout
 

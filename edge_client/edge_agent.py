@@ -232,6 +232,17 @@ class EdgeAgent:
         # Callback do daemon cài (để đóng gói tests)
         self._notify_lost_connection: Callable[[str], None] | None = None
         self._notify_temp_hot: Callable[[float], None] | None = None
+        # Kênh liên tục (04/11/2026): mốc thời gian mất mạng để tính seconds offline
+        self._offline_since_epoch: float | None = None
+
+        # UDR-1 (04/11/2026): Universal Device Reader — diff thiết bị 60s/lần
+        self._device_watcher: Any = None
+        try:
+            from edge_client.device_watcher import DeviceWatcher  # type: ignore
+
+            self._device_watcher = DeviceWatcher(self.events.add)
+        except Exception:
+            self._device_watcher = None  # fail-closed: thiếu module vẫn chạy
 
     # ------------------------------------------------------------------
     # TỰ PHẢN ỨNG (1)
@@ -267,6 +278,7 @@ class EdgeAgent:
     def detect_connection_lost(self, core_connected: bool, was_connected: bool) -> bool:
         """Phát hiện chuyển trạng thái CONNECTED → LOST. Trả True nếu vừa mất."""
         if was_connected and not core_connected:
+            self._offline_since_epoch = time.time()
             self.events.add(
                 "BRAIN_CONNECTION_LOST",
                 severity="CRITICAL",
@@ -278,6 +290,20 @@ class EdgeAgent:
                 except Exception:
                     pass
             return True
+        if core_connected and not was_connected and self._offline_since_epoch:
+            # Kênh liên tục (04/11/2026): ONLINE LẠI → báo khôi phục kèm thời
+            # gian offline. Buffer giữ event đến khi gửi được (retry mỗi vòng
+            # heartbeat) → khi mạng về, DM TONY nhận ngay "đã kết nối lại".
+            offline_s = max(0, int(time.time() - self._offline_since_epoch))
+            self._offline_since_epoch = None
+            self.events.add(
+                "BRAIN_CONNECTION_RESTORED",
+                severity="INFO",
+                details={
+                    "offline_seconds": offline_s,
+                    "restored_at_utc": _now_utc_iso(),
+                },
+            )
         return False
 
     # ------------------------------------------------------------------
@@ -475,6 +501,12 @@ class EdgeAgent:
             target=self._health_loop, daemon=True, name="edge-agent-health",
         )
         self._health_thread.start()
+        # UDR-1: vòng lặp diff thiết bị 60s (cắm/rút → event → Brain)
+        if self._device_watcher is not None:
+            try:
+                self._device_watcher.start_background()
+            except Exception:
+                pass  # fail-closed: watcher lỗi không giết daemon
 
     def stop_background_loops(self) -> None:
         self._stop_event.set()
@@ -503,14 +535,21 @@ class EdgeAgent:
         with self._lock:
             last_metrics = dict(self._last_metrics)
             n_suggestions = len(self._suggestions)
-        return {
+        summary = {
             "agent_version": "V41",
             "capabilities": [
                 "AUTO_REACT", "AUTO_MANAGE", "AUTO_COLLECT",
-                "AUTO_COORDINATE", "CONTROLLED_IMPROVE",
+                "AUTO_COORDINATE", "CONTROLLED_IMPROVE", "DEVICE_WATCH",
             ],
             "metrics": last_metrics,
             "suggestions_pending": n_suggestions,
             "events_buffered": len(self.events),
             "greeted_this_boot": self._greeted,
         }
+        # UDR-1: kèm snapshot thiết bị gần nhất (đi cùng heartbeat telemetry)
+        if self._device_watcher is not None:
+            try:
+                summary["devices"] = self._device_watcher.current_snapshot()
+            except Exception:
+                pass
+        return summary

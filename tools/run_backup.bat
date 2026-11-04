@@ -1,4 +1,4 @@
 @echo off
 REM Wrapper cho Task Scheduler: backup DB 2AM hằng ngày (user-level, không cần Admin)
 cd /d "E:\BRAIN"
-.venv\Scripts\python.exe tools\backup_database.py >> logs\backup.log 2>&1
+.venv\Scripts\pythonw.exe tools\backup_database.py >> logs\backup.log 2>&1

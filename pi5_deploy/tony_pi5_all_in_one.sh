@@ -36,6 +36,32 @@ pkill -f "main.py" 2>/dev/null || true
 sleep 2
 echo "[OK] Đã tắt kiosk cũ (nếu có)"
 
+# 2b) UDR-1 + UDC-1 + kênh liên tục (04/11/2026): đồng bộ TOÀN BỘ lõi
+#     edge_client từ thư mục edge_client/ cạnh script (zip giải nén).
+#     Gồm: main, client_daemon (endpoint /api/kiosk/device), edge_agent
+#     (connection lost/restored), auth, config, actuators, device_readers,
+#     device_watcher, device_control.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EC_DIR=/home/quanpt1/Desktop/edge_client
+SRC_EC=""
+[ -d "$SCRIPT_DIR/edge_client" ] && SRC_EC="$SCRIPT_DIR/edge_client"
+[ -z "$SRC_EC" ] && [ -f "$SCRIPT_DIR/client_daemon.py" ] && SRC_EC="$SCRIPT_DIR"
+if [ -n "$SRC_EC" ] && [ -d "$EC_DIR" ]; then
+  SYNCED=0
+  for MOD in main.py client_daemon.py edge_agent.py auth.py config.py \
+             actuators.py device_readers.py device_watcher.py device_control.py; do
+    if [ -f "$SRC_EC/$MOD" ]; then
+      cp -f "$SRC_EC/$MOD" "$EC_DIR/$MOD"
+      chown quanpt1:quanpt1 "$EC_DIR/$MOD"
+      SYNCED=$((SYNCED+1))
+    fi
+  done
+  echo "[OK] UDR-1 + UDC-1 + kênh liên tục: đã đồng bộ $SYNCED/9 module lõi"
+  [ "$SYNCED" -lt 9 ] && echo "[CẢNH BÁO] thiếu module — kiểm tra lại zip"
+else
+  echo "[CẢNH BÁO] không tìm thấy edge_client/ cạnh script hoặc $EC_DIR — bỏ qua đồng bộ"
+fi
+
 # 3) Cập nhật core_host trong config.json → IP PC lõi
 CFG=/home/quanpt1/Desktop/edge_client/config.json
 CORE_HOST="${CORE_HOST:-192.168.1.9}"   # PC lõi mới (02/11/2026, LAN QUANPT)
