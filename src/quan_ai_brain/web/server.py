@@ -219,6 +219,9 @@ from quan_ai_brain.web.edge_monitor import (
     EdgeConnectionState,
 )
 
+# --- UDR-1 (04/11/2026): Universal Device Reader — thiết bị cắm vào Pi5 ---
+from quan_ai_brain.web.device_store import DeviceStore, default_sender
+
 # --- M1 System Health Intelligence (đọc-only + alert DM) ---
 from quan_ai_brain.monitoring import get_global_aggregator
 from quan_ai_brain.monitoring.alert_engine import AlertEngine
@@ -273,6 +276,11 @@ _GLOBAL_WAKE_CONFIG = WakeWordConfig(enabled=False)
 _GLOBAL_EDGE_PAIRING_PIN = "888666"
 _GLOBAL_PAIRED_EDGE_DEVICES: dict[str, dict[str, Any]] = {}
 _GLOBAL_EDGE_MONITOR = EdgeConnectionMonitor(heartbeat_timeout_sec=4.0)
+# UDR-1: store thiết bị Pi5 + DM NetChat cho owner khi cắm/rút (cooldown 300s)
+_GLOBAL_DEVICE_STORE = DeviceStore(
+    Path(__file__).resolve().parents[2] / "data" / "edge_devices.db",
+    sender=default_sender(),
+)
 _GLOBAL_MOUTH_SYNC = MouthSyncEngine(frame_interval_ms=50)
 _GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
     "packets_in": 0,
@@ -764,6 +772,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/executive/edge/alerts":
             self._handle_api_edge_alerts()
+            return
+
+        # UDR-1: hiện trạng thiết bị cắm vào Pi5 (current + lịch sử)
+        if path == "/api/executive/edge/devices":
+            self._handle_api_edge_devices(parsed.query)
             return
 
         if path == "/api/executive/edge/status":
@@ -3932,6 +3945,26 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "history": _GLOBAL_EDGE_MONITOR.get_alert_history(limit=30),
         })
 
+    def _handle_api_edge_devices(self, query: Any) -> None:
+        """UDR-1: hiện trạng thiết bị cắm vào Pi5.
+
+        ?history=1 → kèm 50 sự kiện cắm/rút gần nhất.
+        """
+        try:
+            payload: dict[str, Any] = {
+                "success": True,
+                "current": _GLOBAL_DEVICE_STORE.current_devices(),
+            }
+            try:
+                q = urllib.parse.parse_qs(query) if isinstance(query, str) else {}
+                if q.get("history", ["0"])[0] in ("1", "true"):
+                    payload["recent_events"] = _GLOBAL_DEVICE_STORE.recent_events(50)
+            except Exception:
+                pass
+            self._send_json(payload)
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)})
+
     def _handle_api_edge_heartbeat(self, body: dict) -> None:
         _GLOBAL_EDGE_TELEMETRY["packets_in"] += 1
         if hasattr(self, "client_address") and self.client_address:
@@ -3950,6 +3983,16 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         telemetry_payload = body.get("telemetry")
         if telemetry_payload:
             _GLOBAL_EDGE_TELEMETRY["last_telemetry"] = telemetry_payload
+
+        # UDR-1: heartbeat mang snapshot thiết bị (edge_agent.get_status_summary)
+        edge_agent_state = body.get("edge_agent")
+        if isinstance(edge_agent_state, dict) and isinstance(
+                edge_agent_state.get("devices"), dict):
+            try:
+                _GLOBAL_DEVICE_STORE.record_snapshot(
+                    device_id, edge_agent_state["devices"])
+            except Exception:
+                pass  # fail-closed
 
         status = _GLOBAL_EDGE_MONITOR.record_heartbeat(
             device_id=device_id,
@@ -4004,6 +4047,17 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         severity="CRITICAL" if severity == "CRITICAL" else "WARNING",
                         metadata={"agent_event": ev, "device_id": device_id},
                     )
+                # UDR-1: thiết bị cắm/rút Pi5 → lưu + DM TONY cho owner
+                if etype == "DEVICE_ADDED":
+                    try:
+                        _GLOBAL_DEVICE_STORE.record_added(device_id, ev)
+                    except Exception:
+                        pass  # fail-closed
+                elif etype == "DEVICE_REMOVED":
+                    try:
+                        _GLOBAL_DEVICE_STORE.record_removed(device_id, ev)
+                    except Exception:
+                        pass  # fail-closed
             _GLOBAL_EDGE_TELEMETRY["edge_events_received"] = (
                 _GLOBAL_EDGE_TELEMETRY.get("edge_events_received", 0) + accepted
             )

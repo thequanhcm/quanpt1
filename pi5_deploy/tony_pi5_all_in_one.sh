@@ -36,6 +36,24 @@ pkill -f "main.py" 2>/dev/null || true
 sleep 2
 echo "[OK] Đã tắt kiosk cũ (nếu có)"
 
+# 2b) UDR-1 (04/11/2026): đồng bộ 2 module Universal Device Reader mới
+#     device_readers.py (scanner 10 bus) + device_watcher.py (diff 60s)
+#     Nguồn: 2 file nằm cạnh script này khi owner giải nén zip.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EC_DIR=/home/quanpt1/Desktop/edge_client
+if [ -f "$SCRIPT_DIR/device_readers.py" ] && [ -f "$SCRIPT_DIR/device_watcher.py" ]; then
+  if [ -d "$EC_DIR" ]; then
+    cp -f "$SCRIPT_DIR/device_readers.py" "$EC_DIR/device_readers.py"
+    cp -f "$SCRIPT_DIR/device_watcher.py" "$EC_DIR/device_watcher.py"
+    chown quanpt1:quanpt1 "$EC_DIR/device_readers.py" "$EC_DIR/device_watcher.py"
+    echo "[OK] UDR-1: đã đồng bộ device_readers.py + device_watcher.py"
+  else
+    echo "[CẢNH BÁO] $EC_DIR không tồn tại — bỏ qua đồng bộ UDR-1"
+  fi
+else
+  echo "[CẢNH BÁO] thiếu device_readers.py/device_watcher.py cạnh script — UDR-1 không đồng bộ"
+fi
+
 # 3) Cập nhật core_host trong config.json → IP PC lõi
 CFG=/home/quanpt1/Desktop/edge_client/config.json
 CORE_HOST="${CORE_HOST:-192.168.1.9}"   # PC lõi mới (02/11/2026, LAN QUANPT)

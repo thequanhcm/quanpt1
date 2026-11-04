@@ -321,9 +321,10 @@ class TestStatusSummary:
         agent = EdgeAgent()
         s = agent.get_status_summary()
         assert s["agent_version"] == "V41"
+        # UDR-1 (04/11): +DEVICE_WATCH — Universal Device Reader
         assert set(s["capabilities"]) == {
             "AUTO_REACT", "AUTO_MANAGE", "AUTO_COLLECT",
-            "AUTO_COORDINATE", "CONTROLLED_IMPROVE",
+            "AUTO_COORDINATE", "CONTROLLED_IMPROVE", "DEVICE_WATCH",
         }
         assert s["suggestions_pending"] == 0
         assert s["events_buffered"] == 0
