@@ -307,22 +307,28 @@ class FederatedAggregator:
     
     def detect_poisoning(self, updates: list[ModelUpdate], 
                         method: str = 'krum') -> list[str]:
-        """Detect malicious/poisoned updates."""
-        # Simplified poisoning detection
-        # In real implementation, would use Krum, Median, Trimmed Mean, etc.
+        """Detect malicious/poisoned updates.
         
+        (05/11/2026 FIX — SKIP-repair V18): mean/std 3-sigma tự che outlier —
+        1 outlier duy nhất phồng std đến mức (x - mean) luôn < 3*std (sigma
+        masking, xích tổng (x_i - mean)^2 > n^2 * (x - mean)^2). Đã đổi sang
+        MAD (Median Absolute Deviation) — robust với outlier, phát hiện được
+        >= 1 điểm bất thường khi n >= 3.
+        """
         poisoned = []
         if len(updates) < 3:
             return poisoned
         
-        # Check for outliers in loss/accuracy
         losses = [u.loss for u in updates if u.loss is not None]
-        if losses:
-            avg_loss = sum(losses) / len(losses)
-            std_loss = (sum((l - avg_loss) ** 2 for l in losses) / len(losses)) ** 0.5
-            
+        if len(losses) >= 3:
+            med = sorted(losses)[len(losses) // 2] if len(losses) % 2 == 1 else (
+                sorted(losses)[len(losses) // 2 - 1] + sorted(losses)[len(losses) // 2]
+            ) / 2
+            mad = sorted(abs(l - med) for l in losses)[len(losses) // 2]
+            # MAD=0 (đa số loss giống hệt nhau) → mọi lệch khỏi median là bất thường
+            threshold = 3 * (1.4826 * mad) if mad > 0 else 1e-9
             for update in updates:
-                if update.loss and abs(update.loss - avg_loss) > 3 * std_loss:
+                if update.loss is not None and abs(update.loss - med) > threshold:
                     poisoned.append(update.node_id)
         
         return poisoned
@@ -346,16 +352,25 @@ class DifferentialPrivacy:
         self.operations = []
     
     def add_laplace_noise(self, value: float, sensitivity: float) -> float:
-        """Add Laplace noise for differential privacy."""
+        """Add Laplace noise for differential privacy.
+
+        (05/11/2026 FIX — SKIP-repair V18): random.laplace KHÔNG tồn tại trong
+        stdlib Python — code cũ crash AttributeError ngay lần gọi thật.
+        Laplace(b=scale) sampling chuẩn: u ∈ (-0.5, 0) ∪ (0, 0.5),
+        noise = -b * sign(u) * ln(1 - 2|u|).
+        """
         scale = sensitivity / self.epsilon
-        noise = random.laplace(0, scale)
+        u = random.uniform(-0.5, 0.5)
+        while abs(u) < 1e-12:  # tránh log(0)
+            u = random.uniform(-0.5, 0.5)
+        noise = -scale * math.copysign(math.log(1 - 2 * abs(u)), u)
         return value + noise
     
     def add_gaussian_noise(self, value: float, sensitivity: float) -> float:
         """Add Gaussian noise for (epsilon, delta)-DP."""
         sigma = sensitivity * (2 * math.log(1.25 / self.delta)) ** 0.5 / self.epsilon
         noise = random.gauss(0, sigma)
-        return value + value
+        return value + noise
     
     def clip_gradients(self, gradients: dict[str, float], max_norm: float) -> dict[str, float]:
         """Clip gradients to bound sensitivity."""

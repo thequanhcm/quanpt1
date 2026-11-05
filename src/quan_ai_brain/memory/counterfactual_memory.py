@@ -262,9 +262,12 @@ class CounterfactualMemory:
     def learn_from_counterfactual(self, scenario_id: str) -> LessonLearned | None:
         """Learn from a counterfactual scenario."""
         scenario = None
+        # (05/11/2026 FIX — SKIP-repair V17): SELECT sai thứ tự cột — confidence
+        # nằm ở row[5], outcome_difference ở row[6]; code cũ json.loads(row[5])
+        # gây TypeError (float không parse được JSON) MỌI lần gọi thật.
         row = self._conn.execute(
             "SELECT scenario_id, base_event_id, alternative_action, predicted_outcome, "
-            "actual_outcome, confidence, outcome_difference "
+            "actual_outcome, outcome_difference, confidence "
             "FROM counterfactual_scenarios WHERE scenario_id = ?",
             (scenario_id,)
         ).fetchone()
@@ -275,6 +278,7 @@ class CounterfactualMemory:
         predicted = json.loads(row[3])
         actual = json.loads(row[4]) if row[4] else None
         difference = json.loads(row[5]) if row[5] else None
+        scenario_confidence = row[6]
         
         if not actual:
             return None  # Can't learn without actual outcome
@@ -302,7 +306,7 @@ class CounterfactualMemory:
             scenario_ids=[scenario_id],
             insight=insight,
             recommendation=recommendation,
-            confidence=scenario.confidence if scenario else 0.5
+            confidence=scenario_confidence if scenario_confidence is not None else 0.5
         )
         
         # Save lesson

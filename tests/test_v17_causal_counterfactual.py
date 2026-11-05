@@ -77,7 +77,23 @@ class TestCausalGraph:
     
     def test_find_causal_chain(self, causal_db):
         """Find causal chain between events."""
-        pytest.skip("Complex test - fix pending")
+        graph = CausalGraph(str(causal_db))
+        graph.add_causal_event("e1", "cause", "Event 1", "2024-01-01T00:00:00Z")
+        graph.add_causal_event("e2", "event", "Event 2", "2024-01-02T00:00:00Z")
+        graph.add_causal_event("e3", "effect", "Event 3", "2024-01-03T00:00:00Z")
+        graph.add_causal_link("e1", "e2", "direct", 0.9)
+        graph.add_causal_link("e2", "e3", "direct", 0.8)
+
+        chain = graph.find_causal_chain("e1", "e3")
+        assert chain is not None
+        assert chain.chain == ["e1", "e2", "e3"]
+        assert 0 < chain.total_strength <= 0.9 * 0.8 + 1e-9
+        # Không có đường đi → None
+        graph.add_causal_event("lone", "event", "Isolated", "2024-01-04T00:00:00Z")
+        assert graph.find_causal_chain("e1", "lone") is None
+        # Event không tồn tại → None
+        assert graph.find_causal_chain("e1", "ghost") is None
+        graph.close()
     
     def test_infer_causality(self, causal_db):
         """Infer causal relationship."""
@@ -258,7 +274,27 @@ class TestCounterfactualMemory:
     
     def test_learn_from_counterfactual(self, counterfactual_db):
         """Learn from counterfactual scenario."""
-        pytest.skip("Complex test - fix pending")
+        memory = CounterfactualMemory(str(counterfactual_db))
+
+        # Chưa có actual outcome → không thể học (fail-honest)
+        memory.add_counterfactual(CounterfactualScenario(
+            scenario_id="cf_p", base_event_id="event1", alternative_action="Action A",
+            predicted_outcome={"value": 100}, actual_outcome=None, confidence=0.8
+        ))
+        assert memory.learn_from_counterfactual("cf_p") is None
+
+        # Có actual outcome (kém hơn dự đoán) → sinh lesson
+        memory.add_counterfactual(CounterfactualScenario(
+            scenario_id="cf1", base_event_id="event2", alternative_action="Action B",
+            predicted_outcome={"value": 100}, actual_outcome={"value": 60},
+            confidence=0.8, outcome_difference={"value": -40}
+        ))
+        lesson = memory.learn_from_counterfactual("cf1")
+        assert lesson is not None
+        assert lesson.scenario_ids == ["cf1"] or "cf1" in lesson.scenario_ids
+        assert lesson.insight
+        assert 0.0 < lesson.confidence <= 1.0
+        memory.close()
     
     def test_find_similar_scenarios(self, counterfactual_db):
         """Find similar scenarios."""
@@ -314,8 +350,52 @@ class TestCounterfactualMemory:
     
     def test_generate_lessons_learned(self, counterfactual_db):
         """Generate lessons learned."""
-        pytest.skip("Complex test - fix pending")
+        memory = CounterfactualMemory(str(counterfactual_db))
+
+        # Không có scenario nào có actual outcome → 0 lesson
+        memory.add_counterfactual(CounterfactualScenario(
+            scenario_id="cf_p", base_event_id="event1", alternative_action="Action A",
+            predicted_outcome={}, actual_outcome=None, confidence=0.8
+        ))
+        assert memory.generate_lessons_learned() == []
+
+        # 2 scenario có actual outcome → sinh >= 1 lesson
+        memory.add_counterfactual(CounterfactualScenario(
+            scenario_id="cf1", base_event_id="event2", alternative_action="Action B",
+            predicted_outcome={"value": 100}, actual_outcome={"value": 80},
+            confidence=0.8, outcome_difference={"value": -20}
+        ))
+        memory.add_counterfactual(CounterfactualScenario(
+            scenario_id="cf2", base_event_id="event3", alternative_action="Action C",
+            predicted_outcome={"value": 50}, actual_outcome={"value": 70},
+            confidence=0.7, outcome_difference={"value": 20}
+        ))
+        lessons = memory.generate_lessons_learned()
+        assert len(lessons) >= 1
+        assert all(l.insight for l in lessons)
+        memory.close()
     
     def test_get_all_lessons(self, counterfactual_db):
         """Get all lessons learned."""
-        pytest.skip("Complex test - fix pending")
+        memory = CounterfactualMemory(str(counterfactual_db))
+
+        # Ban đầu chưa có lesson nào
+        assert memory.get_all_lessons() == []
+
+        # Sinh lesson từ 2 scenario có actual outcome
+        for sid, alt, diff in [("cf1", "Action A", {"value": -30}),
+                               ("cf2", "Action B", {"cost": 15})]:
+            memory.add_counterfactual(CounterfactualScenario(
+                scenario_id=sid, base_event_id=f"event_{sid}", alternative_action=alt,
+                predicted_outcome={"value": 100}, actual_outcome={"value": 70},
+                confidence=0.8, outcome_difference=diff
+            ))
+            memory.learn_from_counterfactual(sid)
+
+        lessons = memory.get_all_lessons()
+        assert len(lessons) >= 2
+        # Mỗi lesson đầy đủ trường + sắp xếp created_at DESC
+        created = [l.created_at for l in lessons]
+        assert created == sorted(created, reverse=True)
+        assert all(l.lesson_id and l.insight and l.recommendation for l in lessons)
+        memory.close()
