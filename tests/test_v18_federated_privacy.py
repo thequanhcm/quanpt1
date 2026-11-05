@@ -89,7 +89,26 @@ class TestFederatedAggregator:
     
     def test_distribute_model(self, federated_db):
         """Distribute global model to nodes."""
-        pytest.skip("Complex test - fix pending")
+        aggregator = FederatedAggregator(str(federated_db))
+        aggregator.register_node(FederatedNode("client1", "client", []))
+        aggregator.register_node(FederatedNode("client2", "client", []))
+
+        result = aggregator.distribute_global_model(["client1", "client2"])
+        assert result is True
+
+        # Sau distribute: last_sync cập nhật mới → không ai là straggler
+        stragglers_after = aggregator.handle_stragglers(["client1", "client2"], timeout=300)
+        assert stragglers_after == []
+
+        # Giả lập node nghẽn: đẩy last_sync lùi 400s > timeout 300
+        from datetime import datetime, timezone, timedelta
+        old = (datetime.now(timezone.utc) - timedelta(seconds=400)).isoformat()
+        aggregator._conn.execute(
+            "UPDATE federated_nodes SET last_sync = ? WHERE node_id = 'client1'", (old,))
+        aggregator._conn.commit()
+        stragglers = aggregator.handle_stragglers(["client1", "client2"], timeout=300)
+        assert stragglers == ["client1"]
+        aggregator.close()
     
     def test_evaluate_model(self, federated_db):
         """Evaluate global model."""
@@ -106,11 +125,37 @@ class TestFederatedAggregator:
     
     def test_check_convergence(self, federated_db):
         """Check training convergence."""
-        pytest.skip("Complex test - fix pending")
+        aggregator = FederatedAggregator(str(federated_db))
+
+        # Loss dao động lớn → chưa hội tụ
+        assert aggregator.check_convergence([1.0, 0.8, 0.95, 0.7], threshold=0.01) is False
+        # Loss ổn định dưới ngưỡng → hội tụ
+        assert aggregator.check_convergence([0.50, 0.498, 0.499, 0.4985], threshold=0.01) is True
+        # Lịch sử quá ngắn (<2) → không kết luận được hội tụ
+        assert aggregator.check_convergence([0.5], threshold=0.01) is False
+        aggregator.close()
     
     def test_detect_poisoning(self, federated_db):
         """Detect poisoned updates."""
-        pytest.skip("Complex test - fix pending")
+        aggregator = FederatedAggregator(str(federated_db))
+
+        # <3 updates: thuật toán từ chối kết luận (tránh false positive)
+        small = [
+            ModelUpdate("u1", "client1", 0, {"w1": 0.5}, None, 0.4, 0.85, 100),
+            ModelUpdate("u2", "client2", 0, {"w1": 0.6}, None, 0.5, 0.80, 100),
+        ]
+        assert aggregator.detect_poisoning(small) == []
+
+        # 4 updates bình thường + 1 outlier loss cực lớn → bị phát hiện
+        normal = [
+            ModelUpdate(f"u{i}", f"client{i}", 0, {"w1": 0.5}, None, 0.40 + 0.01 * i, 0.85, 100)
+            for i in range(1, 5)
+        ]
+        poison = ModelUpdate("u9", "bad_client", 0, {"w1": 99.0}, None, 50.0, 0.05, 100)
+        flagged = aggregator.detect_poisoning(normal + [poison])
+        assert "bad_client" in flagged
+        assert all(f"client{i}" not in flagged for i in range(1, 5))
+        aggregator.close()
 
 
 class TestDifferentialPrivacy:
@@ -118,19 +163,66 @@ class TestDifferentialPrivacy:
     
     def test_add_laplace_noise(self, federated_db):
         """Add Laplace noise."""
-        pytest.skip("Complex test - fix pending")
+        dp = DifferentialPrivacy(epsilon=1.0)
+
+        # Nhiễu phải thay đổi giá trị (xác suất gần 1 với scale đủ lớn)
+        noisy = [dp.add_laplace_noise(100.0, sensitivity=10.0) for _ in range(50)]
+        assert any(abs(n - 100.0) > 1e-9 for n in noisy)
+        # Noise trung bình gần 0 (Laplace đối xứng, 50 mẫu, tol rộng)
+        mean_shift = sum(n - 100.0 for n in noisy) / len(noisy)
+        assert abs(mean_shift) < 10.0
+        # Epsilon nhỏ → nhiễu mạnh hơn (độ phân tán tăng)
+        dp_strong = DifferentialPrivacy(epsilon=0.1)
+        spread_strong = max(abs(dp_strong.add_laplace_noise(0.0, 10.0)) for _ in range(200))
+        spread_weak = max(abs(dp.add_laplace_noise(0.0, 10.0)) for _ in range(200))
+        assert spread_strong >= spread_weak
     
     def test_add_gaussian_noise(self, federated_db):
         """Add Gaussian noise."""
-        pytest.skip("Complex test - fix pending")
+        dp = DifferentialPrivacy(epsilon=1.0, delta=1e-5)
+
+        # Bug-fix verification: noise PHẢI được cộng vào giá trị (trước đây
+        # code trả về value + value — nhiễu Gaussian không bao giờ được áp dụng)
+        noisy = [dp.add_gaussian_noise(100.0, sensitivity=5.0) for _ in range(50)]
+        assert any(abs(n - 100.0) > 1e-9 for n in noisy)
+        # Gaussian đối xứng → trung bình gần giá trị gốc
+        mean_shift = sum(n - 100.0 for n in noisy) / len(noisy)
+        assert abs(mean_shift) < 10.0
+        # Giá trị không âm đi quá xa về phía âm (sigma nhỏ với sensitivity 5)
+        assert all(n > 90.0 - 5 * 20 for n in noisy)
     
     def test_clip_gradients(self, federated_db):
         """Clip gradients."""
-        pytest.skip("Complex test - fix pending")
+        dp = DifferentialPrivacy()
+
+        grads = {"w1": 3.0, "w2": 4.0}  # norm = 5.0
+        clipped = dp.clip_gradients(grads, max_norm=2.5)
+        norm_after = sum(g ** 2 for g in clipped.values()) ** 0.5
+        assert abs(norm_after - 2.5) < 1e-9
+        # Tỉ lệ giữ nguyên hướng (3/4 = 1.5/2.0)
+        assert abs(clipped["w1"] - 1.5) < 1e-9
+        assert abs(clipped["w2"] - 2.0) < 1e-9
+        # Norm nhỏ hơn max_norm → giữ nguyên
+        unchanged = dp.clip_gradients({"w1": 0.1}, max_norm=2.5)
+        assert unchanged["w1"] == 0.1
     
     def test_track_privacy_budget(self, federated_db):
         """Track privacy budget."""
-        pytest.skip("Complex test - fix pending")
+        dp = DifferentialPrivacy(epsilon=1.0)
+
+        dp.track_privacy_budget(0.3)
+        dp.track_privacy_budget(0.2)
+        assert abs(dp.privacy_budget_used - 0.5) < 1e-9
+        assert abs(dp.remaining_budget() - 0.5) < 1e-9
+        assert len(dp.operations) == 2
+        # Vượt budget → remaining không âm (floor 0)
+        dp.track_privacy_budget(0.9)
+        assert dp.remaining_budget() == 0.0
+        # Report đầy đủ trường
+        report = dp.privacy_report()
+        assert report["used"] == pytest.approx(1.4)
+        assert report["remaining"] == 0.0
+        assert len(report["operations"]) == 3
 
 
 class TestKAnonymity:
@@ -155,7 +247,24 @@ class TestKAnonymity:
     
     def test_check_k_anonymity(self, privacy_db):
         """Check k-anonymity satisfaction."""
-        pytest.skip("Complex test - fix pending")
+        k_anon = KAnonymity(k=3)
+
+        # 4 bản ghi cùng nhóm quasi-identifier (k=3 thỏa)
+        safe = [
+            {"age": "20-40", "location": "Hanoi"},
+            {"age": "20-40", "location": "Hanoi"},
+            {"age": "20-40", "location": "Hanoi"},
+            {"age": "20-40", "location": "Hanoi"},
+        ]
+        assert k_anon.check_k_anonymity(safe, ["age", "location"]) is True
+
+        # Mỗi nhóm chỉ 1 bản ghi → vi phạm k=3
+        unsafe = [
+            {"age": 25, "location": "Hanoi"},
+            {"age": 30, "location": "HCMC"},
+            {"age": 35, "location": "Danang"},
+        ]
+        assert k_anon.check_k_anonymity(unsafe, ["age", "location"]) is False
 
 
 class TestLDiversity:
@@ -163,7 +272,25 @@ class TestLDiversity:
     
     def test_check_l_diversity(self, privacy_db):
         """Check l-diversity satisfaction."""
-        pytest.skip("Complex test - fix pending")
+        l_div = LDiversity(l=2)
+
+        # Mỗi nhóm có >=2 giá trị sensitive khác nhau → thỏa
+        safe = [
+            {"location": "Hanoi", "diagnosis": "A"},
+            {"location": "Hanoi", "diagnosis": "B"},
+            {"location": "Hanoi", "diagnosis": "A"},
+            {"location": "HCMC", "diagnosis": "B"},
+            {"location": "HCMC", "diagnosis": "A"},
+        ]
+        assert l_div.check_l_diversity(safe, ["location"], "diagnosis") is True
+
+        # Nhóm Hanoi chỉ có 1 giá trị sensitive → vi phạm l=2
+        unsafe = [
+            {"location": "Hanoi", "diagnosis": "A"},
+            {"location": "Hanoi", "diagnosis": "A"},
+            {"location": "Hanoi", "diagnosis": "A"},
+        ]
+        assert l_div.check_l_diversity(unsafe, ["location"], "diagnosis") is False
 
 
 class TestSecureComputation:
