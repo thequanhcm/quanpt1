@@ -1,0 +1,251 @@
+# BÁO CÁO KỸ THUẬT — tailscale_mesh_pc_pi5
+
+> Sinh tự động 06/11/2026 17:45:46 (giờ VN) theo chỉ thị owner 02/11/2026:
+> báo cáo chi tiết sau MỖI tác vụ — có phân tích, đánh giá, định hướng, đề xuất.
+
+## 1. TÓM TẮT ĐIỀU HÀNH
+Owner duyet: cai Tailscale + cau hinh Pi5 tro mesh + test toan bo heartbeat. DA XONG: (1) winget cai Tailscale v1.104.5 (35s); (2) PC tu dong nhan node cu quanpt 100.92.219.98 trong mesh thequan.hcm (khong can login - node key con han); (3) tailscale ping Pi5 100.100.83.59: pong direct via 192.168.1.21:41641 (2-4ms, khong DERP); (4) Pi5 core_host 192.168.1.9 -> 100.92.219.98 (backup config.json.bak_20261106); (5) systemctl restart quan_ai_edge. 8/8 TEST HEARTBEAT PASS: kiosk core_connected True qua mesh; PC nhan heartbeat READY paired True; 10/10 heartbeat stability; 10/10 tailscale pong; kiosk API 3/3; Pi5->PC core 200. Kien truc: PRIMARY = Tailscale mesh (khong phu thuoc Wi-Fi/doi IP router, tu DERP khi ra ngoai); FALLBACK = LAN (config .bak luon san sang rollback).
+
+## 2. PHÂN TÍCH
+- Mesh thequan.hcm co 4 node: quanpt1 (Pi5, ONLINE), desktop-snmi929 (PC cu, OFFLINE 15h - la nguyen nhan core_host sai trong config), iphone-15-pro-max (offline 56d), quanpt (PC moi, offline 55d -> gio ONLINE lai)
+- 100.102.120.6 trong config Pi5 cu = Tailscale IP cua PC CU da tat - giai thich duoc vi sao kiosk offline truoc do
+
+## 3. ĐÁNH GIÁ
+- T
+- a
+- i
+- l
+- s
+- c
+- a
+- l
+- e
+-  
+- d
+- i
+- r
+- e
+- c
+- t
+-  
+- p
+- a
+- t
+- h
+-  
+- c
+- u
+- n
+- g
+-  
+- L
+- A
+- N
+-  
+- (
+- 1
+- 9
+- 2
+- .
+- 1
+- 6
+- 8
+- .
+- 1
+- .
+- 2
+- 1
+- :
+- 4
+- 1
+- 6
+- 4
+- 1
+- )
+-  
+- =
+-  
+- d
+- o
+-  
+- t
+- r
+- e
+-  
+- t
+- h
+- a
+- p
+-  
+- 2
+- -
+- 4
+- m
+- s
+- ,
+-  
+- k
+- h
+- o
+- n
+- g
+-  
+- q
+- u
+- a
+-  
+- r
+- e
+- l
+- a
+- y
+- ;
+-  
+- k
+- h
+- i
+-  
+- P
+- C
+- /
+- P
+- i
+- 5
+-  
+- r
+- a
+-  
+- m
+- a
+- n
+- g
+-  
+- k
+- h
+- a
+- c
+-  
+- t
+- u
+-  
+- c
+- h
+- u
+- y
+- e
+- n
+-  
+- D
+- E
+- R
+- P
+-  
+- o
+- v
+- e
+- r
+-  
+- I
+- n
+- t
+- e
+- r
+- n
+- e
+- t
+
+## 4. ĐỊNH HƯỚNG
+- 1
+-  
+- C
+- o
+- r
+- e
+-  
+- (
+- E
+- :
+- B
+- R
+- A
+- I
+- N
+-  
+- P
+- C
+- )
+-  
+- -
+-  
+- 1
+-  
+- h
+- i
+- n
+- h
+-  
+- t
+- h
+- e
+-  
+- (
+- P
+- i
+- 5
+- )
+-  
+- -
+-  
+- 2
+-  
+- k
+- e
+- n
+- h
+-  
+- d
+- u
+-  
+- p
+- h
+- o
+- n
+- g
+-  
+- l
+- a
+- n
+-  
+- n
+- h
+- a
+- u
+- :
+-  
+- m
+- e
+- s
+- h
+-  
+- +
+-  
+- L
+- A
+- N
+
+## 5. ĐỀ XUẤT
+- Owner chay sudo bash tony_pi5_all_in_one.sh (zip 11 file DM TONY) de sync UDR-1/UDC-1 9 module edge_client
+- Sau do go pi5 ok -> G1 LIVE VALIDATION 16 muc
+
+## 6. BẰNG CHỨNG & MINH CHỨNG SỐ
+- reports/TAILSCALE_MESH_LIVE_20261106.md
+- tailscale status: active; direct 192.168.1.21:41641
+- PC /edge/status: READY paired True
+
+## 7. RỦI RO & TRUNG THỰC
+- Tailscale service phai Running 24/7 (dang Running, auto-start voi Windows)
+- Neu anh logout mesh tu tay thi Pi5 mat PRIMARY - fallback LAN van song
+
+## 8. VIỆC CHỜ OWNER QUYẾT ĐỊNH
+- Chay script Pi5 (zip 11 file trong DM TONY)
+- pi5 ok -> G1 LIVE VALIDATION 16 muc

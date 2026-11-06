@@ -1,0 +1,8 @@
+[Unit]
+Description=TONY WiFi Watchdog (auto-reconnect ưu tiên mạng cùng PC)
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/tony_wifi_watchdog.sh
+User=root

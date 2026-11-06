@@ -1,0 +1,98 @@
+[
+ {
+  "n": 1,
+  "name": "Tailscale mesh PC→Pi5",
+  "ok": true,
+  "evidence": "pong via 192.168.1.21:41641 in 4ms = DIRECT mesh (không DERP relay)"
+ },
+ {
+  "n": 2,
+  "name": "LAN fallback Pi5:8768 reachable",
+  "ok": true,
+  "evidence": "TCP connect_ex=0"
+ },
+ {
+  "n": 3,
+  "name": "SSH key TONY (tony-desktop-20261103)",
+  "ok": true,
+  "evidence": "OK"
+ },
+ {
+  "n": 4,
+  "name": "Service quan_ai_edge active+enabled (24/7)",
+  "ok": true,
+  "evidence": "active/enabled"
+ },
+ {
+  "n": 5,
+  "name": "Kiosk daemon API 8768",
+  "ok": true,
+  "evidence": "kiosk_running=False core_connected=True avatar=SLEEPING"
+ },
+ {
+  "n": 6,
+  "name": "PC core server 8766 health",
+  "ok": true,
+  "evidence": "core_server=HEALTHY overall=DEGRADED"
+ },
+ {
+  "n": 7,
+  "name": "Heartbeat Pi5→PC qua mesh (schema edge_status)",
+  "ok": true,
+  "evidence": "success=True state=READY paired=True device=EDGE-PI5-DESK-01"
+ },
+ {
+  "n": 8,
+  "name": "Heartbeat stability 10/10",
+  "ok": true,
+  "evidence": "10/10 READY+paired, latency 196–594ms"
+ },
+ {
+  "n": 9,
+  "name": "PC→Pi5 control set_expression",
+  "ok": true,
+  "evidence": "success=True message='G1 VALIDATION: avatar display' avatar=IDLE core_connected=True"
+ },
+ {
+  "n": 10,
+  "name": "UDR-1 device registry 59 thiết bị",
+  "ok": true,
+  "evidence": "PC→Pi5 action=device list_devices → data.total=59 devices (USB/serial/I2C/GPIO/HDMI/camera...)"
+ },
+ {
+  "n": 11,
+  "name": "UDC-1 write gate fail-closed",
+  "ok": true,
+  "evidence": "relay_set KHÔNG token → success=false 'CHƯA CÓ XÁC NHẬN — lệnh ghi cần anh ok'"
+ },
+ {
+  "n": 12,
+  "name": "Voice converse pipeline (audio→STT→phản hồi)",
+  "ok": true,
+  "evidence": "POST WAV 0.3s → 200 JSON {stt_text:'', reply:'', message:'STT không nhận được text'} — pipeline sống, STT im lặng đúng thiết kế"
+ },
+ {
+  "n": 13,
+  "name": "UDC-1 stage_write cấp token",
+  "ok": true,
+  "evidence": "stage_write relay_1 CLOSED → success=true, token=1303c3e3…, ttl_sec=600"
+ },
+ {
+  "n": 14,
+  "name": "UDC-1 2 bước: confirm token → GPIO thật",
+  "ok": true,
+  "evidence": "relay_1 'Nguồn Cánh Tay Trái' GPIO17 state=CLOSED, emulated=false, via_dm=true"
+ },
+ {
+  "n": 15,
+  "name": "Trả an toàn + token one-shot",
+  "ok": true,
+  "evidence": "relay_1→OPEN ok; token reuse → chặn (success=False)"
+ },
+ {
+  "n": 16,
+  "name": "UDC-1 trạng thái cuối sau estop",
+  "ok": true,
+  "evidence": "8 relays OPEN (0 CLOSED), emulated={None}"
+ }
+]

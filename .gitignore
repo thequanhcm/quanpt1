@@ -56,3 +56,12 @@ $RECYCLE.BIN/
 
 # Mirror đích (không track)
 /mirror/
+
+# Merge BRAIN_0 audit (06/11) — workspace ngoài + artifact audit tạm
+BRAIN_0/
+tmp_audit_merge.json
+reports/brain0_audit_result.json
+
+# Edge runtime artifacts (06/11) — server ghi runtime, không commit
+src/data/edge_devices.db
+data/edge_media/
