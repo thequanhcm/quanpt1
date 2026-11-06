@@ -211,14 +211,20 @@ def main():
                         prev = cur
                     return prev[-1]
 
-                tokens = txt.replace("ơi", " ơi").split()
+                # (06/11/2026) SIẾT FALSE-POSITIVE (duyệt audit 06/11):
+                # - 'ơi' phải là token ĐỘC LẬP (không tách từ giữa từ khác —
+                #   'ngoài khơi' không còn sinh token 'ơi').
+                # - bỏ 'toi'/'tôi' khỏi danh sách tên (Vosk nhận 'TONY ơi' thành
+                #   'tôi ơi' đã có cụm khớp mờ riêng bên dưới) → TV noise như
+                #   '...ngoài khơi...' không khớp has_name nữa.
+                tokens = txt.replace(" ơi", " ơi ").split()
                 has_name = any(
                     _lev(t, w) <= 2
                     for t in tokens
                     for w in ("cherry", "cheri", "ché ri", "che ri",
-                              "tony", "toi", "tôi", "tony.", "tó-ni")
+                              "tony", "tony.", "tó-ni")
                 )
-                has_oi = "ơi" in tokens or "oi" in tokens or "ơi!" in tokens
+                has_oi = any(t in ("ơi", "oi", "ơi!") for t in tokens)
                 if has_name and has_oi:
                     return True
                 # cụm đầy đủ khớp mờ 1 lỗi:
