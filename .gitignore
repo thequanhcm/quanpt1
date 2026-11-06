@@ -12,6 +12,7 @@ credentials*.json
 data/edge_hmac_secret.txt
 *secret*.txt
 *token*.txt
+edge_secret_local.txt
 
 # Python
 __pycache__/
