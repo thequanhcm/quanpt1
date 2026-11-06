@@ -462,23 +462,45 @@ def stop_hdmi_mirror() -> bool:
 # → "TONY ơi" từ Pi5 timeout im lặng. Resolver đọc config mỗi lần gọi
 # (file local ~1KB) + cache phòng đọc lỗi.
 _CORE_BASE_CACHE: str | None = None
+_CORE_BASE_CACHE_AT: float = 0.0
 _VOICE_COMMAND_PATH = "/api/executive/edge/voice_command"
 _VOICE_CONVERSE_PATH = "/api/executive/edge/converse"
 
 
 def _resolve_core_base_url() -> str:
-    """Địa chỉ não PC cho voice/HDMI — từ config.json của daemon (nguồn duy nhất)."""
-    global _CORE_BASE_CACHE
+    """Địa chỉ não PC cho voice/HDMI — từ config.json của daemon (nguồn duy nhất).
+
+    (06/11/2026, owner) ƯU TIÊN WiFi LAN khi PC + Pi5 cùng mạng: probe TCP
+    config host trước (LAN, <1ms); fail mới thử các host dự phòng
+    (Tailscale mesh 100.x). Chọn host ĐẦU TIÊN mở cổng — LAN luôn thắng khi
+    cùng WiFi vì được probe đầu tiên. Kết quả cache 30s tránh probe mỗi lời nói.
+    """
+    global _CORE_BASE_CACHE, _CORE_BASE_CACHE_AT
+    now = time.time()
+    if _CORE_BASE_CACHE and (now - _CORE_BASE_CACHE_AT) < 30.0:
+        return _CORE_BASE_CACHE
     try:
         cfg_path = Path.home() / "Desktop" / "edge_client" / "config.json"
         with open(cfg_path, encoding="utf-8") as fh:
             cfg = json.load(fh)
-        host = str(cfg.get("core_host") or "").strip()
         port = int(cfg.get("core_port") or 8766)
-        if host:
-            base = f"http://{host}:{port}"
-            _CORE_BASE_CACHE = base
-            return base
+        # Thứ tự ưu tiên: LAN (config) → mesh fallback (từ last known PC mesh IP)
+        host_candidates: list[str] = []
+        cfg_host = str(cfg.get("core_host") or "").strip()
+        if cfg_host:
+            host_candidates.append(cfg_host)
+        if cfg_host not in ("100.92.219.98",):
+            host_candidates.append("100.92.219.98")  # Tailscale mesh PC (backup)
+        import socket as _sock
+        for host in host_candidates:
+            try:
+                with _sock.create_connection((host, port), timeout=1.0):
+                    base = f"http://{host}:{port}"
+                    _CORE_BASE_CACHE = base
+                    _CORE_BASE_CACHE_AT = now
+                    return base
+            except OSError:
+                continue
     except Exception:
         pass
     return _CORE_BASE_CACHE or "http://127.0.0.1:8766"
@@ -779,7 +801,7 @@ def _voice_conversation_loop() -> None:
                     except Exception:
                         pass
             if utt == b"IDLE_TIMEOUT":
-                _voice_set_transcript("Em nghỉ nghe nhé. Gọi 'TONY ơi' khi cần em!", "IDLE")
+                _voice_set_transcript("Em nghỉ nghe nhé. Gọi 'CHERRY ơi' khi cần em!", "IDLE")
                 print("[VOICE] 30s im lặng → nghỉ phiên", flush=True)
                 return
             if not utt:
@@ -807,7 +829,7 @@ def _voice_conversation_loop() -> None:
             low = stt.lower()
             if any(k in low for k in ("nghỉ đi", "nghi di", "nghỉ nào", "tạm biệt", "ngủ đi")):
                 _voice_send_answer_flow(stt, "Dạ, em nghỉ nghe đây ạ. Anh cần thì gọi em nhé!")
-                _voice_set_transcript("Em nghỉ nghe nhé. Gọi 'TONY ơi' khi cần em!", "IDLE")
+                _voice_set_transcript("Em nghỉ nghe nhé. Gọi 'CHERRY ơi' khi cần em!", "IDLE")
                 print("[VOICE] owner bảo nghỉ → kết thúc phiên", flush=True)
                 return
             if answer:
@@ -821,7 +843,7 @@ def _voice_conversation_loop() -> None:
                 _voice_send_answer_flow(stt, "Em chưa xử lý được lệnh này, anh thử lại nhé.")
                 time.sleep(1.5)
         print("[VOICE] hết 15 phút/phiên → nghỉ", flush=True)
-        _voice_set_transcript("Em nghỉ nghe nhé. Gọi 'TONY ơi' khi cần em!", "IDLE")
+        _voice_set_transcript("Em nghỉ nghe nhé. Gọi 'CHERRY ơi' khi cần em!", "IDLE")
     finally:
         _VOICE_CONVO_ACTIVE.release()
 
@@ -1877,7 +1899,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             _set_kiosk_closed_by_owner(True)
             with self.daemon_state.lock:
                 self.daemon_state.avatar_state = "IDLE"
-                self.daemon_state.transcript = "Giao diện đã thoát theo yêu cầu của Anh — gọi 'TONY ơi' hoặc chạm màn hình là em quay lại."
+                self.daemon_state.transcript = "Giao diện đã thoát theo yêu cầu của Anh — gọi 'CHERRY ơi' hoặc chạm màn hình là em quay lại."
             try:
                 import subprocess, shutil, os
                 global _KIOSK_PROC
@@ -1895,7 +1917,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                     "kiosk_running": False,
                     "kiosk_closed_by_owner": True,
                     "embodiment_mode": "STANDBY",
-                    "message": "Đã thoát giao diện hình thể theo yêu cầu của Anh (màn hình giữ nguyên). Gọi 'TONY ơi' là em quay lại."
+                    "message": "Đã thoát giao diện hình thể theo yêu cầu của Anh (màn hình giữ nguyên). Gọi 'CHERRY ơi' là em quay lại."
                 })
                 return
             except Exception as e:
@@ -2696,7 +2718,7 @@ class EdgeClientDaemon:
             boot_actions = self.state.edge_agent.maybe_autoreact_on_boot(camera_available)
             if boot_actions.get("greeted"):
                 with self.state.lock:
-                    self.state.transcript = "Chào Anh Quân! TONY online, tất cả hệ thống sẵn sàng."
+                    self.state.transcript = "Chào Anh Quân! CHERRY online, tất cả hệ thống sẵn sàng."
                     self.state.avatar_state = "SPEAKING"
         except Exception:
             pass  # fail-closed: lỗi agent không được giết heartbeat
