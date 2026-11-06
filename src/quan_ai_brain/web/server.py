@@ -3940,8 +3940,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     "/api/kiosk/device", method="POST",
                     data={
                         "op": str(body.get("op", "")),
+                        "write_op": str(body.get("write_op", "")),
                         "target": str(body.get("target", "")),
-                        "value": body.get("value"),
+                        "value": body.get("value") if body.get("value") is not None else "",
                         "confirm_token": str(body.get("confirm_token", "")),
                     },
                     timeout=8.0,
