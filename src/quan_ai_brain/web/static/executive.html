@@ -215,6 +215,43 @@
             </div>
           </div>
 
+          <!-- (06/11/2026, owner) SỨC KHỎE PI 5 — tốc độ phản hồi + CPU/RAM/nhiệt thật từ Edge Agent V41 -->
+          <div class="edge-link-box pi5-health-box" id="pi5-health-box" style="margin-top: 12px;">
+            <div class="edge-link-header">
+              <span class="edge-icon">🩺</span>
+              <strong>Sức khỏe Pi 5 (thời gian thực):</strong>
+            </div>
+            <div class="pi5-health-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-top: 8px;">
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">⚡ Phản hồi (RTT):</span>
+                <strong class="stat-val" id="pi5-health-rtt">-- ms</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">🛰️ Kênh truyền:</span>
+                <strong class="stat-val" id="pi5-health-channel">--</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">🧠 CPU sử dụng:</span>
+                <strong class="stat-val" id="pi5-health-cpu">--%</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">💾 RAM:</span>
+                <strong class="stat-val" id="pi5-health-ram">--</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">🌡️ Nhiệt độ:</span>
+                <strong class="stat-val" id="pi5-health-temp">--°C</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">⏱️ Uptime:</span>
+                <strong class="stat-val" id="pi5-health-uptime">--</strong>
+              </div>
+            </div>
+            <div class="pi5-health-note" style="font-size: 11px; opacity: 0.75; margin-top: 6px;">
+              Cấu hình: Raspberry Pi 5 Model B · 4GB RAM · Edge Agent V41 đo thật mỗi 30s
+            </div>
+          </div>
+
           <!-- Emergency Action Buttons -->
           <div class="emergency-actions-box">
             <button class="btn btn-emergency-stop" id="btn-emergency-stop" title="Dừng ngay lập tức toàn bộ công cụ và tác vụ">

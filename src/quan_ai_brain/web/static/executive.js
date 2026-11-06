@@ -2412,6 +2412,53 @@ document.addEventListener("DOMContentLoaded", () => {
         if (pingAvgEl) pingAvgEl.textContent = `Trung bình: ~${avg.toFixed(1)}ms`;
       }
 
+      // (06/11/2026, owner) Sức khỏe Pi5: RTT + kênh + CPU/RAM/nhiệt/uptime
+      // từ Edge Agent V41 (metrics thật đo trên Pi5, đi theo heartbeat).
+      const hRtt = document.getElementById("pi5-health-rtt");
+      const hChannel = document.getElementById("pi5-health-channel");
+      const hCpu = document.getElementById("pi5-health-cpu");
+      const hRam = document.getElementById("pi5-health-ram");
+      const hTemp = document.getElementById("pi5-health-temp");
+      const hUptime = document.getElementById("pi5-health-uptime");
+      if (hRtt && data.rtt_ms) {
+        hRtt.textContent = `${data.rtt_ms.toFixed(0)} ms`;
+        hRtt.style.color = data.rtt_ms > 150 ? "#f87171" : (data.rtt_ms > 60 ? "#fbbf24" : "var(--green-success)");
+      }
+      if (hChannel && data.edge_ip) {
+        const ip = String(data.edge_ip).split(":")[0] || "";
+        const isLan = ip.startsWith("192.168.") || ip.startsWith("10.") || (ip.startsWith("172.") && !ip.startsWith("172.30."));
+        hChannel.textContent = isLan ? "LAN/WiFi (ưu tiên)" : (ip.startsWith("100.") ? "Tailscale Mesh" : ip || "--");
+      }
+      const agent = data.edge_agent || {};
+      const am = agent.metrics || {};
+      if (hCpu) {
+        if (typeof am.cpu_percent === "number" && am.cpu_percent >= 0) {
+          hCpu.textContent = `${am.cpu_percent.toFixed(0)}%`;
+          hCpu.style.color = am.cpu_percent > 85 ? "#f87171" : (am.cpu_percent > 60 ? "#fbbf24" : "var(--green-success)");
+        } else { hCpu.textContent = "đang đo..."; }
+      }
+      if (hRam) {
+        if (typeof am.mem_available_mb === "number" && am.mem_available_mb > 0) {
+          const totalMb = 4045; // Pi 5 4GB (MemTotal thực tế 4142208 kB)
+          const usedPct = Math.max(0, Math.min(100, 100 * (1 - am.mem_available_mb / totalMb)));
+          hRam.textContent = `${am.mem_available_mb} MB trống (${usedPct.toFixed(0)}% dùng)`;
+          hRam.style.color = usedPct > 90 ? "#f87171" : (usedPct > 75 ? "#fbbf24" : "var(--green-success)");
+        } else { hRam.textContent = "đang đo..."; }
+      }
+      if (hTemp) {
+        if (typeof am.temp_c === "number" && am.temp_c > 0) {
+          hTemp.textContent = `${am.temp_c.toFixed(1)}°C`;
+          hTemp.style.color = am.temp_c > 75 ? "#f87171" : (am.temp_c > 65 ? "#fbbf24" : "var(--green-success)");
+        } else { hTemp.textContent = "--°C"; }
+      }
+      if (hUptime) {
+        const up = am.uptime_sec;
+        if (typeof up === "number" && up > 0) {
+          const d = Math.floor(up / 86400), h = Math.floor((up % 86400) / 3600), mnt = Math.floor((up % 3600) / 60);
+          hUptime.textContent = d > 0 ? `${d} ngày ${h} giờ` : `${h} giờ ${mnt} phút`;
+        } else { hUptime.textContent = "--"; }
+      }
+
       const isOnline = data.edge_status && data.edge_status.state === "READY";
       if (linkStateBadge) {
         if (isOnline) {
