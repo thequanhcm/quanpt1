@@ -277,7 +277,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 _GLOBAL_WAKE_CONFIG = WakeWordConfig(enabled=False)
 _GLOBAL_EDGE_PAIRING_PIN = "888666"
 _GLOBAL_PAIRED_EDGE_DEVICES: dict[str, dict[str, Any]] = {}
-_GLOBAL_EDGE_MONITOR = EdgeConnectionMonitor(heartbeat_timeout_sec=4.0)
+# (06/11/2026) Timeout 12s: heartbeat gửi mỗi ~1s qua mesh DERP (RTT 100–190ms)
+# — ngưỡng 4s cũ khiến 1 nhịp lỡ là tuyên bố mất Pi5 (báo giả "kiosk đang tắt"
+# trong khi Pi bật). 12s = tha thứ ~10 nhịp chậm; vẫn bắt thật sự rớt mạng.
+_GLOBAL_EDGE_MONITOR = EdgeConnectionMonitor(heartbeat_timeout_sec=12.0, alert_on_misses=3)
 # UDR-1: store thiết bị Pi5 + DM NetChat cho owner khi cắm/rút (cooldown 300s)
 _GLOBAL_DEVICE_STORE = DeviceStore(
     Path(__file__).resolve().parents[2] / "data" / "edge_devices.db",
@@ -4152,6 +4155,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         telemetry_payload = body.get("telemetry")
         if telemetry_payload:
             _GLOBAL_EDGE_TELEMETRY["last_telemetry"] = telemetry_payload
+            # (06/11/2026) Kiosk snapshot vào monitor — DM status cần kiosk_running
+            try:
+                _GLOBAL_EDGE_MONITOR.last_telemetry = dict(telemetry_payload)
+            except Exception:
+                pass
 
         # UDR-1: heartbeat mang snapshot thiết bị (edge_agent.get_status_summary)
         edge_agent_state = body.get("edge_agent")

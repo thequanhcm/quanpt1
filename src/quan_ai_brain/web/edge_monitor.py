@@ -82,10 +82,16 @@ class EdgeConnectionMonitor:
         heartbeat_timeout_sec: float = 4.0,
         degraded_rtt_threshold_ms: float = 350.0,
         device_id: str = "EDGE-PI5-DESK-01",
+        alert_on_misses: int = 3,
     ) -> None:
         self.lock = threading.RLock()
         self.heartbeat_timeout_sec = max(0.05, float(heartbeat_timeout_sec))
         self.degraded_rtt_threshold_ms = max(50.0, float(degraded_rtt_threshold_ms))
+        # (06/11/2026) Alert B chỉ bắn sau N lần MISS liên tiếp — heartbeat 1s
+        # qua mesh DERP (RTT 100–190ms) hay chập chờn 1 nhịp; tuyên bố mất
+        # Pi5 CRITICAL ngay miss #1 là báo giả (owner hỏi "pi vẫn bật, sao
+        # báo kiosk tắt"). State vẫn DISCONNECTED đúng nghĩa vượt deadline.
+        self.alert_on_misses = max(1, int(alert_on_misses))
         self.device_id = device_id
 
         self.state: EdgeConnectionState = EdgeConnectionState.DISCONNECTED
@@ -95,6 +101,9 @@ class EdgeConnectionMonitor:
         self.consecutive_misses: int = 0
         self.paired: bool = False
         self.device_label: str = "Raspberry Pi 5 Digital Avatar"
+        # (06/11/2026) Snapshot telemetry mới nhất từ heartbeat (kiosk_running...)
+        # — trước đây status không trả kiosk_running nên DM luôn báo "đang tắt".
+        self.last_telemetry: dict[str, Any] = {}
 
         # Alert tracking & anti-spam
         self.active_alerts: dict[EdgeAlertCode, EdgeAlertRecord] = {}
@@ -165,6 +174,10 @@ class EdgeConnectionMonitor:
             self.last_heartbeat_utc = now_utc
             self.last_rtt_ms = max(0.0, float(rtt_ms))
             self.consecutive_misses = 0
+            # (06/11/2026) Snapshot telemetry từ heartbeat (kiosk_running...) —
+            # nguồn sự thật để DM/dashboard báo đúng trạng thái kiosk.
+            if isinstance(metadata, dict):
+                self.last_telemetry = dict(metadata)
 
             # Evaluate channel health
             if self.last_rtt_ms > self.degraded_rtt_threshold_ms:
@@ -188,7 +201,6 @@ class EdgeConnectionMonitor:
             had_disconnect = EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT in self.active_alerts
             self.active_alerts.pop(EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT, None)
             self.active_alerts.pop(EdgeAlertCode.ALERT_A_PI5_NOT_CONNECTED, None)
-
             # If recovering from previous disconnect, trigger Alert E
             if was_disconnected and had_disconnect:
                 self._trigger_alert(
@@ -270,18 +282,24 @@ class EdgeConnectionMonitor:
                     EdgeConnectionState.SYNCING,
                 ):
                     self.state = EdgeConnectionState.DISCONNECTED
+                # (06/11/2026) Báo động CRITICAL chỉ khi mất N nhịp LIÊN TIẾP
+                # (mặc định 3 ≈ 3s không có tin) — 1 nhịp lỡ qua mesh là đời
+                # thường, không phải "Pi5 tắt nguồn".
+                if self.consecutive_misses >= self.alert_on_misses:
                     self._trigger_alert(
                         code=EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT,
                         title="CẢNH BÁO: MẤT KẾT NỐI RASPBERRY PI 5",
                         message=(
                             f"Không nhận được tín hiệu nhịp tim từ {self.device_id} trong {elapsed:.1f}s "
-                            f"(Ngưỡng cho phép: {self.heartbeat_timeout_sec}s). Pi 5 có thể đã tắt nguồn hoặc mất sóng Wi-Fi."
+                            f"(Ngưỡng cho phép: {self.heartbeat_timeout_sec}s, miss liên tiếp: "
+                            f"{self.consecutive_misses}/{self.alert_on_misses}). Pi 5 có thể đã tắt nguồn hoặc mất sóng Wi-Fi."
                         ),
                         severity="CRITICAL",
                         metadata={
                             "elapsed_sec": round(elapsed, 2),
                             "last_heartbeat_utc": self.last_heartbeat_utc,
                             "misses": self.consecutive_misses,
+                            "alert_on_misses": self.alert_on_misses,
                         },
                     )
 
@@ -349,9 +367,15 @@ class EdgeConnectionMonitor:
                 "state": self.state.value,
                 "paired": self.paired,
                 "last_heartbeat_utc": self.last_heartbeat_utc,
+                "last_heartbeat_epoch": self.last_heartbeat_epoch,
                 "seconds_since_heartbeat": elapsed_since_hb,
                 "timeout_sec": self.heartbeat_timeout_sec,
                 "rtt_ms": self.last_rtt_ms,
+                "consecutive_misses": self.consecutive_misses,
+                # (06/11/2026) Kiosk snapshot từ heartbeat gần nhất — DM/dashboard
+                # báo đúng "đang bật/đang tắt" theo dữ liệu thật của Pi5.
+                "kiosk_running": bool(self.last_telemetry.get("kiosk_running")),
+                "telemetry": dict(self.last_telemetry),
                 "active_alert_count": len(self.active_alerts),
                 "active_alerts": [a.to_dict() for a in self.active_alerts.values()],
             }

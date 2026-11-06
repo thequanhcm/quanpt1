@@ -779,11 +779,23 @@ def handle_tony_status(payload: dict[str, Any] | None = None) -> str:
         edge = data.get("edge") or {}
         state = str(edge.get("state") or "?")
         paired = edge.get("paired")
-        hb = edge.get("last_heartbeat_epoch") or 0
-        age = f"{max(0.0, time.time() - float(hb)):.0f}s trước" if hb else "?"
+        # (06/11/2026 fix) Ưu tiên seconds_since_heartbeat do server tự tính;
+        # last_heartbeat_epoch mới được server trả (trước đây đọc field không
+        # tồn tại → luôn hiện "?").
+        since = edge.get("seconds_since_heartbeat")
+        if since is not None:
+            age = f"{max(0.0, float(since)):.0f}s trước"
+        else:
+            hb = edge.get("last_heartbeat_epoch") or 0
+            age = f"{max(0.0, time.time() - float(hb)):.0f}s trước" if hb else "?"
+        # (06/11/2026 fix) kiosk_running giờ là field thật trong status (snapshot
+        # từ heartbeat của Pi5) — trước đây luôn None → DM luôn báo "đang tắt"
+        # dù Pi bật (root cause câu hỏi của anh lúc 20:54).
         kiosk = edge.get("kiosk_running")
-        _audit("netchat_command.tony_status", {"state": state})
-        return (f"🧭 Hình thể Pi 5: {_vn(state)} | ghép nối: {_vn_bool(paired)} | "
+        misses = edge.get("consecutive_misses") or 0
+        miss_note = f" (miss liên tiếp: {misses})" if state == "DISCONNECTED" else ""
+        _audit("netchat_command.tony_status", {"state": state, "kiosk_running": kiosk})
+        return (f"🧭 Hình thể Pi 5: {_vn(state)}{miss_note} | ghép nối: {_vn_bool(paired)} | "
                 f"tim đập (heartbeat): {age} | "
                 f"kiosk: {'đang bật' if kiosk else 'đang tắt'}")
     except Exception as exc:
