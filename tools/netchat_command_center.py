@@ -1035,14 +1035,18 @@ def handle_tony_pi_screenshot(text: str = "", payload: dict[str, Any] | None = N
                 capture_output=True, timeout=15)
         size_kb = pc_path.stat().st_size / 1024
         # 4) Gửi ảnh DM
+        # (06/11/2026, owner) CHỈ GỬI HÌNH — metadata gộp caption, không tin text
         sent, sent_msg = send_file_to_dm(
             str(pc_path),
             f"🖥️ Ảnh màn hình kiosk Pi 5 (TFT 800x480) lúc "
-            f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM)")
+            f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM) — "
+            f"k_{ts}.png ({size_kb:.0f} KB), đã lưu PC")
         _audit("netchat_command.tony_pi_screenshot",
                {"ok": True, "size_kb": round(size_kb, 1), "dm_sent": sent})
-        dm_note = " — đã gửi ảnh vào DM cho anh" if sent else f" (gửi DM lỗi: {sent_msg})"
-        return (f"🖥️ Đã chụp màn hình kiosk Pi 5 ({size_kb:.0f} KB){dm_note}.")
+        if sent:
+            return ""
+        return (f"⚠️ Đã chụp màn hình kiosk ({size_kb:.0f} KB) nhưng gửi ảnh vào DM lỗi: "
+                f"{sent_msg} — ảnh lưu tại PC: {pc_path}")
     except Exception as exc:
         _audit("netchat_command.tony_pi_screenshot", {"ok": False, "err": type(exc).__name__})
         return f"⚠️ Lỗi chụp màn hình Pi 5: {type(exc).__name__}: {exc}"
@@ -1059,20 +1063,27 @@ def handle_tony_pi_photo(text: str = "", payload: dict[str, Any] | None = None) 
     fname = str(data.get("filename", ""))
     pc_path = str(data.get("pc_path", ""))
     size_kb = int(data.get("size_bytes", 0)) / 1024
-    _audit("netchat_command.tony_pi_photo",
-           {"ok": True, "file": fname, "size_kb": round(size_kb, 1)})
-
     # Gửi file vào DM cho owner xem ngay:
-    dm_note = ""
+    # (06/11/2026, owner) CHỈ GỬI HÌNH — không tin text xác nhận nữa: tên file +
+    # dung lượng gộp vào caption của tin ảnh. Return rỗng → responder im lặng
+    # (cơ chế có sẵn: response rỗng/None → không gửi gì).
     if pc_path and not pc_path.startswith("("):
         from pathlib import Path as _P
-        sent, sent_msg = send_file_to_dm(
-            pc_path, f"📷 Ảnh chụp từ camera Pi 5 lúc "
-                     f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM)")
-        dm_note = " và đã gửi ảnh vào DM cho anh" if sent else (
-            f" (gửi DM lỗi: {sent_msg})")
-    return (f"📷 Đã chụp ảnh từ camera Pi 5: {fname} ({size_kb:.0f} KB) — "
-            f"đã lưu trên Pi 5 lẫn máy tính{dm_note}.")
+        caption = (f"📷 Ảnh chụp từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
+                   f"(TONY chụp theo lệnh DM) — {fname} ({size_kb:.0f} KB), "
+                   f"đã lưu Pi 5 + PC")
+        sent, sent_msg = send_file_to_dm(pc_path, caption)
+        if not sent:
+            # Gửi ảnh lỗi → BẮT BUỘC báo bằng text (không im lặng khi mất ảnh)
+            _audit("netchat_command.tony_pi_photo", {"dm_sent": False, "err": sent_msg[:120]})
+            return (f"⚠️ Đã chụp {fname} ({size_kb:.0f} KB) nhưng gửi ảnh vào DM lỗi: "
+                    f"{sent_msg} — ảnh lưu tại PC: {pc_path}")
+        _audit("netchat_command.tony_pi_photo",
+               {"ok": True, "file": fname, "size_kb": round(size_kb, 1), "dm_sent": True})
+        return ""
+    # Không có file trên PC → báo text (fail-honest, không im lặng)
+    return (f"📷 Đã chụp {fname} ({size_kb:.0f} KB), lưu trên Pi 5 — "
+            f"không tải được về PC để gửi DM.")
 
 
 def handle_tony_pi_video(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -1095,18 +1106,20 @@ def handle_tony_pi_video(text: str = "", payload: dict[str, Any] | None = None) 
            {"ok": True, "file": fname, "size_kb": round(size_kb, 1),
             "duration": duration, "has_audio": has_audio})
 
-    dm_note = ""
+    # (06/11/2026, owner) CHỈ GỬI VIDEO — metadata gộp vào caption, không tin text
     if pc_path and not pc_path.startswith("("):
         from pathlib import Path as _P
-        sent, sent_msg = send_file_to_dm(
-            pc_path, f"🎬 Video {duration:.0f}s{' kèm tiếng' if has_audio else '(câm)'} "
-                     f"từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
-                     f"(TONY quay theo lệnh DM)")
-        dm_note = " và đã gửi video vào DM cho anh" if sent else (
-            f" (gửi DM lỗi: {sent_msg})")
-    audio_note = "kèm tiếng mic" if has_audio else "video câm (mic không ghi được)"
-    return (f"🎬 Đã quay video {duration:.0f}s từ Pi 5 ({audio_note}): {fname} "
-            f"({size_kb:.0f} KB) — đã lưu trên Pi 5 lẫn máy tính{dm_note}.")
+        caption = (f"🎬 Video {duration:.0f}s{' kèm tiếng' if has_audio else '(câm)'} "
+                   f"từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
+                   f"(TONY quay theo lệnh DM) — {fname} ({size_kb:.0f} KB), đã lưu Pi 5 + PC")
+        sent, sent_msg = send_file_to_dm(pc_path, caption)
+        if not sent:
+            _audit("netchat_command.tony_pi_video", {"dm_sent": False, "err": sent_msg[:120]})
+            return (f"⚠️ Đã quay {fname} ({size_kb:.0f} KB) nhưng gửi video vào DM lỗi: "
+                    f"{sent_msg} — video lưu tại PC: {pc_path}")
+        return ""
+    return (f"🎬 Đã quay video {duration:.0f}s từ Pi 5: {fname} ({size_kb:.0f} KB), "
+            f"lưu trên Pi 5 — không tải được về PC để gửi DM.")
 
 
 def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -1138,16 +1151,21 @@ def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None)
     _audit("netchat_command.tony_pi_listen",
            {"ok": True, "file": fname, "size_kb": round(size_kb, 1), "duration": duration})
 
-    dm_note = ""
+    # (06/11/2026, owner) CHỈ GỬI FILE — metadata gộp vào caption, không tin text
+    mic_label = {"usb": "mic USB", "bt": "mic loa (SRS-XB33)",
+                 "auto": "mic tự chọn (USB ưu tiên)"}.get(mic_kind, "mic")
     if pc_path and not pc_path.startswith("("):
         sent, sent_msg = send_file_to_dm(
             pc_path, f"🎙️ Thu âm {duration:.0f}s từ mic Pi 5 lúc "
-                     f"{time.strftime('%H:%M:%S %d/%m')} (tai TONY nghe theo lệnh DM)")
-        dm_note = " và đã gửi file âm thanh vào DM cho anh" if sent else (
-            f" (gửi DM lỗi: {sent_msg})")
-    mic_label = {"usb": "mic USB", "bt": "mic loa (SRS-XB33)", "auto": "mic tự chọn (USB ưu tiên)"}.get(mic_kind, "mic")
-    return (f"🎙️ Đã thu âm {duration:.0f}s ({mic_label}): {fname} ({size_kb:.0f} KB) — "
-            f"đã lưu trên Pi 5 lẫn máy tính{dm_note}.")
+                     f"{time.strftime('%H:%M:%S %d/%m')} (tai TONY nghe theo lệnh DM) — "
+                     f"{fname} ({size_kb:.0f} KB), {mic_label}, đã lưu Pi 5 + PC")
+        if not sent:
+            _audit("netchat_command.tony_pi_listen", {"dm_sent": False, "err": sent_msg[:120]})
+            return (f"⚠️ Đã thu âm {fname} ({size_kb:.0f} KB) nhưng gửi file vào DM lỗi: "
+                    f"{sent_msg} — file lưu tại PC: {pc_path}")
+        return ""
+    return (f"🎙️ Đã thu âm {duration:.0f}s ({mic_label}): {fname} ({size_kb:.0f} KB), "
+            f"lưu trên Pi 5 — không tải được về PC để gửi DM.")
 
 
 def handle_tony_youtube(text: str, payload: dict[str, Any] | None = None) -> str:

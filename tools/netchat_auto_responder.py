@@ -1274,8 +1274,9 @@ def main():
                         payload={"file_paths": _local_paths} if _local_paths else None,
                     )
 
-                    if response is None:
-                        # ok_silent: xác nhận không kèm việc nào → không gửi gì
+                    if response is None or not str(response).strip():
+                        # ok_silent / handler trả rỗng (vd 'chụp hình' đã gửi ảnh DM,
+                        # metadata gộp caption): không gửi tin text rỗng/spam.
                         seen_ids.add(msg_id)
                         _save_seen_state(seen_ids)
                         _save_state_files(seen_ids, _batch_pending)
