@@ -21,7 +21,7 @@ import dbus
 BUS_NAME = "org.bluez"
 PATH = "/org/bluez"
 IFACE_ADAPTER = "org.bluez.Adapter1"
-IFACE_NET_SERVER = "org.bluez.Network1"
+IFACE_NET_SERVER = "org.bluez.NetworkServer1"  # BlueZ 5.82 trên Debian 13 (Network1 cũ không tồn tại)
 DBUS_PROPS = "org.freedesktop.DBus.Properties"
 
 BRIDGE = "pan0"
@@ -57,8 +57,9 @@ def find_adapter() -> dbus.Interface:
 def main() -> int:
     setup_bridge()
     net_server = find_adapter()
-    # Register NAP service trên bridge
-    net_server.RegisterServer(UUID_NAP, BRIDGE)
+    # Register NAP service trên bridge — org.bluez.NetworkServer1.Register(uuid, bridge)
+    # (BlueZ API: UUID TRƯỚC, bridge SAU — docs org.bluez.NetworkServer.rst)
+    net_server.Register(UUID_NAP, BRIDGE)
     log.info("NAP registered: uuid=%s bridge=%s", UUID_NAP, BRIDGE)
 
     # Bluetooth discoverable + pairable để PC tìm thấy

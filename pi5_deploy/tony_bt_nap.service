@@ -1,0 +1,13 @@
+[Unit]
+Description=TONY BT-NAP server — Bluetooth PAN cứu hộ PC↔Pi5 (172.30.99.1)
+After=bluetooth.service
+Requires=bluetooth.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /home/quanpt1/Desktop/edge_client/bt_nap_server.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
