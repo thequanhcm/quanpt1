@@ -30,9 +30,8 @@ class WakeWordMatchResult:
 
 
 DEFAULT_WAKE_WORDS: list[WakeWordItem] = [
-    WakeWordItem("ww_hi_tony", "Hi TONY", "en", True, "LOW"),
-    WakeWordItem("ww_hey_tony", "Hey Tony", "en", True, "LOW"),
-    WakeWordItem("ww_tony_oi", "Tony ơi", "vi", True, "LOW"),
+    WakeWordItem("ww_cherry_oi", "Cherry ơi", "vi", True, "LOW"),
+    WakeWordItem("ww_hi_cherry", "Hi Cherry", "en", True, "LOW"),
     WakeWordItem("ww_chao_tro_ly", "Chào trợ lý", "vi", True, "LOW"),
     WakeWordItem("ww_hi_tro_ly", "Hi trợ lý", "vi", True, "LOW"),
     WakeWordItem("ww_xin_chao_tro_ly", "Xin chào trợ lý", "vi", True, "LOW"),
@@ -75,7 +74,7 @@ class WakeWordConfig:
         kw_list = [asdict(w) for w in self.items.values()]
         return {
             "enabled": self.enabled,
-            "assistant_name": "TONY — QUAN AI BRAIN Voice Assistant",
+            "assistant_name": "CHERRY — QUAN AI BRAIN Voice Assistant",
             "silence_timeout_seconds": self.silence_timeout_seconds,
             "silence_timeout_sec": self.silence_timeout_seconds,
             "chime_enabled": self.chime_enabled,

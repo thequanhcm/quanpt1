@@ -1,4 +1,4 @@
-"""Comprehensive Test Suite for QUAN AI BRAIN / TONY PHAM Digital Identity,
+"""Comprehensive Test Suite for QUAN AI BRAIN / CHERRY Digital Identity (rename 06/11/2026 từ TONY PHAM theo lệnh owner),
 Self-Introduction, Owner Authority & Executive Persona.
 
 Implements and strictly verifies all 15 mandatory test scenarios from Section 9:
@@ -64,12 +64,12 @@ def test_scenario_01_ask_assistant_name(orchestrator: ExecutiveRoleOrchestrator)
     """Test 1: Người dùng hỏi tên trợ lý."""
     res1 = orchestrator.process("Em tên gì?")
     assert res1.active_role == ExecutiveRole.EXECUTIVE_ASSISTANT
-    assert "TONY PHAM" in res1.response_text
+    assert "CHERRY" in res1.response_text  # (06/11) rename TONY PHAM → CHERRY
     assert "QUAN AI BRAIN" in res1.response_text
     assert "Anh Quân" in res1.response_text
 
     res2 = orchestrator.process("Tên của em là gì?")
-    assert "TONY PHAM" in res2.response_text
+    assert "CHERRY" in res2.response_text
 
 
 # ==============================================================================
@@ -272,7 +272,7 @@ def test_context_builder_contains_tony_pham_and_owner_authority(persona: Executi
     """Verify PromptContextBuilder injects official identity into LLM system prompt."""
     builder = PromptContextBuilder(persona=persona)
     ctx = builder.build("Xin chào em, em là ai?")
-    assert "TONY PHAM" in ctx.rendered_context
+    assert "CHERRY" in ctx.rendered_context
     assert "Anh Quân" in ctx.rendered_context
     assert "QUAN AI BRAIN" in ctx.rendered_context
 
@@ -280,7 +280,7 @@ def test_context_builder_contains_tony_pham_and_owner_authority(persona: Executi
 def test_voice_pipeline_spoken_sanitization_preserves_self_intro(voice_pipeline: XiaoZhiVoicePipeline):
     """Verify voice pipeline sanitizes and articulates natural Vietnamese without clipping."""
     res = voice_pipeline.handle_voice_input("Giới thiệu về em.", is_push_to_talk=True)
-    assert "TONY PHAM" in res.spoken_text
+    assert "CHERRY" in res.spoken_text
     assert "Anh Quân" in res.spoken_text
     assert res.mouth_timeline is not None
     assert len(res.mouth_timeline["frames"]) > 0

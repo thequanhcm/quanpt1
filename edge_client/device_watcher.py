@@ -65,8 +65,11 @@ class DeviceWatcher:
         for fp in sorted(added):
             dev = next((d for d in flat if device_fingerprint(d) == fp), None)
             info = self._describe(dev)
+            # (06/11/2026, owner) desc chỉ chứa ĐỊNH DANH ([bus] tên (vid_pid)) —
+            # câu văn "kết nối/mất kết nối" do DeviceStore soạn 1 chỗ duy nhất,
+            # tránh lặp chữ ("Thiết bị CẮM vào Pi5: Thiết bị cắm vào Pi5: …").
             ev = self._safe_add("DEVICE_ADDED", "INFO", {
-                "desc": f"Thiết bị cắm vào Pi5: {info}",
+                "desc": info,
                 "fingerprint": fp,
                 **({"device": dev} if dev else {}),
             })
@@ -80,7 +83,7 @@ class DeviceWatcher:
             dev = next((d for d in last if device_fingerprint(d) == fp), None)
             info = self._describe(dev)
             ev = self._safe_add("DEVICE_REMOVED", "INFO", {
-                "desc": f"Thiết bị rút khỏi Pi5: {info}",
+                "desc": info,  # định danh thuần — câu văn do DeviceStore soạn
                 "fingerprint": fp,
             })
             if ev:

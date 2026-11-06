@@ -131,6 +131,13 @@ class DigitalHumanAvatar {
         browLift: 2.2, browTilt: 2.8, browInward: 0.5, browAsymmetric: 2.8,
         eyeSquint: 0.22, gazeX: 0.0, gazeY: -0.6, glintPulse: 1.25, smileBoost: 0.22,
       },
+      // (06/11/2026, owner: "đủ đa dạng cử chỉ, giác quan") Tone SURPRISED —
+      // kích hoạt portrait_surprised (asset đã có nhưng trước giờ chết code):
+      // tin bất ngờ, cảnh báo khẩn chưa xác nhận, sự kiện ngoài dự kiến.
+      SURPRISED: {
+        browLift: 6.0, browTilt: 0.0, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: -0.15, gazeX: 0.0, gazeY: 0.8, glintPulse: 1.6, smileBoost: 0.0,
+      },
     };
 
     // State configurations (Standard 12-State Digital Human Protocol)
@@ -232,17 +239,30 @@ class DigitalHumanAvatar {
     // (31/10/2026) AUDIT HIỆU NĂNG: 60 FPS trên SwiftShader (software GL) ngốn
     // ~300% CPU → nhiệt 66°C, phản ứng chậm. Màn DSI 800x480 không cần 60 FPS:
     // giới hạn 15 FPS (66ms/frame) — mắt thường vẫn mượt, CPU giảm ~4 lần.
-    const FRAME_MIN_INTERVAL_MS = 66;
-    let _lastFrameTs = 0;
+    // (06/11/2026, owner: "hình thể mượt nhất") IDLE/SLEEPING 12 FPS đủ (ít chuyển
+    // động), SPEAKING/LISTENING/THINKING 24 FPS cho lip-sync + đầu mượt theo giọng —
+    // thích ứng theo trạng thái thay vì cap cứng một mức.
+    this._lastFrameTs = 0;
     const loop = (timestamp) => {
-      if (timestamp - _lastFrameTs >= FRAME_MIN_INTERVAL_MS) {
-        _lastFrameTs = timestamp;
+      const cap = this._frameIntervalMs();
+      if (timestamp - this._lastFrameTs >= cap) {
+        this._lastFrameTs = timestamp;
         this._update(timestamp);
         this._render(timestamp);
       }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+  }
+
+  _frameIntervalMs() {
+    switch (this.state) {
+      case "SPEAKING": return 42;  // ~24 FPS — miệng + đầu theo nhịp giọng
+      case "LISTENING":
+      case "THINKING":
+      case "RESEARCHING": return 56; // ~18 FPS
+      default: return 83;          // ~12 FPS — IDLE/SLEEPING tiết kiệm CPU
+    }
   }
 
   setState(newState) {
@@ -282,6 +302,11 @@ class DigitalHumanAvatar {
     // 1. Alert / Warning / Safety Block / Prohibited
     if (/canh bao|chuy|luu y|nguy hiem|rui ro|khong duoc|chan|that bai|loi |bi loi|bat thuong|su co|dung |khan cap|nghiem cam/.test(lower)) {
       return "SERIOUS_ALERT";
+    }
+
+    // 1b. (06/11/2026) Bất ngờ / khẩn cấp / đột xuất — tone SURPRISED mới
+    if (/bat ngo|ngac nhien|dang le|khong mong doi|khan|dot xuat|mau than|choang|bat thuong|on ao/.test(lower)) {
+      return "SURPRISED";
     }
 
     // 2. Success / Accomplished / Certified / 100% / Excellent
@@ -331,6 +356,13 @@ class DigitalHumanAvatar {
     this.currentTimeline = timeline;
     this.timelineStartTime = performance.now();
     this.setState("SPEAKING");
+  }
+
+  // (06/11/2026, owner: "hình chuyển động theo giọng nói") Nguồn năng lượng
+  // THẬT từ audio đang phát (WebAudio AnalyserNode do kiosk.js cấp). Khi có,
+  // miệng + gật đầu dẫn động theo amplitude thay vì chỉ timeline chữ.
+  setLiveAudioMeter(fn) {
+    this._liveAudioMeter = typeof fn === "function" ? fn : null;
   }
 
   cancelUtterance() {
@@ -425,9 +457,14 @@ class DigitalHumanAvatar {
         this.targetHeadSwayX = -2.2;
         this.nextHeadShiftTime = now + 3000 + Math.random() * 2500;
       } else if (this.state === "SPEAKING") {
-        // Dynamic roll aligned with natural speech cadence
-        this.targetHeadTilt = Math.sin(now * 0.003) * 0.018;
-        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.5;
+        // (06/11/2026, owner: "hình chuyển động theo giọng nói") Đầu GẬT THEO
+        // NHỊP LỜI NÓI: dùng open_ratio hiện tại của lip-sync làm xung gật đầu —
+        // mỗi âm tiết mở miệng mạnh → gật nhẹ xuống, khép → nâng lên. Cộng thêm
+        // cadence sin chậm để không máy móc. Khi không có timeline vẫn có sway.
+        const speechPulse = this.currentOpenRatio; // 0..1 theo timeline/fallback
+        this.targetHeadNodY = speechPulse * 3.2;
+        this.targetHeadTilt = Math.sin(now * 0.003) * 0.014 + speechPulse * 0.008;
+        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.2;
         this.nextHeadShiftTime = now + 1400;
       } else {
         this.targetHeadTilt = 0.0;
@@ -494,25 +531,42 @@ class DigitalHumanAvatar {
     }
 
     // 5. Lip-Sync Frame Lookup from timeline
-    if (this.state === "SPEAKING" && this.currentTimeline && this.currentTimeline.frames) {
-      const elapsedMs = now - this.timelineStartTime;
-      const frames = this.currentTimeline.frames;
-      let activeFrame = frames[0];
-
-      for (let i = 0; i < frames.length; i++) {
-        if (frames[i].offset_ms <= elapsedMs) {
-          activeFrame = frames[i];
+    if (this.state === "SPEAKING") {
+      // (06/11/2026) ƯU TIÊN NĂNG LƯỢNG THẬT: khi có live audio meter (WebAudio
+      // đo chính file mp3 đang phát), openRatio dẫn động theo amplitude — khớp
+      // nhịp tuyệt đối với tiếng loa; viseme suy từ mức mở (khép→REST).
+      if (this._liveAudioMeter) {
+        let energy = 0;
+        try { energy = Math.max(0, Math.min(1, this._liveAudioMeter())); } catch (_) { energy = 0; }
+        if (energy > 0.02) {
+          // Làm mượt: lerp về energy để tránh nhiễu từng sample
+          this.currentOpenRatio = this.currentOpenRatio + (energy * 0.95 - this.currentOpenRatio) * 0.45;
+          this.activeViseme = this.currentOpenRatio < 0.12 ? "REST"
+            : (this.currentOpenRatio > 0.72 ? "O" : (this.currentOpenRatio < 0.35 ? "I" : "A"));
         } else {
-          break;
+          this.currentOpenRatio = this.currentOpenRatio * 0.72; // khép dần tự nhiên
+          if (this.currentOpenRatio < 0.05) this.activeViseme = "REST";
         }
-      }
+      } else if (this.currentTimeline && this.currentTimeline.frames) {
+        const elapsedMs = now - this.timelineStartTime;
+        const frames = this.currentTimeline.frames;
+        let activeFrame = frames[0];
 
-      if (elapsedMs >= this.currentTimeline.total_duration_ms) {
-        this.cancelUtterance();
-        this.setState("IDLE");
-      } else if (activeFrame) {
-        this.activeViseme = activeFrame.viseme || "REST";
-        this.currentOpenRatio = activeFrame.open_ratio || 0.0;
+        for (let i = 0; i < frames.length; i++) {
+          if (frames[i].offset_ms <= elapsedMs) {
+            activeFrame = frames[i];
+          } else {
+            break;
+          }
+        }
+
+        if (elapsedMs >= this.currentTimeline.total_duration_ms) {
+          this.cancelUtterance();
+          this.setState("IDLE");
+        } else if (activeFrame) {
+          this.activeViseme = activeFrame.viseme || "REST";
+          this.currentOpenRatio = activeFrame.open_ratio || 0.0;
+        }
       }
     }
   }
@@ -569,6 +623,10 @@ class DigitalHumanAvatar {
     } else if ((this.state === "WARNING" || this.state === "BLOCKED" || this.activeEmotionTone === "SERIOUS_ALERT") && this.assets.portrait_warning && this.assets.portrait_warning.complete && this.assets.portrait_warning.naturalWidth > 0) {
       baseImg = this.assets.portrait_warning;
       isSpecialExpression = true;
+    } else if (this.activeEmotionTone === "SURPRISED" && this.assets.portrait_surprised && this.assets.portrait_surprised.complete && this.assets.portrait_surprised.naturalWidth > 0) {
+      // (06/11/2026) SURPRISED: dùng đúng asset portrait_surprised vốn bỏ không
+      baseImg = this.assets.portrait_surprised;
+      isSpecialExpression = true;
     } else if (this.state === "ERROR" && this.assets.portrait_error && this.assets.portrait_error.complete && this.assets.portrait_error.naturalWidth > 0) {
       baseImg = this.assets.portrait_error;
       isSpecialExpression = true;
@@ -607,52 +665,68 @@ class DigitalHumanAvatar {
   }
 
   _drawHolographicHalo(ctx, w, h, color) {
+    // (06/11/2026, owner: "mượt nhất") Halo tĩnh ít đổi → CACHE offscreen:
+    // chỉ vẽ lại khi màu aura đổi hoặc vòng quay vượt 1 bậc cung nhỏ. Giảm
+    // shadowBlur đắt mỗi frame → tăng FPS thực trên Pi5 đáng kể.
     const cx = w * 0.5;
     const cy = h * 0.46;
     const radius = w * 0.42;
 
+    const cacheKey = `${color}|${Math.floor(this.haloAngle / 0.35)}`;
+    if (!this._haloCache || this._haloCacheKey !== cacheKey) {
+      if (!this._haloCache) {
+        this._haloCache = document.createElement("canvas");
+        this._haloCache.width = w;
+        this._haloCache.height = h;
+      }
+      const hctx = this._haloCache.getContext("2d");
+      hctx.clearRect(0, 0, w, h);
+      hctx.save();
+      hctx.translate(cx, cy);
+      hctx.rotate(this.haloAngle);
+
+      hctx.shadowBlur = 18;
+      hctx.shadowColor = color;
+      hctx.strokeStyle = color;
+      hctx.lineWidth = 2.0;
+      hctx.globalAlpha = 0.45;
+
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, 0, Math.PI * 2);
+      hctx.stroke();
+
+      hctx.lineWidth = 3.5;
+      hctx.globalAlpha = 0.75;
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, 0, Math.PI * 0.4);
+      hctx.stroke();
+
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, Math.PI * 0.9, Math.PI * 1.3);
+      hctx.stroke();
+
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, Math.PI * 1.6, Math.PI * 1.9);
+      hctx.stroke();
+
+      hctx.restore();
+      this._haloCacheKey = cacheKey;
+    }
+
+    ctx.drawImage(this._haloCache, 0, 0);
+
+    // Telemetry node dots — nhẹ, vẽ trực tiếp (đủ mượt 24 FPS)
     ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(this.haloAngle);
-
-    // Outer glow ring
-    ctx.shadowBlur = 18;
-    ctx.shadowColor = color;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.0;
-    ctx.globalAlpha = 0.45;
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Segmented tech arcs
-    ctx.lineWidth = 3.5;
-    ctx.globalAlpha = 0.75;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 0.4);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, Math.PI * 0.9, Math.PI * 1.3);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, Math.PI * 1.6, Math.PI * 1.9);
-    ctx.stroke();
-
-    // Telemetry node dots
     const numDots = 8;
     ctx.fillStyle = "#ffffff";
     for (let i = 0; i < numDots; i++) {
-      const angle = (i * Math.PI * 2) / numDots;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
+      const angle = this.haloAngle + (i * Math.PI * 2) / numDots;
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius;
       ctx.beginPath();
       ctx.arc(x, y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
-
     ctx.restore();
   }
 
@@ -681,8 +755,10 @@ class DigitalHumanAvatar {
 
     ctx.strokeStyle = gradL;
     ctx.lineWidth = Math.max(1.8, 2.6 * scaleX);
-    ctx.shadowBlur = 4;
-    ctx.shadowColor = "rgba(0, 229, 255, 0.25)";
+    // (06/11/2026) shadowBlur là operation đắt nhất canvas 2D — giảm 4→2 và
+    // chỉ giữ trên strand ngoài; hiệu ứng sheen giữ nguyên nhờ gradient.
+    ctx.shadowBlur = 2;
+    ctx.shadowColor = "rgba(0, 229, 255, 0.18)";
 
     // Outer Left Hair Strand
     ctx.beginPath();
@@ -766,14 +842,20 @@ class DigitalHumanAvatar {
     ];
 
     ctx.fillStyle = "rgba(215, 240, 255, 0.75)";
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = "#00e5ff";
+    // (06/11/2026) Motes: bỏ shadowBlur (đắt), glow giả bằng 2 lớp bán trong suốt
+    ctx.shadowBlur = 0;
 
     motes.forEach(m => {
       const my = ((m.by + Math.sin(now * 0.002 + m.phase) * 16) % 1024) * scaleY;
       const mx = (m.bx + Math.cos(now * 0.0018 + m.phase) * 10) * scaleX;
+      // Glow 2 lớp rẻ: vầng lớn mờ + lõi sáng (không dùng shadowBlur)
+      ctx.fillStyle = "rgba(0, 229, 255, 0.18)";
       ctx.beginPath();
-      ctx.arc(mx, my, 1.8 * scaleX, 0, Math.PI * 2);
+      ctx.arc(mx, my, 4.2 * scaleX, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(235, 250, 255, 0.9)";
+      ctx.beginPath();
+      ctx.arc(mx, my, 1.6 * scaleX, 0, Math.PI * 2);
       ctx.fill();
     });
 

@@ -52,8 +52,7 @@
         <div class="brand-info">
           <div class="brand-title-row">
             <h1 class="brand-title">QUAN AI BRAIN</h1>
-            <span class="badge-role">BẢN SAO NHÂN SỰ SỐ</span>
-            <span class="badge-port">PORT :8766</span>
+            <span class="badge-role">PHÒNG ĐIỀU HÀNH</span>
           </div>
           <p class="brand-subtitle">Trợ Lý Điều Hành Số Đa Lĩnh Vực — Đại Diện & Thấu Hiểu Quyền Năng Của Quanpt1</p>
         </div>
@@ -85,6 +84,8 @@
     </header>
 
     <!-- ================= VISUAL COCKPIT HERO: DIGITAL AVATAR & EXECUTIVE STATUS ================= -->
+    <!-- (06/11/2026) Tinh gọn: bỏ chip định danh dư + 11 nút biểu cảm (trạng thái
+         hệ thống tự động, hiển thị ở pill trên). -->
     <section class="visual-cockpit-hero" id="visual-cockpit-hero">
       <div class="cockpit-hero-grid">
 
@@ -112,24 +113,6 @@
             <span class="waveform-label">Sóng Âm Thanh / Trạng Thái:</span>
             <canvas id="avatar-waveform-canvas" width="220" height="28" class="waveform-canvas"></canvas>
           </div>
-
-          <!-- 11 States Quick Preview / Selector for Quanpt1 -->
-          <div class="avatar-state-pills-wrap">
-            <span class="pills-title">Biểu cảm 11 trạng thái:</span>
-            <div class="avatar-state-pills" id="avatar-state-pills">
-              <button class="pill-state active" data-state="IDLE" title="Sẵn sàng, chớp mắt nhẹ">IDLE</button>
-              <button class="pill-state" data-state="LISTENING" title="Đang nghe sau từ đánh thức">LISTEN</button>
-              <button class="pill-state" data-state="THINKING" title="Đang suy luận lập kế hoạch">THINK</button>
-              <button class="pill-state" data-state="RESEARCHING" title="Đang rà soát tài liệu">RESEARCH</button>
-              <button class="pill-state" data-state="LEARNING" title="Đang học hỏi tự cải tiến">LEARN</button>
-              <button class="pill-state" data-state="SPEAKING" title="Đang phát giọng nói TTS">SPEAK</button>
-              <button class="pill-state" data-state="WAITING_FOR_OWNER" title="Chờ Quanpt1 duyệt">WAITING</button>
-              <button class="pill-state" data-state="BLOCKED" title="Bị chặn bởi ranh giới R5">BLOCKED</button>
-              <button class="pill-state" data-state="ERROR" title="Cảnh báo sự cố">ERROR</button>
-              <button class="pill-state" data-state="SAFE_MODE" title="Đóng băng an toàn">SAFE</button>
-              <button class="pill-state" data-state="OFFLINE" title="Ngoại tuyến / Mất kết nối">OFFLINE</button>
-            </div>
-          </div>
         </div>
 
         <!-- Column 2: Supervisor & Active Focus -->
@@ -145,7 +128,7 @@
               <code class="task-id-code" id="hero-task-id">task_executive_supervision</code>
             </div>
             <h3 class="task-goal-text" id="hero-task-goal">
-              Giám Sát & Điều Hành Trợ Lý Bản Sao Số Dưới Quyền Quanpt1
+              Giám Sát &amp; Điều Hành Trợ Lý Số Dưới Quyền Quanpt1
             </h3>
             
             <div class="task-progress-box">
@@ -229,6 +212,43 @@
               <button class="btn btn-edge-addon" id="btn-quick-open-camera" style="background: linear-gradient(135deg, #0284c7, #06b6d4); border-color: #0369a1; color: #ffffff; font-weight: 700;" title="Mở nhanh khung hình trực tiếp và chụp ảnh camera Pi 5">
                 📷 XEM CAMERA PI 5 TRỰC TIẾP
               </button>
+            </div>
+          </div>
+
+          <!-- (06/11/2026, owner) SỨC KHỎE PI 5 — tốc độ phản hồi + CPU/RAM/nhiệt thật từ Edge Agent V41 -->
+          <div class="edge-link-box pi5-health-box" id="pi5-health-box" style="margin-top: 12px;">
+            <div class="edge-link-header">
+              <span class="edge-icon">🩺</span>
+              <strong>Sức khỏe Pi 5 (thời gian thực):</strong>
+            </div>
+            <div class="pi5-health-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; margin-top: 8px;">
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">⚡ Phản hồi (RTT):</span>
+                <strong class="stat-val" id="pi5-health-rtt">-- ms</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">🛰️ Kênh truyền:</span>
+                <strong class="stat-val" id="pi5-health-channel">--</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">🧠 CPU sử dụng:</span>
+                <strong class="stat-val" id="pi5-health-cpu">--%</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">💾 RAM:</span>
+                <strong class="stat-val" id="pi5-health-ram">--</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">🌡️ Nhiệt độ:</span>
+                <strong class="stat-val" id="pi5-health-temp">--°C</strong>
+              </div>
+              <div class="stat-box" style="padding: 6px 8px;">
+                <span class="stat-lbl">⏱️ Uptime:</span>
+                <strong class="stat-val" id="pi5-health-uptime">--</strong>
+              </div>
+            </div>
+            <div class="pi5-health-note" style="font-size: 11px; opacity: 0.75; margin-top: 6px;">
+              Cấu hình: Raspberry Pi 5 Model B · 4GB RAM · Edge Agent V41 đo thật mỗi 30s
             </div>
           </div>
 
@@ -619,9 +639,9 @@
 
           <div class="dialogue-messages" id="dialogue-messages-list">
             <div class="msg-bubble msg-assistant">
-              <div class="msg-author">QUAN AI BRAIN — BẢN SAO SỐ</div>
+              <div class="msg-author">QUAN AI BRAIN — PHÒNG ĐIỀU HÀNH</div>
               <div class="msg-text">
-                Kính chào Anh Quanpt1! Em là Bản sao nhân sự số của Anh, đã sẵn sàng tiếp nhận các chỉ đạo điều hành, báo cáo tiến độ và tham vấn quyết sách chiến lược. Anh cần em thực hiện hoặc chuẩn bị nội dung gì ạ?
+                Kính chào Anh Quanpt1! Em là trợ lý số của Anh, đã sẵn sàng tiếp nhận các chỉ đạo điều hành, báo cáo tiến độ và tham vấn quyết sách chiến lược. Anh cần em thực hiện hoặc chuẩn bị nội dung gì ạ?
               </div>
               <div class="msg-time">Bây giờ</div>
             </div>

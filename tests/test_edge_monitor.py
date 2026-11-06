@@ -59,30 +59,41 @@ def test_degraded_channel_triggers_alert_c():
 
 
 def test_watchdog_detects_sudden_disconnect_alert_b():
-    # Set short timeout of 0.2s for deterministic testing
-    monitor = EdgeConnectionMonitor(heartbeat_timeout_sec=0.2)
+    # (06/11/2026) Thiết kế mới: Alert B chỉ bắn sau alert_on_misses lần MISS
+    # LIÊN TIẾP — 1 nhịp lỡ qua mesh DERP không được tuyên bố mất Pi5.
+    # Chọn timeout ngắn 0.2s + miss ngay lần 1 để test deterministic.
+    monitor = EdgeConnectionMonitor(heartbeat_timeout_sec=0.2, alert_on_misses=3)
     monitor.record_pairing("EDGE-PI5-DESK-01", "Bàn Làm Việc Quanpt1")
     monitor.record_heartbeat("EDGE-PI5-DESK-01", rtt_ms=15.0)
     assert monitor.state == EdgeConnectionState.READY
 
-    # Wait past timeout
+    # Miss #1: vượt deadline → state DISCONNECTED NHƯNG chưa được báo động
     time.sleep(0.25)
     monitor.check_deadline()
-
-    # Must transition to DISCONNECTED and trigger Alert B
     assert monitor.state == EdgeConnectionState.DISCONNECTED
+    assert EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT not in monitor.active_alerts
+
+    # Miss #2: vẫn chưa báo động
+    time.sleep(0.05)
+    monitor.check_deadline()
+    assert EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT not in monitor.active_alerts
+
+    # Miss #3 (đủ alert_on_misses): lúc này mới CRITICAL Alert B
+    time.sleep(0.05)
+    monitor.check_deadline()
     assert EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT in monitor.active_alerts
     alert_b = monitor.active_alerts[EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT]
     assert alert_b.severity == "CRITICAL"
     assert "MẤT KẾT NỐI" in alert_b.title
+    assert alert_b.metadata["misses"] == 3
 
 
 def test_recovery_triggers_alert_e_and_preserves_history():
-    monitor = EdgeConnectionMonitor(heartbeat_timeout_sec=0.15)
+    monitor = EdgeConnectionMonitor(heartbeat_timeout_sec=0.15, alert_on_misses=1)
     monitor.record_pairing("EDGE-PI5-DESK-01", "Bàn Làm Việc Quanpt1")
     monitor.record_heartbeat("EDGE-PI5-DESK-01", rtt_ms=15.0)
 
-    # Disconnect
+    # Disconnect (alert_on_misses=1 → miss #1 đã báo động)
     time.sleep(0.20)
     monitor.check_deadline()
     assert monitor.state == EdgeConnectionState.DISCONNECTED
@@ -99,6 +110,23 @@ def test_recovery_triggers_alert_e_and_preserves_history():
     codes = [h["code"] for h in history]
     assert EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT.value in codes
     assert EdgeAlertCode.ALERT_E_PI5_RECOVERED.value in codes
+
+
+def test_heartbeat_telemetry_exposed_in_status():
+    # (06/11/2026) Root cause DM báo "kiosk đang tắt" dù Pi bật: record_heartbeat
+    # phải lưu telemetry snapshot và get_status trả kiosk_running đúng.
+    monitor = EdgeConnectionMonitor()
+    monitor.record_pairing("EDGE-PI5-DESK-01", "Bàn Làm Việc Quanpt1")
+    status = monitor.record_heartbeat(
+        "EDGE-PI5-DESK-01", rtt_ms=20.0, subsystems_ready=True,
+        metadata={"kiosk_running": True, "avatar_state": "IDLE"},
+    )
+    assert status["kiosk_running"] is True
+    status = monitor.get_status()
+    assert status["kiosk_running"] is True
+    assert status["telemetry"]["avatar_state"] == "IDLE"
+    assert status["last_heartbeat_epoch"] > 0
+    assert status["seconds_since_heartbeat"] is not None
 
 
 def test_auth_and_sync_faults():

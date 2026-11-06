@@ -13,11 +13,13 @@ from quan_ai_brain.voice import (
 
 
 def test_default_wake_words_loaded():
+    # (06/11/2026) Rename owner TONY → CHERRY: bỏ ww_hi_tony/ww_hey_tony/ww_tony_oi,
+    # thêm ww_cherry_oi/ww_hi_cherry → 9 items (giữ lệnh cũ quá độ ở wake service Pi5).
     cfg = WakeWordConfig()
-    assert len(cfg.items) == 10
+    assert len(cfg.items) == 9
     phrases = [w.phrase for w in cfg.items.values()]
-    assert "Hi TONY" in phrases
-    assert "Tony ơi" in phrases
+    assert "Cherry ơi" in phrases
+    assert "Hi Cherry" in phrases
     assert "Chào trợ lý" in phrases
     assert "Hello assistant" in phrases
     assert "QUAN AI" in phrases
@@ -33,15 +35,15 @@ def test_normalization():
 
 def test_exact_matches():
     cfg = WakeWordConfig()
-    m1 = cfg.match("Hi TONY")
+    m1 = cfg.match("Hi Cherry")  # (06/11) rename TONY → CHERRY
     assert m1.matched is True
-    assert m1.keyword == "Hi TONY"
+    assert m1.keyword == "Hi Cherry"
     assert m1.extracted_payload == ""
     assert m1.is_control_command is False
 
-    m2 = cfg.match("Tony ơi")
+    m2 = cfg.match("Cherry ơi")
     assert m2.matched is True
-    assert m2.keyword == "Tony ơi"
+    assert m2.keyword == "Cherry ơi"
 
     m3 = cfg.match("Chào trợ lý")
     assert m3.matched is True
@@ -54,9 +56,9 @@ def test_exact_matches():
 
 def test_payload_extraction():
     cfg = WakeWordConfig()
-    res = cfg.match("Hi TONY hãy lập kế hoạch kiểm tra pin")
+    res = cfg.match("Hi Cherry hãy lập kế hoạch kiểm tra pin")  # (06/11) rename
     assert res.matched is True
-    assert res.keyword == "Hi TONY"
+    assert res.keyword == "Hi Cherry"
     assert res.extracted_payload == "hãy lập kế hoạch kiểm tra pin"
     assert res.confidence >= 0.90
 

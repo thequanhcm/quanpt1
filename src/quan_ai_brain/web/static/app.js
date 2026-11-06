@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Button to test speech on Raspberry Pi 5
     if (btnPi5SpeakTest) {
         btnPi5SpeakTest.addEventListener('click', async () => {
-            const greeting = 'Xin chào Anh Quanpt1! Em là TONY, trợ lý điều hành số của Anh. Em đang phát lời thoại trực tiếp trên loa Raspberry Pi 5 và sẵn sàng nhận lệnh!';
+            const greeting = 'Xin chào Anh ạ! Em là Cherry — Trợ lý điều hành số ạ!';  // (06/11) owner chuẩn văn + rename
             if (pi5SyncStatus) pi5SyncStatus.textContent = 'ĐANG PHÁT TRÊN PI 5...';
             await speakText(greeting);
         });
@@ -728,16 +728,37 @@ document.addEventListener('DOMContentLoaded', () => {
                     card.innerHTML = `
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span class="mem-badge">${m.kind || 'Episode'}</span>
-                            <span class="mem-date">${m.created_at ? m.created_at.substring(0, 19).replace('T', ' ') : ''}</span>
+                            <span style="display: flex; gap: 0.5rem; align-items: center;">
+                                <span class="mem-date">${m.created_at ? m.created_at.substring(0, 19).replace('T', ' ') : ''}</span>
+                                <button class="mem-delete-btn" data-id="${m.id}" title="Xóa trí nhớ này"
+                                    style="border: 1px solid var(--border); background: transparent; color: var(--text-muted); border-radius: 6px; cursor: pointer; padding: 2px 8px; font-size: 0.8rem;">🗑</button>
+                            </span>
                         </div>
                         <p class="mem-text">${m.summary}</p>
                         <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">Source: ${m.source_ref || 'unknown'}</div>
                     `;
+                    card.querySelector('.mem-delete-btn').addEventListener('click', () => deleteMemory(m.id));
                     listEl.appendChild(card);
                 });
             }
         } catch (err) {
             listEl.innerHTML = `<div style="color: var(--accent-rose);">Lỗi tải trí nhớ: ${err.message}</div>`;
+        }
+    }
+
+    // (06/11/2026, owner) Xóa 1 trí nhớ dài hạn — nút 🗑 trên card
+    async function deleteMemory(id) {
+        if (!confirm('Xóa vĩnh viễn trí nhớ này khỏi kho? Hành động không thể hoàn tác.')) return;
+        try {
+            const res = await fetch('/api/memories/' + encodeURIComponent(id), { method: 'DELETE' });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                loadMemories();
+            } else {
+                alert(`Không xóa được: ${data.error || ('HTTP ' + res.status)}`);
+            }
+        } catch (err) {
+            alert(`Lỗi kết nối khi xóa: ${err.message}`);
         }
     }
 

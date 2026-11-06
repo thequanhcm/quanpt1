@@ -55,7 +55,7 @@ class SelfModel:
     def to_conversational_summary(self) -> str:
         """Generate conversational self-introduction."""
         lines = [
-            f"Xin chào, em là **TONY PHAM** — trợ lý AI và nhân sự số của anh **{self.identity.get('owner', 'Quanpt1')}**.",
+            f"Xin chào, em là **CHERRY** — trợ lý AI và nhân sự số của anh **{self.identity.get('owner', 'Quanpt1')}**.",
             "",
             "**📍 Triển khai:**",
             f"  - PC Core: {self.deployment.get('core_location', 'Windows PC')}",
@@ -124,7 +124,7 @@ class SelfModelEngine:
         # Identity
         identity = {
             "system_name": "QUAN AI BRAIN",
-            "assistant_name": "TONY PHAM",
+            "assistant_name": "CHERRY",
             "owner": "Quanpt1",
             "owner_id": "quanpt1-3a28d2fa",
             "creator": "Anh Quân — Quanpt1",

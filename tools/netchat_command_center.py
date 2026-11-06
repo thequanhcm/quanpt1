@@ -68,16 +68,19 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "ack_alert": ("giữ nguyên", "giu nguyen", "tắt cảnh báo", "tat canh bao",
                   "đã xác nhận cảnh báo", "da xac nhan canh bao",
                   "không cảnh báo nữa", "khong canh bao nua"),
-    "tony_speak": ("tony nói", "tony noi", "kêu tony nói", "keu tony noi", "nói với anh", "noi voi anh"),
+    "tony_speak": ("tony nói", "tony noi", "kêu tony nói", "keu tony noi", "nói với anh", "noi voi anh",
+                "cherry nói", "cherry noi", "kêu cherry nói", "keu cherry noi"),  # (06/11) CHERRY song song TONY
     "tony_face": ("biểu cảm", "bieu cam", "đổi biểu cảm", "doi bieu cam", "set expression", "mặt vui", "mat vui",
                   "mỉm cười", "mim cuoi", "cười lên", "cuoi len", "mắt to", "mat to", "chăm chú", "cham chu"),
     "tony_pause": ("tony nghỉ", "tony nghi", "tony nghỉ ngơi", "tony nghi ngoi", "tạm nghỉ", "tam nghi", "pause tony",
-                   "tony ngủ", "tony ngu", "standby", "chế độ chờ", "che do cho", "về chế độ standby"),
-    "tony_resume": ("tony làm việc", "tony lam viec", "tony hoạt động", "tony hoat dong", "resume tony", "tony dậy", "tony day"),
+                   "tony ngủ", "tony ngu", "standby", "chế độ chờ", "che do cho", "về chế độ standby",
+                   "cherry nghỉ", "cherry nghi", "cherry ngủ", "cherry ngu", "pause cherry"),  # (06/11) CHERRY
+    "tony_resume": ("tony làm việc", "tony lam viec", "tony hoạt động", "tony hoat dong", "resume tony", "tony dậy", "tony day",
+                   "cherry làm việc", "cherry lam viec", "cherry hoạt động", "cherry hoat dong", "resume cherry", "cherry dậy", "cherry day"),  # (06/11) CHERRY
     "tony_status": ("hình thể", "hinh the", "pi5", "pi 5", "hình tì", "hinh ti", "edge"),
     "tony_volume": ("âm lượng", "am luong", "volume", "loa to hơn", "loa to hon", "loa nhỏ hơn", "loa nho hon"),
     # (31/10/2026) Điều khiển Pi5 mở web/YouTube/nhạc + standby từ DM
-    "tony_music_stop": ("tony dừng nhạc", "tony dung nhac", "dừng nhạc", "dung nhac",
+    "tony_music_stop": ("tony dừng nhạc", "tony dung nhac", "cherry dừng nhạc", "cherry dung nhac", "dừng nhạc", "dung nhac",
                         "tắt nhạc", "tat nhac", "stop nhạc", "stop nhac"),
     # UDC-1 (04/11/2026): điều khiển thiết bị trên Pi5 theo lệnh DM
     "device_list": ("thiết bị trên pi", "thiet bi tren pi", "liệt kê thiết bị",
@@ -91,7 +94,7 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "emergency_stop_device": ("dừng khẩn thiết bị", "dung khan thiet bi",
                               "emergency stop device", "ngắt nguồn thiết bị",
                               "ngat nguon thiet bi"),
-    "tony_back": ("tony về", "tony ve", "về hình thể", "ve hinh the", "tắt trang web",
+    "tony_back": ("tony về", "tony ve", "cherry về", "cherry ve", "về hình thể", "ve hinh the", "tắt trang web",
                   "tat trang web", "đóng trang web", "dong trang web", "tony quay lại",
                   "tony quay lai"),
     "tony_websearch": ("tony tìm", "tony tim", "tony tìm kiếm", "tony tim kiem",
@@ -259,7 +262,7 @@ def run_pending_action(chat_session_id: str) -> str | None:
 
 _POLITE_PREFIXES = ("giúp anh", "giup anh", "giúp em", "giup em", "làm ơn", "lam on",
                     "vui lòng", "vui long", "cho anh", "cho em", "cho tôi", "cho toi",
-                    "tony", "em", "bạn", "ban")
+                    "tony", "cherry", "em", "bạn", "ban")  # (06/11) + cherry
 
 
 def _starts_with_any_keyword(t: str) -> bool:
@@ -325,6 +328,19 @@ def detect_intent(text: str) -> str | None:
     # không được rơi vào 'stop' tổng (pre-existing bug, chủ bị 1 lần).
     if not _is_question(t) and _is_music_stop(t):
         return "tony_music_stop"
+    # (06/11/2026) 'Phân tích ảnh/hình' — đọc ảnh DM hoặc ảnh TONY vừa chụp
+    # (OCR + cấu trúc). ƯU TIÊN trước 'chụp ảnh' để 'phân tích ảnh vừa chụp'
+    # không bị nuốt thành lệnh chụp. Chặn chặt: phải có 'ảnh|hình|image|photo'
+    # + 'phân tích|phan tich|đọc chữ|doc chu|nội dung ảnh' — không nuốt
+    # 'phân tích dữ liệu/thống kê' (không có từ ảnh).
+    if (re.search(r"phân tích|phan tich|đọc chữ|doc chu|xem giúp|nội dung", t)
+            and re.search(r"\bảnh\b|\bhình\b|\bimage\b|\bphoto\b|\bjpg\b|\bpng\b", t)
+            and not re.search(r"dữ liệu|du lieu|thống kê|thong ke|bảng|bang\b", t)):
+        return "tony_analyze_image"
+    # (06/11/2026) 'Đọc chữ trong ảnh' ngắn ('đọc chữ ảnh này', 'ảnh này ghi gì') —
+    # không cần từ 'phân tích':
+    if re.search(r"\bảnh\b|\bhình\b", t) and re.search(r"ghi gì|chữ gì|đọc giúp|doc giup|có chữ", t):
+        return "tony_analyze_image"
     # (31/10/2026) 'Tắt (cả) giao diện (Pi5)' = ngủ màn hình → standby, ƯU TIÊN
     # trước pattern rộng 'pi5' của tony_status.
     if ("tắt" in t or "tat" in t) and "giao diện" in t or ("tắt" in t or "tat" in t) and "giao dien" in t:
@@ -620,8 +636,8 @@ def handle_help(payload: dict[str, Any] | None = None) -> str:
         "🤖 KÊNH LÀM VIỆC TONY (lệnh đứng đầu câu):\n"
         "• trạng thái | báo cáo | nhiệm vụ | tri thức | việc cần làm\n"
         "• phê duyệt — duyệt hồ sơ chờ (FIFO)\n"
-        "• bật hình thể / tắt hình thể / tony nghỉ / tony làm việc / tony về\n"
-        "• tony nói <câu> | biểu cảm <kiểu> | âm lượng <0-100>\n"
+        "• bật hình thể / tắt hình thể / cherry nghỉ / cherry làm việc / cherry về\n"
+        "• cherry nói <câu> | biểu cảm <kiểu> | âm lượng <0-100>\n"
         "• tony mở youtube [từ khóa] | tony tìm <câu> | tony phát nhạc <tên> | tony dừng nhạc\n"
         "• hiển thị ảnh trên pi [N giây] — ảnh DM lên màn Pi5 rồi tự về avatar\n"
         "• mở <app> | đóng <app> | chụp màn hình | khóa máy  (PC)\n"
@@ -779,11 +795,23 @@ def handle_tony_status(payload: dict[str, Any] | None = None) -> str:
         edge = data.get("edge") or {}
         state = str(edge.get("state") or "?")
         paired = edge.get("paired")
-        hb = edge.get("last_heartbeat_epoch") or 0
-        age = f"{max(0.0, time.time() - float(hb)):.0f}s trước" if hb else "?"
+        # (06/11/2026 fix) Ưu tiên seconds_since_heartbeat do server tự tính;
+        # last_heartbeat_epoch mới được server trả (trước đây đọc field không
+        # tồn tại → luôn hiện "?").
+        since = edge.get("seconds_since_heartbeat")
+        if since is not None:
+            age = f"{max(0.0, float(since)):.0f}s trước"
+        else:
+            hb = edge.get("last_heartbeat_epoch") or 0
+            age = f"{max(0.0, time.time() - float(hb)):.0f}s trước" if hb else "?"
+        # (06/11/2026 fix) kiosk_running giờ là field thật trong status (snapshot
+        # từ heartbeat của Pi5) — trước đây luôn None → DM luôn báo "đang tắt"
+        # dù Pi bật (root cause câu hỏi của anh lúc 20:54).
         kiosk = edge.get("kiosk_running")
-        _audit("netchat_command.tony_status", {"state": state})
-        return (f"🧭 Hình thể Pi 5: {_vn(state)} | ghép nối: {_vn_bool(paired)} | "
+        misses = edge.get("consecutive_misses") or 0
+        miss_note = f" (miss liên tiếp: {misses})" if state == "DISCONNECTED" else ""
+        _audit("netchat_command.tony_status", {"state": state, "kiosk_running": kiosk})
+        return (f"🧭 Hình thể Pi 5: {_vn(state)}{miss_note} | ghép nối: {_vn_bool(paired)} | "
                 f"tim đập (heartbeat): {age} | "
                 f"kiosk: {'đang bật' if kiosk else 'đang tắt'}")
     except Exception as exc:
@@ -793,14 +821,14 @@ def handle_tony_status(payload: dict[str, Any] | None = None) -> str:
 def handle_tony_pause(payload: dict[str, Any] | None = None) -> str:
     ok, msg = _edge_control({"action": "pause"})
     _audit("netchat_command.tony_pause", {"success": ok})
-    return "😴 TONY tạm nghỉ — màn Pi 5 tắt, tự dậy khi có lệnh hoặc giọng 'TONY ơi'." if ok \
+    return "😴 CHERRY tạm nghỉ — màn Pi 5 tắt, tự dậy khi có lệnh hoặc giọng 'CHERRY ơi'." if ok \
         else f"⚠️ Không pause được: {msg}"
 
 
 def handle_tony_resume(payload: dict[str, Any] | None = None) -> str:
     ok, msg = _edge_control({"action": "resume"})
     _audit("netchat_command.tony_resume", {"success": ok})
-    return "☀️ TONY dậy làm việc — màn hình Pi 5 sáng lại." if ok \
+    return "☀️ CHERRY dậy làm việc — màn hình Pi 5 sáng lại." if ok \
         else f"⚠️ Không resume được: {msg}"
 
 
@@ -808,17 +836,17 @@ def handle_tony_speak(text: str, payload: dict[str, Any] | None = None) -> str:
     """'tony nói <câu>' — TTS trên loa Pi 5 (BT SRS-XB33 phải bật nguồn)."""
     q = (text or "").strip()
     if not q:
-        return "🗣️ Anh muốn TONY nói gì? Cú pháp: 'tony nói Chào anh Quân'"
+        return "🗣️ Anh muốn CHERRY nói gì? Cú pháp: 'cherry nói Chào anh Quân'"
     ok, msg = _edge_control({"action": "speak", "text": q[:500]})
     _audit("netchat_command.tony_speak", {"success": ok, "len": len(q)})
-    return f"🗣️ TONY đang nói: \"{q[:120]}\"" if ok else f"⚠️ TONY không nói được: {msg}"
+    return f"🗣️ CHERRY đang nói: \"{q[:120]}\"" if ok else f"⚠️ CHERRY không nói được: {msg}"
 
 
 # (31/10/2026) PHÁT NGUYÊN VĂN — chống GLM paraphrase:
 # 'em phát câu này 2 lần trên loa pi5: <nguyên văn>' → text đưa vào TTS giữ
 # 100% nguyên văn câu sau dấu ':', phát đúng N lần (1..5), không cắt/không diễn giải.
 _SPEAK_VERBATIM_RE = re.compile(
-    r"^\s*(?:em\s+|tony\s+)?phát(?:\s+câu\s+này|\s+nguyên\s+văn|\s+đúng)?\s*"
+    r"^\s*(?:em\s+|tony\s+|cherry\s+)?phát(?:\s+câu\s+này|\s+nguyên\s+văn|\s+đúng)?\s*"
     r"(?:(\d+)\s*lần|\s+hai\s+lần|\s+2\s+lần)?\s*(?:trên\s+)?(?:loa\s+)?(?:pi\s*5|pi5)?\s*"
     r"(?:giọng\s+(nữ|nam))?\s*[:：]\s*(.+)$",
     re.IGNORECASE,
@@ -1023,14 +1051,18 @@ def handle_tony_pi_screenshot(text: str = "", payload: dict[str, Any] | None = N
                 capture_output=True, timeout=15)
         size_kb = pc_path.stat().st_size / 1024
         # 4) Gửi ảnh DM
+        # (06/11/2026, owner) CHỈ GỬI HÌNH — metadata gộp caption, không tin text
         sent, sent_msg = send_file_to_dm(
             str(pc_path),
             f"🖥️ Ảnh màn hình kiosk Pi 5 (TFT 800x480) lúc "
-            f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM)")
+            f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM) — "
+            f"k_{ts}.png ({size_kb:.0f} KB), đã lưu PC")
         _audit("netchat_command.tony_pi_screenshot",
                {"ok": True, "size_kb": round(size_kb, 1), "dm_sent": sent})
-        dm_note = " — đã gửi ảnh vào DM cho anh" if sent else f" (gửi DM lỗi: {sent_msg})"
-        return (f"🖥️ Đã chụp màn hình kiosk Pi 5 ({size_kb:.0f} KB){dm_note}.")
+        if sent:
+            return ""
+        return (f"⚠️ Đã chụp màn hình kiosk ({size_kb:.0f} KB) nhưng gửi ảnh vào DM lỗi: "
+                f"{sent_msg} — ảnh lưu tại PC: {pc_path}")
     except Exception as exc:
         _audit("netchat_command.tony_pi_screenshot", {"ok": False, "err": type(exc).__name__})
         return f"⚠️ Lỗi chụp màn hình Pi 5: {type(exc).__name__}: {exc}"
@@ -1047,20 +1079,27 @@ def handle_tony_pi_photo(text: str = "", payload: dict[str, Any] | None = None) 
     fname = str(data.get("filename", ""))
     pc_path = str(data.get("pc_path", ""))
     size_kb = int(data.get("size_bytes", 0)) / 1024
-    _audit("netchat_command.tony_pi_photo",
-           {"ok": True, "file": fname, "size_kb": round(size_kb, 1)})
-
     # Gửi file vào DM cho owner xem ngay:
-    dm_note = ""
+    # (06/11/2026, owner) CHỈ GỬI HÌNH — không tin text xác nhận nữa: tên file +
+    # dung lượng gộp vào caption của tin ảnh. Return rỗng → responder im lặng
+    # (cơ chế có sẵn: response rỗng/None → không gửi gì).
     if pc_path and not pc_path.startswith("("):
         from pathlib import Path as _P
-        sent, sent_msg = send_file_to_dm(
-            pc_path, f"📷 Ảnh chụp từ camera Pi 5 lúc "
-                     f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM)")
-        dm_note = " và đã gửi ảnh vào DM cho anh" if sent else (
-            f" (gửi DM lỗi: {sent_msg})")
-    return (f"📷 Đã chụp ảnh từ camera Pi 5: {fname} ({size_kb:.0f} KB) — "
-            f"đã lưu trên Pi 5 lẫn máy tính{dm_note}.")
+        caption = (f"📷 Ảnh chụp từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
+                   f"(TONY chụp theo lệnh DM) — {fname} ({size_kb:.0f} KB), "
+                   f"đã lưu Pi 5 + PC")
+        sent, sent_msg = send_file_to_dm(pc_path, caption)
+        if not sent:
+            # Gửi ảnh lỗi → BẮT BUỘC báo bằng text (không im lặng khi mất ảnh)
+            _audit("netchat_command.tony_pi_photo", {"dm_sent": False, "err": sent_msg[:120]})
+            return (f"⚠️ Đã chụp {fname} ({size_kb:.0f} KB) nhưng gửi ảnh vào DM lỗi: "
+                    f"{sent_msg} — ảnh lưu tại PC: {pc_path}")
+        _audit("netchat_command.tony_pi_photo",
+               {"ok": True, "file": fname, "size_kb": round(size_kb, 1), "dm_sent": True})
+        return ""
+    # Không có file trên PC → báo text (fail-honest, không im lặng)
+    return (f"📷 Đã chụp {fname} ({size_kb:.0f} KB), lưu trên Pi 5 — "
+            f"không tải được về PC để gửi DM.")
 
 
 def handle_tony_pi_video(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -1083,18 +1122,20 @@ def handle_tony_pi_video(text: str = "", payload: dict[str, Any] | None = None) 
            {"ok": True, "file": fname, "size_kb": round(size_kb, 1),
             "duration": duration, "has_audio": has_audio})
 
-    dm_note = ""
+    # (06/11/2026, owner) CHỈ GỬI VIDEO — metadata gộp vào caption, không tin text
     if pc_path and not pc_path.startswith("("):
         from pathlib import Path as _P
-        sent, sent_msg = send_file_to_dm(
-            pc_path, f"🎬 Video {duration:.0f}s{' kèm tiếng' if has_audio else '(câm)'} "
-                     f"từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
-                     f"(TONY quay theo lệnh DM)")
-        dm_note = " và đã gửi video vào DM cho anh" if sent else (
-            f" (gửi DM lỗi: {sent_msg})")
-    audio_note = "kèm tiếng mic" if has_audio else "video câm (mic không ghi được)"
-    return (f"🎬 Đã quay video {duration:.0f}s từ Pi 5 ({audio_note}): {fname} "
-            f"({size_kb:.0f} KB) — đã lưu trên Pi 5 lẫn máy tính{dm_note}.")
+        caption = (f"🎬 Video {duration:.0f}s{' kèm tiếng' if has_audio else '(câm)'} "
+                   f"từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
+                   f"(TONY quay theo lệnh DM) — {fname} ({size_kb:.0f} KB), đã lưu Pi 5 + PC")
+        sent, sent_msg = send_file_to_dm(pc_path, caption)
+        if not sent:
+            _audit("netchat_command.tony_pi_video", {"dm_sent": False, "err": sent_msg[:120]})
+            return (f"⚠️ Đã quay {fname} ({size_kb:.0f} KB) nhưng gửi video vào DM lỗi: "
+                    f"{sent_msg} — video lưu tại PC: {pc_path}")
+        return ""
+    return (f"🎬 Đã quay video {duration:.0f}s từ Pi 5: {fname} ({size_kb:.0f} KB), "
+            f"lưu trên Pi 5 — không tải được về PC để gửi DM.")
 
 
 def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -1126,16 +1167,57 @@ def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None)
     _audit("netchat_command.tony_pi_listen",
            {"ok": True, "file": fname, "size_kb": round(size_kb, 1), "duration": duration})
 
-    dm_note = ""
+    # (06/11/2026, owner) CHỈ GỬI FILE — metadata gộp vào caption, không tin text
+    mic_label = {"usb": "mic USB", "bt": "mic loa (SRS-XB33)",
+                 "auto": "mic tự chọn (USB ưu tiên)"}.get(mic_kind, "mic")
     if pc_path and not pc_path.startswith("("):
         sent, sent_msg = send_file_to_dm(
             pc_path, f"🎙️ Thu âm {duration:.0f}s từ mic Pi 5 lúc "
-                     f"{time.strftime('%H:%M:%S %d/%m')} (tai TONY nghe theo lệnh DM)")
-        dm_note = " và đã gửi file âm thanh vào DM cho anh" if sent else (
-            f" (gửi DM lỗi: {sent_msg})")
-    mic_label = {"usb": "mic USB", "bt": "mic loa (SRS-XB33)", "auto": "mic tự chọn (USB ưu tiên)"}.get(mic_kind, "mic")
-    return (f"🎙️ Đã thu âm {duration:.0f}s ({mic_label}): {fname} ({size_kb:.0f} KB) — "
-            f"đã lưu trên Pi 5 lẫn máy tính{dm_note}.")
+                     f"{time.strftime('%H:%M:%S %d/%m')} (tai TONY nghe theo lệnh DM) — "
+                     f"{fname} ({size_kb:.0f} KB), {mic_label}, đã lưu Pi 5 + PC")
+        if not sent:
+            _audit("netchat_command.tony_pi_listen", {"dm_sent": False, "err": sent_msg[:120]})
+            return (f"⚠️ Đã thu âm {fname} ({size_kb:.0f} KB) nhưng gửi file vào DM lỗi: "
+                    f"{sent_msg} — file lưu tại PC: {pc_path}")
+        return ""
+    return (f"🎙️ Đã thu âm {duration:.0f}s ({mic_label}): {fname} ({size_kb:.0f} KB), "
+            f"lưu trên Pi 5 — không tải được về PC để gửi DM.")
+
+
+def handle_tony_analyze_image(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """'phân tích ảnh vừa chụp' / 'đọc chữ trong ảnh' — TONY Vision.
+
+    Nguồn ảnh theo thứ tự: (1) file đính kèm DM đang xử lý (payload['file_paths']),
+    (2) ảnh mới nhất trong data/netchat_files (24h), (3) ảnh TONY tự chụp mới nhất
+    trong logs/pi5_media (24h). OCR vie+eng + cấu trúc đo được; tri thức vào
+    candidate_knowledge (chờ owner duyệt). Fail-honest: không có ảnh → báo rõ.
+    """
+    from quan_ai_brain.vision.image_analyzer import analyze_image, latest_capture_info
+
+    paths: list[str] = list((payload or {}).get("file_paths") or [])
+    target: str | None = paths[0] if paths else None
+    if not target:
+        from pathlib import Path as _P
+        attach = WORKSPACE / "data" / "netchat_files"
+        if attach.exists():
+            imgs = [f for f in attach.iterdir()
+                    if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+                    and time.time() - f.stat().st_mtime < 86400]
+            if imgs:
+                target = str(max(imgs, key=lambda f: f.stat().st_mtime))
+    if not target:
+        info = latest_capture_info()
+        if info and info.get("age_min", 1e9) < 1440:  # ảnh tự chụp trong 24h
+            target = info["path"]
+
+    if not target:
+        return ("⚠️ Em chưa thấy ảnh nào để phân tích: không có ảnh đính kèm DM, "
+                "không có ảnh DM trong 24h, và ảnh TONY chụp cũng quá cũ. "
+                "Anh gửi ảnh vào DM hoặc nhắn 'chụp hình' rồi em phân tích ngay nhé.")
+
+    out = analyze_image(target)
+    _audit("netchat_command.tony_analyze_image", {"file": Path(target).name})
+    return out
 
 
 def handle_tony_youtube(text: str, payload: dict[str, Any] | None = None) -> str:
@@ -1513,6 +1595,8 @@ HANDLERS = {
     "tony_pi_live": handle_tony_pi_live,
     "tony_pi_live_off": handle_tony_pi_live_off,
     "tony_pi_video": handle_tony_pi_video,
+    # (06/11/2026) TONY Vision — 'phân tích ảnh' (OCR + cấu trúc, tri thức chờ duyệt)
+    "tony_analyze_image": handle_tony_analyze_image,
     # (01/11/2026, owner-ACK) 'giữ nguyên/tắt cảnh báo' — ghi nhận quyết định
     "ack_alert": handle_ack_alert,
 }

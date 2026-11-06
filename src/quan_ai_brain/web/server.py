@@ -27,6 +27,8 @@ from quan_ai_brain.cognition import (
     PromptContextBuilder,
 )
 from quan_ai_brain.cognition.session_memory import SessionMemoryManager
+from quan_ai_brain.cognition.memory_review_cycle import MemoryReviewCycle
+from quan_ai_brain.memory.deep_memory import DeepMemoryStore
 from quan_ai_brain.core.autonomic import GLOBAL_AUTONOMIC_SYSTEM
 
 # Edge authentication
@@ -275,7 +277,10 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 _GLOBAL_WAKE_CONFIG = WakeWordConfig(enabled=False)
 _GLOBAL_EDGE_PAIRING_PIN = "888666"
 _GLOBAL_PAIRED_EDGE_DEVICES: dict[str, dict[str, Any]] = {}
-_GLOBAL_EDGE_MONITOR = EdgeConnectionMonitor(heartbeat_timeout_sec=4.0)
+# (06/11/2026) Timeout 12s: heartbeat gửi mỗi ~1s qua mesh DERP (RTT 100–190ms)
+# — ngưỡng 4s cũ khiến 1 nhịp lỡ là tuyên bố mất Pi5 (báo giả "kiosk đang tắt"
+# trong khi Pi bật). 12s = tha thứ ~10 nhịp chậm; vẫn bắt thật sự rớt mạng.
+_GLOBAL_EDGE_MONITOR = EdgeConnectionMonitor(heartbeat_timeout_sec=12.0, alert_on_misses=3)
 # UDR-1: store thiết bị Pi5 + DM NetChat cho owner khi cắm/rút (cooldown 300s)
 _GLOBAL_DEVICE_STORE = DeviceStore(
     Path(__file__).resolve().parents[2] / "data" / "edge_devices.db",
@@ -674,6 +679,23 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_list_memories()
             return
 
+        # V9.0: Deep Memory (Tab 10 — Trí Nhớ Sâu)
+        if path == "/api/memory/deep/stats":
+            self._handle_api_deep_stats()
+            return
+
+        if path == "/api/memory/deep/units":
+            self._handle_api_deep_units(parsed.query)
+            return
+
+        if path == "/api/memory/deep/questions":
+            self._handle_api_deep_questions(parsed.query)
+            return
+
+        if path == "/api/memory/deep/timeline":
+            self._handle_api_deep_timeline()
+            return
+
         if path == "/api/executive/overview":
             self._handle_api_executive_overview()
             return
@@ -946,6 +968,21 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         self.send_error(404, "Not Found")
 
+    def do_DELETE(self) -> None:
+        """(06/11/2026, owner) DELETE — chỉ dùng cho xóa trí nhớ dashboard.
+
+        Route: /api/memories/{id} → _handle_api_delete_memory.
+        Chỉ phục vụ localhost dashboard (server vốn bind 127.0.0.1); HMAC gate
+        KHÔNG áp dụng vì đây là request từ browser owner, không phải edge device.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path.startswith("/api/memories/"):
+            record_id = path[len("/api/memories/"):].strip("/")
+            self._handle_api_delete_memory(record_id)
+            return
+        self._send_error_json("Not found", 404)
+
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -992,6 +1029,19 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/memories":
             self._handle_api_add_memory(body)
+            return
+
+        # V9.0: Deep Memory (Tab 10 — Trí Nhớ Sâu)
+        if path == "/api/memory/deep/answer":
+            self._handle_api_deep_answer(body)
+            return
+
+        if path == "/api/memory/deep/extract":
+            self._handle_api_deep_extract(body)
+            return
+
+        if path == "/api/memory/deep/review":
+            self._handle_api_deep_review(body)
             return
 
         if path == "/api/plan":
@@ -1505,6 +1555,32 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_error_json(f"Failed to record memory: {exc}", 500)
 
+    def _handle_api_delete_memory(self, record_id: str) -> None:
+        """(06/11/2026, owner) Xóa 1 trí nhớ dài hạn theo id (nút xóa trên dashboard).
+
+        Owner yêu cầu xóa trực tiếp trên dashboard. Hard-delete qua
+        MemoryStore.delete_episode; id sai / không tồn tại → 404 fail-honest.
+        """
+        record_id = str(record_id or "").strip()
+        if not record_id:
+            self._send_error_json("Missing memory id", 400)
+            return
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            with MemoryStore(db_path, workspace=workspace) as store:
+                deleted = store.delete_episode(record_id)
+        except ValueError as exc:
+            self._send_error_json(f"Invalid id: {exc}", 400)
+            return
+        except Exception as exc:
+            self._send_error_json(f"Database error: {exc}", 500)
+            return
+        if not deleted:
+            self._send_error_json("Memory not found", 404)
+            return
+        self._send_json({"success": True, "deleted_id": record_id})
+
     def _handle_api_chat_history(self, query_str: str) -> None:
         params = urllib.parse.parse_qs(query_str)
         session_id = params.get("session_id", ["default_executive_session"])[0]
@@ -1518,6 +1594,119 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"success": True, "session_id": session_id, "history": history})
         except Exception as exc:
             self._send_error_json(f"Error fetching session history: {exc}", 500)
+
+    # ============================ V9.0 — DEEP MEMORY (Trí Nhớ Sâu) ============================
+    # Tab 10 executive: 6 route đọc/ghi qua DeepMemoryStore (brain.db, additive).
+    # Fail-honest: lỗi DB → success=False + HTTP 500, không giả dữ liệu.
+
+    def _open_deep_store(self):
+        workspace = _find_workspace_root()
+        return DeepMemoryStore(workspace / "data" / "brain.db")
+
+    def _handle_api_deep_stats(self) -> None:
+        try:
+            store = self._open_deep_store()
+            try:
+                self._send_json({"success": True, "stats": store.deep_stats()})
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_units(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        status = params.get("status", [""])[0].strip()
+        try:
+            limit = min(max(int(params.get("limit", ["60"])[0]), 1), 200)
+        except ValueError:
+            limit = 60
+        try:
+            store = self._open_deep_store()
+            try:
+                units = store.list_units(status=status or None, limit=limit)
+            finally:
+                store.close()
+            self._send_json({"success": True, "units": units})
+        except ValueError as exc:
+            self._send_error_json(str(exc), 400)
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_questions(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        status = params.get("status", ["OPEN"])[0].strip().upper()
+        if status not in ("OPEN", "ANSWERED", "SUPERSEDED", "EXPIRED", "ALL"):
+            status = "OPEN"
+        try:
+            store = self._open_deep_store()
+            try:
+                questions = store.list_owner_questions(status=status, limit=50)
+            finally:
+                store.close()
+            self._send_json({"success": True, "questions": questions})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_timeline(self) -> None:
+        try:
+            store = self._open_deep_store()
+            try:
+                events = store.review_timeline(limit=20)
+            finally:
+                store.close()
+            self._send_json({"success": True, "events": events})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_answer(self, body: dict) -> None:
+        question_id = str(body.get("question_id", "")).strip()
+        answer = str(body.get("answer", "")).strip()
+        if not question_id or not answer:
+            self._send_error_json("question_id and answer are required", 400)
+            return
+        try:
+            store = self._open_deep_store()
+            try:
+                updated = store.answer_owner_question(question_id, answer)
+            finally:
+                store.close()
+            if updated is None:
+                self._send_error_json("question not found", 404)
+                return
+            self._send_json({"success": True, "question": updated})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_extract(self, body: dict) -> None:
+        try:
+            limit = min(max(int(body.get("limit", 30)), 1), 200)
+        except (TypeError, ValueError):
+            limit = 30
+        try:
+            store = self._open_deep_store()
+            try:
+                extraction = store.extract_from_chat_turns(limit=limit)
+            finally:
+                store.close()
+            self._send_json({"success": True, "extraction": extraction})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_review(self, body: dict) -> None:
+        try:
+            batch_limit = min(max(int(body.get("batch_limit", 20)), 1), 500)
+        except (TypeError, ValueError):
+            batch_limit = 20
+        try:
+            store = self._open_deep_store()
+            try:
+                cycle = MemoryReviewCycle(store, batch_limit=batch_limit)
+                result = cycle.run()
+            finally:
+                store.close()
+            self._send_json({"success": True, "review": result})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
 
     def _handle_api_autonomic_status(self) -> None:
         """Return the latest autonomic health report, active pains, and hardware organ audits."""
@@ -3657,6 +3846,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
             "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
             "last_telemetry": _GLOBAL_EDGE_TELEMETRY.get("last_telemetry", {}),
+            # (06/11/2026, owner) Sức khỏe Pi5: CPU/RAM/nhiệt từ Edge Agent V41
+            # (metrics thật đo trên Pi5 mỗi 30s, đi theo heartbeat 1s) + kênh
+            # truyền hiện hành suy từ edge_ip (192.168.x=LAN, 100.x=mesh).
+            "edge_agent": _GLOBAL_EDGE_TELEMETRY.get("last_edge_agent", {}),
         })
 
     def _handle_api_edge_control(self, body: dict) -> None:
@@ -4007,6 +4200,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         telemetry_payload = body.get("telemetry")
         if telemetry_payload:
             _GLOBAL_EDGE_TELEMETRY["last_telemetry"] = telemetry_payload
+            # (06/11/2026) Kiosk snapshot vào monitor — DM status cần kiosk_running
+            try:
+                _GLOBAL_EDGE_MONITOR.last_telemetry = dict(telemetry_payload)
+            except Exception:
+                pass
 
         # UDR-1: heartbeat mang snapshot thiết bị (edge_agent.get_status_summary)
         edge_agent_state = body.get("edge_agent")

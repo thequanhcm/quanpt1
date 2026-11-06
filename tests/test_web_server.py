@@ -75,6 +75,37 @@ def test_web_server_api_memories(web_server_instance: str) -> None:
         assert isinstance(data.get("memories"), list)
 
 
+def test_web_server_api_delete_memory_roundtrip(web_server_instance: str) -> None:
+    """(06/11/2026, owner) Nút xóa trí nhớ trên dashboard Trí Nhớ Dài Hạn.
+
+    Owner yêu cầu xóa trực tiếp trên dashboard. Roundtrip: POST tạo → DELETE
+    xóa thành công → DELETE lại = 404 (fail-honest, không giả thành công).
+    """
+    base = web_server_instance
+    # POST tạo trí nhớ tạm
+    req = urllib.request.Request(
+        f"{base}/api/memories",
+        data=json.dumps({"summary": "bản ghi test xóa (sẽ bị xóa)", "kind": "user_note"}).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=5.0) as resp:
+        rid = json.loads(resp.read().decode("utf-8"))["record_id"]
+    assert rid
+    # DELETE xóa
+    req2 = urllib.request.Request(f"{base}/api/memories/{rid}", method="DELETE")
+    with urllib.request.urlopen(req2, timeout=5.0) as resp:
+        body = json.loads(resp.read().decode("utf-8"))
+    assert body.get("success") is True
+    assert body.get("deleted_id") == rid
+    # DELETE lại → 404 fail-honest
+    try:
+        urllib.request.urlopen(req2, timeout=5.0)
+        raise AssertionError("DELETE lần 2 phải 404")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+
+
 def test_edge_control_speak_audio_forwarding(web_server_instance: str) -> None:
     payload = json.dumps({
         "action": "speak",

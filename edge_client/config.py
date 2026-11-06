@@ -37,7 +37,7 @@ class EdgeConfig:
     edge_client_version: str = "0.2.0"
     avatar_version: str = "digital_human_model_a_v1"
     persona_version: str = "1.0.0"
-    assistant_name: str = "TONY PHAM"
+    assistant_name: str = "CHERRY"
     config_schema_version: str = "1.0"
     extra_metadata: dict[str, Any] = field(default_factory=dict)
 

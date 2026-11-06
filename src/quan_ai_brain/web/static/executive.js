@@ -111,13 +111,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const llmEl = document.getElementById("status-llm");
       if (llmEl) {
-        const isOnline = data.llm && (data.llm.reachable || data.llm.ollama_online);
-        const modelName = (data.llm && (data.llm.model || data.llm.default_model)) || "qwen2.5:7b";
+        // (06/11/2026) Trung thực nguồn suy luận: dùng active_provider_label do
+        // server tính (NetMind Cloud / Ollama local / MOCK) — hết mâu thuẫn
+        // "Offline (Fallback)" trong khi chat vẫn chạy Cloud.
+        const providerLabel = data.llm && data.llm.active_provider_label;
+        const isMock = providerLabel && providerLabel.startsWith("MOCK");
+        const isOnline = providerLabel && !isMock;
         if (isOnline) {
-          llmEl.textContent = `Online (${modelName})`;
+          llmEl.textContent = providerLabel;
+          llmEl.style.color = "var(--green-success)";
+        } else if (data.llm && (data.llm.reachable || data.llm.ollama_online)) {
+          const modelName = (data.llm && (data.llm.model || data.llm.default_model)) || "qwen2.5:7b";
+          llmEl.textContent = `Trực tuyến (${modelName})`;
           llmEl.style.color = "var(--green-success)";
         } else {
-          llmEl.textContent = "Offline (Fallback)";
+          llmEl.textContent = "Chưa kết nối runtime";
           llmEl.style.color = "var(--gold-accent)";
         }
       }
@@ -1407,7 +1415,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (supRes.ok) {
           const sup = await supRes.json();
           const telemModel = document.getElementById("telem-model-val");
-          if (telemModel && sup.active_model) telemModel.textContent = `${sup.active_model} (Local)`;
+          // (06/11/2026) Model thật đang phục vụ — lấy từ /api/status cache vì
+          // supervisor cũ hardcode "qwen2.5:7b (Local)" trong khi chat chạy Cloud.
+          if (telemModel) {
+            try {
+              const stRes = await fetch("/api/status");
+              if (stRes.ok) {
+                const st = await stRes.json();
+                const label = st.llm && (st.llm.active_provider_label
+                  || `${st.llm.active_model || st.llm.model || "?"}`);
+                if (label) telemModel.textContent = label;
+              }
+            } catch (_) { /* giữ nguyên label cũ nếu fetch lỗi */ }
+          }
 
           const telemStatus = document.getElementById("telem-supervisor-status");
           if (telemStatus) {
@@ -2390,6 +2410,53 @@ document.addEventListener("DOMContentLoaded", () => {
         drawPingGraph(data.rtt_history);
         const avg = data.rtt_history.reduce((a, b) => a + b, 0) / data.rtt_history.length;
         if (pingAvgEl) pingAvgEl.textContent = `Trung bình: ~${avg.toFixed(1)}ms`;
+      }
+
+      // (06/11/2026, owner) Sức khỏe Pi5: RTT + kênh + CPU/RAM/nhiệt/uptime
+      // từ Edge Agent V41 (metrics thật đo trên Pi5, đi theo heartbeat).
+      const hRtt = document.getElementById("pi5-health-rtt");
+      const hChannel = document.getElementById("pi5-health-channel");
+      const hCpu = document.getElementById("pi5-health-cpu");
+      const hRam = document.getElementById("pi5-health-ram");
+      const hTemp = document.getElementById("pi5-health-temp");
+      const hUptime = document.getElementById("pi5-health-uptime");
+      if (hRtt && data.rtt_ms) {
+        hRtt.textContent = `${data.rtt_ms.toFixed(0)} ms`;
+        hRtt.style.color = data.rtt_ms > 150 ? "#f87171" : (data.rtt_ms > 60 ? "#fbbf24" : "var(--green-success)");
+      }
+      if (hChannel && data.edge_ip) {
+        const ip = String(data.edge_ip).split(":")[0] || "";
+        const isLan = ip.startsWith("192.168.") || ip.startsWith("10.") || (ip.startsWith("172.") && !ip.startsWith("172.30."));
+        hChannel.textContent = isLan ? "LAN/WiFi (ưu tiên)" : (ip.startsWith("100.") ? "Tailscale Mesh" : ip || "--");
+      }
+      const agent = data.edge_agent || {};
+      const am = agent.metrics || {};
+      if (hCpu) {
+        if (typeof am.cpu_percent === "number" && am.cpu_percent >= 0) {
+          hCpu.textContent = `${am.cpu_percent.toFixed(0)}%`;
+          hCpu.style.color = am.cpu_percent > 85 ? "#f87171" : (am.cpu_percent > 60 ? "#fbbf24" : "var(--green-success)");
+        } else { hCpu.textContent = "đang đo..."; }
+      }
+      if (hRam) {
+        if (typeof am.mem_available_mb === "number" && am.mem_available_mb > 0) {
+          const totalMb = 4045; // Pi 5 4GB (MemTotal thực tế 4142208 kB)
+          const usedPct = Math.max(0, Math.min(100, 100 * (1 - am.mem_available_mb / totalMb)));
+          hRam.textContent = `${am.mem_available_mb} MB trống (${usedPct.toFixed(0)}% dùng)`;
+          hRam.style.color = usedPct > 90 ? "#f87171" : (usedPct > 75 ? "#fbbf24" : "var(--green-success)");
+        } else { hRam.textContent = "đang đo..."; }
+      }
+      if (hTemp) {
+        if (typeof am.temp_c === "number" && am.temp_c > 0) {
+          hTemp.textContent = `${am.temp_c.toFixed(1)}°C`;
+          hTemp.style.color = am.temp_c > 75 ? "#f87171" : (am.temp_c > 65 ? "#fbbf24" : "var(--green-success)");
+        } else { hTemp.textContent = "--°C"; }
+      }
+      if (hUptime) {
+        const up = am.uptime_sec;
+        if (typeof up === "number" && up > 0) {
+          const d = Math.floor(up / 86400), h = Math.floor((up % 86400) / 3600), mnt = Math.floor((up % 3600) / 60);
+          hUptime.textContent = d > 0 ? `${d} ngày ${h} giờ` : `${h} giờ ${mnt} phút`;
+        } else { hUptime.textContent = "--"; }
       }
 
       const isOnline = data.edge_status && data.edge_status.state === "READY";

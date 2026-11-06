@@ -144,6 +144,22 @@ class MemoryStore:
             output.append(item)
         return output
 
+    def delete_episode(self, record_id: str) -> bool:
+        """(06/11/2026, owner) Xóa vĩnh viễn 1 episode theo id.
+
+        Owner yêu cầu xóa trực tiếp trên dashboard Trí Nhớ Dài Hạn.
+        Hard-delete (không archive) — đúng nghĩa "anh không cần lưu trữ".
+        Trả True nếu có row bị xóa, False nếu id không tồn tại (fail-honest).
+        """
+        if not record_id or len(record_id) > 64 or not record_id.replace("-", "").isalnum():
+            raise ValueError("Invalid episode id")
+        with self._lock, self._connection:
+            cur = self._connection.execute(
+                "DELETE FROM episodes WHERE id = ?",
+                (record_id,),
+            )
+            return cur.rowcount > 0
+
     def add_candidate(self, statement: str, source_ref: str, rationale: str = "") -> str:
         if not statement.strip():
             raise ValueError("Candidate statement must not be empty")
