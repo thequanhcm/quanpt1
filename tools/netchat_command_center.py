@@ -325,6 +325,19 @@ def detect_intent(text: str) -> str | None:
     # không được rơi vào 'stop' tổng (pre-existing bug, chủ bị 1 lần).
     if not _is_question(t) and _is_music_stop(t):
         return "tony_music_stop"
+    # (06/11/2026) 'Phân tích ảnh/hình' — đọc ảnh DM hoặc ảnh TONY vừa chụp
+    # (OCR + cấu trúc). ƯU TIÊN trước 'chụp ảnh' để 'phân tích ảnh vừa chụp'
+    # không bị nuốt thành lệnh chụp. Chặn chặt: phải có 'ảnh|hình|image|photo'
+    # + 'phân tích|phan tich|đọc chữ|doc chu|nội dung ảnh' — không nuốt
+    # 'phân tích dữ liệu/thống kê' (không có từ ảnh).
+    if (re.search(r"phân tích|phan tich|đọc chữ|doc chu|xem giúp|nội dung", t)
+            and re.search(r"\bảnh\b|\bhình\b|\bimage\b|\bphoto\b|\bjpg\b|\bpng\b", t)
+            and not re.search(r"dữ liệu|du lieu|thống kê|thong ke|bảng|bang\b", t)):
+        return "tony_analyze_image"
+    # (06/11/2026) 'Đọc chữ trong ảnh' ngắn ('đọc chữ ảnh này', 'ảnh này ghi gì') —
+    # không cần từ 'phân tích':
+    if re.search(r"\bảnh\b|\bhình\b", t) and re.search(r"ghi gì|chữ gì|đọc giúp|doc giup|có chữ", t):
+        return "tony_analyze_image"
     # (31/10/2026) 'Tắt (cả) giao diện (Pi5)' = ngủ màn hình → standby, ƯU TIÊN
     # trước pattern rộng 'pi5' của tony_status.
     if ("tắt" in t or "tat" in t) and "giao diện" in t or ("tắt" in t or "tat" in t) and "giao dien" in t:
@@ -1168,6 +1181,42 @@ def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None)
             f"lưu trên Pi 5 — không tải được về PC để gửi DM.")
 
 
+def handle_tony_analyze_image(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """'phân tích ảnh vừa chụp' / 'đọc chữ trong ảnh' — TONY Vision.
+
+    Nguồn ảnh theo thứ tự: (1) file đính kèm DM đang xử lý (payload['file_paths']),
+    (2) ảnh mới nhất trong data/netchat_files (24h), (3) ảnh TONY tự chụp mới nhất
+    trong logs/pi5_media (24h). OCR vie+eng + cấu trúc đo được; tri thức vào
+    candidate_knowledge (chờ owner duyệt). Fail-honest: không có ảnh → báo rõ.
+    """
+    from quan_ai_brain.vision.image_analyzer import analyze_image, latest_capture_info
+
+    paths: list[str] = list((payload or {}).get("file_paths") or [])
+    target: str | None = paths[0] if paths else None
+    if not target:
+        from pathlib import Path as _P
+        attach = WORKSPACE / "data" / "netchat_files"
+        if attach.exists():
+            imgs = [f for f in attach.iterdir()
+                    if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+                    and time.time() - f.stat().st_mtime < 86400]
+            if imgs:
+                target = str(max(imgs, key=lambda f: f.stat().st_mtime))
+    if not target:
+        info = latest_capture_info()
+        if info and info.get("age_min", 1e9) < 1440:  # ảnh tự chụp trong 24h
+            target = info["path"]
+
+    if not target:
+        return ("⚠️ Em chưa thấy ảnh nào để phân tích: không có ảnh đính kèm DM, "
+                "không có ảnh DM trong 24h, và ảnh TONY chụp cũng quá cũ. "
+                "Anh gửi ảnh vào DM hoặc nhắn 'chụp hình' rồi em phân tích ngay nhé.")
+
+    out = analyze_image(target)
+    _audit("netchat_command.tony_analyze_image", {"file": Path(target).name})
+    return out
+
+
 def handle_tony_youtube(text: str, payload: dict[str, Any] | None = None) -> str:
     """'tony mở youtube [từ khóa]' — không từ khóa: mở trang chủ YouTube;
     có từ khóa: tìm kiếm và mở trang kết quả YouTube trên màn Pi 5."""
@@ -1543,6 +1592,8 @@ HANDLERS = {
     "tony_pi_live": handle_tony_pi_live,
     "tony_pi_live_off": handle_tony_pi_live_off,
     "tony_pi_video": handle_tony_pi_video,
+    # (06/11/2026) TONY Vision — 'phân tích ảnh' (OCR + cấu trúc, tri thức chờ duyệt)
+    "tony_analyze_image": handle_tony_analyze_image,
     # (01/11/2026, owner-ACK) 'giữ nguyên/tắt cảnh báo' — ghi nhận quyết định
     "ack_alert": handle_ack_alert,
 }

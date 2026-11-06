@@ -15,6 +15,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<10.0"]
 memory = ["chromadb>=1.0.0", "sentence-transformers>=2.0"]
+vision = ["pytesseract>=0.3.10", "Pillow>=8.0"]
 all = ["chromadb>=1.0.0", "sentence-transformers>=2.0"]
 
 [project.scripts]
