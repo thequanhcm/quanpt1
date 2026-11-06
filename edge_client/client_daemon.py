@@ -456,17 +456,39 @@ def stop_hdmi_mirror() -> bool:
             return False
 
 
-_HDMI_EVENT_URL = "http://100.102.120.6:8766/api/executive/edge/hdmi_event"
+# (06/11/2026) Voice/HDMI URL KHÔNG còn hardcode IP — lấy từ config.json
+# (cùng nguồn với kiosk/heartbeat). Root cause thật 06/11: IP Tailscale PC
+# đổi 100.102.120.6 (01/11) → 100.92.219.98, voice loop vẫn bắn vào IP cũ
+# → "TONY ơi" từ Pi5 timeout im lặng. Resolver đọc config mỗi lần gọi
+# (file local ~1KB) + cache phòng đọc lỗi.
+_CORE_BASE_CACHE: str | None = None
+_VOICE_COMMAND_PATH = "/api/executive/edge/voice_command"
+_VOICE_CONVERSE_PATH = "/api/executive/edge/converse"
+
+
+def _resolve_core_base_url() -> str:
+    """Địa chỉ não PC cho voice/HDMI — từ config.json của daemon (nguồn duy nhất)."""
+    global _CORE_BASE_CACHE
+    try:
+        cfg_path = Path.home() / "Desktop" / "edge_client" / "config.json"
+        with open(cfg_path, encoding="utf-8") as fh:
+            cfg = json.load(fh)
+        host = str(cfg.get("core_host") or "").strip()
+        port = int(cfg.get("core_port") or 8766)
+        if host:
+            base = f"http://{host}:{port}"
+            _CORE_BASE_CACHE = base
+            return base
+    except Exception:
+        pass
+    return _CORE_BASE_CACHE or "http://127.0.0.1:8766"
+
 
 # (01/11/2026, owner) HỘI THOẠI LIÊN TỤC: sau wake, TONY chào NGAY
 # "Dạ, em nghe anh ạ." (audio cục bộ, không đợi PC) rồi LẮNG NGHE LIÊN TỤC
 # theo VAD — nói tới đâu thu tới đó → gửi não PC STT + xử lý → trả lời giọng
 # → nghe tiếp... như hội thoại 2 người. Nghỉ khi: im lặng ~30s, owner nói
 # "nghỉ đi/tạm biệt", hoặc hết 15 phút/phiên (gọi "TONY ơi" là mở phiên mới).
-_VOICE_COMMAND_URL = ("http://100.102.120.6:8766/"
-                      "api/executive/edge/voice_command")
-_VOICE_CONVERSE_URL = ("http://100.102.120.6:8766/"
-                       "api/executive/edge/converse")
 _VOICE_CONVO_ACTIVE = threading.Lock()  # 1 phiên hội thoại duy nhất
 _VAD_CHUNK_SEC = 0.2          # mỗi block PCM VAD 0.2s
 _VAD_RMS_SPEAK = 280.0        # ngưỡng MỜI câu nói (đo thật 01/11: tiếng qua
@@ -617,7 +639,7 @@ def _voice_send_answer_flow(text: str, answer: str) -> bool:
     out = None
     for attempt in range(2):
         out = _voice_post_json(
-            "http://100.102.120.6:8766/api/voice/tts-synthesize",
+            _resolve_core_base_url() + "/api/voice/tts-synthesize",
             {"text": answer[:300]}, timeout=30)
         if out and out.get("audio_base64"):
             break
@@ -769,7 +791,7 @@ def _voice_conversation_loop() -> None:
             wav_bytes = _pcm_to_wav_bytes(utt)
             content_b64 = base64.b64encode(wav_bytes).decode("ascii")
             _voice_set_transcript("Em đang suy nghĩ...", "THINKING")
-            out = _voice_post_json(_VOICE_CONVERSE_URL, {
+            out = _voice_post_json(_resolve_core_base_url() + _VOICE_CONVERSE_PATH, {
                 "content_b64": content_b64,
                 "device_id": "EDGE-PI5-DESK-01",
                 "turn": turn,
@@ -818,7 +840,7 @@ def _notify_hdmi_event(event: str, ports: list) -> None:
     phê duyệt owner trước khi bật mirror (quyết định của anh, không tự bật)."""
     try:
         req = urllib.request.Request(
-            _HDMI_EVENT_URL,
+            _resolve_core_base_url() + "/api/executive/edge/hdmi_event",
             data=json.dumps({"event": event, "ports": ports,
                              "device_id": "EDGE-PI5-DESK-01"}).encode(),
             method="POST", headers={"Content-Type": "application/json"})

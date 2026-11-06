@@ -15,7 +15,7 @@
 | 3 | Voice Interface | `voice/azure_asr.py` (streaming recognize), `voice/azure_tts.py` (synthesize_stream) | **IMPLEMENTED** | UNIT_TESTED | Chưa đo ASR/TTS latency E2E; chưa chứng minh partial transcript thời gian thực |
 | 4 | Audio Processing | `voice/audio_vad_pipeline.py` (WebRTC VAD), `voice/audio_capture.py` | **PARTIALLY_IMPLEMENTED** | UNIT_TESTED | **Không có AEC/NS/AGC** — hands-free full-duplex sẽ tự-ngắt; chỉ VAD |
 | 5 | Barge-in | `voice/barge_in_handler.py` (`BargeInDetector`, TurnState/TurnEvent) | **IMPLEMENTED** | UNIT_TESTED + có route `/api/voice/barge-in` | Chưa đo barge-in response time thật (mục tiêu ≤200 ms) |
-| 6 | State Machine hội thoại | `voice/state_machine.py` (`VoiceStateMachine`) | **PARTIALLY_IMPLEMENTED** | UNIT_TESTED | Hiện ít trạng thái — V9.0 §2.4 cần 7: IDLE/LISTENING/THINKING/SPEAKING/INTERRUPTED/ERROR/OFFLINE |
+| 6 | State Machine hội thoại | `voice/state_machine.py` (`VoiceStateMachine`) | **IMPLEMENTED** | UNIT_TESTED | 9 trạng thái đầy đủ (DISABLED/STANDBY/WAKE_DETECTED/LISTENING/TRANSCRIBING/THINKING/SPEAKING/INTERRUPTED/ERROR) — cần đồng bộ sự kiện `voice_state_changed` lên QEP telemetry (Sprint 4) |
 | 7 | Pi5 Client | `edge_client/client_daemon.py` (+20 kiosk API: camera/audio/media/estop) | **IMPLEMENTED** | **LIVE_VERIFIED 06/11** (5/5 services active, kiosk core_connected, camera IMX708 E2E) | LAN chết 2 chiều — phụ thuộc mesh DERP 51–189 ms; chưa có ESP32 để điều phối |
 | 8 | Wake Word | `edge_client/wake_word_service.py` (openWakeWord) | **PARTIALLY_IMPLEMENTED** | UNIT_TESTED | KHÔNG phải ESP-SR WakeNet; chưa chạy offline trên device thật; chưa đo FA/FR |
 | 9 | Device Registry | `src/quan_ai_brain/web/device_store.py` (`DeviceStore`) | **IMPLEMENTED** | UNIT_TESTED | Chưa theo QEP (13 thành phần §VI); chưa có registration + capability discovery chuẩn |
@@ -53,7 +53,7 @@
 1. **AEC thiếu** (gap #4): mở hands-free bây giờ → TONY tự ngắt lời chính mình. Bắt buộc Sprint 1.
 2. **LAN PC↔Pi5 chết 2 chiều** (router chặn): mọi traffic qua mesh DERP — ảnh hưởng băng thông audio streaming; cần root-cause trước khi đưa audio qua LAN.
 3. **Wake word FA/FR chưa đo**: không có baseline trước khi đổi sang WakeNet → không chứng minh được cải thiện.
-4. **State machine 3→7 trạng thái**: phải mở rộng + phát sự kiện `voice_state_changed` lên QEP telemetry (Sprint 1).
+4. **Voice loop qua IP cứng đã fix 06/11** (root cause "TONY ơi" im lặng): voice/hdmi/tts URL giờ resolve từ `config.json`; còn lại: phát sự kiện `voice_state_changed` lên QEP telemetry (Sprint 4).
 5. **Không có ESP32 thật**: Sprint 3 chỉ có thể làm spec + firmware nghiên cứu; mọi claim "ESP32 OK" là SIMULATED cho đến khi có board.
 
 ---
