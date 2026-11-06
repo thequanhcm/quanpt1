@@ -55,7 +55,9 @@ def test_executive_html_served(executive_server_instance: str) -> None:
         assert resp.status == 200
         content = resp.read().decode("utf-8")
         assert "QUAN AI BRAIN" in content
-        assert "BẢN SAO NHÂN SỰ SỐ" in content
+        # (06/11/2026) Văn phong chuẩn owner: 'PHÒNG ĐIỀU HÀNH', hết 'BẢN SAO'
+        assert "PHÒNG ĐIỀU HÀNH" in content
+        assert "BẢN SAO" not in content
         assert "tab-consultation" in content
         assert "tony-avatar-canvas" in content
         assert "btn-emergency-stop" in content

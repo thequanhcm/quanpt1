@@ -111,13 +111,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const llmEl = document.getElementById("status-llm");
       if (llmEl) {
-        const isOnline = data.llm && (data.llm.reachable || data.llm.ollama_online);
-        const modelName = (data.llm && (data.llm.model || data.llm.default_model)) || "qwen2.5:7b";
+        // (06/11/2026) Trung thực nguồn suy luận: dùng active_provider_label do
+        // server tính (NetMind Cloud / Ollama local / MOCK) — hết mâu thuẫn
+        // "Offline (Fallback)" trong khi chat vẫn chạy Cloud.
+        const providerLabel = data.llm && data.llm.active_provider_label;
+        const isMock = providerLabel && providerLabel.startsWith("MOCK");
+        const isOnline = providerLabel && !isMock;
         if (isOnline) {
-          llmEl.textContent = `Online (${modelName})`;
+          llmEl.textContent = providerLabel;
+          llmEl.style.color = "var(--green-success)";
+        } else if (data.llm && (data.llm.reachable || data.llm.ollama_online)) {
+          const modelName = (data.llm && (data.llm.model || data.llm.default_model)) || "qwen2.5:7b";
+          llmEl.textContent = `Trực tuyến (${modelName})`;
           llmEl.style.color = "var(--green-success)";
         } else {
-          llmEl.textContent = "Offline (Fallback)";
+          llmEl.textContent = "Chưa kết nối runtime";
           llmEl.style.color = "var(--gold-accent)";
         }
       }
@@ -1407,7 +1415,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (supRes.ok) {
           const sup = await supRes.json();
           const telemModel = document.getElementById("telem-model-val");
-          if (telemModel && sup.active_model) telemModel.textContent = `${sup.active_model} (Local)`;
+          // (06/11/2026) Model thật đang phục vụ — lấy từ /api/status cache vì
+          // supervisor cũ hardcode "qwen2.5:7b (Local)" trong khi chat chạy Cloud.
+          if (telemModel) {
+            try {
+              const stRes = await fetch("/api/status");
+              if (stRes.ok) {
+                const st = await stRes.json();
+                const label = st.llm && (st.llm.active_provider_label
+                  || `${st.llm.active_model || st.llm.model || "?"}`);
+                if (label) telemModel.textContent = label;
+              }
+            } catch (_) { /* giữ nguyên label cũ nếu fetch lỗi */ }
+          }
 
           const telemStatus = document.getElementById("telem-supervisor-status");
           if (telemStatus) {
