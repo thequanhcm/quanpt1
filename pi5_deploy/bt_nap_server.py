@@ -71,8 +71,11 @@ def main() -> int:
             props = dbus.Interface(bus.get_object(BUS_NAME, path), DBUS_PROPS)
             props.Set(IFACE_ADAPTER, "Discoverable", dbus.Boolean(True))
             props.Set(IFACE_ADAPTER, "Pairable", dbus.Boolean(True))
+            # (06/11/2026) timeout 0 = discoverable VĨNH VIỄN khi service chạy
+            # (mặc định 180s → owner bấm pair trên Windows bị lỡ cửa sổ 3 phút)
+            props.Set(IFACE_ADAPTER, "DiscoverableTimeout", dbus.UInt32(0))
             props.Set(IFACE_ADAPTER, "Alias", "TONY-PI5")
-            log.info("adapter discoverable+pairable, alias=TONY-PI5")
+            log.info("adapter discoverable(timeout=0)+pairable, alias=TONY-PI5")
 
     signal.signal(signal.SIGTERM, lambda *a: sys.exit(0))
     log.info("BT-NAP sẵn sàng — PC có thể join Bluetooth PAN tới Pi5")
