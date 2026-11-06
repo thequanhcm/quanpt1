@@ -129,9 +129,10 @@ def pair_with_core(host: str, port: int, pin: str, device_id: str, label: str) -
 def setup_autostart_kiosk(script_dir: Path) -> None:
     # 1. Create start_kiosk.sh optimized for 7" DSI Touchscreen 2 (1280x720)
     start_sh = script_dir / "start_kiosk.sh"
-    content = f"""#!/bin/bash
+    content = """#!/bin/bash
 # Tự động khởi chạy QUAN AI BRAIN Kiosk trên Raspberry Pi 5 (Màn hình 7" DSI Touch 2)
-cd "{script_dir}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 python3 main.py &
 sleep 2
 
@@ -172,6 +173,7 @@ def main() -> int:
     config_file = script_dir / "config.json"
     # Parse CLI flags
     auto_mode = "--auto" in sys.argv
+    force_mode = "--force" in sys.argv
     cli_host = None
     cli_port = None
     cli_pin = None
@@ -191,9 +193,12 @@ def main() -> int:
             with open(config_file, "r", encoding="utf-8") as f:
                 existing_cfg = json.load(f)
             sec = existing_cfg.get("shared_secret", "")
-            if sec and sec != "EDGE_EPHEMERAL_DEV_SECRET_DO_NOT_USE_IN_PROD":
+            current_host = existing_cfg.get("core_host", "")
+            host_differs = bool(cli_host and cli_host != current_host)
+
+            if not force_mode and not host_differs and sec and sec != "EDGE_EPHEMERAL_DEV_SECRET_DO_NOT_USE_IN_PROD":
                 print(f"👉 Thiết bị đã được ghép cặp trước đó với Brain Core tại:")
-                print(f"   http://{existing_cfg.get('core_host', '127.0.0.1')}:{existing_cfg.get('core_port', 8766)}")
+                print(f"   http://{current_host or '127.0.0.1'}:{existing_cfg.get('core_port', 8766)}")
                 if auto_mode:
                     print("\n[CHẾ ĐỘ TỰ ĐỘNG] Sử dụng cấu hình ghép cặp hiện tại.")
                     setup_autostart_kiosk(script_dir)
@@ -273,30 +278,40 @@ def main() -> int:
 
     # Save to config.json
     shared_secret = pair_res.get("shared_secret", "")
-    config_data = {
+    base_cfg = {}
+    if config_file.exists():
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                base_cfg = json.load(f)
+        except Exception:
+            base_cfg = {}
+    config_data = dict(base_cfg)
+    config_data.update({
         "device_id": device_id,
         "device_label": device_label,
         "core_host": core_host,
         "core_port": core_port,
-        "kiosk_host": "127.0.0.1",
+        "kiosk_host": "0.0.0.0",
         "kiosk_port": 8768,
         "shared_secret": shared_secret,
-        "poll_interval_sec": 1.0,
-        "heartbeat_timeout_sec": 4.0,
-        "reconnect_delay_sec": 2.0,
-        "kiosk_mode": True,
-        "face_only_mode": True,
-        "display_orientation": "landscape",
-        "screen_width": 1280,
-        "screen_height": 720,
-        "wake_word": "TONY ơi",
-        "follow_up_window_sec": 15.0,
-        "core_version": "0.2.0",
-        "edge_client_version": "0.2.0",
-        "protocol_version": "1.0",
-        "avatar_version": "digital_human_model_f_v1",
+        "poll_interval_sec": base_cfg.get("poll_interval_sec", 1.0),
+        "heartbeat_timeout_sec": base_cfg.get("heartbeat_timeout_sec", 4.0),
+        "reconnect_delay_sec": base_cfg.get("reconnect_delay_sec", 2.0),
+        "kiosk_mode": base_cfg.get("kiosk_mode", True),
+        "face_only_mode": base_cfg.get("face_only_mode", True),
+        "display_orientation": base_cfg.get("display_orientation", "landscape"),
+        "screen_width": base_cfg.get("screen_width", 1280),
+        "screen_height": base_cfg.get("screen_height", 720),
+        "wake_word": base_cfg.get("wake_word", "TONY ơi"),
+        "follow_up_window_sec": base_cfg.get("follow_up_window_sec", 15.0),
+        "core_version": base_cfg.get("core_version", "0.2.0"),
+        "edge_client_version": base_cfg.get("edge_client_version", "0.2.0"),
+        "protocol_version": base_cfg.get("protocol_version", "1.0"),
+        "avatar_version": base_cfg.get("avatar_version", "digital_human_model_f_v1"),
+        "persona_version": base_cfg.get("persona_version", "1.0.0"),
+        "assistant_name": base_cfg.get("assistant_name", "TONY PHAM"),
         "config_schema_version": "1.0",
-    }
+    })
 
     with open(config_file, "w", encoding="utf-8") as f:
         json.dump(config_data, f, indent=2, ensure_ascii=False)
