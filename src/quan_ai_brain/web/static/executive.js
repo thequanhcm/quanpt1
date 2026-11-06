@@ -2737,7 +2737,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const placeholderText = document.getElementById("camera-placeholder-text");
 
         if (devNameEl && data.device_name) {
-          devNameEl.textContent = `${data.device_name} (${data.device_node || '/dev/video0'})`;
+          devNameEl.textContent = `${data.device_name} (${data.device_node || 'libcamera/imx708'})`;
         }
 
         if (badgeCam) {
@@ -2872,7 +2872,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (btnCamCapture) {
       btnCamCapture.addEventListener("click", async () => {
-        showCameraAlert("📸 Đang yêu cầu Pi 5 chụp ảnh snapshot qua V4L2...", "loading");
+        showCameraAlert("📸 Đang yêu cầu Pi 5 chụp ảnh snapshot qua libcamera (IMX708)...", "loading");
         try {
           await sendCameraControl("camera_on");
           const res = await fetch("/api/executive/edge/camera/snapshot", { cache: "no-store" });
@@ -2929,8 +2929,8 @@ document.addEventListener("DOMContentLoaded", () => {
               metadata: {
                 source: "pi5_camera",
                 resolution: lastSnapshotData.resolution || "640x480",
-                device: "Sirius USB2.0 Camera",
-                device_node: "/dev/video0"
+                device: "Raspberry Pi Camera Module 3 (IMX708)",
+                device_node: "libcamera/imx708"
               }
             })
           });

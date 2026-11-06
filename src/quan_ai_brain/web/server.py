@@ -4607,7 +4607,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     "camera_enabled": False,
                     "camera_streaming": False,
                     "status": "CAMERA_OFF",
-                    "device_name": "Sirius USB2.0 Camera (Chưa kết nối)",
+                    # (06/11/2026) Label đúng phần cứng: Pi5 gắn Camera Module 3 (IMX708
+                    # CSI, libcamera) — KHÔNG phải USB webcam V4L2. Fail-honest cả tên.
+                    "device_name": "Raspberry Pi Camera Module 3 (Chưa kết nối)",
                 },
             })
 
@@ -4660,7 +4662,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         url = f"http://{edge_ip}:{edge_port}/api/kiosk/camera/stream"
         try:
             req = urllib.request.Request(url, method="GET")
-            with urllib.request.urlopen(req, timeout=3.0) as resp:
+            # (06/11/2026) 3.0s → 8.0s: rpicam-still mất ~1.4-2.5s/frame (cold start
+            # có thể hơn) — 3s gây "timed out" khi camera vừa bật từ OFF.
+            with urllib.request.urlopen(req, timeout=8.0) as resp:
                 frame_data = resp.read()
                 self.send_response(200)
                 self.send_header("Content-Type", "image/jpeg")
