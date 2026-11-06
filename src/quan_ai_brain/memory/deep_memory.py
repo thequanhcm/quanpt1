@@ -929,6 +929,98 @@ class DeepMemoryStore:
         run["stats"] = json.loads(run.pop("stats_json") or "{}")
         return run
 
+    # ------------------------------------------------ V9.0 API support (additive)
+
+    def list_units(self, status: str | None = None, limit: int = 60) -> list[dict[str, Any]]:
+        """Danh sách tri thức cho Tab 10 — kèm tối đa 3 quan hệ mỗi unit."""
+        if not 1 <= int(limit) <= 200:
+            raise ValueError("limit must be between 1 and 200")
+        sql = "SELECT * FROM knowledge_units"
+        params: list[Any] = []
+        if status:
+            allowed = {
+                "EXTRACTED", "VERIFIED", "INFERRED", "CONFLICTED",
+                "NEEDS_OWNER_REVIEW", "SUPERSEDED", "CANDIDATE", "REJECTED",
+            }
+            if status not in allowed:
+                raise ValueError("invalid status filter")
+            sql += " WHERE status=?"
+            params.append(status)
+        sql += " ORDER BY updated_at_utc DESC, created_at_utc DESC LIMIT ?"
+        params.append(int(limit))
+        with self._lock:
+            rows = self._connection.execute(sql, params).fetchall()
+            out: list[dict[str, Any]] = []
+            for row in rows:
+                item = dict(row)
+                rel_rows = self._connection.execute(
+                    """
+                    SELECT from_id, relation_type, to_id, basis, is_speculative
+                    FROM knowledge_relations
+                    WHERE from_id=? OR to_id=?
+                    ORDER BY created_at_utc DESC LIMIT 3
+                    """,
+                    (item["knowledge_id"], item["knowledge_id"]),
+                ).fetchall()
+                item["relations"] = [dict(r) for r in rel_rows]
+                out.append(item)
+        return out
+
+    def answer_owner_question(self, question_id: str, answer: str) -> dict[str, Any] | None:
+        """Owner trả lời câu hỏi A–G — ghi nhận, KHÔNG tự nâng trạng thái tri thức (PHẦN XV)."""
+        answer = (answer or "").strip()
+        if not answer:
+            raise ValueError("answer is required")
+        with self._lock, self._connection:
+            row = self._connection.execute(
+                "SELECT question_id FROM owner_questions WHERE question_id=?", (question_id,)
+            ).fetchone()
+            if row is None:
+                return None
+            self._connection.execute(
+                "UPDATE owner_questions SET status='ANSWERED', answer_text=?, answered_at_utc=? WHERE question_id=?",
+                (answer, _now(), question_id),
+            )
+        return self.get_owner_question(question_id)
+
+    def review_timeline(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Sự kiện gần nhất: runs sàng lọc + tri thức cập nhật (gom 2 nguồn, mới nhất trước)."""
+        if not 1 <= int(limit) <= 100:
+            raise ValueError("limit must be between 1 and 100")
+        events: list[dict[str, Any]] = []
+        with self._lock:
+            runs = self._connection.execute(
+                "SELECT run_id, started_at_utc, status, stats_json FROM memory_review_runs "
+                "ORDER BY started_at_utc DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            units = self._connection.execute(
+                "SELECT knowledge_id, statement, status, updated_at_utc FROM knowledge_units "
+                "ORDER BY updated_at_utc DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        for r in runs:
+            try:
+                stats = json.loads(r["stats_json"] or "{}")
+            except json.JSONDecodeError:
+                stats = {}
+            events.append({
+                "kind": "review_run",
+                "at": r["started_at_utc"],
+                "detail": (
+                    f"Sàng lọc {r['run_id'][:12]} — {r['status']} — "
+                    f"+{stats.get('new_units', 0)} tri thức, {stats.get('owner_questions', 0)} câu hỏi"
+                ),
+            })
+        for u in units:
+            events.append({
+                "kind": "knowledge_update",
+                "at": u["updated_at_utc"],
+                "detail": f"{u['status']}: {u['statement'][:80]}",
+            })
+        events.sort(key=lambda e: e["at"], reverse=True)
+        return events[: int(limit)]
+
     def close(self) -> None:
         with self._lock:
             self._connection.close()

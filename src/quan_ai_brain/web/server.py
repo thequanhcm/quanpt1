@@ -27,6 +27,8 @@ from quan_ai_brain.cognition import (
     PromptContextBuilder,
 )
 from quan_ai_brain.cognition.session_memory import SessionMemoryManager
+from quan_ai_brain.cognition.memory_review_cycle import MemoryReviewCycle
+from quan_ai_brain.memory.deep_memory import DeepMemoryStore
 from quan_ai_brain.core.autonomic import GLOBAL_AUTONOMIC_SYSTEM
 
 # Edge authentication
@@ -674,6 +676,23 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_list_memories()
             return
 
+        # V9.0: Deep Memory (Tab 10 — Trí Nhớ Sâu)
+        if path == "/api/memory/deep/stats":
+            self._handle_api_deep_stats()
+            return
+
+        if path == "/api/memory/deep/units":
+            self._handle_api_deep_units(parsed.query)
+            return
+
+        if path == "/api/memory/deep/questions":
+            self._handle_api_deep_questions(parsed.query)
+            return
+
+        if path == "/api/memory/deep/timeline":
+            self._handle_api_deep_timeline()
+            return
+
         if path == "/api/executive/overview":
             self._handle_api_executive_overview()
             return
@@ -992,6 +1011,19 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/memories":
             self._handle_api_add_memory(body)
+            return
+
+        # V9.0: Deep Memory (Tab 10 — Trí Nhớ Sâu)
+        if path == "/api/memory/deep/answer":
+            self._handle_api_deep_answer(body)
+            return
+
+        if path == "/api/memory/deep/extract":
+            self._handle_api_deep_extract(body)
+            return
+
+        if path == "/api/memory/deep/review":
+            self._handle_api_deep_review(body)
             return
 
         if path == "/api/plan":
@@ -1518,6 +1550,119 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"success": True, "session_id": session_id, "history": history})
         except Exception as exc:
             self._send_error_json(f"Error fetching session history: {exc}", 500)
+
+    # ============================ V9.0 — DEEP MEMORY (Trí Nhớ Sâu) ============================
+    # Tab 10 executive: 6 route đọc/ghi qua DeepMemoryStore (brain.db, additive).
+    # Fail-honest: lỗi DB → success=False + HTTP 500, không giả dữ liệu.
+
+    def _open_deep_store(self):
+        workspace = _find_workspace_root()
+        return DeepMemoryStore(workspace / "data" / "brain.db")
+
+    def _handle_api_deep_stats(self) -> None:
+        try:
+            store = self._open_deep_store()
+            try:
+                self._send_json({"success": True, "stats": store.deep_stats()})
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_units(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        status = params.get("status", [""])[0].strip()
+        try:
+            limit = min(max(int(params.get("limit", ["60"])[0]), 1), 200)
+        except ValueError:
+            limit = 60
+        try:
+            store = self._open_deep_store()
+            try:
+                units = store.list_units(status=status or None, limit=limit)
+            finally:
+                store.close()
+            self._send_json({"success": True, "units": units})
+        except ValueError as exc:
+            self._send_error_json(str(exc), 400)
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_questions(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        status = params.get("status", ["OPEN"])[0].strip().upper()
+        if status not in ("OPEN", "ANSWERED", "SUPERSEDED", "EXPIRED", "ALL"):
+            status = "OPEN"
+        try:
+            store = self._open_deep_store()
+            try:
+                questions = store.list_owner_questions(status=status, limit=50)
+            finally:
+                store.close()
+            self._send_json({"success": True, "questions": questions})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_timeline(self) -> None:
+        try:
+            store = self._open_deep_store()
+            try:
+                events = store.review_timeline(limit=20)
+            finally:
+                store.close()
+            self._send_json({"success": True, "events": events})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_answer(self, body: dict) -> None:
+        question_id = str(body.get("question_id", "")).strip()
+        answer = str(body.get("answer", "")).strip()
+        if not question_id or not answer:
+            self._send_error_json("question_id and answer are required", 400)
+            return
+        try:
+            store = self._open_deep_store()
+            try:
+                updated = store.answer_owner_question(question_id, answer)
+            finally:
+                store.close()
+            if updated is None:
+                self._send_error_json("question not found", 404)
+                return
+            self._send_json({"success": True, "question": updated})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_extract(self, body: dict) -> None:
+        try:
+            limit = min(max(int(body.get("limit", 30)), 1), 200)
+        except (TypeError, ValueError):
+            limit = 30
+        try:
+            store = self._open_deep_store()
+            try:
+                extraction = store.extract_from_chat_turns(limit=limit)
+            finally:
+                store.close()
+            self._send_json({"success": True, "extraction": extraction})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    def _handle_api_deep_review(self, body: dict) -> None:
+        try:
+            batch_limit = min(max(int(body.get("batch_limit", 20)), 1), 500)
+        except (TypeError, ValueError):
+            batch_limit = 20
+        try:
+            store = self._open_deep_store()
+            try:
+                cycle = MemoryReviewCycle(store, batch_limit=batch_limit)
+                result = cycle.run()
+            finally:
+                store.close()
+            self._send_json({"success": True, "review": result})
+        except Exception as exc:
+            self._send_error_json(f"Deep memory error: {exc}", 500)
 
     def _handle_api_autonomic_status(self) -> None:
         """Return the latest autonomic health report, active pains, and hardware organ audits."""
