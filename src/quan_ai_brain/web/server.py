@@ -968,6 +968,21 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         self.send_error(404, "Not Found")
 
+    def do_DELETE(self) -> None:
+        """(06/11/2026, owner) DELETE — chỉ dùng cho xóa trí nhớ dashboard.
+
+        Route: /api/memories/{id} → _handle_api_delete_memory.
+        Chỉ phục vụ localhost dashboard (server vốn bind 127.0.0.1); HMAC gate
+        KHÔNG áp dụng vì đây là request từ browser owner, không phải edge device.
+        """
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        if path.startswith("/api/memories/"):
+            record_id = path[len("/api/memories/"):].strip("/")
+            self._handle_api_delete_memory(record_id)
+            return
+        self._send_error_json("Not found", 404)
+
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
@@ -1539,6 +1554,32 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"success": True, "record_id": record_id})
         except Exception as exc:
             self._send_error_json(f"Failed to record memory: {exc}", 500)
+
+    def _handle_api_delete_memory(self, record_id: str) -> None:
+        """(06/11/2026, owner) Xóa 1 trí nhớ dài hạn theo id (nút xóa trên dashboard).
+
+        Owner yêu cầu xóa trực tiếp trên dashboard. Hard-delete qua
+        MemoryStore.delete_episode; id sai / không tồn tại → 404 fail-honest.
+        """
+        record_id = str(record_id or "").strip()
+        if not record_id:
+            self._send_error_json("Missing memory id", 400)
+            return
+        workspace = _find_workspace_root()
+        db_path = workspace / "data" / "brain.db"
+        try:
+            with MemoryStore(db_path, workspace=workspace) as store:
+                deleted = store.delete_episode(record_id)
+        except ValueError as exc:
+            self._send_error_json(f"Invalid id: {exc}", 400)
+            return
+        except Exception as exc:
+            self._send_error_json(f"Database error: {exc}", 500)
+            return
+        if not deleted:
+            self._send_error_json("Memory not found", 404)
+            return
+        self._send_json({"success": True, "deleted_id": record_id})
 
     def _handle_api_chat_history(self, query_str: str) -> None:
         params = urllib.parse.parse_qs(query_str)
@@ -3805,6 +3846,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "transcript": _GLOBAL_EDGE_TELEMETRY.get("transcript", ""),
             "face_only_mode": _GLOBAL_EDGE_TELEMETRY.get("face_only_mode", True),
             "last_telemetry": _GLOBAL_EDGE_TELEMETRY.get("last_telemetry", {}),
+            # (06/11/2026, owner) Sức khỏe Pi5: CPU/RAM/nhiệt từ Edge Agent V41
+            # (metrics thật đo trên Pi5 mỗi 30s, đi theo heartbeat 1s) + kênh
+            # truyền hiện hành suy từ edge_ip (192.168.x=LAN, 100.x=mesh).
+            "edge_agent": _GLOBAL_EDGE_TELEMETRY.get("last_edge_agent", {}),
         })
 
     def _handle_api_edge_control(self, body: dict) -> None:
