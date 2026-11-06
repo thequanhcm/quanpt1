@@ -954,6 +954,17 @@ class EdgeDaemonState:
 
     def to_kiosk_dict(self) -> dict[str, Any]:
         with self.lock:
+            # (06/11/2026, fix fail-honest) core_connected TRƯỚC ĐÂY sticky-True:
+            # chỉ được set True (2515/2648), không bao giờ reset False khi PC chết
+            # / mất WiFi → kiosk báo "connected" giả vĩnh viễn. Giờ: quá stale
+            # (heartbeat_timeout_sec × 3) tự xem như mất kết nối (display only —
+            # heartbeat sống lại sẽ bật True ngay chu kỳ kế tiếp).
+            _hb_stale = (
+                self.last_heartbeat_epoch > 0.0
+                and (time.time() - self.last_heartbeat_epoch)
+                > max(self.config.heartbeat_timeout_sec * 3.0, 12.0)
+            )
+            _core_ok = self.core_connected and not _hb_stale
             reload_needed = self.need_ui_reload
             self.need_ui_reload = False
             audio_b64 = self.pending_audio_base64
@@ -964,8 +975,8 @@ class EdgeDaemonState:
             self.pending_navigation = None
             kiosk_active = is_kiosk_running()
             return {
-                "core_connected": self.core_connected,
-                "avatar_state": self.avatar_state if self.core_connected else "OFFLINE",
+                "core_connected": _core_ok,
+                "avatar_state": self.avatar_state if _core_ok else "OFFLINE",
                 "kiosk_running": kiosk_active,
                 "camera_streaming": self.camera_streaming,
                 "embodiment_mode": "ACTIVE" if kiosk_active else "STANDBY",
