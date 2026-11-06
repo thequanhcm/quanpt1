@@ -111,7 +111,7 @@ def test_store_records_and_dm_cooldown(tmp_path) -> None:
     st = DeviceStore(tmp_path / "dev.db", sender=sender, cooldown_sec=60)
     ev_add = {"type": "DEVICE_ADDED", "severity": "INFO", "details": {
         "fingerprint": "usb:1-2:1234:5678",
-        "desc": "Thiết bị cắm vào Pi5: [usb] USB Cam (1234:5678)",
+        "desc": "[usb] USB Cam (1234:5678)",
         "device": {"bus": "usb", "dev_id": "1-2", "name": "USB Cam",
                    "vid_pid": "1234:5678", "meta": {}}}}
     r1 = st.record_added("EDGE-PI5-DESK-01", ev_add)
@@ -122,7 +122,7 @@ def test_store_records_and_dm_cooldown(tmp_path) -> None:
 
     ev_rm = {"type": "DEVICE_REMOVED", "severity": "INFO", "details": {
         "fingerprint": "usb:1-2:1234:5678",
-        "desc": "Thiết bị rút khỏi Pi5: [usb] USB Cam (1234:5678)"}}
+        "desc": "[usb] USB Cam (1234:5678)"}}
     r3 = st.record_removed("EDGE-PI5-DESK-01", ev_rm)
     assert r3["stored"] and r3["dm"]["sent"] is True  # key khác → không cooldown
 
@@ -131,6 +131,39 @@ def test_store_records_and_dm_cooldown(tmp_path) -> None:
     evs = st.recent_events(10)
     # 2 lần record_added đều ghi DB (audit trail); riêng DM bị cooldown
     assert [e["event"] for e in evs] == ["REMOVED", "ADDED", "ADDED"]
+
+
+def test_store_dm_wording_connected_disconnected(tmp_path) -> None:
+    """(06/11/2026, owner) Văn phong DM kỹ thuật + gọn: 'Đã kết nối'/'Mất kết nối'
+    — KHÔNG lặp cụm từ ('Thiết bị CẮM…: Thiết bị cắm…'), 1 dòng duy nhất."""
+    sent: list[str] = []
+
+    def sender(msg: str):
+        sent.append(msg)
+        return {"success": True}
+
+    st = DeviceStore(tmp_path / "dev3.db", sender=sender, cooldown_sec=0)
+    ev_add = {"type": "DEVICE_ADDED", "severity": "INFO", "details": {
+        "fingerprint": "usb:1-2:1234:5678",
+        "desc": "[usb] USB Cam (1234:5678)",
+        "device": {"bus": "usb", "dev_id": "1-2", "name": "USB Cam",
+                   "vid_pid": "1234:5678", "meta": {}}}}
+    st.record_added("EDGE-PI5-DESK-01", ev_add)
+    add_msg = sent[-1]
+    assert add_msg.startswith("🔌 Đã kết nối: USB Cam")
+    assert "(1234:5678)" in add_msg and "usb" in add_msg
+    assert "CẮM" not in add_msg and "Thiết bị cắm" not in add_msg
+    assert add_msg.count("\n") == 0  # 1 dòng gọn
+
+    ev_rm = {"type": "DEVICE_REMOVED", "severity": "INFO", "details": {
+        "fingerprint": "usb:1-2:1234:5678",
+        "desc": "[usb] USB Cam (1234:5678)"}}
+    st.record_removed("EDGE-PI5-DESK-01", ev_rm)
+    rm_msg = sent[-1]
+    assert rm_msg.startswith("⚠️ Mất kết nối: [usb] USB Cam")
+    # chống lặp: cụm "Mất kết nối" chỉ xuất hiện 1 lần, không lồng câu cũ
+    assert rm_msg.count("Mất kết nối") == 1
+    assert "Thiết bị rút" not in rm_msg and "RÚT" not in rm_msg
 
 
 def test_store_no_sender_never_crashes(tmp_path) -> None:

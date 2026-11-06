@@ -90,9 +90,9 @@ class DeviceStore:
                 (fp, bus, str(dev.get("dev_id", ""))[:80], name, vid_pid,
                  now, now, meta))
         dm = self._maybe_send(
-            f"🔌 Thiết bị CẮM vào Pi5: {name}" +
+            f"🔌 Đã kết nối: {name}" +
             (f" ({vid_pid})" if vid_pid else "") +
-            f"\nBus: {bus} | lúc {now[11:19]} UTC",
+            f" — {bus} | {now[11:19]} UTC",
             key=f"ADDED:{fp}")
         return {"stored": True, "dm": dm}
 
@@ -112,7 +112,7 @@ class DeviceStore:
             con.execute(
                 "DELETE FROM edge_device_current WHERE fingerprint = ?", (fp,))
         dm = self._maybe_send(
-            f"⚠️ Thiết bị RÚT khỏi Pi5: {desc}\nlúc {now[11:19]} UTC",
+            f"⚠️ Mất kết nối: {desc} | {now[11:19]} UTC",
             key=f"REMOVED:{fp}")
         return {"stored": True, "dm": dm}
 
