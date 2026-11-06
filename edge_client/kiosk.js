@@ -119,7 +119,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (!mouthLine) return;
 
+    // (06/11/2026, owner: "hình chuyển động theo giọng nói mượt mà") Bộ miệng
+    // SVG random 110ms CHỈ là fallback khi canvas avatar chưa có timeline
+    // (asset chưa load / engine lỗi). Khi window.digitalHuman sẵn sàng, lip-sync
+    // do MouthSyncEngine timeline trên canvas đảm nhiệm — tắt đường cũ để tránh
+    // 2 nguồn trộn nhau gây giật (judder).
     if (stateKey === "SPEAKING") {
+      if (window.digitalHuman && window.digitalHuman.loaded) return; // canvas lo
       const visemes = ["mouth-open-A", "mouth-open-O", "mouth-open-E", "mouth-open-I", "mouth-open-U"];
       mouthAnimInterval = setInterval(() => {
         visemes.forEach(v => mouthLine.classList.remove(v));
@@ -176,15 +182,34 @@ document.addEventListener("DOMContentLoaded", () => {
       const slot = w / numBars;
       const barW = Math.max(3, slot - 3);
 
+      // (06/11/2026) Energy THẬT từ audio đang phát (nếu analyser sẵn sàng)
+      let liveEnergy = 0;
+      let liveSpectrum = null;
+      if (kioskAudioAnalyser && kioskAudioData && currentAvatarState === "SPEAKING") {
+        kioskAudioAnalyser.getByteFrequencyData(kioskAudioData);
+        let sum = 0;
+        for (let i = 0; i < kioskAudioData.length; i++) sum += kioskAudioData[i];
+        liveEnergy = sum / (kioskAudioData.length * 255); // 0..1
+        liveSpectrum = kioskAudioData;
+      }
+
       for (let i = 0; i < numBars; i++) {
         const x = i * slot + 1;
         let barH = 3;
         let color = "rgba(0, 229, 255, 0.4)";
 
         if (currentAvatarState === "SPEAKING") {
-          const factor = Math.sin(phase * 2.5 + i * 0.55) * 0.5 + 0.5;
-          barH = 3 + factor * (h - 6);
-          color = "rgba(59, 130, 246, 0.95)";
+          if (liveSpectrum) {
+            // Giác quan THẬT: mỗi cột = 1 dải tần của audio đang phát
+            const bin = Math.floor((i / numBars) * liveSpectrum.length);
+            const v = liveSpectrum[bin] / 255;
+            barH = 3 + v * (h - 6);
+            color = v > 0.55 ? "rgba(96, 165, 250, 1.0)" : "rgba(59, 130, 246, 0.95)";
+          } else {
+            const factor = Math.sin(phase * 2.5 + i * 0.55) * 0.5 + 0.5;
+            barH = 3 + factor * (h - 6);
+            color = "rgba(59, 130, 246, 0.95)";
+          }
         } else if (currentAvatarState === "LISTENING") {
           const factor = Math.sin(phase * 3.2 + i * 0.65) * 0.5 + 0.5;
           barH = 3 + factor * (h - 6);
@@ -227,6 +252,30 @@ document.addEventListener("DOMContentLoaded", () => {
   updateClock();
 
   // Play Speech Audio on Raspberry Pi 5
+  // (06/11/2026) VU meter THẬT: dùng WebAudio AnalyserNode đo amplitude audio
+  // đang phát → thanh VU chạy đúng "giác quan" (nghe gì hiện nấy), không giả lập.
+  let kioskAudioCtx = null;
+  let kioskAudioAnalyser = null;
+  let kioskAudioData = null;
+
+  function attachAnalyser(audio) {
+    try {
+      if (!kioskAudioCtx) kioskAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (kioskAudioCtx.state === "suspended") { kioskAudioCtx.resume().catch(() => {}); }
+      const src = kioskAudioCtx.createMediaElementSource(audio);
+      kioskAudioAnalyser = kioskAudioCtx.createAnalyser();
+      kioskAudioAnalyser.fftSize = 64;
+      kioskAudioData = new Uint8Array(kioskAudioAnalyser.frequencyBinCount);
+      src.connect(kioskAudioAnalyser);
+      kioskAudioAnalyser.connect(kioskAudioCtx.destination);
+      return true;
+    } catch (err) {
+      // Nền tảng chặn WebAudio → fallback về VU giả lập (không chết tiếng)
+      kioskAudioAnalyser = null;
+      return false;
+    }
+  }
+
   function playKioskSpeech(audioBase64, timeline, spokenText) {
     if (!audioBase64) return;
     try {
@@ -242,6 +291,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const audio = new Audio("data:audio/mpeg;base64," + audioBase64);
       currentKioskAudio = audio;
       setAvatarState("SPEAKING");
+      // (06/11/2026) Gắn analyser để VU meter + avatar đọc energy THẬT
+      const analyserOk = attachAnalyser(audio);
 
       // (31/10) BIỂU CẢM THEO NỘI DUNG: micro-expression theo cảm xúc câu nói
       if (window.digitalHuman && spokenText) {
@@ -249,6 +300,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (window.digitalHuman && timeline) {
         window.digitalHuman.setTimeline(timeline);
+      } else if (window.digitalHuman && analyserOk) {
+        // (06/11/2026) Không có timeline (TTS fallback khác) nhưng có audio thật:
+        // chạy chế độ SPEAKING + để engine đọc liveEnergy từ analyser.
+        window.digitalHuman.setLiveAudioMeter(() => {
+          if (!kioskAudioAnalyser || !kioskAudioData || !currentKioskAudio) return 0;
+          kioskAudioAnalyser.getByteFrequencyData(kioskAudioData);
+          let sum = 0;
+          for (let i = 0; i < kioskAudioData.length; i++) sum += kioskAudioData[i];
+          return sum / (kioskAudioData.length * 255); // 0..1
+        });
       }
 
       audio.onended = () => {
@@ -258,6 +319,7 @@ document.addEventListener("DOMContentLoaded", () => {
           window.digitalHuman.cancelUtterance();
           window.digitalHuman.setState("IDLE");
           window.digitalHuman.resetMicroExpression();
+          window.digitalHuman.setLiveAudioMeter(null); // (06/11/2026) ngắt meter
         }
         if (wakeEngine) {
           wakeEngine.notifySpeakingEnd();
@@ -272,6 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
           window.digitalHuman.cancelUtterance();
           window.digitalHuman.setState("IDLE");
           window.digitalHuman.resetMicroExpression();
+          window.digitalHuman.setLiveAudioMeter(null);
         }
         if (wakeEngine) {
           wakeEngine.notifySpeakingEnd();
