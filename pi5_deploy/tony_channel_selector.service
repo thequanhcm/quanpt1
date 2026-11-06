@@ -1,0 +1,7 @@
+[Unit]
+Description=TONY Channel Selector — tự điều tiết kênh PC↔Pi5 mạnh nhất (mesh/LAN/BT-PAN)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/quanpt1/Desktop/edge_client/tony_channel_selector.py
+User=quanpt1
