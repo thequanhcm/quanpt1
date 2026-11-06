@@ -237,25 +237,39 @@ document.addEventListener('DOMContentLoaded', () => {
             const res = await fetch('/api/status');
             const data = await res.json();
             // Hiển thị model THẬT đang xử lý (cloud hay local) — trung thực tuyệt đối
+            // (06/11/2026) HIỆN TRẠNG MÔ HÌNH THẬT: NetMind Cloud (GLM-5.3-Flash) là runtime
+            // CHÍNH (Ollama đã gỡ khỏi máy — chỉ còn "Local Ollama" nếu owner cài lại).
+            // Widget hiển thị PROVIDER ĐANG PHỤC VỤ, không phải trạng thái Ollama.
             const activeModel = (data.llm && (data.llm.active_model || data.llm.default_model)) || '';
-            const isCloud = activeModel && !/qwen2\.5|llama|mistral/i.test(activeModel);
-            if (data.llm && data.llm.ollama_online) {
+            const nm = (data.llm && data.llm.netmind) || {};
+            const nmReady = nm.status === 'READY' || nm.catalog_reachable === true;
+            const nmModels = Array.isArray(nm.available_models) ? nm.available_models : [];
+            const isCloudModel = activeModel && !/qwen2\.5|llama|mistral/i.test(activeModel);
+            const cloudServing = isCloudModel && (nmReady || data.llm.active_provider_label);
+            if (cloudServing) {
+                // Runtime chính = NetMind Cloud — xanh
+                ollamaIndicator.className = 'status-indicator online';
+                ollamaStatusText.textContent = data.llm.active_provider_label || 'NetMind Cloud — suy luận chính';
+            } else if (data.llm && data.llm.ollama_online) {
                 ollamaIndicator.className = 'status-indicator online';
                 ollamaStatusText.textContent = 'Trực tuyến (127.0.0.1)';
             } else {
                 ollamaIndicator.className = 'status-indicator offline';
-                ollamaStatusText.textContent = 'Chưa kết nối (suy luận qua Cloud)';
+                ollamaStatusText.textContent = 'Không có runtime (cần Cloud hoặc cài lại Ollama)';
             }
             if (activeModel) {
-                activeModelName.textContent = activeModel + (isCloud ? ' — Cloud' : ' — Local');
+                activeModelName.textContent = activeModel + (cloudServing ? ' — NetMind Cloud' : (isCloudModel ? ' — Cloud' : ' — Local'));
             }
-            if (Array.isArray(data.llm?.available_models) && data.llm.available_models.length > 0) {
+            // Dropdown: models CỦA PROVIDER ĐANG PHỤC VỤ (netmind list) — fallback ollama list
+            const selectorModels = nmModels.length > 0 ? nmModels : (data.llm?.available_models || []);
+            if (selectorModels.length > 0) {
                 modelSelector.innerHTML = '';
-                data.llm.available_models.forEach(m => {
+                selectorModels.forEach(m => {
                     const opt = document.createElement('option');
+                    const pretty = m.replace('zai-org/', '').replace('MiniMax/', 'MiniMax ').replace('Qwen/', 'Qwen ');
                     opt.value = m;
-                    opt.textContent = m + (m === state.selectedModel ? ' (đang dùng)' : '');
-                    if (m === state.selectedModel) opt.selected = true;
+                    opt.textContent = pretty + (m === activeModel ? ' — đang dùng' : '');
+                    if (m === activeModel) opt.selected = true;
                     modelSelector.appendChild(opt);
                 });
             }

@@ -32,12 +32,12 @@
             <div class="status-card" id="system-status-widget">
                 <div class="status-row">
                     <span class="status-indicator online" id="ollama-indicator"></span>
-                    <span class="status-label">Local Ollama</span>
+                    <span class="status-label">Suy luận (LLM)</span>
                     <span class="status-val" id="ollama-status-text">Đang kiểm tra...</span>
                 </div>
                 <div class="status-subrow">
                     <span class="sub-label">Model active:</span>
-                    <span class="sub-val" id="active-model-name">qwen2.5:7b</span>
+                    <span class="sub-val" id="active-model-name">zai-org/GLM-5.3-Flash</span>
                 </div>
                 <div class="status-subrow">
                     <span class="sub-label">Governance:</span>
@@ -82,7 +82,7 @@
             <header class="top-bar">
                 <div class="top-title">
                     <h1 id="page-title">Hội Thoại Nhận Thức & Giọng Nói</h1>
-                    <p class="subtitle" id="page-subtitle">Trợ lý điều hành cá nhân bảo mật cao • Trí nhớ dài hạn • GLM-5.3-Flash qua NetMind Cloud (Ollama local khi khả dụng)</p>
+                    <p class="subtitle" id="page-subtitle">Trợ lý điều hành cá nhân bảo mật cao • Trí nhớ dài hạn • GLM-5.3-Flash qua NetMind Cloud</p>
                 </div>
                 <div class="top-actions">
                     <div class="voice-toggle-wrapper" title="Bật/Tắt trợ lý tự đọc câu trả lời bằng giọng nói">
@@ -97,10 +97,10 @@
                         <span id="tts-status-badge" class="tts-badge ready" title="Trạng thái giọng đọc tiếng Việt">vi-VN (Hoài My)</span>
                     </div>
                     <select class="model-select" id="model-selector">
-                        <option value="zai-org/GLM-5.3-Flash" selected>GLM-5.3-Flash (Nhanh nhất - Cloud)</option>
-                        <option value="Qwen/Qwen3.5-122B-A10B-FP8">Qwen3.5-122B (Suy luận sâu)</option>
-                        <option value="qwen2.5:7b">qwen2.5:7b (Local - Offline)</option>
-                        <option value="qwen2.5:1.5b">qwen2.5:1.5b (Local - Siêu tốc)</option>
+                        <option value="zai-org/GLM-5.3-Flash" selected>GLM-5.3-Flash (Nhanh nhất - NetMind Cloud)</option>
+                        <option value="Qwen/Qwen3.5-122B-A10B-FP8">Qwen3.5-122B (Suy luận sâu - NetMind Cloud)</option>
+                        <option value="MiniMax/MiniMax-M3">MiniMax-M3 (NetMind Cloud)</option>
+                        <option value="Qwen/Qwen3.6-35B-A3B-FP8">Qwen3.6-35B (NetMind Cloud)</option>
                     </select>
                 </div>
             </header>
