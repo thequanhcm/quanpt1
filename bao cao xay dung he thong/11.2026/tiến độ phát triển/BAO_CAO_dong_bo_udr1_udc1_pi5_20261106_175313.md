@@ -1,0 +1,290 @@
+# BÁO CÁO KỸ THUẬT — dong_bo_udr1_udc1_pi5
+
+> Sinh tự động 06/11/2026 17:53:13 (giờ VN) theo chỉ thị owner 02/11/2026:
+> báo cáo chi tiết sau MỖI tác vụ — có phân tích, đánh giá, định hướng, đề xuất.
+
+## 1. TÓM TẮT ĐIỀU HÀNH
+Owner ra lenh dong bo module dieu khien moi UDR-1/UDC-1. DA XONG E2E tren phan cung that: (1) backup 7 files Pi5 -> backup_pre_udr1_20261106; (2) scp 9 module loi moi (main, client_daemon, edge_agent, auth, config, actuators, device_readers, device_watcher, device_control) - sha256 9/9 khop; (3) cai SSH key TONY tony-desktop-20261103 vao authorized_keys - SSH bang key TONY OK; (4) systemctl restart quan_ai_edge active; (5) Phat hien + fix 1 bug production server.py: nhanh action=device thieu forward write_op (stage_write luon fail) + value=None gay 500 str.get; (6) restart 8766 qua watchdog lan 3. KET QUA VERIFY: GPIO THAT emulated=false hardware_available=true; list_devices 59 thiet bi; WRITE khong token BI TU CHOI (fail-closed dung); emergency_stop chay ngay DE_ENERGIZED_ALL_RELAYS 8 relays; stage_write cap token TTL 600s; relay_set relay_1 GPIO17 CLOSED thanh cong voi token; tra an toan OPEN; token one-shot bi chan dung tai su dung; heartbeat READY paired True sau tat ca. UDR-1/UDC-1: LIVE_VERIFIED tren phan cung that.
+
+## 2. PHÂN TÍCH
+- 9 module loi da dong bo PC->Pi5 qua scp voi xac nhan sha256 tung file
+- device_control.py tren Pi5: READ_ONLY_OPS chay ngay; relay/joint can confirm_token TTL 10 phut one-shot; emergency_stop chay ngay
+- Bug server.py: nhanh action=device forward thieu truong write_op nen PC khong the stage_write qua kenh chuan
+
+## 3. ĐÁNH GIÁ
+- U
+- D
+- C
+- -
+- 1
+-  
+- a
+- n
+-  
+- t
+- o
+- a
+- n
+-  
+- d
+- u
+- n
+- g
+-  
+- t
+- h
+- i
+- e
+- t
+-  
+- k
+- e
+- :
+-  
+- k
+- h
+- o
+- n
+- g
+-  
+- t
+- o
+- k
+- e
+- n
+-  
+- =
+-  
+- k
+- h
+- o
+- n
+- g
+-  
+- g
+- h
+- i
+- ;
+-  
+- t
+- o
+- k
+- e
+- n
+-  
+- g
+- a
+- n
+-  
+- (
+- o
+- p
+- ,
+- t
+- a
+- r
+- g
+- e
+- t
+- ,
+- v
+- a
+- l
+- u
+- e
+- )
+-  
+- T
+- T
+- L
+-  
+- 1
+- 0
+-  
+- p
+- h
+- u
+- t
+-  
+- m
+- o
+- t
+- -
+- l
+- a
+- n
+- ;
+-  
+- e
+- s
+- t
+- o
+- p
+-  
+- k
+- h
+- o
+- n
+- g
+-  
+- t
+- o
+- k
+- e
+- n
+- ;
+-  
+- G
+- P
+- I
+- O
+-  
+- t
+- h
+- a
+- t
+-  
+- k
+- h
+- o
+- n
+- g
+-  
+- p
+- h
+- a
+- i
+-  
+- e
+- m
+- u
+- l
+- a
+- t
+- e
+- d
+
+## 4. ĐỊNH HƯỚNG
+- K
+- E
+- N
+- H
+-  
+- D
+- I
+- E
+- U
+-  
+- K
+- H
+- I
+- E
+- N
+-  
+- T
+- H
+- I
+- E
+- T
+-  
+- B
+- I
+-  
+- P
+- C
+- -
+- >
+- P
+- i
+- 5
+-  
+- L
+- I
+- V
+- E
+- :
+-  
+- o
+- w
+- n
+- e
+- r
+-  
+- D
+- M
+-  
+- N
+- e
+- t
+- C
+- h
+- a
+- t
+-  
+- -
+- >
+-  
+- P
+- C
+-  
+- -
+- >
+-  
+- P
+- i
+- 5
+-  
+- G
+- P
+- I
+- O
+-  
+- r
+- e
+- l
+- a
+- y
+- /
+- j
+- o
+- i
+- n
+- t
+-  
+- c
+- o
+-  
+- p
+- h
+- e
+-  
+- d
+- u
+- y
+- e
+- t
+-  
+- 2
+-  
+- b
+- u
+- o
+- c
+
+## 5. ĐỀ XUẤT
+- G1 LIVE VALIDATION 16 muc (khong con can script zip - da sync thu cong xong)
+- Commit fix server.py (cho owner ra lenh commit)
+
+## 6. BẰNG CHỨNG & MINH CHỨNG SỐ
+- reports/UDR1_UDC1_SYNC_LIVE_20261106.md
+- sha256 9/9 khop
+- relay_1 state CLOSED->OPEN da verify
+- tests/test_device_control_dm.py 8/8 PASS sau fix
+
+## 7. RỦI RO & TRUNG THỰC
+- Backup 7 files cu nam tai Pi5 backup_pre_udr1_20261106 neu can rollback
+- Fix server.py chua commit - chua co trong git
+
+## 8. VIỆC CHỜ OWNER QUYẾT ĐỊNH
+- Duyet commit fix server.py
+- G1 16 muc khi anh san sang
