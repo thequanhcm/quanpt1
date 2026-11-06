@@ -67,7 +67,7 @@ def test_self_model_generation():
     model = engine.generate_self_model()
 
     assert model.identity["system_name"] == "QUAN AI BRAIN"
-    assert model.identity["assistant_name"] == "TONY PHAM"
+    assert model.identity["assistant_name"] == "CHERRY"  # (06/11) rename
     assert model.identity["owner"] == "Quanpt1"
     assert len(model.active_modules) > 0
     assert len(model.memory_types) > 0
@@ -85,7 +85,7 @@ def test_conversational_summary():
     model = engine.generate_self_model()
     summary = model.to_conversational_summary()
 
-    assert "TONY PHAM" in summary
+    assert "CHERRY" in summary  # (06/11) rename
     assert "Quanpt1" in summary
     assert "PC Core" in summary or "Raspberry Pi" in summary
     assert "Bộ nhớ" in summary or "Memory" in summary

@@ -103,7 +103,7 @@ def sanitize_for_spoken_vietnamese(text: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
 
     # 7. Truncate overly verbose sentences for natural voice listening
-    max_len = 1500 if ("TONY PHAM" in s or "QUAN AI BRAIN" in s) else 350
+    max_len = 1500 if ("CHERRY" in s or "TONY PHAM" in s or "QUAN AI BRAIN" in s) else 350
     if len(s) > max_len:
         # V8: cắt theo CÂU (dấu câu kết thúc) — không cắt giữa câu như trước.
         sentences = re.split(r"(?<=[.!?])\s+", s)
@@ -285,8 +285,8 @@ class XiaoZhiVoicePipeline:
             self.state_machine.transition_to(VoiceState.DISABLED, reason="Sleep command")
             return VoiceInteractionResult(
                 query=match.keyword,
-                response_text="Em xin phép tạm nghỉ, khi cần Anh cứ gọi 'Tony ơi' nhé.",
-                spoken_text="Em xin phép tạm nghỉ, khi cần Anh cứ gọi 'Tony ơi' nhé.",
+                response_text="Em xin phép tạm nghỉ, khi cần Anh cứ gọi 'CHERRY ơi' nhé.",
+                spoken_text="Em xin phép tạm nghỉ, khi cần Anh cứ gọi 'CHERRY ơi' nhé.",
                 active_role=ExecutiveRole.EXECUTIVE_ASSISTANT.value,
                 state=self.state_machine.current_state.value,
             )

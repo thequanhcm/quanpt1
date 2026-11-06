@@ -2,10 +2,12 @@
 """QUAN AI BRAIN — Wake Word Service cho Pi 5 (24/7, chạy ngoài kiosk).
 
 Nghe liên tục qua mic USB (Jieli), nhận tiếng Việt offline bằng Vosk.
-Khi nghe thấy "TONY ơi" (hoặc "Tony", "Hi Tony"...):
+Khi nghe thấy "CHERRY ơi" (hoặc "Cherry", "Hi Cherry"...):
   1. POST http://127.0.0.1:8768/api/kiosk/control {"action":"wake_by_voice"}
      → daemon _wake_screen: bật màn hình + launch kiosk + avatar ACTIVE.
   2. Kiosk chạy → wake_engine.js (Web Speech) tiếp quản hội thoại.
+
+(Rename 06/11/2026 theo lệnh owner: wake word TONY ơi → CHERRY ơi.)
 
 Chạy bằng systemd quan_ai_wake.service (user quanpt1), tự restart nếu lỗi.
 Mic bị daemon kiosk giữ? Vosk mở cùng thiết bị qua ALSA default (dsnoop PipeWire)
@@ -25,12 +27,17 @@ from vosk import Model, KaldiRecognizer
 MODEL_PATH = str(Path.home() / "vosk-model-small-vn-0.3")
 KIOSK_API = "http://127.0.0.1:8768"
 SAMPLE_RATE = 16000
-# Model small-vn nhận "Tony ơi" thành nhiều biến thể gần giống — dùng bộ khớp
-# RỘNG (đã kiểm chứng: "Tony ơi" → 'tôi nghĩ tới mì tươi'). Wake là hành động
+# Model small-vn nhận "Cherry ơi" thành nhiều biến thể gần giống — dùng bộ khớp
+# RỘNG (đã kiểm chứng cách khớp với "Tony ơi" từ 31/10). Wake là hành động
 # vô hại (chỉ bật màn hình) nên chấp nhận false-positive thấp.
 WAKE_PHRASES = (
-    # (31/10/2026) OWNER CHUẨN: tony / tony ơi / hi tony / hay tony — đủ 4 mẫu
-    # đánh thức + biến thể dấu/không dấu Vosk hay trả về:
+    # (06/11/2026) OWNER ĐỔI TÊN: cherry / cherry ơi / hi cherry / hay cherry
+    # (cũ: tony — giữ biến thể cũ 1 tuần quá độ rồi bỏ) + biến thể dấu/không dấu
+    # Vosk hay trả về ("cherry" → "cherry"/"cheri"/"ché ri"):
+    "cherry", "cherry ơi", "cherry oi", "hi cherry", "hay cherry", "hey cherry",
+    "hay cherry ơi", "hay cherry oi", "hi cherry ơi", "hi cherry oi",
+    "cheri", "ché ri", "che ri", "chè ri",
+    # biến thể TONY cũ (quá độ — owner quen miệng):
     "tony", "tony ơi", "tony oi", "hi tony", "hay tony", "hey tony",
     "hay tony ơi", "hay tony oi", "hi tony ơi", "hi tony oi",
     "tôi nghĩ", "toi nghi", "tới mì", "toi mi", "mì tươi", "mi tuoi",
@@ -84,7 +91,7 @@ def main():
     import io
     proc = None
     buf = io.BytesIO()
-    print("[WAKE] sẵn sàng — lắng nghe 'TONY ơi'", flush=True)
+    print("[WAKE] sẵn sàng — lắng nghe 'CHERRY ơi'", flush=True)
 
     # Ghi qua pw-record (PipeWire) — device USB bị PipeWire giữ độc quyền nên
     # arecord plughw:2,0 luôn 'Device busy'. pw-record đọc từ source node mặc
@@ -191,6 +198,7 @@ def main():
             def _fuzzy_hit(txt: str) -> bool:
                 # (31/10/2026) Vosk small nhận "TONY ơi" thành 'thừa'/'tôi'/
                 # 'vực'... — khớp mờ từng token (Levenshtein <=2) với tên + 'ơi':
+                # (06/11/2026) thêm bộ tên CHERRY + giữ TONY quá độ.
                 def _lev(a: str, b: str) -> int:
                     if abs(len(a) - len(b)) > 2:
                         return 9
@@ -207,14 +215,16 @@ def main():
                 has_name = any(
                     _lev(t, w) <= 2
                     for t in tokens
-                    for w in ("tony", "toi", "tôi", "tony.", "tó-ni")
+                    for w in ("cherry", "cheri", "ché ri", "che ri",
+                              "tony", "toi", "tôi", "tony.", "tó-ni")
                 )
                 has_oi = "ơi" in tokens or "oi" in tokens or "ơi!" in tokens
                 if has_name and has_oi:
                     return True
                 # cụm đầy đủ khớp mờ 1 lỗi:
                 return any(_lev(txt[:24], p) <= 3 for p in
-                           ("tony ơi", "tôi ơi", "tony oi", "tới mì"))
+                           ("cherry ơi", "cherry oi", "cheri oi",
+                            "tony ơi", "tôi ơi", "tony oi", "tới mì"))
 
             if any(p in text for p in WAKE_PHRASES) or _fuzzy_hit(text):
                 print(f"[WAKE] NGHE THẤY: '{text}' → wake!", flush=True)

@@ -125,7 +125,7 @@ def chat():
                     context += f"{i}. {mem.get('content', '')[:200]}\n"
             
             # Build prompt
-            prompt = f"""Anh là TONY - Trợ lý số thông minh.
+            prompt = f"""Anh là CHERRY - Trợ lý số thông minh.  # (06/11) rename
             
 Câu hỏi của chủ nhân: {query}
 
