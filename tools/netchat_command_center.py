@@ -68,16 +68,19 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "ack_alert": ("giữ nguyên", "giu nguyen", "tắt cảnh báo", "tat canh bao",
                   "đã xác nhận cảnh báo", "da xac nhan canh bao",
                   "không cảnh báo nữa", "khong canh bao nua"),
-    "tony_speak": ("tony nói", "tony noi", "kêu tony nói", "keu tony noi", "nói với anh", "noi voi anh"),
+    "tony_speak": ("tony nói", "tony noi", "kêu tony nói", "keu tony noi", "nói với anh", "noi voi anh",
+                "cherry nói", "cherry noi", "kêu cherry nói", "keu cherry noi"),  # (06/11) CHERRY song song TONY
     "tony_face": ("biểu cảm", "bieu cam", "đổi biểu cảm", "doi bieu cam", "set expression", "mặt vui", "mat vui",
                   "mỉm cười", "mim cuoi", "cười lên", "cuoi len", "mắt to", "mat to", "chăm chú", "cham chu"),
     "tony_pause": ("tony nghỉ", "tony nghi", "tony nghỉ ngơi", "tony nghi ngoi", "tạm nghỉ", "tam nghi", "pause tony",
-                   "tony ngủ", "tony ngu", "standby", "chế độ chờ", "che do cho", "về chế độ standby"),
-    "tony_resume": ("tony làm việc", "tony lam viec", "tony hoạt động", "tony hoat dong", "resume tony", "tony dậy", "tony day"),
+                   "tony ngủ", "tony ngu", "standby", "chế độ chờ", "che do cho", "về chế độ standby",
+                   "cherry nghỉ", "cherry nghi", "cherry ngủ", "cherry ngu", "pause cherry"),  # (06/11) CHERRY
+    "tony_resume": ("tony làm việc", "tony lam viec", "tony hoạt động", "tony hoat dong", "resume tony", "tony dậy", "tony day",
+                   "cherry làm việc", "cherry lam viec", "cherry hoạt động", "cherry hoat dong", "resume cherry", "cherry dậy", "cherry day"),  # (06/11) CHERRY
     "tony_status": ("hình thể", "hinh the", "pi5", "pi 5", "hình tì", "hinh ti", "edge"),
     "tony_volume": ("âm lượng", "am luong", "volume", "loa to hơn", "loa to hon", "loa nhỏ hơn", "loa nho hon"),
     # (31/10/2026) Điều khiển Pi5 mở web/YouTube/nhạc + standby từ DM
-    "tony_music_stop": ("tony dừng nhạc", "tony dung nhac", "dừng nhạc", "dung nhac",
+    "tony_music_stop": ("tony dừng nhạc", "tony dung nhac", "cherry dừng nhạc", "cherry dung nhac", "dừng nhạc", "dung nhac",
                         "tắt nhạc", "tat nhac", "stop nhạc", "stop nhac"),
     # UDC-1 (04/11/2026): điều khiển thiết bị trên Pi5 theo lệnh DM
     "device_list": ("thiết bị trên pi", "thiet bi tren pi", "liệt kê thiết bị",
@@ -91,7 +94,7 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "emergency_stop_device": ("dừng khẩn thiết bị", "dung khan thiet bi",
                               "emergency stop device", "ngắt nguồn thiết bị",
                               "ngat nguon thiet bi"),
-    "tony_back": ("tony về", "tony ve", "về hình thể", "ve hinh the", "tắt trang web",
+    "tony_back": ("tony về", "tony ve", "cherry về", "cherry ve", "về hình thể", "ve hinh the", "tắt trang web",
                   "tat trang web", "đóng trang web", "dong trang web", "tony quay lại",
                   "tony quay lai"),
     "tony_websearch": ("tony tìm", "tony tim", "tony tìm kiếm", "tony tim kiem",
@@ -259,7 +262,7 @@ def run_pending_action(chat_session_id: str) -> str | None:
 
 _POLITE_PREFIXES = ("giúp anh", "giup anh", "giúp em", "giup em", "làm ơn", "lam on",
                     "vui lòng", "vui long", "cho anh", "cho em", "cho tôi", "cho toi",
-                    "tony", "em", "bạn", "ban")
+                    "tony", "cherry", "em", "bạn", "ban")  # (06/11) + cherry
 
 
 def _starts_with_any_keyword(t: str) -> bool:
@@ -633,8 +636,8 @@ def handle_help(payload: dict[str, Any] | None = None) -> str:
         "🤖 KÊNH LÀM VIỆC TONY (lệnh đứng đầu câu):\n"
         "• trạng thái | báo cáo | nhiệm vụ | tri thức | việc cần làm\n"
         "• phê duyệt — duyệt hồ sơ chờ (FIFO)\n"
-        "• bật hình thể / tắt hình thể / tony nghỉ / tony làm việc / tony về\n"
-        "• tony nói <câu> | biểu cảm <kiểu> | âm lượng <0-100>\n"
+        "• bật hình thể / tắt hình thể / cherry nghỉ / cherry làm việc / cherry về\n"
+        "• cherry nói <câu> | biểu cảm <kiểu> | âm lượng <0-100>\n"
         "• tony mở youtube [từ khóa] | tony tìm <câu> | tony phát nhạc <tên> | tony dừng nhạc\n"
         "• hiển thị ảnh trên pi [N giây] — ảnh DM lên màn Pi5 rồi tự về avatar\n"
         "• mở <app> | đóng <app> | chụp màn hình | khóa máy  (PC)\n"
@@ -818,14 +821,14 @@ def handle_tony_status(payload: dict[str, Any] | None = None) -> str:
 def handle_tony_pause(payload: dict[str, Any] | None = None) -> str:
     ok, msg = _edge_control({"action": "pause"})
     _audit("netchat_command.tony_pause", {"success": ok})
-    return "😴 TONY tạm nghỉ — màn Pi 5 tắt, tự dậy khi có lệnh hoặc giọng 'TONY ơi'." if ok \
+    return "😴 CHERRY tạm nghỉ — màn Pi 5 tắt, tự dậy khi có lệnh hoặc giọng 'CHERRY ơi'." if ok \
         else f"⚠️ Không pause được: {msg}"
 
 
 def handle_tony_resume(payload: dict[str, Any] | None = None) -> str:
     ok, msg = _edge_control({"action": "resume"})
     _audit("netchat_command.tony_resume", {"success": ok})
-    return "☀️ TONY dậy làm việc — màn hình Pi 5 sáng lại." if ok \
+    return "☀️ CHERRY dậy làm việc — màn hình Pi 5 sáng lại." if ok \
         else f"⚠️ Không resume được: {msg}"
 
 
@@ -833,17 +836,17 @@ def handle_tony_speak(text: str, payload: dict[str, Any] | None = None) -> str:
     """'tony nói <câu>' — TTS trên loa Pi 5 (BT SRS-XB33 phải bật nguồn)."""
     q = (text or "").strip()
     if not q:
-        return "🗣️ Anh muốn TONY nói gì? Cú pháp: 'tony nói Chào anh Quân'"
+        return "🗣️ Anh muốn CHERRY nói gì? Cú pháp: 'cherry nói Chào anh Quân'"
     ok, msg = _edge_control({"action": "speak", "text": q[:500]})
     _audit("netchat_command.tony_speak", {"success": ok, "len": len(q)})
-    return f"🗣️ TONY đang nói: \"{q[:120]}\"" if ok else f"⚠️ TONY không nói được: {msg}"
+    return f"🗣️ CHERRY đang nói: \"{q[:120]}\"" if ok else f"⚠️ CHERRY không nói được: {msg}"
 
 
 # (31/10/2026) PHÁT NGUYÊN VĂN — chống GLM paraphrase:
 # 'em phát câu này 2 lần trên loa pi5: <nguyên văn>' → text đưa vào TTS giữ
 # 100% nguyên văn câu sau dấu ':', phát đúng N lần (1..5), không cắt/không diễn giải.
 _SPEAK_VERBATIM_RE = re.compile(
-    r"^\s*(?:em\s+|tony\s+)?phát(?:\s+câu\s+này|\s+nguyên\s+văn|\s+đúng)?\s*"
+    r"^\s*(?:em\s+|tony\s+|cherry\s+)?phát(?:\s+câu\s+này|\s+nguyên\s+văn|\s+đúng)?\s*"
     r"(?:(\d+)\s*lần|\s+hai\s+lần|\s+2\s+lần)?\s*(?:trên\s+)?(?:loa\s+)?(?:pi\s*5|pi5)?\s*"
     r"(?:giọng\s+(nữ|nam))?\s*[:：]\s*(.+)$",
     re.IGNORECASE,

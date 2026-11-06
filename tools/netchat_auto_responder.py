@@ -681,31 +681,14 @@ def _target_channel_for(msg):
     return msg.get("_chan") or CHANNEL_ID
 
 def send_greeting_message():
-    """Send welcome message when system starts or restarts."""
-    greeting = f"""👋 **XIN CHÀO ANH QUANPT1!**
+    """Send welcome message when system starts or restarts.
 
-Em là **TONY** - Trợ lý số thông minh của anh!
-
-**📊 Hệ thống đã khởi động thành công:**
-✅ Máy chủ QUAN AI BRAIN đang chạy
-✅ Chó canh (watchdog) giám sát hoạt động
-✅ Cỗ máy tự học sẵn sàng
-✅ Trả lời tin nhắn tự động đã hoạt động
-✅ Bảng điều hành: http://127.0.0.1:8766/
-
-**🧠 Trí nhớ:**
-• 150+ kiến thức đã được nhúng vector
-• 2127 câu chuyện trong bộ não (brain.db)
-• Bộ nhớ 3 tầng: Ngắn hạn → Dài hạn → Đã xác thực
-
-**🎯 Sẵn sàng hỗ trợ:**
-• Tra cứu thông tin
-• Quản lý công việc
-• Phân tích dữ liệu
-• Tự động hóa tác vụ
-• Kết nối với hình thể số (avatar)
-
-Anh cần em giúp gì hôm nay ạ? 🚀"""
+    (06/11/2026, owner): bản tin rút gọn — CHỈ 2 dòng:
+    "XIN CHÀO ANH QUANPT1! / Em là Cherry - Trợ lý số thông minh của anh!"
+    (cũ: bảng trạng thái dài multi-section — bỏ theo lệnh owner)
+    """
+    greeting = """XIN CHÀO ANH QUANPT1!
+Em là Cherry - Trợ lý số thông minh của anh!"""
 
     print("\n" + "="*60)
     print("👋 Sending greeting message to NetChat...")
