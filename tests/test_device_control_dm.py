@@ -162,12 +162,21 @@ def test_dm_intent_routing() -> None:
 
 def test_relay_dm_stages_pending_not_execute() -> None:
     """'bật rơ le 3' qua DM: Pi offline → không hứa suông; Pi stage được →
-    pending action chờ 'ok', KHÔNG tự execute."""
+    pending action chờ 'ok', KHÔNG tự execute.
+
+    (06/11/2026) route_message KHÔNG tự inject chat_session_id vào payload —
+    caller (responder) phải truyền. Test mô phỏng đúng hợp đồng responder:
+    payload={'chat_session_id': ...} như process_message inject sau fix
+    session-mismatch. Nếu relay stage thất bại (Pi offline) → KHÔNG pending.
+    """
     from tools.netchat_command_center import (
         _PENDING_ACTIONS, route_message, _take_pending_action,
     )
-    # Pi offline thật (kiosk 8768 đóng) → trả ⚠️ trung thực, không pending
-    intent, resp = route_message("bật rơ le 3", chat_session_id="udc-test-1")
+    # Mô phỏng responder sau fix: payload mang chat_session_id thật
+    intent, resp = route_message(
+        "bật rơ le 3", chat_session_id="udc-test-1",
+        payload={"chat_session_id": "udc-test-1"},
+    )
     assert intent in ("relay_on", "pc_open")  # tùy môi trường có core
     # nếu core forward thất bại → không stage pending
     if not resp.startswith("⚙️"):

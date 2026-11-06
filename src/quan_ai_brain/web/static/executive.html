@@ -1090,13 +1090,13 @@
         <div class="card mt-24" id="card-remote-camera">
           <div class="card-header flex-between" style="flex-wrap: wrap; gap: 12px;">
             <div>
-              <span class="card-tag">REMOTE CAMERA &amp; VISION • USB WEBCAM V4L2</span>
+              <span class="card-tag">REMOTE CAMERA &amp; VISION • PI CAMERA MODULE 3 (IMX708 CSI)</span>
               <h3>Quan Sát Hình Ảnh Camera Pi 5 Trực Tiếp &amp; Chụp Ảnh Snapshot</h3>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <a href="/api/executive/edge/camera/stream" target="_blank" class="btn btn-sm btn-outline" style="border-color:#0369a1; color:#0369a1;" title="Mở luồng hình ảnh camera trong tab trình duyệt riêng">🔗 Mở Tab Khung Hình Riêng</a>
               <span class="badge" id="badge-camera-state" style="background: rgba(100, 116, 139, 0.25); color: #64748b; border: 1px solid #64748b;">🔴 CAMERA OFF</span>
-              <span class="badge" id="badge-camera-node" style="background: rgba(2, 132, 199, 0.14); color: #0369a1; border: 1px solid #0369a1;">/dev/video0 (V4L2)</span>
+              <span class="badge" id="badge-camera-node" style="background: rgba(2, 132, 199, 0.14); color: #0369a1; border: 1px solid #0369a1;">libcamera (IMX708)</span>
             </div>
           </div>
 
@@ -1114,12 +1114,12 @@
                   <span id="camera-overlay-tag">🔴 TẮT</span>
                 </div>
                 <div class="camera-overlay-res" style="position: absolute; bottom: 8px; right: 10px; font-size: 0.7rem; color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px;">
-                  <span id="camera-overlay-res-val">640x480 • V4L2 USB</span>
+                  <span id="camera-overlay-res-val">640x480 • CSI IMX708</span>
                 </div>
               </div>
 
               <div class="camera-telemetry-row flex-between" style="font-size: 0.78rem; color: #64748b; padding: 0 4px;">
-                <span>Thiết bị: <strong id="lbl-camera-device-name" style="color:#0369a1;">Sirius USB2.0 Camera</strong></span>
+                <span>Thiết bị: <strong id="lbl-camera-device-name" style="color:#0369a1;">Raspberry Pi Camera Module 3</strong></span>
                 <span>Thời điểm: <strong id="lbl-camera-timestamp">Chưa có khung hình</strong></span>
               </div>
             </div>

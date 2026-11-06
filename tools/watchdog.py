@@ -202,7 +202,15 @@ def check_ollama() -> bool:
 
 
 def check_netchat_bot() -> bool:
-    """GAP-R3: NetChat auto-responder liveness via heartbeat freshness in its log."""
+    """GAP-R3: NetChat auto-responder liveness via heartbeat freshness in its log.
+
+    (06/11/2026, owner: "toàn bộ các câu hỏi của anh DM em đều phải phản hồi")
+    BÀI HỌC _NO_WIN: heartbeat LIVE ≠ poll sống — responder có thể chạy vòng
+    lặp (touch heartbeat) nhưng NameError giết toàn bộ read/send → TONY câm
+    trong khi giám sát vẫn báo HEALTHY. Bổ sung lớp 2: quét stdout log gần đây
+    cho lỗi fatal lặp lại (NameError/SyntaxError/AttributeError/Traceback) —
+    thấy lỗi → coi như KHÔNG khỏe → ensure_daemon_alive restart.
+    """
     log_path = Path(CONFIG["netchat_responder_log"])
     if not log_path.exists():
         logger.warning("NetChat responder log missing; bot may not be running")
@@ -211,6 +219,32 @@ def check_netchat_bot() -> bool:
     # (01/11/2026, owner) Responder polls 2s/vòng; 150s không ghi gì = treo/dead
     # (trước đây 600s — anh phải chờ quá lâu khi Tony bị treo).
     alive = age_seconds < 150
+    # Lớp 2 (06/11/2026): stdout log có fatal error gần đây (<5 phút) → unhealthy
+    if alive:
+        stdout_log = Path(CONFIG["log_dir"]) / "netchat_auto_responder_stdout.log"
+        if stdout_log.exists():
+            try:
+                recent_cutoff = time.time() - 300  # 5 phút gần nhất
+                if stdout_log.stat().st_mtime >= recent_cutoff:
+                    with stdout_log.open("r", encoding="utf-8", errors="replace") as f:
+                        tail = f.read()[-8000:]  # đủ xa cho 1-2 vòng poll lỗi
+                    # Lỗi in qua str(e) KHÔNG chứa tên class ("name 'X' is not defined",
+                    # "Traceback" chỉ khi logger in stack) — đếm theo text thật
+                    # (06/11: "NameError" đếm=0 dù 114 hits "not defined" — sai pattern).
+                    fatal_hits = (
+                        tail.count("is not defined")
+                        + tail.count("SyntaxError")
+                        + tail.count("AttributeError")
+                        + tail.count("Traceback")
+                    )
+                    if fatal_hits >= 3:  # ≥3 lần trong tail = lỗi lặp, không phải一次
+                        logger.error(
+                            f"NetChat responder heartbeat LIVE nhưng stdout có {fatal_hits} "
+                            f"fatal error lặp lại — coi như unhealthy (bài học _NO_WIN 06/11)"
+                        )
+                        alive = False
+            except Exception as e:
+                logger.debug(f"stdout tail scan skipped: {e}")
     state = _update_component_state("netchat_bot", alive)
     if not alive:
         logger.warning(f"NetChat responder heartbeat stale ({int(age_seconds)}s; state={state})")

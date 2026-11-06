@@ -62,6 +62,12 @@ _orig_subprocess_run = subprocess.run
 # (TONY câm từ 18:09). Ép UTF-8 cho MỌI subprocess.run() của process này.
 _UTF8_ENV = {"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
 
+# (06/11/2026) FIX NameError: _NO_WIN bị xóa nhầm khi patch 30/10 (17 chỗ gọi
+# vẫn còn) → "Error reading dm messages: name '_NO_WIN' is not defined" CHẾT
+# TOÀN BỘ poll loop — TONY câm hoàn toàn dù heartbeat vẫn LIVE (loop chạy qua
+# except, không crash process). Khôi phục định nghĩa.
+_NO_WIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
 def _subprocess_run_no_window(*args, **kwargs):
     kwargs.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
     _env = dict(os.environ)
@@ -1045,6 +1051,15 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
                 _voice_text = ""
             if _voice_text:
                 message_text = _voice_text  # text STT thay thế → route như lệnh chữ
+        # (06/11/2026) FIX session mismatch: route_message KHÔNG tự inject
+        # chat_session_id vào payload → handle_relay_on/off đọc payload['chat_session_id']
+        # = 'default' → pending rơi vào key 'default' dù owner đang ở DM thật →
+        # 'ok' sau đó run_pending_action(chat_session_id thật) KHÔNG thấy gì → im lặng.
+        # Inject ở đây (responder là entry point chính) — caller truyền đủ thì giữ nguyên.
+        if payload is None:
+            payload = {"chat_session_id": chat_session_id}
+        elif "chat_session_id" not in payload:
+            payload = {**payload, "chat_session_id": chat_session_id}
         intent, response = route_message(
             message_text, sender_user_id=sender_user_id, chat_session_id=chat_session_id,
             payload=payload,

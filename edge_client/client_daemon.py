@@ -2235,7 +2235,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
         image_bytes = self._capture_camera_frame()
         if not image_bytes:
             with self.daemon_state.lock:
-                self.daemon_state.last_camera_error = "Không thể chụp ảnh từ thiết bị camera /dev/video0"
+                self.daemon_state.last_camera_error = "Không thể chụp ảnh từ Camera Module 3 (IMX708/libcamera)"
             self._send_error_json("CAMERA_UNAVAILABLE: Không thể chụp ảnh từ camera vật lý", 503)
             return
 
