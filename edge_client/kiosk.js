@@ -3,7 +3,7 @@
  * 
  * Capabilities:
  * - 24/7 Digital Human (Model F) with responsive emotion states & viseme mouth sync
- * - Hands-free wake word engine ("Hi TONY", "Tony ơi") via USB microphone
+ * - Hands-free wake word engine ("Hi CHERRY", "Cherry ơi", quá độ "Tony ơi") via USB microphone
  * - Natural Vietnamese female speech playback via USB speaker
  * - Real-time LAN synchronization with PC Executive Core Desk
  */
@@ -164,6 +164,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   setTimeout(triggerBlink, 3000);
 
+  // (07/11/2026) FIX TDZ: 3 biến audio phải khai báo TRƯỚC initWaveform() —
+  // render() chạy đồng bộ lúc init và đọc kioskAudioAnalyser (L188); khai báo
+  // let ở dưới (L257-259) khiến JS ném "Cannot access before initialization"
+  // → toàn bộ handler DOMContentLoaded chết → đồng hồ kiosk đứng "--:--:--".
+  let kioskAudioCtx = null;
+  let kioskAudioAnalyser = null;
+  let kioskAudioData = null;
+
   // (31/10/2026) VU METER DỌC — thanh mức âm thanh dọc bên phải màn:
   // cột bar chạy TỪ DƯỚI LÊN, thể hiện mic (LISTENING) và loa phát (SPEAKING).
   function initWaveform() {
@@ -254,9 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Play Speech Audio on Raspberry Pi 5
   // (06/11/2026) VU meter THẬT: dùng WebAudio AnalyserNode đo amplitude audio
   // đang phát → thanh VU chạy đúng "giác quan" (nghe gì hiện nấy), không giả lập.
-  let kioskAudioCtx = null;
-  let kioskAudioAnalyser = null;
-  let kioskAudioData = null;
+  // (07/11/2026) 3 biến đã chuyển lên TRƯỚC initWaveform() — fix TDZ.
 
   function attachAnalyser(audio) {
     try {
@@ -381,7 +387,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (data.success && (data.spoken_text || data.reply || data.response_text)) {
         const replyText = data.spoken_text || data.reply || data.response_text;
-        if (transcriptEl) transcriptEl.textContent = `TONY: "${replyText}"`;
+        if (transcriptEl) transcriptEl.textContent = `CHERRY: "${replyText}"`;
 
         if (data.audio_base64) {
           playKioskSpeech(data.audio_base64, data.mouth_timeline || data.timeline);
@@ -462,7 +468,7 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       // (31/10/2026) Owner policy: CHỈ auto-listen khi config cho phép (enabled=true).
-      // Mặc định = IM LẶNG; nút mic "TONY ƠI..." trên màn hình vẫn hoạt động.
+      // Mặc định = IM LẶNG; nút mic "CHERRY ƠI..." trên màn hình vẫn hoạt động.
       wakeEngine.syncConfigFromBackend().then(() => {
         if (wakeEngine.options.autoStart === false) {
           console.log("Voice engine auto-start DISABLED by core config (mic-only activation).");
@@ -497,7 +503,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // (31/10/2026) Điều khiển từ xa: mở URL thật trên màn Pi (YouTube,
       // Google search, trang tin...). Dùng OVERLAY IFRAME fullscreen — giữ
-      // kiosk sống (poll/status/wake engine vẫn chạy, TONY quay lại được).
+      // kiosk sống (poll/status/wake engine vẫn chạy, CHERRY quay lại được).
       if (data.navigation_url) {
         console.log("Remote navigation received:", data.navigation_url);
         let nv = document.getElementById("kiosk-web-overlay");
@@ -512,14 +518,14 @@ document.addEventListener("DOMContentLoaded", () => {
           nv.src = data.navigation_url;
         }
       } else if (data.navigation_url === "") {
-        // Lệnh "tony về" — đóng overlay web, hiển thị lại hình thể TONY.
+        // Lệnh "cherry về"/"tony về" (quá độ) — đóng overlay web, hiển thị lại hình thể CHERRY.
         const old = document.getElementById("kiosk-web-overlay");
         if (old) old.remove();
-        console.log("Web overlay closed — back to TONY avatar");
+        console.log("Web overlay closed — back to CHERRY avatar");
       }
 
       // (31/10/2026) Hiển thị ảnh DM trên màn Pi: image_url non-null → overlay
-      // <img> fullscreen; null/quá hạn → gỡ overlay, quay về avatar TONY.
+      // <img> fullscreen; null/quá hạn → gỡ overlay, quay về avatar CHERRY.
       // Daemon tự hết hạn theo `until` (show_image duration_sec, mặc định 15s)
       // nên kiosk chỉ phản chiếu trạng thái — không cần timer riêng ở đây.
       let kioskImg = document.getElementById("kiosk-image-overlay");
@@ -538,7 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (kioskImg.getAttribute("src") !== srcUrl) kioskImg.src = srcUrl;
       } else if (kioskImg) {
         kioskImg.remove();
-        console.log("Image overlay removed — back to TONY avatar");
+        console.log("Image overlay removed — back to CHERRY avatar");
       }
 
       // (31/10/2026) LIVE CAMERA: camera_streaming=true → overlay MJPEG fullscreen
@@ -558,7 +564,7 @@ document.addEventListener("DOMContentLoaded", () => {
       } else if (camLive) {
         camLive.src = "";
         camLive.remove();
-        console.log("Camera live overlay removed — back to TONY avatar");
+        console.log("Camera live overlay removed — back to CHERRY avatar");
       }
 
       if (data.need_ui_reload) {
@@ -669,7 +675,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // (01/11/2026, owner) STOP = CHỈ THOÁT giao diện hiển thị hình thể:
       // đóng chromium kiosk, màn hình + hệ thống giữ nguyên; daemon vẫn
       // ACTIVE; không emergency, không tắt nguồn, không tắt màn.
-      // Owner gọi lại "TONY ơi" (hoặc chạm nút TONY ƠI) là giao diện mở lại.
+      // Owner gọi lại "Cherry ơi" (hoặc chạm nút CHERRY ƠI) là giao diện mở lại.
       if (currentKioskAudio) {
         try { currentKioskAudio.pause(); } catch (_) {}
         currentKioskAudio = null;
@@ -687,11 +693,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Touch Wake Button ("TONY ƠI...")
+  // Touch Wake Button ("CHERRY ƠI...")
   if (btnWake) {
     btnWake.addEventListener("click", async () => {
-      // (31/10/2026) Owner policy: chạm nút = GỌI TONY dậy NGAY, phản hồi như
-      // wake word "TONY ơi": bật màn + kiosk sống lại nếu đã bị STOP tắt.
+      // (31/10/2026) Owner policy: chạm nút = GỌI CHERRY dậy NGAY, phản hồi như
+      // wake word "Cherry ơi": bật màn + kiosk sống lại nếu đã bị STOP tắt.
       btnWake.classList.add("listening");
       setAvatarState("LISTENING");
       if (transcriptEl) transcriptEl.textContent = `"Dạ em nghe Anh! Đang lắng nghe..."`;
