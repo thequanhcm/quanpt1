@@ -1,18 +1,21 @@
-"""TONY Vision — phân tích ảnh (OCR + mô tả cấu trúc, không bịa).
+"""TONY Vision — phân tích ảnh (mô tả bối cảnh + OCR + cấu trúc, không bịa).
 
 (06/11/2026) Owner: "em sẽ học tập tri thức để nhận diện hình ảnh. em tải về và
 cài đặt OCR, huấn luyện cho TONY biết tất cả các hình ảnh, chi tiết để TONY
 phân tích được."
 
-Phạm vi SPRINT NÀY (đã duyệt theo lệnh "em tải về và cài đặt OCR"):
-- OCR Tesseract vie+eng trên ảnh DM owner gửi / ảnh TONY tự chụp (logs/pi5_media).
-- Mô tả cấu trúc THÔ TIN THẬT đo được từ file (kích thước, độ sáng, màu chủ đạo,
-  vùng sáng/tối) — không gán nhãn vật thể (nhà bếp, tủ lạnh...) vì engine
-  phân loại chưa có; ghi rõ hạn chế (fail-honest, QPIG: không khai báo
-  Operational những gì chưa chạy thử).
-- Ghi tri thức rút ra vào brain.db (knowledge) — TONY "học" dần theo từng ảnh.
+(07/11/2026, duyệt owner "cho cherry học cách phân tích ảnh... hình ảnh đang
+mô tả gì: trong nhà, tủ lạnh, đèn, bể cá, cá..."): thêm MÔ TẢ BỐI CẢNH qua
+NetMind Cloud GLM-5.3-Flash (đã probe thật: model nhận ảnh base64, trả mô tả
+tiếng Việt ~2s). Mô tả đặt LÊN ĐẦU reply; số liệu kỹ thuật + OCR giữ sau.
 
-Huấn luyện model nhận diện vật thể thật (YOLO/CLIP...) = Sprint riêng, CHỜ DUYỆT.
+Phạm vi:
+- MÔ TẢ BỐI CẢNH (mới): GLM vision — trong nhà/ngoài trời, vật thể, con vật...
+  LƯU Ý TRUNG THỰC: GLM có thể nhầm chi tiết nhỏ (đó là hạn chế của model,
+  ghi rõ "mô tả AI, có thể sai chi tiết" trong reply).
+- OCR Tesseract vie+eng trên ảnh DM owner gửi / ảnh TONY tự chụp (logs/pi5_media).
+- Mô tả cấu trúc THÔ TIN THẬT đo được từ file (kích thước, độ sáng, màu chủ đạo).
+- Ghi tri thức rút ra vào brain.db (candidate_knowledge) — cách ly chờ duyệt.
 """
 from __future__ import annotations
 
@@ -142,6 +145,81 @@ def latest_capture_info() -> dict[str, Any]:
     }
 
 
+def _scene_description(path: Path, *, timeout: float = 45.0) -> str | None:
+    """Mô tả BỐI CẢNH ảnh ("ảnh này chụp ở đâu, có những gì") qua NetMind Cloud
+    GLM-5.3-Flash (model nhận ảnh base64 — probe thật 07/11, ~2s).
+
+    Trả về text tiếng Việt hoặc None khi lỗi (fail-honest — phần kỹ thuật vẫn chạy).
+    Mô tả do AI sinh, có thể sai chi tiết nhỏ — caller ghi chú rõ trong reply.
+    """
+    try:
+        import base64 as _b64
+        import urllib.request as _ur
+        import urllib.error as _ue
+        import sys as _sys
+        from pathlib import Path as _P
+
+        # tái sử dụng provider NetMind (key + base URL chuẩn dự án)
+        _sys.path.insert(0, str(_P(__file__).resolve().parents[2]))
+        from quan_ai_brain.llm.netmind_provider import NetMindProvider
+
+        key = NetMindProvider()._get_api_key()
+        if not key:
+            return None
+        data = path.read_bytes()
+        if len(data) > 6_000_000:  # >6MB — resize để không vượt giới hạn gateway
+            try:
+                from PIL import Image
+                import io as _io
+                img = Image.open(_io.BytesIO(data))
+                img.thumbnail((1280, 1280))
+                buf = _io.BytesIO()
+                img.save(buf, format="JPEG", quality=85)
+                data = buf.getvalue()
+            except Exception:
+                pass
+        payload = {
+            "model": "zai-org/GLM-5.3-Flash",
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url",
+                 "image_url": {"url": "data:image/jpeg;base64," + _b64.b64encode(data).decode()}},
+                {"type": "text",
+                 "text": "Ảnh này chụp ở đâu (trong nhà/ngoài trời/địa điểm gì)? "
+                         "Bên trong có những vật thể, con vật, con người gì? "
+                         "Trả lời ngắn gọn 3-5 câu TIẾNG VIỆT THUẦN (không dùng từ tiếng Anh), "
+                         "chỉ nêu cái thấy được, không suy diễn điều không có."},
+            ]}],
+            # (07/11) GLM-5.3-Flash là reasoning model: content=None + finish=length
+            # khi max_tokens nhỏ (hết token trong phần reasoning) — probe thật.
+            "max_tokens": 1000,
+        }
+        base_url = NetMindProvider().base_url
+        req = _ur.Request(
+            base_url.rstrip("/") + "/chat/completions",
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with _ur.urlopen(req, timeout=timeout) as resp:
+            d = json.loads(resp.read().decode())
+        text = (d["choices"][0]["message"].get("content") or "").strip()
+        if not text:
+            # finish=length trong reasoning → thử 1 lần nữa (model đôi lúc trả được)
+            payload["max_tokens"] = 2000
+            req2 = _ur.Request(
+                base_url.rstrip("/") + "/chat/completions",
+                data=json.dumps(payload).encode(),
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur.urlopen(req2, timeout=timeout) as resp2:
+                d2 = json.loads(resp2.read().decode())
+            text = (d2["choices"][0]["message"].get("content") or "").strip()
+        return text or None
+    except Exception:
+        return None  # fail-honest: mô tả bối cảnh lỗi không được làm hỏng phân tích
+
+
 def analyze_image(path: str | Path, *, max_ocr_chars: int = 1200) -> str:
     """Phân tích 1 ảnh → text tiếng Việt trung thực: facts + OCR + ghi vào knowledge.
 
@@ -162,6 +240,15 @@ def analyze_image(path: str | Path, *, max_ocr_chars: int = 1200) -> str:
 
     # ---- Soạn reply trung thực ----
     lines = [f"👁️ Phân tích ảnh `{p.name}`:"]
+
+    # (07/11/2026, duyệt owner) MÔ TẢ BỐI CẢNH đặt LÊN ĐẦU — "ảnh đang mô tả gì:
+    # trong nhà, tủ lạnh, đèn, bể cá..." (GLM vision, probe thật 07/11).
+    scene = _scene_description(p)
+    if scene:
+        scene_short = scene.replace("\n", " ").strip()
+        lines.append(f"🏞️ Bối cảnh (mô tả AI GLM, có thể sai chi tiết nhỏ): {scene_short}")
+    else:
+        lines.append("🏞️ Bối cảnh: em chưa mô tả được (dịch vụ mô tả AI không phản hồi) — phần kỹ thuật bên dưới vẫn chính xác.")
 
     lines.append(
         f"• Kích thước: {facts['width']}×{facts['height']} px ({facts['mode']}), "
@@ -192,8 +279,8 @@ def analyze_image(path: str | Path, *, max_ocr_chars: int = 1200) -> str:
     if saved_k:
         lines.append(f"• 🧠 Đã lưu tri thức ảnh vào trí nhớ ({saved_k}).")
     lines.append(
-        "ℹ️ Em phân tích được cấu trúc + chữ. Nhận diện vật thể (tủ lạnh, người...)"
-        " cần huấn luyện model thị giác — anh duyệt sprint riêng em sẽ làm."
+        "ℹ️ Em mô tả được bối cảnh (AI) + cấu trúc kỹ thuật + chữ. Muốn nhận diện "
+        "chính xác 100% theo danh mục vật thể riêng, anh duyệt em huấn luyện model."
     )
     return "\n".join(lines)
 
