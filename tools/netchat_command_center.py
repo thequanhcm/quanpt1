@@ -344,6 +344,11 @@ def detect_intent(text: str) -> str | None:
     # không bị nuốt thành lệnh chụp. Chặn chặt: phải có 'ảnh|hình|image|photo'
     # + 'phân tích|phan tich|đọc chữ|doc chu|nội dung ảnh' — không nuốt
     # 'phân tích dữ liệu/thống kê' (không có từ ảnh).
+    # (07/11/2026, owner) LỊCH TRỰC FT — 'lịch trực hôm nay/ngày mai/ngày X' →
+    # đọc kho_tai_lieu/Lịch trực FT (LICH_TRUC_TTrPDL_*.xls). ƯU TIÊN TRƯỚC mọi
+    # intent khác có thể nuốt từ 'trực'. Kèm 'cá nhân/tôi/anh <tên>' → tra 1 người.
+    if re.search(r"lịch trực|lich truc|trực hôm nay|truc hom nay|ai trực|ai truc|ai trực nhật|lịch trực nhật|lich truc nhat", t):
+        return "duty_roster_query"
     # (07/11/2026, duyệt owner) CVI S2-S4 — ƯU TIÊN TRƯỚC 'phân tích ảnh' thường:
     # 'phân tích chuyên sâu [ảnh]' / 'phân tích bố cục|ánh sáng|phong cách ảnh' → CVI pro;
     # 'tạo prompt (từ) ảnh' / 'reverse prompt' → reverse prompt. 'pro' phải đứng thành từ riêng
@@ -1207,6 +1212,56 @@ def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None)
             f"lưu trên Pi 5 — không tải được về PC để gửi DM.")
 
 
+def handle_duty_roster_query(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """'lịch trực hôm nay' / 'lịch trực ngày 8' / 'lịch trực của Quân' — đọc file
+    LICH_TRUC_TTrPDL_*.xls trong kho_tai_lieu/Lịch trực FT (read-only, xlrd).
+
+    N = ca ngày, Đ = ca đêm, N+Đ = cả hai. Mỗi tên kèm chức vụ + điện thoại
+    (yêu cầu owner 07/11). Fail-honest: thiếu file/sheet/ngày → báo rõ, không đoán.
+    """
+    import datetime as _dt
+    from quan_ai_brain.knowledge.duty_roster import (
+        get_duty_for_date, find_person_shift, format_daily_report,
+    )
+
+    t = (text or "").lower()
+    now = _dt.datetime.now()
+    day, month, year = now.day, now.month, now.year
+    m = re.search(r"ngày\s*(\d{1,2})(?:\s*(?:tháng|/|\.)\s*(\d{1,2}))?", t)
+    if m:
+        day = int(m.group(1))
+        if m.group(2):
+            month = int(m.group(2))
+    elif "ngày mai" in t or "mai" in t:
+        nxt = now + _dt.timedelta(days=1)
+        day, month, year = nxt.day, nxt.month, nxt.year
+    elif "hôm qua" in t:
+        prv = now - _dt.timedelta(days=1)
+        day, month, year = prv.day, prv.month, prv.year
+
+    # Tra 1 cá nhân: 'lịch trực của <tên>' / 'lịch trực <tên>'
+    mname = re.search(r"(?:của|cua)\s+([\wÀ-ỹ\s]{2,30})$", t.strip()) or re.search(
+        r"lịch trực(?:\s+ngày\s*\d+)?\s+([\wÀ-ỹ]{2,}(?:\s+[\wÀ-ỹ]{2,}){0,2})\s*$", t)
+    if mname and not re.search(r"hôm nay|hom nay|ngày mai|hôm qua", mname.group(1)):
+        name = mname.group(1).strip()
+        # bỏ đuôi ngày nếu dính
+        name = re.sub(r"ngày\s*\d+.*$", "", name).strip()
+        res = find_person_shift(name, day, month, year)
+        if res.get("status") == "AMBIGUOUS":
+            return "📋 " + res.get("message", "Tên trùng — anh nói rõ giúp em")
+        if res.get("status") == "OK" and res.get("found") and res.get("on_duty"):
+            p = res["person"]
+            return (f"📋 Lịch trực ngày {res['date']}: {p['name']}\n"
+                    f"• {res['shift']}: {p['name']} — {p['chuc_vu']} — ☎ {p['dien_thoai']}")
+        if res.get("status") == "OK":
+            return ("📋 " + res.get("message", f"Không thấy {name} trong lịch trực "
+                    f"ngày {day:02d}/{month:02d}/{year}"))
+        return "⚠️ " + res.get("message", "Không đọc được lịch trực")
+
+    res = get_duty_for_date(day, month, year)
+    return format_daily_report(res)
+
+
 def handle_tony_analyze_image(text: str = "", payload: dict[str, Any] | None = None) -> str:
     """'phân tích ảnh vừa chụp' / 'đọc chữ trong ảnh' — CHERRY Vision.
 
@@ -1664,6 +1719,8 @@ HANDLERS = {
     "tony_pi_video": handle_tony_pi_video,
     # (06/11/2026) CHERRY Vision — 'phân tích ảnh' (OCR + cấu trúc, tri thức chờ duyệt)
     "tony_analyze_image": handle_tony_analyze_image,
+    # (07/11/2026, owner) Lịch trực FT — đọc LICH_TRUC_TTrPDL_*.xls
+    "duty_roster_query": handle_duty_roster_query,
     # (07/11/2026, duyệt owner) CVI S2-S4 — phân tích chuyên sâu + reverse prompt
     "tony_analyze_image_pro": handle_tony_analyze_image_pro,
     "tony_reverse_prompt": handle_tony_reverse_prompt,
