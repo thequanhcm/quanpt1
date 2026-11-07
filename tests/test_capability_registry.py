@@ -56,7 +56,8 @@ def test_format_for_prompt():
     prompt_text = registry.format_for_prompt()
     assert "[VERIFIED CAPABILITIES & ARCHITECTURE REALITY]" in prompt_text
     assert "Trí Nhớ Dài Hạn" in prompt_text
-    assert "Suy Luận AI Cục Bộ" in prompt_text
+    # (07/11/2026) nhãn registry thật sau sync 6228e17: 'Suy Luận AI (NetMind Cloud...)'
+    assert "Suy Luận AI" in prompt_text
     assert "VERIFIED_ACTIVE" in prompt_text
     assert "INERT_STAGING" in prompt_text
 

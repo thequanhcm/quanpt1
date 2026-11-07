@@ -60,9 +60,17 @@ def test_w03_wifi_loss_heartbeat_timeout_alert(monitor):
     monitor.record_heartbeat(device_id="PI5-ARM64-EDGE-01", rtt_ms=10.0)
     assert monitor.state in (EdgeConnectionState.READY, EdgeConnectionState.CONNECTED)
 
-    # Fast forward time beyond timeout (2.0s)
+    # (07/11/2026) Hành vi mới theo thiết kế 06/11 (owner duyệt "đánh thức siết + cảnh
+    # báo chống nhiễu"): alert CRITICAL chỉ khi mất >=3 nhịp LIÊN TIẾP (alert_on_misses).
+    # 1 nhịp lỡ → DISCONNECTED nhưng CHƯA alert.
     monitor.last_heartbeat_epoch = time.time() - 5.0
     monitor.check_deadline()
+    assert monitor.state == EdgeConnectionState.DISCONNECTED
+    assert monitor.get_status()["active_alert_count"] == 0  # 1 nhịp lỡ: chưa alert
+
+    for _ in range(3):  # đủ 3 nhịp liên tiếp → alert
+        monitor.last_heartbeat_epoch = time.time() - 5.0
+        monitor.check_deadline()
 
     assert monitor.state == EdgeConnectionState.DISCONNECTED
     status = monitor.get_status()

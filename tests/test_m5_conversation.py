@@ -131,7 +131,8 @@ class TestSelfQAAnswersGrounded:
 
     def test_identity_answer_truthful(self):
         out = self.qa.answer("Em là ai vậy?")
-        assert out and "TONY" in out
+        # (07/11/2026) rename TONY→CHERRY theo lệnh owner — identity trả CHERRY
+        assert out and "CHERRY" in out
         assert "Quanpt1" in out or "Quân" in out
 
     def test_capabilities_mentions_verified_count(self):
