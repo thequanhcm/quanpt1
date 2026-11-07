@@ -49,8 +49,11 @@ def test_get_wake_config(voice_server_instance: str) -> None:
         assert "enabled" in config
         assert "wake_words" in config
         assert isinstance(config["wake_words"], list)
-        assert len(config["wake_words"]) >= 10
-        assert any(w["phrase"].lower() == "hi tony" for w in config["wake_words"])
+        # (07/11/2026) CHERRY rename 06/11 gộp biến thể TONY quá độ → 9 keywords
+        # là đúng thiết kế mới; theo dõi không mất words khi sửa config.
+        assert len(config["wake_words"]) >= 9
+        # Keyword chính phải là CHERRY (rename 06/11 — không còn 'hi tony')
+        assert any(w["phrase"].lower() == "cherry ơi" for w in config["wake_words"])
 
 
 def test_update_wake_config(voice_server_instance: str) -> None:

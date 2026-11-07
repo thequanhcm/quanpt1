@@ -65,7 +65,20 @@ class EdgeConfig:
         try:
             with open(fpath, "r", encoding="utf-8") as f:
                 content = json.load(f)
-            return cls.from_dict(content)
+            cfg = cls.from_dict(content)
+            # (06/11/2026) QPIG §6 — secret không dạng rõ trong git-tracked file:
+            # ưu tiên file secret NGOÀI git (edge_secret_local.txt cạnh config)
+            # khi tồn tại; config.json chỉ là fallback. Không đổi giá trị khi
+            # chưa rotate (chờ owner duyệt) — chỉ đổi NƠI ĐỌC.
+            local_secret = fpath.parent / "edge_secret_local.txt"
+            if local_secret.exists():
+                try:
+                    val = local_secret.read_text(encoding="utf-8").strip()
+                    if val:
+                        cfg.shared_secret = val
+                except Exception:
+                    pass  # fail-open về giá trị config (không giết daemon)
+            return cfg
         except Exception:
             return cls()
 

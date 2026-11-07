@@ -156,18 +156,40 @@ def test_tts_05_mixed_content_and_identifiers():
 
 
 def test_tts_06_provider_offline_reports_tts_unavailable():
-    """TTS-06: Provider failure sets TTS_UNAVAILABLE, never silently speaks English."""
+    """TTS-06: Provider failure sets TTS_UNAVAILABLE, never silently speaks English.
+
+    (07/11/2026) Cập nhật theo auto-fallback Q-3 ĐÃ DUYỆT: Edge fail bền → thử
+    piper local. Khi CẢ HAI đường die (piper không model trong sandbox test),
+    mới TTS_UNAVAILABLE + audio None + lỗi gốc Edge được giữ trong message.
+    """
     mgr = TTSManager()
     with patch("edge_tts.Communicate", side_effect=Exception("Connection refused by Microsoft Edge service")):
-        audio, err = mgr.synthesize_audio("Xin chào anh.")
+        # piper cũng phải fail trong test (model data/piper_voices có thể tồn tại
+        # trên PC thật) → mock piper chết để ép đường TTS_UNAVAILABLE gốc.
+        with patch.object(TTSManager, "_synthesize_with_piper", return_value=(None, "piper sandbox dead")):
+            audio, err = mgr.synthesize_audio("Xin chào anh.")
 
-        assert audio is None
-        assert "Lỗi kết nối Microsoft Edge TTS" in err
-        assert mgr.config.status == TTSStatus.TTS_UNAVAILABLE.value
-        assert mgr.config.connection_status == "OFFLINE"
-        # Must strictly preserve Vietnamese locale, NEVER drift to en-US
-        assert mgr.config.tts_locale == "vi-VN"
-        assert mgr.config.response_language == "vi-VN"
+            assert audio is None
+            assert "Microsoft Edge TTS" in err  # lỗi gốc Edge vẫn được báo cáo
+            assert "piper" in err               # fallback chết cũng được ghi rõ (fail-honest)
+            assert mgr.config.status == TTSStatus.TTS_UNAVAILABLE.value
+            assert mgr.config.connection_status == "OFFLINE"
+            # Must strictly preserve Vietnamese locale, NEVER drift to en-US
+            assert mgr.config.tts_locale == "vi-VN"
+            assert mgr.config.response_language == "vi-VN"
+
+
+def test_tts_06b_edge_failure_falls_back_to_piper():
+    """(07/11/2026) Edge fail bền → auto-fallback piper trả audio, không chết."""
+    mgr = TTSManager()
+    with patch("edge_tts.Communicate", side_effect=Exception("403 bền")):
+        with patch.object(TTSManager, "_synthesize_with_piper",
+                          return_value=(b"RIFF_FAKE_WAV", "")):
+            audio, err = mgr.synthesize_audio("Xin chào anh.")
+            assert audio == b"RIFF_FAKE_WAV"
+            assert err == ""
+            assert "piper" in (mgr.config.last_error or "")
+            assert "Edge-TTS" in (mgr.config.last_error or "")
 
 
 def test_tts_07_invalid_voice_id_rejected():

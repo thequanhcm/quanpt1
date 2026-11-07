@@ -454,6 +454,20 @@ class TTSManager:
                     last_err = f"Lỗi kết nối Microsoft Edge TTS: {exc}"
                 if attempt < 4:
                     _time.sleep(0.5)
+            # (07/11/2026, duyệt 'các công việc chưa hoàn thiện') AUTO-FALLBACK:
+            # Edge fail bền 5 lần → tự thử piper local 1 lần trong cùng request
+            # (model data/piper_voices/vi_VN-vais1000-medium.onnx — Q-3 đã duyệt).
+            # Không đổi provider config toàn cục; trả WAV kèm ghi chú trong error="".
+            try:
+                fb_audio, fb_err = self._synthesize_with_piper(clean_text)
+                if fb_audio:
+                    self.config.status = TTSStatus.READY.value
+                    self.config.connection_status = "CONNECTED (piper fallback)"
+                    self.config.last_error = f"Edge-TTS lỗi ({last_err[:80]}) → phát bằng piper local."
+                    return fb_audio, ""
+                last_err = f"{last_err} | piper fallback cũng lỗi: {fb_err}"
+            except Exception as fb_exc:
+                last_err = f"{last_err} | piper fallback cũng lỗi: {fb_exc}"
             self.mark_unavailable(last_err)
             return None, self.config.last_error
 
@@ -462,54 +476,15 @@ class TTSManager:
         # data/piper_voices/. Không phụ thuộc mạng Microsoft. Xuất WAV 22050Hz
         # mono 16-bit; client pi5 phát trực tiếp (daemon hỗ trợ wav qua ffmpeg).
         if self.config.provider == TTSProvider.PIPER.value:
-            import subprocess as _sp
-            import sys as _sys
-            import tempfile as _tempfile
-            from pathlib import Path as _P
-            model = _P(__file__).resolve().parents[3] / "data" / "piper_voices" / "vi_VN-vais1000-medium.onnx"
-            if not model.exists():
-                self.mark_unavailable(f"Piper voice model không tồn tại: {model.name}. Chạy cài đặt Q-3.")
-                return None, self.config.last_error
-            try:
-                rate_scale = max(0.5, min(2.0, 1.0 / max(0.5, min(2.0, self.config.rate))))
-                # piper CLI '-f -' lỗi PermissionError trên Windows (wave.py mở
-                # temp file) → synth ra file tạm rồi đọc bytes, xoá sau.
-                with _tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as _tf:
-                    tmp_path = _tf.name
-                try:
-                    cmd = [
-                        _sys.executable, "-m", "piper",
-                        "-m", str(model),
-                        "--length-scale", f"{rate_scale:.2f}",
-                        "-f", tmp_path,
-                    ]
-                    proc = _sp.run(cmd, input=clean_text.encode("utf-8"),
-                                   capture_output=True, timeout=30)
-                    if proc.returncode != 0:
-                        err = f"Piper synth lỗi rc={proc.returncode}: {proc.stderr[:200]}"
-                        self.config.status = TTSStatus.ERROR.value
-                        self.config.last_error = err
-                        return None, err
-                    audio = _P(tmp_path).read_bytes()
-                finally:
-                    try:
-                        _P(tmp_path).unlink(missing_ok=True)
-                    except OSError:
-                        pass
-                if not audio:
-                    err = "Piper trả về WAV rỗng."
-                    self.config.status = TTSStatus.ERROR.value
-                    self.config.last_error = err
-                    return None, err
+            audio, err = self._synthesize_with_piper(clean_text)
+            if audio:
                 self.config.status = TTSStatus.READY.value
                 self.config.connection_status = "CONNECTED"
                 self.config.last_error = ""
-                return audio, ""
-            except Exception as exc:
-                err = f"Lỗi Piper TTS local: {exc}"
+            else:
                 self.config.status = TTSStatus.ERROR.value
                 self.config.last_error = err
-                return None, err
+            return audio, err
 
         # Handle Browser-Speech (client side only)
         if self.config.provider == TTSProvider.BROWSER_SPEECH.value:
@@ -517,6 +492,48 @@ class TTSManager:
 
         self.mark_unavailable(f"Provider '{self.config.provider}' không hỗ trợ tổng hợp âm thanh tại Core.")
         return None, self.config.last_error
+
+
+    def _synthesize_with_piper(self, clean_text: str) -> tuple[bytes | None, str]:
+        """Tổng hợp WAV bằng piper local (Q-3). Trả (audio, error).
+
+        Dùng cho provider==piper VÀ auto-fallback khi Edge-TTS fail bền.
+        piper CLI '-f -' lỗi PermissionError trên Windows (wave.py mở temp file)
+        → synth ra file tạm rồi đọc bytes, xoá sau.
+        """
+        import subprocess as _sp
+        import sys as _sys
+        import tempfile as _tempfile
+        from pathlib import Path as _P
+        model = _P(__file__).resolve().parents[3] / "data" / "piper_voices" / "vi_VN-vais1000-medium.onnx"
+        if not model.exists():
+            return None, f"Piper voice model không tồn tại: {model.name}. Chạy cài đặt Q-3."
+        try:
+            rate_scale = max(0.5, min(2.0, 1.0 / max(0.5, min(2.0, self.config.rate))))
+            with _tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as _tf:
+                tmp_path = _tf.name
+            try:
+                cmd = [
+                    _sys.executable, "-m", "piper",
+                    "-m", str(model),
+                    "--length-scale", f"{rate_scale:.2f}",
+                    "-f", tmp_path,
+                ]
+                proc = _sp.run(cmd, input=clean_text.encode("utf-8"),
+                               capture_output=True, timeout=30)
+                if proc.returncode != 0:
+                    return None, f"Piper synth lỗi rc={proc.returncode}: {proc.stderr[:200]}"
+                audio = _P(tmp_path).read_bytes()
+            finally:
+                try:
+                    _P(tmp_path).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            if not audio:
+                return None, "Piper trả về WAV rỗng."
+            return audio, ""
+        except Exception as exc:
+            return None, f"Lỗi Piper TTS local: {exc}"
 
 
 # Global singleton instance for centralized configuration

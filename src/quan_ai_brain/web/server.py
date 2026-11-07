@@ -2691,8 +2691,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 engine = SelfLearningEngine(workspace=workspace, memory_store=store)
 
                 error_desc = str(body.get("error") or "Simulated capability gap: Local Ollama daemon unreachable at 127.0.0.1:11434 (Connection refused).")
+                # (06/11/2026) FIX: TaskOutcome bắt buộc request_id — lỗi 500
+                # "missing 1 required positional argument" khi chạy chu kỳ tự học.
                 outcome = TaskOutcome(
                     task_id=f"task_{uuid.uuid4().hex[:8]}",
+                    request_id=f"req_{uuid.uuid4().hex[:8]}",
                     correlation_id=f"corr_{uuid.uuid4().hex[:8]}",
                     state=TaskState.FAILED,
                     error_message=error_desc,
@@ -2728,16 +2731,26 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
                 cand_rec = engine.quarantine_candidate(dossier)
                 diff_sample = """--- a/src/quan_ai_brain/llm/client.py\n+++ b/src/quan_ai_brain/llm/client.py\n@@ -35,6 +35,14 @@\n+    def is_daemon_online(self) -> bool:\n+        \"\"\"Pre-flight TCP check to detect offline daemon without HTTP latency.\"\"\"\n+        import socket\n+        try:\n+            with socket.create_connection((self.host, self.port), timeout=0.05):\n+                return True\n+        except OSError:\n+            return False\n"""
+                # (06/11/2026) FIX: gọi đúng signature 17 điểm của engine
+                # (kwargs cũ pros/cons/risk_assessment... sai — cùng lỗi chu kỳ 500).
                 proposal = engine.create_upgrade_proposal(
                     problem_statement=gap.description,
                     target_goal="Detect offline status within <=50ms and fail fast to fallback without worker thread stall.",
                     proposed_solution="Implement standard-library pre-flight socket probe before attempting HTTP calls.",
+                    new_knowledge_refs=[f"research:{dossier.research_id}", cand_rec.id],
+                    expected_benefits="Instant fail-fast; no UI freeze; standard library only",
+                    advantages=["Instant fail-fast", "Eliminates UI freeze", "Standard library only"],
+                    disadvantages_and_risks=["Adds 1 extra loopback socket handshake (<0.1ms)"],
+                    impact_scope=["src/quan_ai_brain/llm/client.py"],
                     unified_diff=diff_sample,
-                    pros=["Instant fail-fast", "Eliminates UI freeze", "Standard library only"],
-                    cons=["Adds 1 extra loopback socket handshake (<0.1ms)"],
-                    risk_assessment="Low: only probes loopback address, does not change core parsing.",
-                    files_to_modify=["src/quan_ai_brain/llm/client.py"],
-                    new_candidate_ids=[cand_rec.memory_id],
+                    test_results={"sanity": "sandbox dry-run only; no production apply"},
+                    security_evaluation="Low: only probes loopback address, does not change core parsing.",
+                    compatibility_assessment="Fully backward compatible; additive method only",
+                    measured_metrics={"probe_timeout_ms": 50},
+                    rollback_plan="Remove is_daemon_online() method; no persisted state.",
+                    recommendation="apply",
+                    confidence_score=0.88,
+                    uncertainties=[],
                 )
 
             self._send_json({
