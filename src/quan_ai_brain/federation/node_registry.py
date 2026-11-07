@@ -166,6 +166,33 @@ class NodeRegistry:
         except Exception:
             return False
 
+    def _probe_http(host: str, timeout_s: float = 3.0) -> bool:
+        """Probe PC lõi bằng HTTP supervisor (chính xác hơn ICMP).
+
+        (07/11/2026) FIX alert giả: ping máy chủ từ chính nó thi thoảng rớt
+        (Windows Firewall/stack rate-limit ICMP — đo thật 60% loss) trong khi
+        HTTP 8765 luôn đáp ứng → probe ICMP lệch trạng thái, spam DM
+        'PC lõi MẤT KẾT NỐI' khi Core vẫn sống 24/7.
+        """
+        import urllib.request
+
+        # 8765 bind loopback-only, 8766 bind 0.0.0.0 (07/11) — thử cả hai cổng
+        # và cả loopback (probe PC-self qua IP LAN sẽ không tới 8765).
+        hosts = [host] if host != "127.0.0.1" else [host]
+        if host not in ("127.0.0.1", "localhost"):
+            hosts.append("127.0.0.1")
+        for h in hosts:
+            for port in (8765, 8766):
+                try:
+                    with urllib.request.urlopen(
+                            f"http://{h}:{port}/api/executive/supervisor",
+                            timeout=timeout_s) as resp:
+                        if resp.status == 200:
+                            return True
+                except Exception:
+                    continue
+        return False
+
     def probe_node(self, node_id: str) -> dict[str, Any]:
         node = self.get(node_id)
         if node is None:
@@ -173,7 +200,11 @@ class NodeRegistry:
         if node.kind == "CONNECTOR":
             return {"success": False,
                     "error": "connector không probe bằng ping (dùng kênh riêng của nó)"}
-        alive = self.ping_host(node.host)
+        if node.kind == "PC":
+            # PC lõi: HTTP là chính, ICMP chỉ là fallback (07/11 — alert giả ICMP)
+            alive = self._probe_http(node.host) or self.ping_host(node.host)
+        else:
+            alive = self.ping_host(node.host)
         prev = node.status
         new_status = "REACHABLE" if alive else "UNREACHABLE"
         with self._connect() as conn:

@@ -1665,6 +1665,25 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
   let virtualAvatar = null;
 
+  // (07/11/2026, owner) Đồng bộ giao diện với biểu cảm đã chọn: aura khung gương,
+  // màu tag trạng thái, chấm online/offline. Chống ghi đè: trong 4s sau khi owner
+  // bấm nút, polling telemetry KHÔNG được đổi tag/aura về state cũ.
+  let exprUiHoldUntil = 0;
+  function applyExprUI(expr) {
+    try {
+      const frame = document.querySelector(".virtual-kiosk-frame");
+      const exprTag = document.getElementById("virtual-expr-tag");
+      if (frame) {
+        frame.className = frame.className.replace(/expr-aura-[A-Z_]+/g, "").trim();
+        frame.classList.add("expr-aura-" + expr);
+      }
+      if (exprTag) {
+        exprTag.className = "virtual-expr-tag expr-tag-" + expr;
+        exprTag.textContent = expr;
+      }
+    } catch (e) { console.warn("applyExprUI:", e); }
+  }
+
   function initEdgeAddon() {
     const btnOpenAddon = document.getElementById("btn-open-edge-addon");
     if (btnOpenAddon) {
@@ -1694,6 +1713,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const expr = btn.getAttribute("data-expr");
         document.querySelectorAll(".btn-expr").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
+
+        // (07/11/2026, owner) Giao diện phản ánh NGAY biểu cảm vừa chọn:
+        // aura khung gương + màu tag + giữ lựa chọn 4s chống polling ghi đè.
+        applyExprUI(expr);
+        exprUiHoldUntil = Date.now() + 4000;
 
         // Update local PC avatar and virtual mirror
         setAvatarState(expr);
@@ -2517,15 +2541,39 @@ document.addEventListener("DOMContentLoaded", () => {
       if (virtualStatusText) {
         virtualStatusText.textContent = isOnline ? `PI 5 KIOSK: ONLINE (${data.edge_ip})` : "PI 5 KIOSK: OFFLINE";
       }
-      if (virtualExprTag && data.target_avatar_state) {
-        virtualExprTag.textContent = data.target_avatar_state;
+
+      // (07/11/2026, owner) Chấm trạng thái kiosk ĐÚNG THỰC TẾ: xanh khi online,
+      // đỏ nhấp nháy khi offline (trước đây khóa class 'online' tĩnh trong HTML).
+      const virtualDot = document.querySelector(".virtual-dot");
+      if (virtualDot) {
+        virtualDot.classList.toggle("online", !!isOnline);
+        virtualDot.classList.toggle("offline", !isOnline);
+      }
+
+      // Polling KHÔNG ghi đè lựa chọn biểu cảm của owner trong 4s sau khi bấm;
+      // khi hết hold, đồng bộ lại nút active theo state thật từ kiosk.
+      const nowMs = Date.now();
+      if (data.target_avatar_state) {
+        if (nowMs >= exprUiHoldUntil) {
+          if (virtualExprTag) {
+            virtualExprTag.textContent = data.target_avatar_state;
+            virtualExprTag.className = "virtual-expr-tag expr-tag-" + data.target_avatar_state;
+          }
+          if (virtualAvatar && typeof virtualAvatar.setState === "function") {
+            virtualAvatar.setState(data.target_avatar_state);
+          }
+          const frame = document.querySelector(".virtual-kiosk-frame");
+          if (frame) {
+            frame.className = frame.className.replace(/expr-aura-[A-Z_]+/g, "").trim();
+            frame.classList.add("expr-aura-" + data.target_avatar_state);
+          }
+          document.querySelectorAll(".btn-expr").forEach(b => {
+            b.classList.toggle("active", b.getAttribute("data-expr") === data.target_avatar_state);
+          });
+        }
       }
       if (virtualTranscript && data.transcript) {
         virtualTranscript.textContent = `"${data.transcript}"`;
-      }
-
-      if (virtualAvatar && typeof virtualAvatar.setState === "function" && data.target_avatar_state) {
-        virtualAvatar.setState(data.target_avatar_state);
       }
 
       // Update Tab 7 Embodiment Status
