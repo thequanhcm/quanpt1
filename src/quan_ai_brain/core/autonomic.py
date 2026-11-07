@@ -290,7 +290,7 @@ class AutonomicNervousSystem:
             organ_name="Microphone & Nhận Diện Đánh Thức (Audio Input)",
             region=AnatomicalRegion.EARS,
             status=HardwareStatus.PRESENT_DEGRADED,
-            detected_device="USB Microphone đơn hướng / Wake Word Engine (Hi TONY / Tony ơi)",
+            detected_device="USB Microphone đơn hướng / Wake Word Engine (Hi CHERRY / Cherry ơi)",
             description="Đã có mic thu âm, nhưng chưa có mảng micro chống ồn định hướng và chưa lọc được tiếng vọng khi loa đang phát (chưa hỗ trợ ngắt lời Barge-in mượt mà).",
             recommended_upgrade="Nâng cấp Microphone Array định hướng (ReSpeaker USB Mic Array hoặc Jabra Speak 510) để bắt giọng từ xa 3-5m và ngắt lời trợ lý tự nhiên.",
             priority="HIGH",

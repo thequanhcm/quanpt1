@@ -249,6 +249,51 @@ body {
   box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
 }
 
+/* (07/11/2026, owner) Tab phản chiếu trạng thái chức năng:
+   tab-on = chức năng đang kích hoạt (sáng + chấm xanh), tab-off = không kích hoạt (mờ) */
+.nav-tab .tab-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(100, 116, 139, 0.45);
+  flex: 0 0 auto;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.nav-tab.tab-on .tab-state-dot {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+}
+.nav-tab.tab-off {
+  opacity: 0.45;
+}
+.nav-tab.tab-off .tab-state-dot {
+  background: rgba(100, 116, 139, 0.35);
+}
+
+/* (07/11/2026, owner) Panel phản chiếu trạng thái: chức năng tắt → panel mờ; nút chính chỉ sáng khi active thật */
+.card.panel-off {
+  opacity: 0.55;
+}
+.card.panel-off .card-header h3 {
+  color: var(--text-muted);
+}
+.card.panel-off .btn-primary,
+.card.panel-off .btn-outline {
+  filter: saturate(0.35);
+}
+/* (07/11/2026) inline gradient trên nút vẫn đè class — dùng !important để panel-off thắng inline style */
+.card.panel-off .btn,
+.card.panel-off .btn * {
+  filter: saturate(0.3) opacity(0.75);
+}
+.card.panel-off .btn[style] {
+  filter: saturate(0.3) opacity(0.75) !important;
+}
+.card.panel-off:hover {
+  opacity: 0.85;
+  transition: opacity 0.25s ease;
+}
+
 .tab-badge {
   font-size: 0.72rem;
   padding: 2px 7px;

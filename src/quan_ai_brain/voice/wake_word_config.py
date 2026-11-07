@@ -139,7 +139,7 @@ class WakeWordConfig:
                     confidence=0.98,
                 )
 
-            # Case B: Utterance starts with wake word ("Hi Tony thời tiết hôm nay thế nào")
+            # Case B: Utterance starts with wake word ("Hi Cherry thời tiết hôm nay thế nào")
             if clean.startswith(norm_phrase + " "):
                 payload = clean[len(norm_phrase) :].strip()
                 return WakeWordMatchResult(

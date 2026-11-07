@@ -1,13 +1,13 @@
 @echo off
 REM ============================================
-REM TONY START - One-Click System Launch
+REM CHERRY START (file: TONY_START.bat — giữ tên file, rename 07/11) - One-Click System Launch
 REM ============================================
 REM Khoi dong toan bo he thong QUAN AI BRAIN
 REM Dashboard phong dieu hanh: http://127.0.0.1:8766/
 REM Tat ca cua so Python chay ngam (MINIMIZED)
 REM ============================================
 
-title TONY START - Starting QUAN AI BRAIN
+title CHERRY START - Starting QUAN AI BRAIN
 
 REM ---- UTF-8 cho cac tien trinh Python con (fix loi tieng Viet / charmap) ----
 set "PYTHONUTF8=1"

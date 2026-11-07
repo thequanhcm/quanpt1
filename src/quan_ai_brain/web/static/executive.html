@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/executive.css?v=5.0-light">
+  <link rel="stylesheet" href="/static/executive.css?v=cherry_07nov_r3">
   <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png">
   <script>
     window.switchTab = function(tabId) {
@@ -34,10 +34,17 @@
           if (window.loadEdgeTelemetry) window.loadEdgeTelemetry();
           if (window.loadPiFiles) window.loadPiFiles();
         }
+        // (07/11/2026, owner) deep-link: /?tab=tab-edge-sync mở thẳng tab đó (bookmark được)
+        try { history.replaceState(null, "", `?tab=${tabId}`); } catch (e) {}
       } catch (err) {
         console.error("switchTab error:", err);
       }
     };
+    // (07/11/2026) Mở thẳng tab theo ?tab=... khi tải trang
+    window.addEventListener("DOMContentLoaded", () => {
+      const wanted = new URLSearchParams(location.search).get("tab");
+      if (wanted && document.getElementById(wanted) && wanted !== "tab-persona") window.switchTab(wanted);
+    });
   </script>
 </head>
 <body>
@@ -72,7 +79,7 @@
           <span class="pill-label">Cần Tham Vấn:</span>
           <span class="pill-value" id="status-pending-count">0 phiếu</span>
         </div>
-        <div class="telemetry-pill pill-wake-word" id="pill-wake-word" title="Đánh thức rảnh tay: Gọi 'Tony ơi', 'Hi Tony', 'Chào trợ lý'...">
+        <div class="telemetry-pill pill-wake-word" id="pill-wake-word" title="Đánh thức rảnh tay: Gọi 'Cherry ơi', 'Hi Cherry', 'Chào trợ lý'...">
           <span class="wake-dot" id="wake-dot-indicator"></span>
           <span class="pill-label">Đánh Thức:</span>
           <button class="wake-toggle-btn" id="btn-toggle-wake">OFF</button>
@@ -89,12 +96,12 @@
     <section class="visual-cockpit-hero" id="visual-cockpit-hero">
       <div class="cockpit-hero-grid">
 
-        <!-- Column 1: TONY Digital Avatar Stage -->
+        <!-- Column 1: CHERRY Digital Avatar Stage (07/11 rename TONY→CHERRY) -->
         <div class="card cockpit-avatar-card" id="cockpit-avatar-card">
           <div class="avatar-stage-header">
             <div class="avatar-identity">
               <span class="live-dot pulse"></span>
-              <strong>TONY</strong>
+              <strong>CHERRY</strong>
               <span class="avatar-role-tag" title="DIGITAL HUMAN (MẪU A — DỊU DÀNG, THÂN THIỆN)">DIGITAL HUMAN · MẪU A</span>
             </div>
             <div class="avatar-state-tag state-idle" id="avatar-state-tag">
@@ -275,47 +282,57 @@
     <!-- Main Navigation Tabs -->
     <nav class="executive-nav">
       <button class="nav-tab active" data-tab="tab-persona" id="nav-btn-persona">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">👤</span>
         <span class="tab-text">Nhân Sự Số</span>
       </button>
       <button class="nav-tab" data-tab="tab-consultation" id="nav-btn-consultation">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">📬</span>
         <span class="tab-text">Tham Vấn & Duyệt</span>
         <span class="tab-badge" id="badge-consultation-counter">0</span>
       </button>
       <button class="nav-tab" data-tab="tab-learning" id="nav-btn-learning">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">🔬</span>
         <span class="tab-text">Báo Cáo Tự Học</span>
       </button>
       <button class="nav-tab" data-tab="tab-orchestration" id="nav-btn-orchestration">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">⚙️</span>
         <span class="tab-text">Điều Hành & An Toàn</span>
       </button>
       <button class="nav-tab" data-tab="tab-dialogue" id="nav-btn-dialogue">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">💬</span>
         <span class="tab-text">Hội Thoại Trực Tiếp</span>
       </button>
       <button class="nav-tab" data-tab="tab-netchat" id="nav-btn-netchat">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">📡</span>
         <span class="tab-text">Kênh NetChat</span>
         <span class="tab-badge badge-green" id="badge-netchat-status">—</span>
       </button>
       <button class="nav-tab" data-tab="tab-edge-sync" id="nav-btn-edge-sync">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">📡</span>
         <span class="tab-text">Đồng Bộ Pi 5</span>
         <span class="tab-badge badge-green" id="badge-edge-tab-status">LIVE</span>
       </button>
       <button class="nav-tab" data-tab="tab-pi5-embodiment" id="nav-btn-pi5-embodiment">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">✨</span>
         <span class="tab-text">Hình Thể Pi 5</span>
         <span class="tab-badge" id="badge-tab-embodiment-state" style="background: rgba(100, 116, 139, 0.25); color: #334155; border: 1px solid rgba(100, 116, 139, 0.35);">STANDBY</span>
       </button>
       <button class="nav-tab" data-tab="tab-workbench" id="nav-btn-workbench">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">🧰</span>
         <span class="tab-text">Workbench</span>
         <span class="tab-badge" id="badge-workbench-overview" style="background: rgba(59, 130, 246, 0.2); color: #1d4ed8; border: 1px solid rgba(59, 130, 246, 0.3);">—</span>
       </button>
       <button class="nav-tab" data-tab="tab-deep-memory" id="nav-btn-deep-memory">
+        <span class="tab-state-dot"></span>
         <span class="tab-icon">🧠</span>
         <span class="tab-text">Trí Nhớ Sâu V9</span>
         <span class="tab-badge" id="badge-deep-memory-questions" style="background: rgba(245, 158, 11, 0.2); color: #b45309; border: 1px solid rgba(245, 158, 11, 0.3);">—</span>
@@ -978,7 +995,7 @@
                   <div class="step-num">01</div>
                   <div class="step-icon">🗣️</div>
                   <div class="step-title">Gọi Đánh Thức</div>
-                  <div class="step-desc">Anh gọi <em>"Hi TONY"</em> (hoặc <em>"Tony ơi"</em>, hoặc chạm trực tiếp nút micro trên màn hình Pi 5).</div>
+                  <div class="step-desc">Anh gọi <em>"Hi CHERRY"</em> (hoặc <em>"Cherry ơi"</em>, hoặc chạm trực tiếp nút micro trên màn hình Pi 5).</div>
                 </div>
                 <div class="voice-step-card">
                   <div class="step-num">02</div>
@@ -1091,7 +1108,7 @@
               🔊 BẬT TIẾNG (UNMUTE)
             </button>
             <button class="btn btn-outline" id="btn-toggle-wake-word" style="border-color: #a855f7; color: #c084fc;">
-              🎙️ BẬT/TẮT TỪ KHÓA "HI TONY"
+              🎙️ BẬT/TẮT TỪ KHÓA "HI CHERRY"
             </button>
             <button class="btn btn-primary" id="btn-mic-ptt" style="background: linear-gradient(135deg, #0284c7, #0369a1);">
               ⚡ PUSH TO TALK (NÓI NGAY)
@@ -1155,7 +1172,7 @@
                   <button class="btn btn-outline" id="btn-camera-off" style="border-color: #ef4444; color: #ef4444;">
                     🛑 TẮT CAMERA
                   </button>
-                  <button class="btn btn-primary" id="btn-camera-start-live" style="background: linear-gradient(135deg, #059669, #10b981);">
+                  <button class="btn btn-outline" id="btn-camera-start-live" style="background: linear-gradient(135deg, #059669, #10b981);">
                     ▶️ BẮT ĐẦU XEM
                   </button>
                   <button class="btn btn-outline" id="btn-camera-stop-live">
@@ -1625,6 +1642,6 @@
 
   <script src="/static/wake_engine.js?v=5.0"></script>
   <script src="/static/avatar_engine.js?v=5.0"></script>
-  <script src="/static/executive.js?v=5.0"></script>
+  <script src="/static/executive.js?v=cherry_07nov_r3"></script>
 </body>
 </html>

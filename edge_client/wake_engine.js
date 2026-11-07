@@ -3,7 +3,7 @@
  *
  * Implements:
  * - 9-State Machine (DISABLED, STANDBY, WAKE_DETECTED, LISTENING, TRANSCRIBING, THINKING, SPEAKING, INTERRUPTED, ERROR)
- * - Continuous keyword spotting for Vietnamese & English wake words ("Hi TONY", "Tony ơi")
+ * - Continuous keyword spotting for Vietnamese & English wake words ("Hi CHERRY", "Cherry ơi")
  * - Zero-loss prompt extraction (wake phrase + payload)
  * - Acoustic Echo Cancellation (AEC) during TTS playback to prevent self-triggering
  * - Web Audio API synthesized executive wake chime
@@ -25,9 +25,9 @@ class WakeWordEngine {
     }, options);
 
     this.keywords = [
-      { phrase: "Hi TONY", enabled: true },
-      { phrase: "Hey Tony", enabled: true },
-      { phrase: "Tony ơi", enabled: true },
+      { phrase: "Cherry ơi", enabled: true },
+      { phrase: "Hi Cherry", enabled: true },
+      { phrase: "Hey Cherry", enabled: true },
       { phrase: "Chào trợ lý", enabled: true },
       { phrase: "Hi trợ lý", enabled: true },
       { phrase: "Xin chào trợ lý", enabled: true },

@@ -26,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ollamaStatusText = document.getElementById('ollama-status-text');
     const activeModelName = document.getElementById('active-model-name');
 
-    // Digital Human (Model F — TONY) & Edge Pi 5 Elements
+    // Digital Human (Model F — CHERRY; canvas id tony-avatar-canvas giữ nguyên để không gãy JS) & Edge Pi 5 Elements
     const avatarCanvas = document.getElementById('tony-avatar-canvas');
     const avatarViewport = document.getElementById('avatar-viewport');
     const avatarStateTag = document.getElementById('avatar-state-tag');

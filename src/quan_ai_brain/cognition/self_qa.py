@@ -1,4 +1,5 @@
-"""Self-Q&A — trả lời câu hỏi về BẢN THÂN TONY từ dữ liệu sống (M5, G-12 + M4-C).
+"""Self-Q&A — trả lời câu hỏi về BẢN THÂN CHERRY từ dữ liệu sống (M5, G-12 + M4-C).
+(Rename 07/11: pattern nhận cả tên CHERRY; giữ tony quá độ.)
 
 Nguyên tắc:
 - Khi anh hỏi "em là ai / em làm được gì / em đang ở đâu / sức khỏe em /
@@ -13,31 +14,31 @@ import re
 from pathlib import Path
 from typing import Any
 
-# (category, pattern) — anchor vào em/bạn/tony + chủ đề, KHÔNG khớp "tôi ...".
+# (category, pattern) — anchor vào em/bạn/cherry/tony + chủ đề, KHÔNG khớp "tôi ...".
 _SELF_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("identity", re.compile(
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,40}(là ai|tên gì|là gì|giới thiệu|nhận diện)"
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,40}(là ai|tên gì|là gì|giới thiệu|nhận diện)"
         r"|\b(giới thiệu|nhận diện)[^.?!\n]{0,20}\b(em|tony)\b", re.IGNORECASE)),
     ("limits", re.compile(
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,40}"
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,40}"
         r"(không (làm )?được gì|hạn chế|giới hạn|khó khăn)", re.IGNORECASE)),
     ("capabilities", re.compile(
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,50}"
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,50}"
         r"(làm được( những)? gì|có (những )?(năng lực|kỹ năng|công cụ)|năng lực gì"
         r"|kỹ năng gì|công cụ gì|biết làm gì)", re.IGNORECASE)),
     ("location", re.compile(
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,40}(đang (chạy|ở)|ở đâu|chạy ở đâu|nơi nào)",
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,40}(đang (chạy|ở)|ở đâu|chạy ở đâu|nơi nào)",
         re.IGNORECASE)),
     ("health", re.compile(
         r"(sức khỏe|sức khoẻ|tình trạng hệ thống|hệ thống (có )?khỏe|"
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,30}(khỏe không|ổn không|có vấn đề))",
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,30}(khỏe không|ổn không|có vấn đề))",
         re.IGNORECASE)),
     ("learning", re.compile(
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,40}"
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,40}"
         r"(học được( gì| những gì)|đã học gì|tự học|tiến bộ|đang học)",
         re.IGNORECASE)),
     ("limits", re.compile(
-        r"\b(em|bạn|tony)\b[^.?!\n]{0,40}"
+        r"\b(em|bạn|cherry|tony)\b[^.?!\n]{0,40}"
         r"(không (làm )?được gì|hạn chế|giới hạn|khó khăn)", re.IGNORECASE)),
 ]
 

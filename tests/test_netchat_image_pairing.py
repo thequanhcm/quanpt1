@@ -70,15 +70,31 @@ def test_description_after_image_pairs():
 # 3. Mô tả gửi TRƯỚC ảnh (cùng lượt poll) → ghép ngược
 # ---------------------------------------------------------------------------
 def test_description_before_image_pairs():
+    # (07/11/2026) CẬP NHẬT THEO THIẾT KẾ MỚI (Vision S1 0d850b8): cụm "đọc giúp
+    # anh ảnh này" giờ là LỆNH hệ thống tony_analyze_image → chạy NGAY không ghép
+    # ảnh (luật "lệnh hệ thống không ghép ảnh"). Dùng lời mô tả THƯỜNG để test ghép.
     msgs = [
-        _txt("t1", "đọc giúp anh ảnh này", NOW - 30_000),
+        _txt("t1", "ảnh này chụp ở nhà anh nè", NOW - 30_000),
         _img("i1", NOW),
     ]
     work, pending = _plan_batch(msgs, [], now_ms=NOW, image_check=ic)
     assert len(work) == 1, "Mô tả trước + ảnh = 1 việc duy nhất"
-    assert work[0]["text"] == "đọc giúp anh ảnh này"
+    assert work[0]["text"] == "ảnh này chụp ở nhà anh nè"
     assert work[0]["file_ids"] == ["fIMG"]
     assert pending == []
+
+
+def test_analyze_image_command_does_not_pair():
+    # Lệnh hệ thống ("phân tích ảnh") chạy ngay — KHÔNG ghép ảnh đang chờ
+    # (quy tắc: lệnh hệ thống = việc riêng, file đi kèm tin lệnh mới dùng).
+    msgs = [
+        _txt("t1", "phân tích ảnh", NOW - 30_000),
+        _img("i1", NOW),
+    ]
+    work, pending = _plan_batch(msgs, [], now_ms=NOW, image_check=ic)
+    assert len(work) == 1 and work[0]["text"] == "phân tích ảnh"
+    assert work[0]["file_ids"] == [], "Lệnh hệ thống không được ghép ảnh ngoài"
+    assert len(pending) == 1, "Ảnh vẫn HOLD chờ mô tả thường"
 
 
 # ---------------------------------------------------------------------------
