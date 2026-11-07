@@ -365,14 +365,22 @@ def federation_watchdog_cycle() -> int:
         if result.get("changed") and result.get("status") == "UNREACHABLE":
             if now_ts - last_alerts.get(n.node_id, 0) > 3600:  # 1 lần/giờ/nút
                 last_alerts[n.node_id] = now_ts
-                changed.append(f"🔴 [{n.kind}] {n.label or n.node_id} ({n.host}) MẤT KẾT NỐI")
+                # (07/11/2026, owner) Rút gọn nội dung: '🔴 PC (192.168.1.9)
+                # MẤT KẾT NỐI' — label DB dài ('PC lõi QUANPT (này)') và host
+                # stale (192.168.1.9 cũ) không sửa trong tin; dùng KIND viết
+                # hoa làm tên gọn + host thật từ registry.
+                _kind_vn = {"PC": "PC", "EDGE": "Pi5", "CONNECTOR": "Cổng"}.get(
+                    str(n.kind), str(n.kind))
+                changed.append(f"🔴 {_kind_vn} ({n.host}) MẤT KẾT NỐI")
     try:
         _FED_ALERT_MARKER.write_text(
             _json.dumps(last_alerts, ensure_ascii=False), encoding="utf-8")
     except Exception:
         pass
     if changed:
-        _dm_send("🌐 **LIÊN BANG** — nút mất kết nối:\n" + "\n".join(changed[:5]))
+        # (07/11/2026, owner) Bỏ header '🌐 LIÊN BANG — nút mất kết nối' —
+        # tin đủ nghĩa khi gọn: mỗi nút 1 dòng '🔴 <tên> (<IP>) MẤT KẾT NỐI'.
+        _dm_send("\n".join(changed[:5]))
     return len(changed)
 
 
