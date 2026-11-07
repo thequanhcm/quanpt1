@@ -52,6 +52,10 @@ CONFIG = {
     # (01/11/2026, CLO-UNSTICK) Session tự chủ học RUNNING quá ngưỡng này (giờ)
     # → watchdog kết thúc + đẻ session mới qua engine chuẩn (không sửa DB tay).
     "clo_stall_max_hours": 24.0,
+    # (07/11/2026, owner) Bỏ hẳn Ollama local — chat dùng GLM Cloud (NetMind).
+    # ollama.exe không tồn tại trên máy → watchdog cảnh báo OFFLINE mỗi cycle
+    # gây nhiễu log vô nghĩa. Bật lại True khi có use case offline + cài Ollama.
+    "ollama_monitoring_enabled": False,
 }
 
 # Setup logging
@@ -112,7 +116,9 @@ CONFIG.setdefault(
 )
 CONFIG.setdefault("max_ollama_revival_per_hour", 3)
 CONFIG.setdefault("netchat_responder_log", os.path.join(BASE_DIR, "logs", "netchat_responder_heartbeat.log"))
-CONFIG.setdefault("learning_daemon_log", os.path.join(BASE_DIR, "logs", "learning_daemon.log"))
+# (07/11/2026) daemon ghi stdout vào learning_daemon_stdout.log — file learning_daemon.log
+# cũ 11 ngày không bao giờ cập nhật → watchdog respawn learning vô hạn (5 instance song song).
+CONFIG.setdefault("learning_daemon_log", os.path.join(BASE_DIR, "logs", "learning_daemon_stdout.log"))
 CONFIG.setdefault("disk_free_min_percent", 10.0)
 CONFIG.setdefault("max_component_fail_streak", 3)  # circuit breaker threshold
 CONFIG.setdefault("max_daemon_restart_per_hour", 5)  # Sprint 7 (b): cap giống server
@@ -160,7 +166,14 @@ def check_ollama() -> bool:
     (30/10/2026) 24/7 may moi: khi OFFLINE (>= 2 probe fail lien tiep) thi tu
     khoi dong lai `ollama serve` detached, gioi han 3 lan/gio tranh vong lap
     vo han khi Ollama bi huong loi he thong. Thanh cong -> reset dem.
+
+    (07/11/2026, owner) `ollama_monitoring_enabled: False` — máy đã bỏ Ollama
+    local (chat chạy GLM Cloud), probe/cảnh báo mỗi cycle là nhiễu. Trả về
+    True (neutral: không coi là fail component) và không log.
     """
+    if not CONFIG.get("ollama_monitoring_enabled", True):
+        _component_states["ollama"] = "DISABLED"
+        return True
     alive = _probe_tcp(CONFIG["ollama_port"])
     state = _update_component_state("ollama", alive)
     if state != _component_states.get("ollama_prev", state):
@@ -259,11 +272,19 @@ def check_learning_daemon() -> bool:
     redirect của start_daemon trong watchdog) — trước đây chỉ tra 1 file nên
     daemon sống nhưng bị báo OFFLINE 12.6h. Lấy mtime MỚI NHẤT của cả hai;
     thiếu cả hai → fail-closed OFFLINE.
+
+    07/11/2026: bổ sung nguồn sự thật cấp DỮ LIỆU — brain.db. Instance
+    watchdog-spawn (stdout=file handle) có thể KHÔNG ghi log stdout nào
+    (print bị nuốt, chưa rõ root cause) NHƯNG vẫn ingest vào brain.db mỗi
+    cycle (candidate_knowledge tăng liên tục). brain.db mtime mới (<900s)
+    → daemon chắc chắn sống → không respawn nhầm (đã gây 3 instance song
+    song chiều 07/11). Log stdout vẫn kiểm tra song song như trước.
     """
     candidates = [
         Path(CONFIG["learning_daemon_log"]),                      # logs/learning_daemon.log
         Path(BASE_DIR) / "logs" / "learning_daemon.py.log",       # watchdog-spawned redirect
         Path(BASE_DIR) / "logs" / "learning_daemon_crash.log",
+        Path(BASE_DIR) / "data" / "brain.db",                     # (07/11) dữ liệu thật
     ]
     ages = [
         time.time() - p.stat().st_mtime
