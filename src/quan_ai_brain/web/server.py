@@ -301,6 +301,9 @@ _GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
     "face_only_mode": False,
 }
 _GLOBAL_HDMI_STATE: dict = {"last_ask": 0.0, "awaiting_approval": False}
+# (07/11/2026) Địa chỉ dự phòng của Pi5 khi edge_ip telemetry stale:
+# mesh Tailscale tĩnh (ưu tiên — Pi5 luôn giữ IP này) + IP LAN đã biết.
+EDGE_FALLBACK_IPS: list[str] = ["100.100.83.59", "192.168.1.21"]
 _GLOBAL_ROLE_ORCHESTRATOR = ExecutiveRoleOrchestrator(edge_telemetry=_GLOBAL_EDGE_TELEMETRY)
 
 # (31/10/2026) MARQUEE TIẾNG ANH TRÊN KIOSK: owner yêu cầu khung hội thoại
@@ -406,20 +409,44 @@ def _upload_image_to_pi_for_show(raw_url: str) -> tuple[str | None, str]:
 
 
 def _send_edge_request(path: str, method: str = "GET", data: dict | None = None, timeout: float = 3.0) -> dict:
-    """Send an HTTP request to the Raspberry Pi 5 Kiosk Daemon over Wi-Fi with resilient timeout."""
+    """Send an HTTP request to the Raspberry Pi 5 Kiosk Daemon over Wi-Fi with resilient timeout.
+
+    (07/11/2026) FIX COMMAND_NOT_DELIVERED: edge_ip trong telemetry là IP NGUỒN
+    heartbeat gần nhất — nếu PC restart trước Pi5, edge_ip stale (LAN cũ
+    192.168.1.21 khi Pi5 đã chuyển mesh) → mọi lệnh micro/camera fail
+    'Pi 5 offline' dù Pi5 sống. Giải pháp: pre-check fail → thử lần lượt
+    EDGE_FALLBACK_IPS (mesh tĩnh + LAN) trước khi báo offline; IP thành công
+    được ghi lại làm edge_ip hiện hành.
+    """
     edge_ip = _GLOBAL_EDGE_TELEMETRY.get("edge_ip", "192.168.1.21")
     edge_port = _GLOBAL_EDGE_TELEMETRY.get("edge_port", 8768)
 
     # Fast non-blocking pre-check of TCP socket before urllib to prevent Windows 21s SYN stall
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(min(timeout, 1.0))
-        res = sock.connect_ex((edge_ip, edge_port))
-        sock.close()
-        if res != 0:
-            return {"success": False, "error": f"Port {edge_port} not reachable", "offline": True}
-    except Exception as e:
-        return {"success": False, "error": str(e), "offline": True}
+    def _tcp_ok(ip: str) -> bool:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(min(timeout, 1.0))
+            res = sock.connect_ex((ip, edge_port))
+            sock.close()
+            return res == 0
+        except Exception:
+            return False
+
+    candidates: list[str] = [edge_ip]
+    for fb in EDGE_FALLBACK_IPS:
+        if fb not in candidates:
+            candidates.append(fb)
+    chosen: str | None = None
+    for ip in candidates:
+        if _tcp_ok(ip):
+            chosen = ip
+            break
+    if chosen is None:
+        return {"success": False, "error": f"Port {edge_port} not reachable", "offline": True}
+    if chosen != edge_ip:
+        # IP dự phòng sống — cập nhật telemetry để các lệnh kế dùng luôn
+        _GLOBAL_EDGE_TELEMETRY["edge_ip"] = chosen
+    edge_ip = chosen
 
     url = f"http://{edge_ip}:{edge_port}{path}"
     try:
