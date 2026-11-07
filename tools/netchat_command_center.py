@@ -1227,12 +1227,22 @@ def handle_duty_roster_query(text: str = "", payload: dict[str, Any] | None = No
     t = (text or "").lower()
     now = _dt.datetime.now()
     day, month, year = now.day, now.month, now.year
+    # 'của Mai' → 'mai' là TÊN NGƯỜI, không được dùng làm mốc 'ngày mai'
+    mname_cua = re.search(r"(?:của|cua)\s+([\wÀ-ỹ\s]{2,30})$", t.strip())
+    # Ngày đầy đủ dd/mm/yyyy (có/không từ 'ngày'): '6/11/2026', '06-11-2026', '6.11.26'
+    mfull = re.search(r"\b(\d{1,2})\s*[/.\-]\s*(\d{1,2})(?:\s*[/.\-]\s*(\d{2,4}))?\b", t)
     m = re.search(r"ngày\s*(\d{1,2})(?:\s*(?:tháng|/|\.)\s*(\d{1,2}))?", t)
-    if m:
+    if mfull:
+        day = int(mfull.group(1))
+        month = int(mfull.group(2))
+        if mfull.group(3):
+            y = int(mfull.group(3))
+            year = y + 2000 if y < 100 else y
+    elif m:
         day = int(m.group(1))
         if m.group(2):
             month = int(m.group(2))
-    elif "ngày mai" in t or "mai" in t:
+    elif ("ngày mai" in t or "mai" in t) and not mname_cua:
         nxt = now + _dt.timedelta(days=1)
         day, month, year = nxt.day, nxt.month, nxt.year
     elif "hôm qua" in t:
@@ -1240,9 +1250,13 @@ def handle_duty_roster_query(text: str = "", payload: dict[str, Any] | None = No
         day, month, year = prv.day, prv.month, prv.year
 
     # Tra 1 cá nhân: 'lịch trực của <tên>' / 'lịch trực <tên>'
-    mname = re.search(r"(?:của|cua)\s+([\wÀ-ỹ\s]{2,30})$", t.strip()) or re.search(
+    mname_cua = re.search(r"(?:của|cua)\s+([\wÀ-ỹ\s]{2,30})$", t.strip())
+    mname = mname_cua or re.search(
         r"lịch trực(?:\s+ngày\s*\d+)?\s+([\wÀ-ỹ]{2,}(?:\s+[\wÀ-ỹ]{2,}){0,2})\s*$", t)
-    if mname and not re.search(r"hôm nay|hom nay|ngày mai|hôm qua", mname.group(1)):
+    # 'lịch trực mai' = hỏi NGÀY MAI (đã set ở trên), không phải tên 'Mai';
+    # có 'của' ('lịch trực của Mai') thì vẫn là tên người.
+    if mname and not re.search(r"hôm nay|hom nay|ngày mai|hôm qua", mname.group(1)) \
+            and (mname_cua or mname.group(1).strip() != "mai"):
         name = mname.group(1).strip()
         # bỏ đuôi ngày nếu dính
         name = re.sub(r"ngày\s*\d+.*$", "", name).strip()
