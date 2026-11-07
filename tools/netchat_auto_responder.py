@@ -649,6 +649,49 @@ def _plan_batch(
     return work, pending
 
 
+def _fetch_reply_context(post_id: str) -> str:
+    """(07/11/2026) Lấy nội dung tin gốc khi owner REPLY-quote.
+
+    NetChat (Mattermost fork) gói tin được reply vào `props.reply_post` của
+    post raw — nhưng `netchat_bot.py read` chỉ trả id/user_id/message/
+    file_ids/create_at nên responder mất ngữ cảnh quote (sự cố 17:32:
+    owner reply tin cảnh báo LIÊN BANG hỏi "Sao báo lỗi này" → bot bảo
+    "chưa thấy lỗi nào"). Hàm này GET /api/v4/posts/{id} trực tiếp với
+    token bot (đọc từ .env của skill, in-memory — KHÔNG log giá trị),
+    trả về message của tin gốc hoặc "" nếu không có/không lấy được.
+    """
+    if not post_id:
+        return ""
+    token = ""
+    try:
+        _env = Path(__file__).resolve().parent.parent / "config" / "netchat.env"
+        if not _env.exists():
+            _env = Path(r"C:\Users\DELL\AppData\Local\netmind_desktop"
+                        r"\skills\bot-netchat\.env")
+        if _env.exists():
+            for _line in _env.read_text(encoding="utf-8", errors="replace").splitlines():
+                _line = _line.strip()
+                if _line.startswith("NETCHAT_BOT_TOKEN="):
+                    token = _line.split("=", 1)[1].strip()
+                    break
+    except Exception:
+        return ""
+    if not token:
+        return ""
+    try:
+        import urllib.request as _ur
+        import ssl as _ssl
+        _req = _ur.Request(
+            f"https://netchat.viettel.vn/api/v4/posts/{post_id}",
+            headers={"Authorization": f"Bearer {token}"})
+        with _ur.urlopen(_req, timeout=10, context=_ssl.create_default_context()) as _resp:
+            _post = json.loads(_resp.read().decode("utf-8", "replace"))
+        _rp = (_post.get("props") or {}).get("reply_post") or {}
+        return (_rp.get("message") or "").strip()
+    except Exception:
+        return ""
+
+
 def read_channel_messages(count=10):
     """Read recent messages from BOTH the channel and the owner DM.
 
@@ -1250,8 +1293,27 @@ def main():
                         _local_paths = []
 
                     print("   🤖 Processing...")
+                    # (07/11/2026, owner: "khi anh reply lại nội dung tin nhắn, Cherry
+                    # cần đọc để biết anh reply gì") — NetChat UI gói tin gốc vào
+                    # props.reply_post (đã E2E: GET /posts/{id} → props.reply_post.message)
+                    # nhưng netchat_bot.py read không trả field props → mất ngữ cảnh.
+                    # Responder tự fetch raw post khi message không đủ ngữ cảnh.
+                    reply_ctx = ""
+                    _rp = ((msg.get("props") or {}).get("reply_post") or {})
+                    if not _rp:
+                        try:
+                            reply_ctx = _fetch_reply_context(msg.get("id"))
+                        except Exception:
+                            reply_ctx = ""
+                    else:
+                        _rq = (_rp.get("message") or "").strip()
+                        if _rq:
+                            reply_ctx = _rq
+                    _ai_text = (file_context + "\n" + message_text) if file_context else message_text
+                    if reply_ctx:
+                        _ai_text = f'[Anh QUANPT1 đang REPLY trích dẫn tin CHERRY gửi trước: "{reply_ctx}"]\nCâu hỏi của anh: {_ai_text}'
                     response = process_message(
-                        (file_context + "\n" + message_text) if file_context else message_text,
+                        _ai_text,
                         sender_user_id=msg.get("user_id", ""),
                         chat_session_id=CHANNEL_ID,
                         payload={"file_paths": _local_paths} if _local_paths else None,
