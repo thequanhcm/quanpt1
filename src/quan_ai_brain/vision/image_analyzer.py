@@ -184,10 +184,11 @@ def _scene_description(path: Path, *, timeout: float = 45.0) -> str | None:
                 {"type": "image_url",
                  "image_url": {"url": "data:image/jpeg;base64," + _b64.b64encode(data).decode()}},
                 {"type": "text",
-                 "text": "Ảnh này chụp ở đâu (trong nhà/ngoài trời/địa điểm gì)? "
-                         "Bên trong có những vật thể, con vật, con người gì? "
-                         "Trả lời ngắn gọn 3-5 câu TIẾNG VIỆT THUẦN (không dùng từ tiếng Anh), "
-                         "chỉ nêu cái thấy được, không suy diễn điều không có."},
+                 "text": "Phân tích ảnh này theo 3 phần ngắn, TIẾNG VIỆT THUẦN (không từ tiếng Anh):\n"
+                         "1) BỐI CẢNH: chụp ở đâu (trong nhà/ngoài trời/địa điểm gì), ánh sáng thế nào.\n"
+                         "2) CHỦ THỂ: những vật thể/con vật/con người chính, vị trí trong khung hình.\n"
+                         "3) CHƯA RÕ: chi tiết nào quá mờ/khó phân biệt — nói thẳng 'chưa rõ' thay vì đoán.\n"
+                         "Tuyệt đối chỉ nêu cái thấy được trong ảnh, không bịa chi tiết không có."},
             ]}],
             # (07/11) GLM-5.3-Flash là reasoning model: content=None + finish=length
             # khi max_tokens nhỏ (hết token trong phần reasoning) — probe thật.

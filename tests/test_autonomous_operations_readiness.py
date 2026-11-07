@@ -173,10 +173,13 @@ def test_04_raspberry_pi_disconnect_and_reconnect_detection():
     monitor.record_heartbeat("pi5-edge-01", rtt_ms=12.0, subsystems_ready=True)
     assert monitor.state == EdgeConnectionState.READY
 
-    # 2. Wait for timeout
+    # 2. Wait for timeout — (07/11/2026) alert chỉ sau 3 nhịp lỡ LIÊN TIẾP (thiết kế 06/11)
     time.sleep(0.15)
     monitor.check_deadline()
     assert monitor.state in (EdgeConnectionState.DISCONNECTED, EdgeConnectionState.DEGRADED)
+    for _ in range(3):
+        time.sleep(0.15)
+        monitor.check_deadline()
     status = monitor.get_status()
     assert status["active_alert_count"] >= 1
 
