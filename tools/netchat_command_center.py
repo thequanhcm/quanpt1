@@ -1,4 +1,7 @@
-"""NetChat Command Center — bộ định tuyến lệnh owner↔TONY (DM-only).
+"""NetChat Command Center — bộ định tuyến lệnh owner↔CHERRY (DM-only).
+
+(Rename 07/11/2026: TONY → CHERRY toàn bộ reply/text người dùng nhìn; intent
+id `tony_*`, biến thể lệnh tony/cherry giữ song song quá độ.)
 
 LỊCH SỬ (31/10/2026): file gốc bị ghi đè nhầm bằng nội dung responder trong quá
 trình patch song song 2 file → KHÔI PHỤC toàn bộ từ: code đã đọc trong phiên,
@@ -38,18 +41,23 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     # (31/10/2026) Điều khiển Pi5 mở web/YouTube — ĐẶT TRƯỚC pc_open để
     # 'tony mở youtube...' không bị nuốt thành lệnh mở app PC.
     "tony_youtube": ("tony mở youtube", "tony mo youtube", "tony bật youtube", "tony bat youtube",
+                     "cherry mở youtube", "cherry mo youtube", "cherry bật youtube", "cherry bat youtube",
+                     "cherry mở video", "cherry mo video",  # (07/11) CHERRY song song TONY
                      "mở youtube", "mo youtube", "bật youtube", "bat youtube",
                      "tony mở video", "tony mo video", "xem youtube", "xem video"),
     "tony_music_play": ("tony phát nhạc", "tony phat nhac", "tony bật nhạc", "tony bat nhac",
+                        "cherry phát nhạc", "cherry phat nhac", "cherry bật nhạc", "cherry bat nhac",  # (07/11) CHERRY
                         "phát nhạc", "phat nhac", "bật nhạc", "bat nhac", "phát bài", "phat bai",
                         "bật bài", "bat bai", "mở bài hát", "mo bai hat", "nghe nhạc", "nghe nhac"),
     # (31/10/2026) Lệnh điều khiển TONY/Pi5 từ DM — gọi API thật /api/executive/edge/control
     "tony_on": ("bật hình thể", "bat hinh the", "mở hình thể", "mo hinh the", "kích hoạt hình thể",
                 "kich hoat hinh the", "start kiosk", "bật kiosk", "bat kiosk", "dậy đi tony", "day di tony",
+                "dậy đi cherry", "day di cherry",  # (07/11) CHERRY
                 # (31/10/2026) Owner không gắn màn hình — điều khiển hình thể 100% qua DM:
                 "bật pi5", "bat pi5", "bật pi 5", "bat pi 5", "bật màn pi5", "bat man pi5",
                 "mở giao diện pi5", "mo giao dien pi5", "bật giao diện", "bat giao dien"),
     "tony_off": ("tắt hình thể", "tat hinh the", "đóng kiosk", "dong kiosk", "close kiosk", "ngủ đi tony", "ngu di tony",
+                 "ngủ đi cherry", "ngu di cherry",  # (07/11) CHERRY
                  # (31/10/2026) 'tắt pi5' = tắt giao diện (về desktop/standby):
                  "tắt pi5", "tat pi5", "tắt pi 5", "tat pi 5", "tắt màn pi5", "tat man pi5",
                  "tắt giao diện pi5", "tat giao dien pi5", "tắt giao diện", "tat giao dien"),
@@ -98,6 +106,7 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                   "tat trang web", "đóng trang web", "dong trang web", "tony quay lại",
                   "tony quay lai"),
     "tony_websearch": ("tony tìm", "tony tim", "tony tìm kiếm", "tony tim kiem",
+                       "cherry tìm", "cherry tim", "cherry tìm kiếm", "cherry tim kiem",  # (07/11) CHERRY
                        "tìm giúp anh", "tim giup anh", "tra cứu", "tra cuu",
                        "tìm kiếm", "tim kiem"),
     # (31/10/2026) Hiển thị ảnh từ NetChat lên màn Pi5 (mặc định 15s rồi về avatar)
@@ -114,6 +123,7 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     # lưu 2 bên (Pi + PC) và gửi file về DM cho owner.
     "tony_pi_photo": ("chụp ảnh từ pi", "chup anh tu pi", "chụp ảnh pi",
                       "chup anh pi", "tony chụp ảnh", "tony chup anh",
+                      "cherry chụp ảnh", "cherry chup anh",  # (07/11) CHERRY
                       "chụp ảnh bằng pi", "chup anh bang pi",
                       "camera pi chụp", "camera pi chup",
                       "chụp ảnh gửi anh", "chup anh gui anh",
@@ -123,7 +133,8 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                       "camera chụp gửi", "chụp hình gửi", "chup hinh gui",
                       "chụp ảnh màn hình pi"),
     "tony_pi_video": ("quay video từ pi", "quay video tu pi", "quay video pi",
-                      "tony quay video", "quay video bằng pi",
+                      "tony quay video", "cherry quay video",  # (07/11) CHERRY
+                      "quay video bằng pi",
                       "quay video bang pi", "ghi hình từ pi", "ghi hinh tu pi"),
     # (01/11/2026, owner feedback image_864dc0) 'Chụp màn hình kiosk/pi5' —
     # phải chụp MÀN HÌNH PI5 (grim qua SSH) KHÔNG phải chụp PC. ƯU TIÊN TRƯỚC
@@ -184,7 +195,7 @@ def _is_device_estop(t: str) -> bool:
 
 
 def _is_music_stop(t: str) -> bool:
-    """'dừng nhạc'/'tony dừng nhạc'/'tắt nhạc' — music stop TRƯỚC stop rộng
+    """'dừng nhạc'/'cherry dừng nhạc'/'tắt nhạc' — music stop TRƯỚC stop rộng
     (pre-existing bug 04/11: 'dừng nhạc' rơi vào stop tổng — sửa kèm UDC-1)."""
     return bool(re.search(
         r"(?:dừng|dung|tắt|tat|stop|ngừng|ngung)[^\n]{0,10}(?:nhạc|nhac|music)"
@@ -328,7 +339,7 @@ def detect_intent(text: str) -> str | None:
     # không được rơi vào 'stop' tổng (pre-existing bug, chủ bị 1 lần).
     if not _is_question(t) and _is_music_stop(t):
         return "tony_music_stop"
-    # (06/11/2026) 'Phân tích ảnh/hình' — đọc ảnh DM hoặc ảnh TONY vừa chụp
+    # (06/11/2026) 'Phân tích ảnh/hình' — đọc ảnh DM hoặc ảnh CHERRY vừa chụp
     # (OCR + cấu trúc). ƯU TIÊN trước 'chụp ảnh' để 'phân tích ảnh vừa chụp'
     # không bị nuốt thành lệnh chụp. Chặn chặt: phải có 'ảnh|hình|image|photo'
     # + 'phân tích|phan tich|đọc chữ|doc chu|nội dung ảnh' — không nuốt
@@ -633,12 +644,13 @@ def handle_todo_list(payload: dict[str, Any] | None = None) -> str:
 def handle_help(payload: dict[str, Any] | None = None) -> str:
     """'giúp': bảng lệnh — chỉ hiện khi 'giúp' ĐỨNG ĐẦU câu."""
     return (
-        "🤖 KÊNH LÀM VIỆC TONY (lệnh đứng đầu câu):\n"
+        "🤖 KÊNH LÀM VIỆC CHERRY (lệnh đứng đầu câu):\n"
         "• trạng thái | báo cáo | nhiệm vụ | tri thức | việc cần làm\n"
         "• phê duyệt — duyệt hồ sơ chờ (FIFO)\n"
         "• bật hình thể / tắt hình thể / cherry nghỉ / cherry làm việc / cherry về\n"
         "• cherry nói <câu> | biểu cảm <kiểu> | âm lượng <0-100>\n"
-        "• tony mở youtube [từ khóa] | tony tìm <câu> | tony phát nhạc <tên> | tony dừng nhạc\n"
+        "• cherry mở youtube [từ khóa] | cherry tìm <câu> | cherry phát nhạc <tên> | cherry dừng nhạc\n"
+    "(biến thể cũ tony … vẫn nhận trong thời gian quá độ)\n"
         "• hiển thị ảnh trên pi [N giây] — ảnh DM lên màn Pi5 rồi tự về avatar\n"
         "• mở <app> | đóng <app> | chụp màn hình | khóa máy  (PC)\n"
         "• stop — dừng khẩn cấp"
@@ -662,10 +674,10 @@ def handle_stop(payload: dict[str, Any] | None = None) -> str:
 
 
 def handle_freeze(payload: dict[str, Any] | None = None) -> str:
-    """'freeze': tạm dừng hình thể (pause) — 'tony làm việc' để dậy lại."""
+    """'freeze': tạm dừng hình thể (pause) — 'cherry làm việc' để dậy lại."""
     ok, msg = _edge_control({"action": "pause"})
     _audit("netchat_command.freeze", {"success": ok})
-    return "🧊 Đã tạm dừng (freeze) hình thể TONY — anh nói 'tony làm việc' để em dậy lại ạ." if ok \
+    return "🧊 Đã tạm dừng (freeze) hình thể — anh nói 'cherry làm việc' để em dậy lại ạ." if ok \
         else f"⚠️ Không tạm dừng được: {_vn_err(msg)}"
 
 
@@ -690,14 +702,14 @@ def _edge_control(data: dict[str, Any], timeout: float = 8.0) -> tuple[bool, str
 def handle_tony_on(payload: dict[str, Any] | None = None) -> str:
     ok, msg = _edge_control({"action": "start_kiosk"})
     _audit("netchat_command.tony_on", {"success": ok})
-    return "🤖 Đã bật hình thể TONY trên Pi 5 (màn sáng + giao diện kiosk)." if ok \
+    return "🤖 Đã bật hình thể trên Pi 5 (màn sáng + giao diện kiosk — CHERRY online)." if ok \
         else f"⚠️ Không bật được hình thể: {_vn_err(msg)}"
 
 
 def handle_tony_off(payload: dict[str, Any] | None = None) -> str:
     ok, msg = _edge_control({"action": "close_kiosk"})
     _audit("netchat_command.tony_off", {"success": ok})
-    return "🌙 Đã tắt hình thể — Pi 5 vào chế độ nghỉ (anh gọi 'TONY ơi' là em dậy ạ)." if ok \
+    return "🌙 Đã tắt hình thể — Pi 5 vào chế độ nghỉ (anh gọi 'Cherry ơi' là em dậy ạ)." if ok \
         else f"⚠️ Không tắt được hình thể: {_vn_err(msg)}"
 
 
@@ -708,7 +720,7 @@ def handle_tony_hdmi_show(text: str = "", payload: dict[str, Any] | None = None)
     ok, msg = _edge_control({"action": "hdmi_show"})
     _audit("netchat_command.tony_hdmi_show", {"success": ok})
     if ok:
-        return ("🖥️ Đã bật mirror kiosk ra cổng HDMI của Pi 5 — avatar TONY hiển thị "
+        return ("🖥️ Đã bật mirror kiosk ra cổng HDMI của Pi 5 — avatar CHERRY hiển thị "
                 "đồng thời trên màn DSI 7\" và màn HDMI (tự phát hiện độ phân giải).")
     return ("⚠️ Chưa thấy màn hình nào cắm vào cổng HDMI của Pi 5 — anh cắm dây HDMI "
             "vào rồi nói lại 'xuất hình ra hdmi' nhé (hệ thống cũng tự bật khi phát hiện cắm).")
@@ -923,7 +935,7 @@ def handle_tony_face(text: str, payload: dict[str, Any] | None = None) -> str:
         expr = "HAPPY"
     ok, msg = _edge_control({"action": "set_expression", "expression": expr})
     _audit("netchat_command.tony_face", {"success": ok, "expression": expr})
-    return f"😊 Đã đổi biểu cảm TONY: {expr}" if ok else f"⚠️ Không đổi được biểu cảm: {msg}"
+    return f"😊 Đã đổi biểu cảm CHERRY: {expr}" if ok else f"⚠️ Không đổi được biểu cảm: {msg}"
 
 
 def handle_pc_screenshot(payload: dict[str, Any] | None = None) -> str:
@@ -981,7 +993,7 @@ def handle_tony_show_image(text: str = "", payload: dict[str, Any] | None = None
            {"ok": ok, "file": _Path(paths[0]).name, "duration": duration})
     if ok:
         return (f"🖼️ Đang hiển thị ảnh trên màn Pi 5 trong {duration:.0f} giây — "
-                f"hết thời gian tự về avatar TONY. Muốn hiện lại: nhắn 'hiển thị lại ảnh'.")
+                f"hết thời gian tự về avatar CHERRY. Muốn hiện lại: nhắn 'hiển thị lại ảnh'.")
     return f"⚠️ Không hiển thị được ảnh lên Pi 5: {info}"
 
 
@@ -1055,7 +1067,7 @@ def handle_tony_pi_screenshot(text: str = "", payload: dict[str, Any] | None = N
         sent, sent_msg = send_file_to_dm(
             str(pc_path),
             f"🖥️ Ảnh màn hình kiosk Pi 5 (TFT 800x480) lúc "
-            f"{time.strftime('%H:%M:%S %d/%m')} (TONY chụp theo lệnh DM) — "
+            f"{time.strftime('%H:%M:%S %d/%m')} (CHERRY chụp theo lệnh DM) — "
             f"k_{ts}.png ({size_kb:.0f} KB), đã lưu PC")
         _audit("netchat_command.tony_pi_screenshot",
                {"ok": True, "size_kb": round(size_kb, 1), "dm_sent": sent})
@@ -1086,7 +1098,7 @@ def handle_tony_pi_photo(text: str = "", payload: dict[str, Any] | None = None) 
     if pc_path and not pc_path.startswith("("):
         from pathlib import Path as _P
         caption = (f"📷 Ảnh chụp từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
-                   f"(TONY chụp theo lệnh DM) — {fname} ({size_kb:.0f} KB), "
+                   f"(CHERRY chụp theo lệnh DM) — {fname} ({size_kb:.0f} KB), "
                    f"đã lưu Pi 5 + PC")
         sent, sent_msg = send_file_to_dm(pc_path, caption)
         if not sent:
@@ -1127,7 +1139,7 @@ def handle_tony_pi_video(text: str = "", payload: dict[str, Any] | None = None) 
         from pathlib import Path as _P
         caption = (f"🎬 Video {duration:.0f}s{' kèm tiếng' if has_audio else '(câm)'} "
                    f"từ camera Pi 5 lúc {time.strftime('%H:%M:%S %d/%m')} "
-                   f"(TONY quay theo lệnh DM) — {fname} ({size_kb:.0f} KB), đã lưu Pi 5 + PC")
+                   f"(CHERRY quay theo lệnh DM) — {fname} ({size_kb:.0f} KB), đã lưu Pi 5 + PC")
         sent, sent_msg = send_file_to_dm(pc_path, caption)
         if not sent:
             _audit("netchat_command.tony_pi_video", {"dm_sent": False, "err": sent_msg[:120]})
@@ -1139,7 +1151,7 @@ def handle_tony_pi_video(text: str = "", payload: dict[str, Any] | None = None) 
 
 
 def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None) -> str:
-    """'nghe từ pi [N giây] [bằng mic usb|mic loa]' — TAI của TONY: thu âm N giây.
+    """'nghe từ pi [N giây] [bằng mic usb|mic loa]' — TAI của CHERRY: thu âm N giây.
 
     Mặc định: mic USB Jieli (ưu tiên); 'mic loa'/'mic bluetooth' → mic tích hợp
     trong loa SRS-XB33 (bluez_input) — nhạy tiếng ồn lớn, nền sạch.
@@ -1173,7 +1185,7 @@ def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None)
     if pc_path and not pc_path.startswith("("):
         sent, sent_msg = send_file_to_dm(
             pc_path, f"🎙️ Thu âm {duration:.0f}s từ mic Pi 5 lúc "
-                     f"{time.strftime('%H:%M:%S %d/%m')} (tai TONY nghe theo lệnh DM) — "
+                     f"{time.strftime('%H:%M:%S %d/%m')} (tai CHERRY nghe theo lệnh DM) — "
                      f"{fname} ({size_kb:.0f} KB), {mic_label}, đã lưu Pi 5 + PC")
         if not sent:
             _audit("netchat_command.tony_pi_listen", {"dm_sent": False, "err": sent_msg[:120]})
@@ -1185,10 +1197,10 @@ def handle_tony_pi_listen(text: str = "", payload: dict[str, Any] | None = None)
 
 
 def handle_tony_analyze_image(text: str = "", payload: dict[str, Any] | None = None) -> str:
-    """'phân tích ảnh vừa chụp' / 'đọc chữ trong ảnh' — TONY Vision.
+    """'phân tích ảnh vừa chụp' / 'đọc chữ trong ảnh' — CHERRY Vision.
 
     Nguồn ảnh theo thứ tự: (1) file đính kèm DM đang xử lý (payload['file_paths']),
-    (2) ảnh mới nhất trong data/netchat_files (24h), (3) ảnh TONY tự chụp mới nhất
+    (2) ảnh mới nhất trong data/netchat_files (24h), (3) ảnh CHERRY tự chụp mới nhất
     trong logs/pi5_media (24h). OCR vie+eng + cấu trúc đo được; tri thức vào
     candidate_knowledge (chờ owner duyệt). Fail-honest: không có ảnh → báo rõ.
     """
@@ -1212,7 +1224,7 @@ def handle_tony_analyze_image(text: str = "", payload: dict[str, Any] | None = N
 
     if not target:
         return ("⚠️ Em chưa thấy ảnh nào để phân tích: không có ảnh đính kèm DM, "
-                "không có ảnh DM trong 24h, và ảnh TONY chụp cũng quá cũ. "
+                "không có ảnh DM trong 24h, và ảnh CHERRY chụp cũng quá cũ. "
                 "Anh gửi ảnh vào DM hoặc nhắn 'chụp hình' rồi em phân tích ngay nhé.")
 
     out = analyze_image(target)
@@ -1221,7 +1233,7 @@ def handle_tony_analyze_image(text: str = "", payload: dict[str, Any] | None = N
 
 
 def handle_tony_youtube(text: str, payload: dict[str, Any] | None = None) -> str:
-    """'tony mở youtube [từ khóa]' — không từ khóa: mở trang chủ YouTube;
+    """'cherry mở youtube [từ khóa]' — không từ khóa: mở trang chủ YouTube;
     có từ khóa: tìm kiếm và mở trang kết quả YouTube trên màn Pi 5."""
     q = (text or "").strip()
     if q:
@@ -1245,7 +1257,7 @@ def handle_tony_youtube(text: str, payload: dict[str, Any] | None = None) -> str
                         f"{extra}")
             return f"⚠️ Không mở được YouTube trên Pi 5: {info}\n(Kiểm tra: gõ 'hình thể')"
         return (f"🔍 Không tìm thấy video nào cho “{q[:60]}”. "
-                f"Thử từ khóa khác, ví dụ: 'tony mở youtube nhac thieu nhi vui nhon'")
+                f"Thử từ khóa khác, ví dụ: 'cherry mở youtube nhac thieu nhi vui nhon'")
     ok, info = _open_url_on_pi5("https://www.youtube.com/")
     _audit("netchat_command.tony_youtube", {"ok": ok, "home": True})
     if ok:
@@ -1270,11 +1282,11 @@ def _open_url_on_pi5(url: str) -> tuple[bool, str]:
 
 
 def handle_tony_websearch(text: str, payload: dict[str, Any] | None = None) -> str:
-    """'tony tìm <câu>' / 'tìm kiếm <câu>' — mở Google search kết quả trên màn
+    """'cherry tìm <câu>' / 'tìm kiếm <câu>' — mở Google search kết quả trên màn
     Pi 5 (anh đọc trực tiếp) — không cần AI tổng hợp."""
     q = (text or "").strip()
     if not q:
-        return "🔍 Anh muốn em tìm gì? Cú pháp: 'tony tìm thời tiết hôm nay'"
+        return "🔍 Anh muốn em tìm gì? Cú pháp: 'cherry tìm thời tiết hôm nay'"
     import urllib.parse
     url = "https://www.google.com/search?q=" + urllib.parse.quote(q)
     ok, info = _open_url_on_pi5(url)
@@ -1285,11 +1297,11 @@ def handle_tony_websearch(text: str, payload: dict[str, Any] | None = None) -> s
 
 
 def handle_tony_music_play(text: str, payload: dict[str, Any] | None = None) -> str:
-    """'tony phát nhạc <tên>' / 'bật nhạc <tên>' — dùng engine YouTube Music
+    """'cherry phát nhạc <tên>' / 'bật nhạc <tên>' — dùng engine YouTube Music
     có sẵn (search + play trên loa Pi 5)."""
     q = (text or "").strip()
     if not q:
-        return "🎵 Anh muốn nghe bài gì? Cú pháp: 'tony phát nhạc bolero trữ tình'"
+        return "🎵 Anh muốn nghe bài gì? Cú pháp: 'cherry phát nhạc bolero trữ tình'"
     try:
         import urllib.request
         req = urllib.request.Request(
@@ -1308,7 +1320,7 @@ def handle_tony_music_play(text: str, payload: dict[str, Any] | None = None) -> 
 
 
 def handle_tony_music_stop(payload: dict[str, Any] | None = None) -> str:
-    """'tony dừng nhạc' — stop music trên Pi 5."""
+    """'cherry dừng nhạc' — stop music trên Pi 5."""
     try:
         import urllib.request
         req = urllib.request.Request(
@@ -1420,7 +1432,7 @@ def handle_emergency_stop_device(payload: dict[str, Any] | None = None) -> str:
 
 
 def handle_tony_back(payload: dict[str, Any] | None = None) -> str:
-    """'tony về' — đóng overlay web trên Pi 5, hình thể TONY hiển thị lại."""
+    """'cherry về' — đóng overlay web trên Pi 5, hình thể CHERRY hiển thị lại."""
     try:
         import urllib.request
         req = urllib.request.Request(
@@ -1431,7 +1443,7 @@ def handle_tony_back(payload: dict[str, Any] | None = None) -> str:
         with urllib.request.urlopen(req, timeout=8) as resp:
             data = json.loads(resp.read().decode("utf-8"))
         _audit("netchat_command.tony_back", {"success": bool(data.get("success"))})
-        return "🤖 Đã đóng trang web — hình thể TONY hiển thị lại trên Pi 5."
+        return "🤖 Đã đóng trang web — hình thể CHERRY hiển thị lại trên Pi 5."
     except Exception as exc:
         return f"⚠️ Không đóng được overlay: {type(exc).__name__}: {exc}"
 
@@ -1538,13 +1550,13 @@ def handle_tony_pi_live(payload: dict[str, Any] | None = None) -> str:
 
 
 def handle_tony_pi_live_off(payload: dict[str, Any] | None = None) -> str:
-    """'tắt camera' — dừng live, màn Pi5 về avatar TONY."""
+    """'tắt camera' — dừng live, màn Pi5 về avatar CHERRY."""
     try:
         ok, msg = _camera_control({"action": "stop_live", "source": "netchat"})
         if not ok:
             return f"⚠️ Không tắt được camera live: {msg}"
         _audit("netchat_command.tony_pi_live_off", {})
-        return "✅ Đã TẮT camera live — màn Pi 5 trở về hình thể TONY."
+        return "✅ Đã TẮT camera live — màn Pi 5 trở về hình thể CHERRY."
     except Exception as exc:
         return f"⚠️ Lỗi tắt camera live: {type(exc).__name__}: {exc}"
 
@@ -1570,7 +1582,7 @@ HANDLERS = {
     "todo": handle_todo_list,
     "stop": handle_stop,
     "freeze": handle_freeze,
-    # (31/10/2026) Điều khiển hình thể TONY/Pi5 qua DM — gọi edge control API thật
+    # (31/10/2026) Điều khiển hình thể CHERRY/Pi5 qua DM — gọi edge control API thật
     "tony_on": handle_tony_on,
     "tony_off": handle_tony_off,
 "tony_hdmi_show": handle_tony_hdmi_show,
@@ -1595,7 +1607,7 @@ HANDLERS = {
     "tony_pi_live": handle_tony_pi_live,
     "tony_pi_live_off": handle_tony_pi_live_off,
     "tony_pi_video": handle_tony_pi_video,
-    # (06/11/2026) TONY Vision — 'phân tích ảnh' (OCR + cấu trúc, tri thức chờ duyệt)
+    # (06/11/2026) CHERRY Vision — 'phân tích ảnh' (OCR + cấu trúc, tri thức chờ duyệt)
     "tony_analyze_image": handle_tony_analyze_image,
     # (01/11/2026, owner-ACK) 'giữ nguyên/tắt cảnh báo' — ghi nhận quyết định
     "ack_alert": handle_ack_alert,
@@ -1610,7 +1622,7 @@ _ARG_INTENTS = {"tony_speak": "speak", "tony_face": "face", "tony_volume": "volu
 _ARG_KEYWORD_RES: list[tuple[str, re.Pattern[str]]] = [
     # (31/10/2026) phát NGUYÊN VĂN qua loa — phải đứng TRƯỚC tony_speak/pc_open:
     ("tony_speak_verbatim", _SPEAK_VERBATIM_RE),
-    ("tony_speak", re.compile(r"^\s*(?:tony\s+nói|tony\s+noi|kêu\s+tony\s+nói|keu\s+tony\s+noi)\s+(?:với\s+anh|voi\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
+    ("tony_speak", re.compile(r"^\s*(?:(?:tony|cherry)\s+nói|(?:tony|cherry)\s+noi|kêu\s+(?:tony|cherry)\s+nói|keu\s+(?:tony|cherry)\s+noi)\s+(?:với\s+anh|voi\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
     # UDC-1 (04/11/2026): relay on/off — PHẢI đứng TRƯỚC pc_open/pc_close vì
     # động từ 'bật/tắt' trùng ('bật rơ le 3' ≠ 'bật <app>')
     ("relay_on", re.compile(r"^\s*(?:bật|bat)\s+(?:rơ\s*le|ro\s*le|relay)\b(.*)$", re.IGNORECASE)),
@@ -1620,13 +1632,13 @@ _ARG_KEYWORD_RES: list[tuple[str, re.Pattern[str]]] = [
     ("pc_open", re.compile(r"^\s*(?:mở|mo|bật|bat|bật\s+lên|bat\s+len|khởi\s+động|khoi\s+dong|open)\s+(.+)$", re.IGNORECASE)),
     ("pc_close", re.compile(r"^\s*(?:đóng|dong|tắt|tat|tắt\s+đi|tat\s+di|close|kill)\s+(.+)$", re.IGNORECASE)),
     # (31/10/2026) Pi5: youtube/tìm kiếm/phát nhạc có đối số
-    ("tony_youtube", re.compile(r"^\s*(?:tony\s+)?(?:mở|mo|bật|bat|xem)\s+(?:youtube|video)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
-    ("tony_websearch", re.compile(r"^\s*(?:tony\s+)?(?:tìm|tim|tra\s+cứu|tra\s+cuu|tìm\s+kiếm|tim\s+kiem)(?:\s+kiếm|\s+giúp\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
-    ("tony_music_play", re.compile(r"^\s*(?:tony\s+)?(?:phát|phat|bật|bat|mở|mo|nghe)\s+(?:nhạc|nhac|bài|bai|bài\s+hát|bai\s+hat)\s*[:：]?\s*(.+)$", re.IGNORECASE)),
+    ("tony_youtube", re.compile(r"^\s*(?:tony|cherry)?\s*\s*(?:mở|mo|bật|bat|xem)\s+(?:youtube|video)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
+    ("tony_websearch", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:tìm|tim|tra\s+cứu|tra\s+cuu|tìm\s+kiếm|tim\s+kiem)(?:\s+kiếm|\s+giúp\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
+    ("tony_music_play", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:phát|phat|bật|bat|mở|mo|nghe)\s+(?:nhạc|nhac|bài|bai|bài\s+hát|bai\s+hat)\s*[:：]?\s*(.+)$", re.IGNORECASE)),
     # (31/10/2026) hiển thị ảnh lên Pi5 — 'N giây' là phần đối số
     ("tony_show_image", re.compile(r"^\s*(?:hiển\s+thị|hien\s+thi)\s+(?:lại\s+|lai\s+)?(?:ảnh|anh)\b.*?\bpi(?:\s*5)?\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     # (31/10/2026) TAI: 'nghe từ pi [N giây]' — thu âm mic Pi5 gửi DM
-    ("tony_pi_listen", re.compile(r"^\s*(?:tony\s+)?(?:nghe|thu\s+âm|thu\s+am|ghi\s+âm|ghi\s+am|lắng\s+nghe|lang\s+nghe)\s+(?:từ|tu|qua)\s+(?:mic\s+)?pi(?:\s*5)?\b(.*)$", re.IGNORECASE)),
+    ("tony_pi_listen", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:nghe|thu\s+âm|thu\s+am|ghi\s+âm|ghi\s+am|lắng\s+nghe|lang\s+nghe)\s+(?:từ|tu|qua)\s+(?:mic\s+)?pi(?:\s*5)?\b(.*)$", re.IGNORECASE)),
 ]
 
 

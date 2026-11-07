@@ -59,12 +59,12 @@ _orig_subprocess_run = subprocess.run
 # (30/10/2026) FIX TỔNG LỚP LỖI UTF-8: mọi process con (netchat_bot.py banner
 # tiếng Việt, learning engine, pypdf/docx extract...) chạy dưới pythonw không
 # console → Windows cp1252 → UnicodeEncodeError giết im lặng toàn bộ pipeline
-# (TONY câm từ 18:09). Ép UTF-8 cho MỌI subprocess.run() của process này.
+# (CHERRY câm từ 18:09 lúc đó — rename 07/11 TONY→CHERRY). Ép UTF-8 cho MỌI subprocess.run() của process này.
 _UTF8_ENV = {"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
 
 # (06/11/2026) FIX NameError: _NO_WIN bị xóa nhầm khi patch 30/10 (17 chỗ gọi
 # vẫn còn) → "Error reading dm messages: name '_NO_WIN' is not defined" CHẾT
-# TOÀN BỘ poll loop — TONY câm hoàn toàn dù heartbeat vẫn LIVE (loop chạy qua
+# TOÀN BỘ poll loop — bot câm hoàn toàn dù heartbeat vẫn LIVE (loop chạy qua
 # except, không crash process). Khôi phục định nghĩa.
 _NO_WIN = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
@@ -162,7 +162,7 @@ CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"  # kênh 'Trợ lý Tony Pham' (đã s
 # Giờ responder theo dõi CẢ HAI nguồn và trả lời đúng nơi owner nhắn.
 DM_CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
 OWNER_USERNAME = "quanpt1"
-CHANNEL_NAME = "Trợ lý Tony Pham"
+CHANNEL_NAME = "Trợ lý Tony Pham"  # (07/11) TÊN KÊNH API THẬT trên NetChat — CHỈ đổi khi owner đổi tên kênh phía NetChat; CHERRY = tên trợ lý, không phải tên kênh.
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
 BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
 CATCHUP_WINDOW_MIN = 720  # (01/11/2026, owner) sau restart/treo: quét lại TẤT CẢ
@@ -1057,7 +1057,7 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
         pass
     except Exception as e:
         print(f"   ⚠️ Command router error: {e}")
-    # (01/11/2026, M4-C ĐÃ DUYỆT) Self-Q&A wired: câu hỏi về bản thân TONY
+    # (01/11/2026, M4-C ĐÃ DUYỆT) Self-Q&A wired: câu hỏi về bản thân CHERRY
     # ("em là ai", "em làm được gì", "hệ thống khỏe không"...) → trả lời TỪ DỮ
     # LIỆU SỐNG (SelfQA: self model + learning checkpoints + candidates + health)
     # thay vì để GLM bịa. Không khớp → None, đi tiếp GLM như cũ.

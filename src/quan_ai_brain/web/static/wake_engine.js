@@ -51,6 +51,9 @@ class WakeWordEngine {
     } catch (err) {
       console.warn("Could not sync wake config from backend, using defaults:", err);
       this.keywords = [
+        { phrase: "Hi CHERRY", enabled: true },
+        { phrase: "Hey Cherry", enabled: true },
+        { phrase: "Cherry ơi", enabled: true },
         { phrase: "Hi TONY", enabled: true },
         { phrase: "Hey Tony", enabled: true },
         { phrase: "Tony ơi", enabled: true },
@@ -260,7 +263,7 @@ class WakeWordEngine {
           this.options.onWakeDetected(match.keyword, match.payload);
         }
 
-        // If user already said their query in the same breath ("Hi Tony hãy lập kế hoạch...")
+        // If user already said their query in the same breath ("Hi Cherry hãy lập kế hoạch...")
         if (match.payload && match.payload.trim().length > 3) {
           this.transitionTo("LISTENING", "Payload extracted from wake utterance");
           this.transitionTo("TRANSCRIBING", "Passing payload to processing");

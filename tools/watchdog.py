@@ -217,7 +217,7 @@ def check_netchat_bot() -> bool:
         return _update_component_state("netchat_bot", False) == "HEALTHY"
     age_seconds = time.time() - log_path.stat().st_mtime
     # (01/11/2026, owner) Responder polls 2s/vòng; 150s không ghi gì = treo/dead
-    # (trước đây 600s — anh phải chờ quá lâu khi Tony bị treo).
+    # (trước đây 600s — anh phải chờ quá lâu khi CHERRY bị treo; rename 07/11).
     alive = age_seconds < 150
     # Lớp 2 (06/11/2026): stdout log có fatal error gần đây (<5 phút) → unhealthy
     if alive:

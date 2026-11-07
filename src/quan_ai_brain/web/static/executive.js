@@ -724,7 +724,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (convWakeOnEntry && wakeEngine) wakeEngine.stop();
           btnConvMode.textContent = "💬 Hội thoại: BẬT";
           btnConvMode.classList.add("active");
-          appendMessage("HỆ THỐNG", "💬 Chế độ hội thoại liên tục ĐÃ BẬT — Anh cứ nói thẳng, không cần gọi 'Tony ơi'. Em trả lời xong sẽ tự nghe tiếp. Nói 'dừng hội thoại' để tắt.", "system");
+          appendMessage("HỆ THỐNG", "💬 Chế độ hội thoại liên tục ĐÃ BẬT — Anh cứ nói thẳng, không cần gọi 'Cherry ơi'. Em trả lời xong sẽ tự nghe tiếp. Nói 'dừng hội thoại' để tắt.", "system");
           updateWakeWordUI("LISTENING");
           startConvListening();
         } else {
@@ -923,7 +923,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const stateMap = {
       DISABLED: { label: "TẮT", badge: "🎙️ Đánh thức: TẮT", badgeClass: "" },
-      STANDBY: { label: "SẴN SÀNG", badge: "👂 Chờ: 'Tony ơi'", badgeClass: "active" },
+      STANDBY: { label: "SẴN SÀNG", badge: "👂 Chờ: 'Cherry ơi'", badgeClass: "active" },
       WAKE_DETECTED: { label: "ĐÃ GỌI!", badge: "⚡ Đã đánh thức!", badgeClass: "listening" },
       LISTENING: { label: "LẮNG NGHE", badge: "🎙️ Đang nghe Anh...", badgeClass: "listening" },
       TRANSCRIBING: { label: "GHI NHẬN", badge: "✍️ Đang ghi nhận...", badgeClass: "listening" },
@@ -3554,7 +3554,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const t = m.create_at ? new Date(m.create_at).toLocaleTimeString("vi-VN") : "";
       const lower = (m.message || "").trim().toLowerCase();
       const isCmd = !isBot && cmds.some(c => lower.startsWith(c));
-      const avatarImg = isBot ? '<img class="netchat-msg-avatar" src="/static/assets/avatar/avatar_v2_portrait.jpg" alt="Tony">' : "";
+      const avatarImg = isBot ? '<img class="netchat-msg-avatar" src="/static/assets/avatar/avatar_v2_portrait.jpg" alt="Cherry">' : "";
       const who = isBot ? "🤖 TRỢ LÝ" : "👑 ANH (quanpt1)";
       const esc = (m.message || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       return `<div class="netchat-msg ${isBot ? "msg-bot" : "msg-owner"}">` +

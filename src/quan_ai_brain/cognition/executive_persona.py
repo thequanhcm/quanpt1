@@ -340,7 +340,7 @@ class ExecutivePersona:
             "   - PC Core: Nền tảng Windows 10 x64, runtime Python 3.11/3.14, suy luận LLM cục bộ Ollama (Qwen2.5), "
             "nhúng vector ngữ nghĩa BGE-M3, cơ sở dữ liệu trí nhớ dài hạn SQLite WAL (brain.db), lập kế hoạch tác vụ DAG.\n"
             "   - Raspberry Pi 5: Giao diện biên (Edge Kiosk), xử lý luồng âm thanh PipeWire/WirePlumber, nhận diện từ khóa "
-            "Wake Word ('Hi Tony', 'Tony ơi'), phát âm TTS tiếng Việt (HoaiMyNeural) và động cơ Lip-Sync viseme Model A.\n\n"
+            "Wake Word ('Hi Cherry', 'Cherry ơi'), phát âm TTS tiếng Việt (HoaiMyNeural) và động cơ Lip-Sync viseme Model A.\n\n"
             "2. Quản trị & Bảo mật (Governance):\n"
             "   - Chính sách ranh giới an toàn R0-R5: R0-R2 tự chủ trong giới hạn; R3-R4 bắt buộc phê duyệt số có chữ ký; "
             "R5 bị chặn cứng ở mức kiến trúc.\n"

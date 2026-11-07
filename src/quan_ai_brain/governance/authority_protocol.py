@@ -93,6 +93,7 @@ CONFLICT_PATTERNS = (
     ("sửa nhật ký kiểm toán", "TAMPER_AUDIT"),
     ("che giấu hành động", "HIDE_ACTION"),
     ("ra lệnh cho tony bỏ qua", "PROMPT_INJECTION_STYLE"),
+    ("ra lệnh cho cherry bỏ qua", "PROMPT_INJECTION_STYLE"),
     ("giả mạo phê duyệt", "FORGE_APPROVAL"),
 )
 

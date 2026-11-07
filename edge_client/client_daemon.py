@@ -126,7 +126,7 @@ def play_audio_on_hardware_speaker(audio_base64: str) -> bool:
 _KIOSK_PROC = None
 # (01/11/2026, owner) STOP trên màn hình = CHỈ thoát giao diện hiển thị
 # (không tắt màn, không emergency) — kiosk_guard đọc flag này để KHÔNG tự dậy
-# lại giao diện; owner gọi lại (nút TONY ƠI / wake word "TONY ơi" / DM) thì mở.
+# lại giao diện; owner gọi lại (nút CHERRY ƠI / wake word "Cherry ơi" / DM) thì mở.
 _KIOSK_CLOSED_BY_OWNER_EPOCH = 0.0
 _KIOSK_CLOSED_LOCK = threading.Lock()
 
@@ -459,7 +459,7 @@ def stop_hdmi_mirror() -> bool:
 # (06/11/2026) Voice/HDMI URL KHÔNG còn hardcode IP — lấy từ config.json
 # (cùng nguồn với kiosk/heartbeat). Root cause thật 06/11: IP Tailscale PC
 # đổi 100.102.120.6 (01/11) → 100.92.219.98, voice loop vẫn bắn vào IP cũ
-# → "TONY ơi" từ Pi5 timeout im lặng. Resolver đọc config mỗi lần gọi
+# → "Cherry ơi" từ Pi5 timeout im lặng. Resolver đọc config mỗi lần gọi
 # (file local ~1KB) + cache phòng đọc lỗi.
 _CORE_BASE_CACHE: str | None = None
 _CORE_BASE_CACHE_AT: float = 0.0
@@ -506,11 +506,11 @@ def _resolve_core_base_url() -> str:
     return _CORE_BASE_CACHE or "http://127.0.0.1:8766"
 
 
-# (01/11/2026, owner) HỘI THOẠI LIÊN TỤC: sau wake, TONY chào NGAY
+# (01/11/2026, owner) HỘI THOẠI LIÊN TỤC: sau wake, CHERRY chào NGAY
 # "Dạ, em nghe anh ạ." (audio cục bộ, không đợi PC) rồi LẮNG NGHE LIÊN TỤC
 # theo VAD — nói tới đâu thu tới đó → gửi não PC STT + xử lý → trả lời giọng
 # → nghe tiếp... như hội thoại 2 người. Nghỉ khi: im lặng ~30s, owner nói
-# "nghỉ đi/tạm biệt", hoặc hết 15 phút/phiên (gọi "TONY ơi" là mở phiên mới).
+# "nghỉ đi/tạm biệt", hoặc hết 15 phút/phiên (gọi "Cherry ơi" là mở phiên mới).
 _VOICE_CONVO_ACTIVE = threading.Lock()  # 1 phiên hội thoại duy nhất
 _VAD_CHUNK_SEC = 0.2          # mỗi block PCM VAD 0.2s
 _VAD_RMS_SPEAK = 280.0        # ngưỡng MỜI câu nói (đo thật 01/11: tiếng qua
@@ -1429,7 +1429,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                 return
 
             if action == "audio":
-                # (31/10/2026) TAI của TONY: thu âm mic thuần N giây (pw-record
+                # (31/10/2026) TAI của CHERRY: thu âm mic thuần N giây (pw-record
                 # PipeWire target 75, không đụng wake engine) → tony_media/audio/.
                 out_path = self.MEDIA_AUDIO_DIR / f"audio_{ts}.wav"
                 out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1819,7 +1819,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         if action == "close_web_overlay":
             # (31/10/2026) Đóng overlay web (nếu đang mở) — kiosk hiển thị lại
-            # hình thể TONY. to_kiosk_dict trả navigation_url="" → kiosk.js remove.
+            # hình thể CHERRY. to_kiosk_dict trả navigation_url="" → kiosk.js remove.
             with self.daemon_state.lock:
                 self.daemon_state.pending_navigation = {"url": ""}
             self._send_json({"success": True, "action": "close_web_overlay"})
@@ -1827,7 +1827,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         if action == "wake_by_voice":
             # (31/10/2026) Wake word service (vosk ngoài kiosk) nghe thấy
-            # "TONY ơi" → bật màn hình + launch kiosk + trạng thái chờ nói.
+            # "Cherry ơi" → bật màn hình + launch kiosk + trạng thái chờ nói.
             # (01/11/2026) owner gọi lại → xoá cờ "đóng theo yêu cầu" →
             # guard/kiosk hoạt động bình thường.
             _set_kiosk_closed_by_owner(False)
@@ -1895,7 +1895,7 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             # (01/11/2026, owner) STOP = CHỈ thoát giao diện hiển thị:
             # đóng chromium kiosk, GIỮ màn hình bật, không emergency, avatar
             # không rơi OFFLINE/STOPPED (daemon vẫn ACTIVE). Guard không tự
-            # dậy lại trong 15 phút; owner gọi lại (TONY ƠI / wake word) sẽ mở.
+            # dậy lại trong 15 phút; owner gọi lại (CHERRY ƠI / wake word) sẽ mở.
             _set_kiosk_closed_by_owner(True)
             with self.daemon_state.lock:
                 self.daemon_state.avatar_state = "IDLE"

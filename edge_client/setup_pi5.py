@@ -302,7 +302,7 @@ def main() -> int:
         "display_orientation": base_cfg.get("display_orientation", "landscape"),
         "screen_width": base_cfg.get("screen_width", 1280),
         "screen_height": base_cfg.get("screen_height", 720),
-        "wake_word": base_cfg.get("wake_word", "TONY ơi"),
+        "wake_word": base_cfg.get("wake_word", "Cherry ơi"),  # (07/11) rename Cherry ơi
         "follow_up_window_sec": base_cfg.get("follow_up_window_sec", 15.0),
         "core_version": base_cfg.get("core_version", "0.2.0"),
         "edge_client_version": base_cfg.get("edge_client_version", "0.2.0"),
