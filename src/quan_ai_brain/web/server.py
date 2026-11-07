@@ -28,6 +28,7 @@ from quan_ai_brain.cognition import (
 )
 from quan_ai_brain.cognition.session_memory import SessionMemoryManager
 from quan_ai_brain.cognition.memory_review_cycle import MemoryReviewCycle
+from quan_ai_brain.cognition.memory_review_session import MemoryReviewSession
 from quan_ai_brain.memory.deep_memory import DeepMemoryStore
 from quan_ai_brain.core.autonomic import GLOBAL_AUTONOMIC_SYSTEM
 
@@ -696,6 +697,16 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_deep_timeline()
             return
 
+        # V10 (07/11/2026): Owner-Gated Memory Review — panel "Sàng Lọc Trí Nhớ".
+        # (Trước đó 2 route GET này thiếu → 404 HTML → panel báo "Lỗi tải: <!DOCTYPE".)
+        if path == "/api/memory/review/current":
+            self._handle_api_review_current()
+            return
+
+        if path == "/api/memory/review/session":
+            self._handle_api_review_session(parsed.query)
+            return
+
         if path == "/api/executive/overview":
             self._handle_api_executive_overview()
             return
@@ -1042,6 +1053,23 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/memory/deep/review":
             self._handle_api_deep_review(body)
+            return
+
+        # V10 (07/11/2026): Owner-Gated Memory Review — lệnh máy (không qua LLM).
+        if path == "/api/memory/review/start":
+            self._handle_api_review_start(body)
+            return
+
+        if path == "/api/memory/review/respond":
+            self._handle_api_review_respond(body)
+            return
+
+        if path == "/api/memory/review/confirm":
+            self._handle_api_review_confirm(body)
+            return
+
+        if path == "/api/memory/review/undo":
+            self._handle_api_review_undo(body)
             return
 
         if path == "/api/plan":
@@ -1707,6 +1735,130 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_json({"success": True, "review": result})
         except Exception as exc:
             self._send_error_json(f"Deep memory error: {exc}", 500)
+
+    # -------------------------------------------------- V10: Owner-Gated Memory Review
+    # (07/11/2026) 5 handler cho panel "Sàng Lọc Trí Nhớ (Owner-Gated)" — cầu nối
+    # trực tiếp tới MemoryReviewSession (backend đã UNIT_TESTED 16 test, trước đó
+    # chưa có route nào → frontend nhận 404 HTML → "Lỗi tải: <!DOCTYPE").
+    # Owner-gated theo thiết kế V10: phân tích CHỈ ĐỌC, ghi chỉ khi
+    # preview + confirm lần 2; undo không phá dữ liệu.
+
+    def _open_review_session(self):
+        store = self._open_deep_store()
+        return store, MemoryReviewSession(store)
+
+    def _handle_api_review_start(self, body: dict) -> None:
+        try:
+            scope_limit = min(max(int(body.get("scope_limit", 20)), 1), 200)
+        except (TypeError, ValueError):
+            scope_limit = 20
+        try:
+            store, review = self._open_review_session()
+            try:
+                result = review.start()
+                self._send_json({"success": True, **result})
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error_json(f"Review session error: {exc}", 500)
+
+    def _handle_api_review_current(self) -> None:
+        try:
+            store, review = self._open_review_session()
+            try:
+                session = review.find_open_session()
+                self._send_json({"success": True, "session": session})
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error_json(f"Review session error: {exc}", 500)
+
+    def _handle_api_review_session(self, query_str: str) -> None:
+        params = urllib.parse.parse_qs(query_str)
+        session_id = params.get("session_id", [""])[0].strip()
+        if not session_id:
+            self._send_error_json("session_id is required", 400)
+            return
+        try:
+            store, review = self._open_review_session()
+            try:
+                data = review.get_session(session_id)
+                if data is None:
+                    self._send_json({"success": False, "error": f"session not found: {session_id}"})
+                    return
+                self._send_json({"success": True, **data})
+            finally:
+                store.close()
+        except Exception as exc:
+            self._send_error_json(f"Review session error: {exc}", 500)
+
+    def _handle_api_review_respond(self, body: dict) -> None:
+        session_id = str(body.get("session_id", "")).strip()
+        target_type = str(body.get("target_type", "")).strip()
+        target_id = body.get("target_id")
+        response_kind = str(body.get("kind", body.get("response_kind", ""))).strip()
+        text = str(body.get("text", "")).strip()
+        if not session_id or not target_type or not response_kind:
+            self._send_error_json("session_id, target_type, kind là bắt buộc", 400)
+            return
+        try:
+            store, review = self._open_review_session()
+            try:
+                result = review.respond(session_id, target_type, target_id, response_kind, text)
+                self._send_json({"success": True, "response": result})
+            finally:
+                store.close()
+        except ValueError as exc:
+            self._send_json({"success": False, "error": str(exc)})
+        except Exception as exc:
+            self._send_error_json(f"Review session error: {exc}", 500)
+
+    def _handle_api_review_confirm(self, body: dict) -> None:
+        session_id = str(body.get("session_id", "")).strip()
+        change_id = str(body.get("change_id", "")).strip()
+        preview_only = bool(body.get("preview_only", False))
+        confirm = bool(body.get("confirm", False))
+        if not session_id or not change_id:
+            self._send_error_json("session_id, change_id là bắt buộc", 400)
+            return
+        try:
+            store, review = self._open_review_session()
+            try:
+                if preview_only:
+                    preview = review.preview_change(session_id, change_id)
+                    self._send_json({"success": True, "preview": preview})
+                else:
+                    result = review.confirm_and_apply(session_id, change_id, confirm)
+                    self._send_json({"success": True, **result})
+            finally:
+                store.close()
+        except ValueError as exc:
+            self._send_json({"success": False, "error": str(exc)})
+        except Exception as exc:
+            self._send_error_json(f"Review session error: {exc}", 500)
+
+    def _handle_api_review_undo(self, body: dict) -> None:
+        session_id = str(body.get("session_id", "")).strip()
+        change_id = str(body.get("change_id", "")).strip()
+        if not session_id or not change_id:
+            self._send_error_json("session_id, change_id là bắt buộc", 400)
+            return
+        try:
+            store, review = self._open_review_session()
+            try:
+                # (07/11/2026) Frontend dùng nút "✖ Bỏ" cho change PENDING — map:
+                # PENDING/PREVIEWED → cancel_change; APPLIED → undo_change (hoàn tác).
+                try:
+                    result = review.undo_change(session_id, change_id)
+                except ValueError:
+                    result = review.cancel_change(session_id, change_id)
+                self._send_json({"success": True, **result})
+            finally:
+                store.close()
+        except ValueError as exc:
+            self._send_json({"success": False, "error": str(exc)})
+        except Exception as exc:
+            self._send_error_json(f"Review session error: {exc}", 500)
 
     def _handle_api_autonomic_status(self) -> None:
         """Return the latest autonomic health report, active pains, and hardware organ audits."""
@@ -4298,7 +4450,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         )
                     except Exception:
                         pass  # fail-closed
-                # UDR-1: thiết bị cắm/rút Pi5 → lưu + DM TONY cho owner
+                # UDR-1: thiết bị cắm/rút Pi5 → lưu + DM CHERRY cho owner (rename 07/11)
                 if etype == "DEVICE_ADDED":
                     try:
                         _GLOBAL_DEVICE_STORE.record_added(device_id, ev)

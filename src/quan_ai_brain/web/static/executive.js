@@ -4500,13 +4500,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn = $("btn-deep-owner-review");
     if (btn) { btn.disabled = true; btn.textContent = "⏳ Đang phân tích (chỉ đọc)…"; }
     try {
-      const res = await fetch("/api/chat", {
+      // (07/11/2026) FIX: gọi thẳng endpoint review/start (lệnh máy, không qua LLM).
+      // Trước đó gửi /api/chat "SÀNG LỌC" → LLM trả lời tự do, không tạo session.
+      const res = await fetch("/api/memory/review/start", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: "SÀNG LỌC", session_id: "executive_review_ui" }),
+        body: JSON.stringify({ scope_limit: 20 }),
       });
       const data = await res.json();
-      if (btn) btn.textContent = data.success ? "✅ Đã có kết quả" : "❌ Lỗi";
-    } catch { if (btn) btn.textContent = "❌ Lỗi"; }
+      if (btn) btn.textContent = data.success ? "✅ Đã có kết quả" : `❌ ${data.error || "Lỗi"}`;
+    } catch (err) { if (btn) btn.textContent = "❌ Lỗi"; }
     if (btn) setTimeout(() => { btn.disabled = false; btn.textContent = "+ Sàng Lọc Trí Nhớ"; }, 2500);
     await loadCurrent();
   }
