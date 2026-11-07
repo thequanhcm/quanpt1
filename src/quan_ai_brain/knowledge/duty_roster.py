@@ -63,6 +63,21 @@ def _parse_marks(raw: str) -> set[str]:
             out.add(ch)
     return out
 
+def _day_column(sh, day: int) -> int | None:
+    """Tìm cột của ngày `day` bằng RÀ SOÁT HEADER HÀNG 4 (A4) — không cộng tĩnh.
+
+    Quy ước 'col = 4 + (day-1)' chỉ đúng khi header liên tục 1..31 từ cột E;
+    nếu sheet chèn/ẩn cột hoặc lệch cấu trúc sẽ đọc SAI CỘT → trả nhầm người.
+    Owner yêu cầu (07/11): luôn đối chiếu giá trị số ngày ở hàng A4.
+    """
+    for c in range(4, sh.ncols):
+        try:
+            if int(float(sh.cell_value(3, c))) == day:
+                return c
+        except (TypeError, ValueError):
+            continue
+    return None
+
 def get_duty_for_date(day: int, month: int, year: int) -> dict[str, Any]:
     """Trả {'status','day_shift':[...],'night_shift':[...],'missing':{name:chức_vụ...}} — mỗi tên kèm chức vụ+điện thoại."""
     f = find_roster_file(month, year)
@@ -78,10 +93,10 @@ def get_duty_for_date(day: int, month: int, year: int) -> dict[str, Any]:
     if not (1 <= day <= 31):
         return {"status": "BAD_DATE", "message": f"Ngày không hợp lệ: {day}"}
 
-    # Cột ngày d = 4 + (d-1)
-    col = 4 + (day - 1)
-    if col >= sh.ncols:
-        return {"status": "NO_COLUMN", "message": f"Sheet {month:02d}.{year} không có cột ngày {day}"}
+    # Cột ngày d: rà soát header hàng 4 (A4) — dùng hàm dùng chung
+    col = _day_column(sh, day)
+    if col is None:
+        return {"status": "NO_COLUMN", "message": f"Sheet {month:02d}.{year} không có cột ngày {day} ở hàng 4 (A4)"}
 
     day_shift: list[dict[str, str]] = []
     night_shift: list[dict[str, str]] = []
@@ -217,7 +232,7 @@ def _load_sheet_people(filename: str, sheet: str, day: int) -> dict[str, Any]:
         sh = book.sheet_by_name(sheet)
     except Exception as e:
         return {"status": "READ_ERROR", "message": f"Lỗi đọc {filename}: {e}"}
-    col = 4 + (day - 1)
+    col = _day_column(sh, day)
     people: list[dict[str, str]] = []
     for r in range(4, sh.nrows):
         name = _cell(sh, r, 1)
