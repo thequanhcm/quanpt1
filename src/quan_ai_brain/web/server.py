@@ -310,6 +310,12 @@ _GLOBAL_ROLE_ORCHESTRATOR = ExecutiveRoleOrchestrator(edge_telemetry=_GLOBAL_EDG
 # đang giao tiếp hiển thị bằng TIẾNG ANH. Dịch VI→EN bằng Google gtx endpoint
 # (free, PC được phép — Pi bị block) + cache theo text để không gọi mỗi heartbeat.
 _TRANSLATE_EN_CACHE: dict[str, str] = {}
+# (07/11/2026) Negative-cache: Google gtx trả 429 Too Many Requests sau ~500ms
+# mỗi lần → exception → không cache → MỖI heartbeat Pi5 (1s/lần) lại chờ Google
+# ~500ms → RTT giả 400-600ms → Pi5 DEGRADED + alert "KÊNH TRUYỀN GIÁN ĐOẠN"
+# spam. Cache cả kết quả THẤT BẠI (giữ text gốc) theo TTL để không retry mỗi request.
+_TRANSLATE_FAIL_CACHE: dict[str, float] = {}
+_TRANSLATE_FAIL_TTL_SEC = 600.0
 
 
 def _translate_to_english(text: str) -> str:
@@ -319,6 +325,11 @@ def _translate_to_english(text: str) -> str:
         return ""
     if clean in _TRANSLATE_EN_CACHE:
         return _TRANSLATE_EN_CACHE[clean]
+    # Negative-cache hit: lần gọi gần đây với text này đã fail (429...) —
+    # trả text gốc NGAY, không chờ Google thêm lần nữa (block heartbeat).
+    fail_at = _TRANSLATE_FAIL_CACHE.get(clean)
+    if fail_at is not None and (time.time() - fail_at) < _TRANSLATE_FAIL_TTL_SEC:
+        return clean
     try:
         import urllib.parse
         import urllib.request
@@ -336,6 +347,10 @@ def _translate_to_english(text: str) -> str:
         _TRANSLATE_EN_CACHE[clean] = translated
         return translated
     except Exception:
+        # (07/11/2026) Ghi negative-cache — không retry Google mỗi heartbeat.
+        if len(_TRANSLATE_FAIL_CACHE) > 200:
+            _TRANSLATE_FAIL_CACHE.clear()
+        _TRANSLATE_FAIL_CACHE[clean] = time.time()
         return clean
 
 
@@ -1394,16 +1409,26 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
              f"http_request:{self.path}")
 
         # 2. Ollama daemon — live TCP probe, UNKNOWN on probe infrastructure error
+        # (07/11/2026, owner) Ollama đã gỡ khỏi máy (chat dùng GLM Cloud/NetMind).
+        # Probe refused (RST ~0ms) khi có listener cũ, nhưng KHÔNG có listener → Windows
+        # drops SYN → connect treo đủ timeout 1.5s MỖI REQUEST → /api/health + heartbeat
+        # Pi5 luôn chậm 1.5s → RTT giả 549-1500ms → Pi5 DEGRADED, alert "KÊNH TRUYỀN
+        # GIÁN ĐOẠN" spam. Skip probe khi OLLAMA_DISABLED (mặc định True) — flip env
+        # OLLAMA_DISABLED=0 nếu dùng lại Ollama local.
         ollama_alive = False
         probe_error: str | None = None
-        try:
-            ollama_alive = socket.create_connection(("127.0.0.1", 11434), timeout=1.5) is not None
-        except Exception as exc:
-            probe_error = type(exc).__name__
-        _add("ollama_daemon", ollama_alive,
-             "HEALTHY" if ollama_alive else "OFFLINE",
-             "tcp_probe:127.0.0.1:11434",
-             f"tcp_probe_result:{ollama_alive}" + (f":{probe_error}" if probe_error else ""))
+        if os.environ.get("OLLAMA_DISABLED", "1") != "0":
+            _add("ollama_daemon", False, "DISABLED", "env:OLLAMA_DISABLED",
+                 "probe_skipped:ollama_disabled_by_owner")
+        else:
+            try:
+                ollama_alive = socket.create_connection(("127.0.0.1", 11434), timeout=1.5) is not None
+            except Exception as exc:
+                probe_error = type(exc).__name__
+            _add("ollama_daemon", ollama_alive,
+                 "HEALTHY" if ollama_alive else "OFFLINE",
+                 "tcp_probe:127.0.0.1:11434",
+                 f"tcp_probe_result:{ollama_alive}" + (f":{probe_error}" if probe_error else ""))
 
         # 3. brain.db — real row counts, not configuration claims
         try:
