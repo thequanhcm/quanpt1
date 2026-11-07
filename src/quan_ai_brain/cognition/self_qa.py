@@ -110,12 +110,17 @@ class SelfQA:
 
     def _answer_identity(self) -> str:
         m = self._live_model()
-        i, d = m["identity"], m["deployment"]
+        i = m["identity"]
+        # (07/11/2026, owner) Mẫu câu thân mật: KHÔNG nêu hostname/IP của PC
+        # và Pi5 ở câu giới thiệu — chỉ nói "Em là CHERRY ... Em có N năng lực
+        # đã kiểm chứng." rồi nêu chi tiết năng lực ngay sau đó. Chi tiết cấu
+        # hình máy vẫn trả khi anh hỏi "em chạy ở đâu" (_answer_location).
+        verified = m.get("verified_capabilities") or []
+        names = "; ".join(str(x) for x in verified[:5])
+        extra = f" …còn {len(verified) - 5} nữa" if len(verified) > 5 else ""
         return (f"Em là {i['assistant_name']}, trợ lý điều hành số của anh "
-                f"{i['owner']}. Em chạy trên PC {d['core_location'].split('(')[0].strip()} "
-                f"và {d['edge_location'].split('(')[0].strip()}. "
-                f"Em có {(m.get('verified_capabilities') or []).__len__()} năng lực "
-                f"đã kiểm chứng — anh hỏi \"em làm được gì\" để nghe chi tiết nhé.")
+                f"{i['owner']}. Em có {len(verified)} năng lực đã kiểm chứng: "
+                f"{names}{extra}.")
 
     def _answer_capabilities(self) -> str:
         m = self._live_model()
