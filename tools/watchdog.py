@@ -112,7 +112,9 @@ CONFIG.setdefault(
 )
 CONFIG.setdefault("max_ollama_revival_per_hour", 3)
 CONFIG.setdefault("netchat_responder_log", os.path.join(BASE_DIR, "logs", "netchat_responder_heartbeat.log"))
-CONFIG.setdefault("learning_daemon_log", os.path.join(BASE_DIR, "logs", "learning_daemon.log"))
+# (07/11/2026) daemon ghi stdout vào learning_daemon_stdout.log — file learning_daemon.log
+# cũ 11 ngày không bao giờ cập nhật → watchdog respawn learning vô hạn (5 instance song song).
+CONFIG.setdefault("learning_daemon_log", os.path.join(BASE_DIR, "logs", "learning_daemon_stdout.log"))
 CONFIG.setdefault("disk_free_min_percent", 10.0)
 CONFIG.setdefault("max_component_fail_streak", 3)  # circuit breaker threshold
 CONFIG.setdefault("max_daemon_restart_per_hour", 5)  # Sprint 7 (b): cap giống server

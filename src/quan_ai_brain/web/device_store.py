@@ -89,6 +89,12 @@ class DeviceStore:
                 " name=excluded.name",
                 (fp, bus, str(dev.get("dev_id", ""))[:80], name, vid_pid,
                  now, now, meta))
+        # (07/11/2026, owner) NGỪNG DM '🔌 Đã kết nối ... — lan': host LAN/IP
+        # lên mạng KHÔNG phải thiết bị vật lý cắm/rút — spam kênh DM owner
+        # (ảnh owner 16:4x: 3 tin liên tiếp trong 7s). Vẫn lưu DB cho dashboard;
+        # chỉ thiết bị bus thật (usb/hid/...) mới được DM.
+        if bus == "lan":
+            return {"stored": True, "dm": {"sent": False, "reason": "bus_lan_no_dm"}}
         dm = self._maybe_send(
             f"🔌 Đã kết nối: {name}" +
             (f" ({vid_pid})" if vid_pid else "") +
@@ -111,6 +117,10 @@ class DeviceStore:
                 (now, device_id, fp, bus, desc, "", "REMOVED", "{}"))
             con.execute(
                 "DELETE FROM edge_device_current WHERE fingerprint = ?", (fp,))
+        # (07/11/2026, owner) NGỪNG DM '⚠️ Mất kết nối ... — lan' cùng lý do
+        # record_added: host LAN/IP không phải thiết bị vật lý — chỉ lưu DB.
+        if bus == "lan":
+            return {"stored": True, "dm": {"sent": False, "reason": "bus_lan_no_dm"}}
         dm = self._maybe_send(
             f"⚠️ Mất kết nối: {desc} | {now[11:19]} UTC",
             key=f"REMOVED:{fp}")
