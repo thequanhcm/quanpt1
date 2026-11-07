@@ -110,7 +110,14 @@ def ingest_document(engine: KnowledgeIngestionEngine, file_path: Path, source_ty
         # For Python: extract docstrings
         elif file_path.suffix == ".py":
             docstrings = re.findall(r'"""(.*?)"""', content, re.DOTALL)
-            statements.extend([d.split("\n")[0].strip() for d in docstrings[:5]])  # First line of each docstring
+            # (07/11/2026) FIX: docstring mở đầu bằng dòng trống (vd '"""\nCLI ...')
+            # trước đây lấy dòng đầu = '' → engine.ingest raise ValueError
+            # 'Content must be non-empty' ngập log (142k dòng Failed). Giờ lấy
+            # dòng đầu tiên KHÔNG RỖNG, và bỏ qua statement rỗng.
+            for d in docstrings[:5]:
+                first_line = next((ln.strip() for ln in d.split("\n") if ln.strip()), "")
+                if first_line:
+                    statements.append(first_line)
 
         # For config files: extract key-value pairs
         elif file_path.name == "pyproject.toml":
@@ -123,6 +130,8 @@ def ingest_document(engine: KnowledgeIngestionEngine, file_path: Path, source_ty
 
         ingested = 0
         for stmt in statements[:5]:  # Max 5 facts per file
+            if not stmt.strip():
+                continue  # (07/11/2026) guard: statement rỗng → skip, không raise
             engine.ingest(
                 content=stmt,
                 source_type=source_type,
