@@ -48,20 +48,23 @@ SYSTEM_CAPABILITIES: list[SystemCapability] = [
         name="Trí Nhớ Dài Hạn (Long-Term Memory)",
         description="Lưu trữ và truy xuất bền vững các sự kiện, sở thích, quy trình và tri thức vào SQLite WAL.",
         domain="Memory & Knowledge",
-        status=CapabilityStatus.IMPLEMENTED_UNTESTED,
+        status=CapabilityStatus.VERIFIED_ACTIVE,
         risk_level=0,
         dependencies=("data/brain.db", "MemoryStore"),
-        evidence_notes="Code implemented (sqlite_store.py 523 lines); DB tables exist but 0 episodes/memories/candidates — E2E test pending Sprint 3",
+        evidence_notes=( "(06/11) LIVE: episodes 2.975, semantic 5.052 đang ghi sống; "
+                        "xóa trí nhớ hard-delete qua dashboard E2E POST→DELETE→404; "
+                        "tests 51/51 gồm delete_memory_roundtrip."),
     ),
     SystemCapability(
         capability_id="local_llm_inference",
-        name="Suy Luận AI Cục Bộ (Local Ollama Engine)",
-        description="Giao tiếp với mô hình AI cục bộ qwen2.5:7b và qwen2.5:1.5b trên máy cá nhân không gửi dữ liệu ra ngoài.",
+        name="Suy Luận AI (NetMind Cloud GLM-5.3-Flash + Ollama Local)",
+        description="Chat chính qua NetMind Cloud GLM-5.3-Flash (responder L867); Ollama qwen2.5:7b dự phòng offline/khi cần riêng tư trên máy cá nhân.",
         domain="Cognitive Inference",
         status=CapabilityStatus.VERIFIED_ACTIVE,
         risk_level=0,
-        dependencies=("http://127.0.0.1:11434", "OllamaClient"),
-        evidence_notes="Active on loopback with <1ms pre-flight socket probe",
+        dependencies=("NetMind Cloud API", "http://127.0.0.1:11434 (optional)", "OllamaClient"),
+        evidence_notes=("(06/11) E2E LLM 2.7s qua NetMind Cloud GLM-5.3-Flash; "
+                        "Ollama 11434 hiện KHÔNG chạy trên PC — chỉ bật khi cần offline."),
     ),
     SystemCapability(
         capability_id="safe_task_planning",
@@ -136,6 +139,42 @@ SYSTEM_CAPABILITIES: list[SystemCapability] = [
         risk_level=2,
         dependencies=("IntegrationRegistry", "SystemTelemetryConnector", "ResultVerifier", "SafeToolSandbox"),
         evidence_notes="Verified by 20 acceptance tests; bounded autonomy A0-A3 active",
+    ),
+    SystemCapability(
+        capability_id="edge_embodiment_pi5",
+        name="Hình Thể Số Pi5 — Kết Nối LAN-first, Kiosk Avatar, Wake Voice, Camera (Edge Embodiment)",
+        description="PC↔Pi5 LAN/WiFi-first (mesh/BT dự phòng), HMAC đồng bộ; kiosk avatar 7\" lip-sync FPS 24/18/12; wake 'CHERRY ơi' offline Vosk matcher siết false-positive; camera IMX708 chụp ảnh qua DM (media-only); panel sức khỏe Pi5 thời gian thực (Edge Agent V41).",
+        domain="Edge Embodiment",
+        status=CapabilityStatus.VERIFIED_ACTIVE,
+        risk_level=1,
+        dependencies=("edge_client/client_daemon.py", "edge_client/edge_agent.py", "wake_word_service.py", "kiosk.js"),
+        evidence_notes=("(06/11) LIVE: heartbeat READY RTT 28-35ms misses=0; LAN-first "
+                        "selector+resolver commit 61782fb; health panel commit 4ecbf47; "
+                        "avatar e89866f CPU 0.3-0.5%; wake 22 case test sau siết matcher; "
+                        "camera IMX708 detected; HDMI mirror chưa xong (labwc từ chối "
+                        "enable HDMI-A-2 — báo cáo HDMI_MIRROR_BUG_20261106)."),
+    ),
+    SystemCapability(
+        capability_id="netchat_dm_channel",
+        name="Kênh DM NetChat 2 Chiều 4 Tầng (DM 100% Garantee)",
+        description="DM bot_tony nhận/gửi mọi tin owner qua 4 tầng bảo đảm: poll 10s → heartbeat → watchdog → catchup 720'; self-filter bot; greeting 2 dòng; lệnh điều khiển PC+Pi5 qua command center với phê duyệt DM 2 bước.",
+        domain="Owner Channel",
+        status=CapabilityStatus.VERIFIED_ACTIVE,
+        risk_level=1,
+        dependencies=("tools/netchat_auto_responder.py", "tools/netchat_command_center.py", "bot_tony mwp3nk3ciprjjr4hdmcoqgk6jr"),
+        evidence_notes=("(06/11) LIVE: 476 tin 0 pending; greeting 2 dòng 38/38; "
+                        "media-only DM 5680fb7; audit log ghi nhận lệnh DM."),
+    ),
+    SystemCapability(
+        capability_id="speech_learning_quarantine",
+        name="Học Văn Phong Từ Hội Thoại Giọng Nói Thật (Speech Corpus Learning — Quarantined)",
+        description="Kéo hội thoại Vosk 24h từ Pi5 → lọc noise/độ dài/trùng → 516 câu quarantined trong candidate_knowledge chờ owner duyệt; chưa nối vào prompt giọng nói (đề xuất A: few-shot qua Phase F).",
+        domain="Evolution & Learning",
+        status=CapabilityStatus.IMPLEMENTED_UNTESTED,
+        risk_level=1,
+        dependencies=("tools/speech_corpus.py", "candidate_knowledge"),
+        evidence_notes=("(06/11) journal 1.242 dòng → 674 đạt → 516 quarantined "
+                        "(158 trùng); commit 29c8fe6; chưa E2E nối vào prompt."),
     ),
 ]
 
