@@ -1,6 +1,25 @@
 /**
  * QUAN AI BRAIN — Executive Consultation & Cockpit Script (Port 8766)
  */
+
+/* (07/11/2026, owner) Tab phản chiếu trạng thái chức năng: chức năng kích hoạt → tab sáng
+   (chấm xanh), ngược lại tab mờ. Helper global để mọi scope (IIFE workbench/deep) gọi được. */
+window.updateTabActivation = function (tabId, active, label) {
+  try {
+    const btn = document.querySelector(`.nav-tab[data-tab="${tabId}"]`);
+    if (!btn) return;
+    btn.classList.toggle("tab-on", !!active);
+    btn.classList.toggle("tab-off", !active);
+    let dot = btn.querySelector(".tab-state-dot");
+    if (!dot) {
+      dot = document.createElement("span");
+      dot.className = "tab-state-dot";
+      btn.prepend(dot);
+    }
+    if (label) btn.title = label;
+  } catch (err) { console.error("updateTabActivation:", err); }
+};
+
 document.addEventListener("DOMContentLoaded", () => {
   // Navigation tabs
   const tabs = document.querySelectorAll(".nav-tab");
@@ -173,6 +192,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const tbody = document.getElementById("capabilities-tbody");
       if (!tbody || !data.capabilities) return;
+      const verifiedCount = (data.capabilities || []).filter(c => c.status === "VERIFIED_ACTIVE").length;
+      window.updateTabActivation("tab-persona", verifiedCount > 0,
+        verifiedCount > 0 ? `Nhân Sự Số: ${verifiedCount} năng lực đã kiểm chứng` : "Nhân Sự Số: chưa có năng lực kiểm chứng");
 
       tbody.innerHTML = "";
       data.capabilities.forEach(cap => {
@@ -214,6 +236,8 @@ document.addEventListener("DOMContentLoaded", () => {
       const pendingCount = (data.tickets || []).filter(t => t.status === "PENDING_REVIEW").length;
       const counterBadge = document.getElementById("badge-consultation-counter");
       if (counterBadge) counterBadge.textContent = pendingCount;
+      window.updateTabActivation("tab-consultation", pendingCount > 0,
+        pendingCount > 0 ? `Tham vấn & Duyệt: ${pendingCount} phiếu chờ anh` : "Tham vấn & Duyệt: không có phiếu chờ");
       const statusPending = document.getElementById("status-pending-count");
       if (statusPending) statusPending.textContent = `${pendingCount} phiếu`;
 
@@ -339,6 +363,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const listEl = document.getElementById("learning-reports-list");
       if (!listEl || !data.reports) return;
+      const nReports = (data.reports || []).length;
+      window.updateTabActivation("tab-learning", nReports > 0,
+        nReports > 0 ? `Báo Cáo Tự Học: ${nReports} báo cáo` : "Báo Cáo Tự Học: chưa có báo cáo");
+      // (07/11/2026, owner) panel Tự Học mờ khi chưa có kỳ tự học nào
+      const histCard = listEl.closest(".card");
+      if (histCard) {
+        histCard.classList.toggle("panel-off", nReports === 0);
+        histCard.title = nReports > 0 ? `Tự học: ${nReports} kỳ báo cáo` : "Tự học: chưa có kỳ nào — bấm 'Kích Hoạt Chu Kỳ Tự Học Ngay'";
+      }
+      const detailCard = document.getElementById("learning-report-detail-view");
+      if (detailCard) detailCard.classList.toggle("panel-off", nReports === 0);
 
       listEl.innerHTML = "";
       data.reports.forEach((rep, idx) => {
@@ -2501,6 +2536,8 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function updateEmbodimentTabStatus(data, isOnline) {
+    window.updateTabActivation("tab-pi5-embodiment", !!isOnline, isOnline ? "Hình thể Pi 5: ONLINE" : "Hình thể Pi 5: OFFLINE");
+    window.updateTabActivation("tab-edge-sync", !!isOnline, isOnline ? "Đồng bộ Pi 5: LIVE" : "Đồng bộ Pi 5: MẤT KẾT NỐI");
     const tabEmbodimentBadge = document.getElementById("badge-tab-embodiment-state");
     const embodimentPill = document.getElementById("badge-embodiment-pill");
     const liveStateBadge = document.getElementById("embodiment-live-state-badge");
@@ -2626,9 +2663,28 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadAudioStatus() {
       try {
         const res = await fetch("/api/executive/edge/audio/status", { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          // (07/11/2026, owner) không lấy được trạng thái → panel mờ (không tươi giả)
+          const audioCard = document.getElementById("card-remote-audio");
+          if (audioCard) {
+            audioCard.classList.add("panel-off");
+            audioCard.title = "Âm thanh Pi 5: KHÔNG LẤY ĐƯỢC TRẠNG THÁI";
+          }
+          return;
+        }
         const data = await res.json();
-        if (!data.success) return;
+        if (!data.success) {
+          const audioCard = document.getElementById("card-remote-audio");
+          if (audioCard) audioCard.classList.add("panel-off");
+          return;
+        }
+        // (07/11/2026, owner) panel audio phản chiếu trạng thái: reachable mới sáng
+        const audioCard2 = document.getElementById("card-remote-audio");
+        if (audioCard2) {
+          const audioActive = data.reachable !== false && data.mic_enabled !== false;
+          audioCard2.classList.toggle("panel-off", !audioActive);
+          audioCard2.title = audioActive ? "Âm thanh Pi 5: đang hoạt động" : "Âm thanh Pi 5: MIC TẮT hoặc mất kết nối";
+        }
 
         const devEl = document.getElementById("lbl-mic-device");
         const fmtEl = document.getElementById("lbl-mic-format");
@@ -2693,11 +2749,13 @@ document.addEventListener("DOMContentLoaded", () => {
             badgeWake.style.color = "#0369a1";
             badgeWake.style.border = "1px solid #0369a1";
             badgeWake.textContent = "🎙️ WAKE: BẬT";
+            window.updateTabActivation("tab-dialogue", true, "Hội thoại trực tiếp: WAKE BẬT");
           } else {
             badgeWake.style.background = "rgba(100, 116, 139, 0.2)";
             badgeWake.style.color = "#94a3b8";
             badgeWake.style.border = "1px solid #64748b";
             badgeWake.textContent = "🎙️ WAKE: TẮT";
+            window.updateTabActivation("tab-dialogue", false, "Hội thoại trực tiếp: WAKE TẮT");
           }
         }
 
@@ -2821,6 +2879,14 @@ document.addEventListener("DOMContentLoaded", () => {
           }
         }
 
+        // (07/11/2026, owner) Panel camera phản chiếu trạng thái: tắt → mờ + nút chính bớt tươi
+        const camCard = document.getElementById("card-remote-camera");
+        if (camCard) {
+          const active = !!data.camera_enabled || !!liveStreamingActive;
+          camCard.classList.toggle("panel-off", !active);
+          camCard.title = active ? "Camera Pi 5: đang hoạt động" : "Camera Pi 5: đang TẮT — bấm BẬT CAMERA để kích hoạt";
+        }
+
         if (overlayTag && !liveStreamingActive) {
           overlayTag.textContent = data.camera_enabled ? "📷 SẴN SÀNG" : "🔴 TẮT";
         }
@@ -2884,6 +2950,20 @@ document.addEventListener("DOMContentLoaded", () => {
     async function startLiveStream() {
       if (liveStreamingActive) return;
       liveStreamingActive = true;
+      // (07/11/2026, owner) nút BẮT ĐẦU XEM chỉ "sáng" khi live thật; DỪNG XEM sáng khi đang live
+      const btnStart = document.getElementById("btn-camera-start-live");
+      const btnStop = document.getElementById("btn-camera-stop-live");
+      if (btnStart) {
+        btnStart.classList.remove("btn-primary");
+        btnStart.classList.add("btn-outline");
+        btnStart.textContent = "🔴 ĐANG LIVE…";
+      }
+      if (btnStop) {
+        btnStop.classList.remove("btn-outline");
+        btnStop.classList.add("btn-primary");
+      }
+      const camCard = document.getElementById("card-remote-camera");
+      if (camCard) camCard.classList.remove("panel-off");
       if (overlayTag) overlayTag.textContent = "🟢 TRỰC TIẾP (LIVE)";
       if (imgLive) imgLive.style.display = "block";
       if (placeholderBox) placeholderBox.style.display = "none";
@@ -2917,7 +2997,20 @@ document.addEventListener("DOMContentLoaded", () => {
         clearInterval(liveStreamTimer);
         liveStreamTimer = null;
       }
+      // (07/11/2026, owner) trả nút về trạng thái nghỉ — BẮT ĐẦU XEM mới là nút chính
+      const btnStart = document.getElementById("btn-camera-start-live");
+      const btnStop = document.getElementById("btn-camera-stop-live");
+      if (btnStart) {
+        btnStart.classList.add("btn-primary");
+        btnStart.classList.remove("btn-outline");
+        btnStart.textContent = "▶️ BẮT ĐẦU XEM";
+      }
+      if (btnStop) {
+        btnStop.classList.add("btn-outline");
+        btnStop.classList.remove("btn-primary");
+      }
       if (overlayTag) overlayTag.textContent = "⏹️ ĐÃ DỪNG";
+      loadCameraStatus();  // panel mờ/đầy theo trạng thái camera thật
       sendCameraControl("stop_live");
     }
 
@@ -2966,6 +3059,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (lblSnapVerif) {
               lblSnapVerif.className = "badge badge-ready";
               lblSnapVerif.textContent = "✅ SHA-256 HỢP LỆ";
+              lblSnapVerif.style.background = "";
+              lblSnapVerif.style.color = "";
+              lblSnapVerif.style.border = "";
             }
 
             showCameraAlert(`✅ Đã chụp snapshot (${((data.size_bytes || 0) / 1024).toFixed(1)} KB). Bấm "LƯU VỀ CORE" để lưu vĩnh viễn!`, "success");
@@ -3051,6 +3147,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (lblSnapVerif) {
           lblSnapVerif.className = "badge";
           lblSnapVerif.textContent = "CHỜ XÁC MINH";
+        }
+        // (07/11/2026, owner) chưa có snapshot → badge xám trung tính, không xanh "chờ"
+        if (lblSnapVerif) {
+          lblSnapVerif.style.background = "rgba(100, 116, 139, 0.18)";
+          lblSnapVerif.style.color = "#64748b";
+          lblSnapVerif.style.border = "1px solid #64748b";
         }
       });
     }
@@ -3248,6 +3350,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!res.ok) throw new Error("API tasks error");
       const data = await res.json();
       const tasks = data.active_tasks || [];
+      window.updateTabActivation("tab-orchestration", true,
+        tasks.length > 0 ? `Điều Hành & An Toàn: ${tasks.length} nhiệm vụ` : "Điều Hành & An Toàn: sẵn sàng (0 nhiệm vụ)");
 
       if (badgeCount) badgeCount.textContent = `${tasks.length} nhiệm vụ`;
 
@@ -3299,6 +3403,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }).join("");
     } catch (err) {
       tbody.innerHTML = `<tr><td colspan="7" style="padding: 16px; text-align: center; color: #ef4444;">Lỗi tải danh sách nhiệm vụ: ${err.message}</td></tr>`;
+      window.updateTabActivation("tab-orchestration", false, "Điều Hành & An Toàn: lỗi tải nhiệm vụ");
     }
   }
 
@@ -3522,9 +3627,11 @@ document.addEventListener("DOMContentLoaded", () => {
       const statusBox = document.getElementById("netchat-status-box");
       if (msgData.success) {
         if (badge) { badge.textContent = "LIVE"; badge.classList.add("badge-green"); }
+        window.updateTabActivation("tab-netchat", true, "Kênh NetChat: LIVE");
         if (sub) sub.textContent = `Kênh riêng tư • ${msgData.messages.length} tin gần nhất • Cập nhật ${new Date().toLocaleTimeString("vi-VN")}`;
       } else {
         if (badge) { badge.textContent = "LỖI"; badge.classList.remove("badge-green"); }
+        window.updateTabActivation("tab-netchat", false, "Kênh NetChat: LỖI");
       }
       if (statusBox && statusData) {
         const b = statusData.bot || {};
@@ -3538,6 +3645,7 @@ document.addEventListener("DOMContentLoaded", () => {
       list.innerHTML = `<div class="netchat-loading">⚠️ Không tải được kênh: ${err.message}</div>`;
       const badge = document.getElementById("badge-netchat-status");
       if (badge) { badge.textContent = "OFF"; badge.classList.remove("badge-green"); }
+      window.updateTabActivation("tab-netchat", false, "Kênh NetChat: OFF");
     }
   }
 
@@ -3652,6 +3760,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const { ok, data } = await wbFetch("/api/workbench/overview");
       if (!ok || !data || data.success !== true) throw new Error("API overview lỗi");
+      window.updateTabActivation("tab-workbench", true, "Workbench: đang hoạt động");
 
       // Nhiệm vụ
       const t = data.tasks || {};
@@ -4231,6 +4340,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const res = await fetch("/api/memory/deep/stats");
       const data = await res.json();
       if (!data.success) throw new Error("stats fail");
+      window.updateTabActivation("tab-deep-memory", true, "Trí Nhớ Sâu V9: đang hoạt động");
       const s = data.stats;
       const cells = [
         ["Tri thức", s.knowledge_units_total],
