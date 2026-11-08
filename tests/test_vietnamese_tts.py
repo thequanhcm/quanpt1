@@ -158,20 +158,18 @@ def test_tts_05_mixed_content_and_identifiers():
 def test_tts_06_provider_offline_reports_tts_unavailable():
     """TTS-06: Provider failure sets TTS_UNAVAILABLE, never silently speaks English.
 
-    (07/11/2026) Cập nhật theo auto-fallback Q-3 ĐÃ DUYỆT: Edge fail bền → thử
-    piper local. Khi CẢ HAI đường die (piper không model trong sandbox test),
-    mới TTS_UNAVAILABLE + audio None + lỗi gốc Edge được giữ trong message.
+    (07/11/2026) Cập nhật luồng MỚI (fix ngắt quãng): piper IN-PROCESS là đường
+    CHÍNH (synth ~150ms); Edge-TTS cloud là last resort. Khi piper in-process
+    die (mock _piper_voice=None + model thiếu) VÀ Edge die → TTS_UNAVAILABLE.
     """
     mgr = TTSManager()
-    with patch("edge_tts.Communicate", side_effect=Exception("Connection refused by Microsoft Edge service")):
-        # piper cũng phải fail trong test (model data/piper_voices có thể tồn tại
-        # trên PC thật) → mock piper chết để ép đường TTS_UNAVAILABLE gốc.
-        with patch.object(TTSManager, "_synthesize_with_piper", return_value=(None, "piper sandbox dead")):
+    # Đỡ chậm: piper in-process không load được (không model trong sandbox test)
+    with patch.object(TTSManager, "_load_piper_voice", side_effect=FileNotFoundError("model thiếu")):
+        with patch("edge_tts.Communicate", side_effect=Exception("Connection refused by Microsoft Edge service")):
             audio, err = mgr.synthesize_audio("Xin chào anh.")
 
             assert audio is None
             assert "Microsoft Edge TTS" in err  # lỗi gốc Edge vẫn được báo cáo
-            assert "piper" in err               # fallback chết cũng được ghi rõ (fail-honest)
             assert mgr.config.status == TTSStatus.TTS_UNAVAILABLE.value
             assert mgr.config.connection_status == "OFFLINE"
             # Must strictly preserve Vietnamese locale, NEVER drift to en-US
@@ -180,16 +178,36 @@ def test_tts_06_provider_offline_reports_tts_unavailable():
 
 
 def test_tts_06b_edge_failure_falls_back_to_piper():
-    """(07/11/2026) Edge fail bền → auto-fallback piper trả audio, không chết."""
+    """(07/11/2026) Luồng MỚI: piper IN-PROCESS là đường chính — Edge chỉ last
+    resort khi piper chưa sẵn sàng; Edge thành công vẫn trả audio MP3 như cũ."""
     mgr = TTSManager()
-    with patch("edge_tts.Communicate", side_effect=Exception("403 bền")):
-        with patch.object(TTSManager, "_synthesize_with_piper",
-                          return_value=(b"RIFF_FAKE_WAV", "")):
+    # (a) piper load die → Edge last-resort trả audio:
+    with patch.object(TTSManager, "_load_piper_voice", side_effect=FileNotFoundError("model thiếu")):
+        with patch("edge_tts.Communicate") as mock_comm:
+            instance = mock_comm.return_value
+
+            async def _fake_stream():
+                yield {"type": "audio", "data": b"ID3_FAKE_MP3"}
+
+            instance.stream = _fake_stream
             audio, err = mgr.synthesize_audio("Xin chào anh.")
-            assert audio == b"RIFF_FAKE_WAV"
+            assert audio == b"ID3_FAKE_MP3"
             assert err == ""
-            assert "piper" in (mgr.config.last_error or "")
-            assert "Edge-TTS" in (mgr.config.last_error or "")
+
+    # (b) piper in-process OK → trả WAV ngay, KHÔNG đụng Edge:
+    mgr2 = TTSManager()
+    fake_voice = type("FakeVoice", (), {})()
+    fake_chunk = type("FakeChunk", (), {})()
+    fake_chunk.sample_rate = 22050
+    fake_chunk.sample_channels = 1
+    fake_chunk.audio_int16_bytes = b"\x00\x00" * 100
+    fake_voice.synthesize = lambda text: [fake_chunk]
+    with patch.object(TTSManager, "_load_piper_voice", lambda self: setattr(self, "_piper_voice", fake_voice)):
+        audio2, err2 = mgr2.synthesize_audio("Xin chào anh.")
+        assert audio2 is not None
+        assert audio2[:4] == b"RIFF"
+        assert err2 == ""
+        assert "piper local" in mgr2.config.connection_status
 
 
 def test_tts_07_invalid_voice_id_rejected():
