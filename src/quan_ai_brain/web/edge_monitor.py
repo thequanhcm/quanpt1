@@ -201,6 +201,14 @@ class EdgeConnectionMonitor:
             had_disconnect = EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT in self.active_alerts
             self.active_alerts.pop(EdgeAlertCode.ALERT_B_SUDDEN_DISCONNECT, None)
             self.active_alerts.pop(EdgeAlertCode.ALERT_A_PI5_NOT_CONNECTED, None)
+            # (09/11/2026) FIX ALERT_F TREO VĨNH VIỄN: heartbeat này ĐÃ qua HMAC
+            # verify (server chỉ gọi record_heartbeat khi chữ ký hợp lệ) — nghĩa là
+            # kênh xác thực đã phục hồi (vd sau CLOCK_DRIFT_EXCEEDED khi đồng hồ PC
+            # nhảy rồi tự NTP lại). Giữ alert CRITICAL cũ trên dashboard khiến
+            # dashboard báo lỗi dù hệ thống READY — sai thực tế. Gỡ active alert F
+            # khi recovering từ AUTH_FAILED; lịch sử vẫn giữ trong alert_history.
+            if was_disconnected and EdgeAlertCode.ALERT_F_SECURITY_OR_AUTH_FAULT in self.active_alerts:
+                self.active_alerts.pop(EdgeAlertCode.ALERT_F_SECURITY_OR_AUTH_FAULT, None)
             # If recovering from previous disconnect, trigger Alert E
             if was_disconnected and had_disconnect:
                 self._trigger_alert(
