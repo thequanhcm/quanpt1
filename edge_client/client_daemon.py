@@ -506,6 +506,48 @@ def _resolve_core_base_url() -> str:
     return _CORE_BASE_CACHE or "http://127.0.0.1:8766"
 
 
+# (10/11/2026) TỰ TÌM LẠI PC KHI MẤT KẾT NỐI — quét subnet tìm host mở
+# core_port + trả /api/health 200. Trả None nếu không tìm thấy. Fail-closed:
+# timeout ngắn (1s/host), giới hạn 254 host, không đụng config nếu lỗi.
+def _discover_core_host(subnet: str, port: int, probe_timeout: float) -> str | None:
+    """Quét subnet (vd '192.168.1.0/24') tìm host mở `port` + trả /api/health 200.
+
+    Trả IP string (vd '192.168.1.11') hoặc None. Chỉ quét /24 (giả định LAN
+    gia đình/văn phòng nhỏ — 254 host tối đa, ~5-15s với timeout 1s/host).
+    """
+    import ipaddress, socket, urllib.request
+    try:
+        net = ipaddress.IPv4Network(subnet, strict=False)
+    except Exception:
+        return None
+    if net.num_addresses > 256:
+        return None  # chỉ hỗ trợ /24 trở lên
+    # Bỏ .0 (network) và .255 (broadcast) — quét .1..254
+    candidates = [str(ip) for ip in net.hosts()]
+    for host in candidates:
+        try:
+            with socket.create_connection((host, port), timeout=probe_timeout):
+                pass
+        except OSError:
+            continue
+        # TCP mở → probe HTTP /api/health (không HMAC — endpoint public)
+        try:
+            req = urllib.request.Request(
+                f"http://{host}:{port}/api/health",
+                headers={"User-Agent": "edge-discovery/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=probe_timeout) as resp:
+                if resp.status == 200:
+                    body = resp.read().decode("utf-8", errors="ignore")
+                    # /api/health trả JSON có "service" hoặc "status" — chấp nhận
+                    # cả 2 để không phụ thuộc schema chính xác.
+                    if '"service"' in body or '"status"' in body or 'ok' in body.lower():
+                        return host
+        except Exception:
+            continue
+    return None
+
+
 # (01/11/2026, owner) HỘI THOẠI LIÊN TỤC: sau wake, CHERRY chào NGAY
 # "Dạ, em nghe anh ạ." (audio cục bộ, không đợi PC) rồi LẮNG NGHE LIÊN TỤC
 # theo VAD — nói tới đâu thu tới đó → gửi não PC STT + xử lý → trả lời giọng
@@ -2723,15 +2765,96 @@ class EdgeClientDaemon:
         except Exception:
             pass  # fail-closed: lỗi agent không được giết heartbeat
 
+        # (10/11/2026) TỰ TÌM LẠI PC KHI MẤT KẾT NỐI — theo dõi thời điểm mất
+        # kết nối liên tiếp + rate-limit discovery để không spam quét LAN.
+        _disconnected_since: float | None = None
+        _last_discovery_attempt: float = 0.0
+
         while not self._stop_event.is_set():
             self.check_core_connection()
             self._send_dedicated_heartbeat()
+
+            # (10/11/2026) DISCOVERY: nếu fail liên tiếp > discovery_after_sec
+            # → quét LAN tìm PC mới. Rate-limit 1 lần / discovery_interval_sec.
+            # Khi tìm được → update config.core_host + save config + reset cache.
+            try:
+                with self.state.lock:
+                    now_connected = self.state.core_connected
+                    last_hb = self.state.last_heartbeat_epoch
+                # Stale check giống to_kiosk_dict: quá heartbeat_timeout_sec*3
+                # coi như mất kết nối (kể cả khi core_connected sticky-True).
+                _hb_stale = (
+                    last_hb > 0.0
+                    and (time.time() - last_hb)
+                    > max(self.config.heartbeat_timeout_sec * 3.0, 12.0)
+                )
+                _is_offline = (not now_connected) or _hb_stale
+                if _is_offline:
+                    if _disconnected_since is None:
+                        _disconnected_since = time.time()
+                    offline_for = time.time() - _disconnected_since
+                    if (
+                        self.config.core_host_discovery_enabled
+                        and offline_for >= self.config.core_host_discovery_after_sec
+                        and (time.time() - _last_discovery_attempt)
+                        >= self.config.core_host_discovery_interval_sec
+                    ):
+                        _last_discovery_attempt = time.time()
+                        print(
+                            f"[DISCOVERY] Mất kết nối {offline_for:.0f}s — "
+                            f"quét {self.config.core_host_discovery_subnet} tìm PC..."
+                        )
+                        new_host = _discover_core_host(
+                            self.config.core_host_discovery_subnet,
+                            self.config.core_port,
+                            self.config.core_host_discovery_probe_timeout_sec,
+                        )
+                        if new_host and new_host != self.config.core_host:
+                            old_host = self.config.core_host
+                            self.config.core_host = new_host
+                            # Save config để sống qua restart
+                            try:
+                                cfg_path = (
+                                    Path.home() / "Desktop" / "edge_client" / "config.json"
+                                )
+                                self.config.save_to_file(cfg_path)
+                            except Exception as e:
+                                print(f"[DISCOVERY] save config lỗi: {e}")
+                            # Reset cache _resolve_core_base_url
+                            global _CORE_BASE_CACHE, _CORE_BASE_CACHE_AT
+                            _CORE_BASE_CACHE = None
+                            _CORE_BASE_CACHE_AT = 0.0
+                            print(
+                                f"[DISCOVERY] Tìm thấy PC: {old_host} → {new_host}. "
+                                f"Đã lưu config."
+                            )
+                            # Reset bộ đếm để chu kỳ kế tiếp heartbeat thử lại
+                            _disconnected_since = None
+                        elif new_host == self.config.core_host:
+                            # Tìm thấy chính host cũ — không cần đổi, reset đếm
+                            _disconnected_since = None
+                        else:
+                            print(
+                                f"[DISCOVERY] Không tìm thấy PC trong "
+                                f"{self.config.core_host_discovery_subnet}."
+                            )
+                else:
+                    # Đã kết nối lại — reset bộ đếm
+                    _disconnected_since = None
+            except Exception as e:
+                print(f"[DISCOVERY] lỗi (bỏ qua): {e}")
 
             # V41: phát hiện mất kết nối (CONNECTED → LOST)
             try:
                 with self.state.lock:
                     now_connected = self.state.core_connected
-                self.state.edge_agent.detect_connection_lost(now_connected, self._was_core_connected)
+                    last_hb_for_agent = self.state.last_heartbeat_epoch
+                self.state.edge_agent.detect_connection_lost(
+                    now_connected,
+                    self._was_core_connected,
+                    last_heartbeat_epoch=last_hb_for_agent,
+                    heartbeat_timeout_sec=self.config.heartbeat_timeout_sec,
+                )
                 self._was_core_connected = now_connected
             except Exception:
                 pass

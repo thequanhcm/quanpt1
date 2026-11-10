@@ -275,9 +275,28 @@ class EdgeAgent:
             actions["camera_auto_on"] = True
         return actions
 
-    def detect_connection_lost(self, core_connected: bool, was_connected: bool) -> bool:
-        """Phát hiện chuyển trạng thái CONNECTED → LOST. Trả True nếu vừa mất."""
-        if was_connected and not core_connected:
+    def detect_connection_lost(
+        self,
+        core_connected: bool,
+        was_connected: bool,
+        last_heartbeat_epoch: float = 0.0,
+        heartbeat_timeout_sec: float = 4.0,
+    ) -> bool:
+        """Phát hiện chuyển trạng thái CONNECTED → LOST. Trả True nếu vừa mất.
+
+        (10/11/2026) Sửa fail-honest: core_connected sticky-True (chỉ set True,
+        không bao giờ False) → event LOST/RESTORED không bao giờ fire đúng.
+        Bổ sung stale check: nếu last_heartbeat_epoch quá heartbeat_timeout_sec*3
+        → coi như mất kết nối dù core_connected=True. Cùng logic với
+        to_kiosk_dict() đã sửa 06/11.
+        """
+        _hb_stale = (
+            last_heartbeat_epoch > 0.0
+            and (time.time() - last_heartbeat_epoch)
+            > max(heartbeat_timeout_sec * 3.0, 12.0)
+        )
+        _is_offline = (not core_connected) or _hb_stale
+        if was_connected and _is_offline:
             self._offline_since_epoch = time.time()
             self.events.add(
                 "BRAIN_CONNECTION_LOST",

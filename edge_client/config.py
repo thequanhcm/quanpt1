@@ -26,6 +26,17 @@ class EdgeConfig:
     poll_interval_sec: float = 1.0
     heartbeat_timeout_sec: float = 4.0
     reconnect_delay_sec: float = 2.0
+    # (10/11/2026) TỰ TÌM LẠI PC KHI MẤT KẾT NỐI — PC Wi-Fi IP nhảy DHCP
+    # (.9→.13→.11 trong 3 ngày) khiến Pi mất dấu PC vĩnh viễn. Khi heartbeat
+    # fail liên tiếp > discovery_after_sec, daemon quét LAN tìm PC (probe
+    # /api/health 200 + HMAC verify) → update core_host + save config. Rate-limit
+    # discovery_interval_sec để không spam quét. Fail-closed: nếu tắt discovery
+    # hoặc subnet rỗng → giữ nguyên core_host cũ (không phá kết nối đang chạy).
+    core_host_discovery_enabled: bool = True
+    core_host_discovery_subnet: str = "192.168.1.0/24"
+    core_host_discovery_after_sec: float = 30.0
+    core_host_discovery_interval_sec: float = 60.0
+    core_host_discovery_probe_timeout_sec: float = 1.0
     kiosk_mode: bool = True
     face_only_mode: bool = True  # Strictly display digital face/avatar; hide texts & panels
     display_orientation: str = "landscape"  # "landscape" or "portrait"
