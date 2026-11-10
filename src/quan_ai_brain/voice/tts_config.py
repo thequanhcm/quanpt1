@@ -239,6 +239,15 @@ class TTSManager:
         self.config = config or TTSConfig()
         self.available_voices = list(STANDARD_VIETNAMESE_VOICES)
         self.active_voice_id = self.config.tts_voice_preference
+        # (07/11/2026) Audio cache theo (voice, text) — voice/interact hỏi lại cùng
+        # câu (lời chào, câu lặp) không synthesize lại; tránh Edge-TTS flakiness
+        # biến mỗi heartbeat thành 5 retry × (connect + sleep 0.5s) ≈ 8-18s.
+        self._audio_cache: dict[str, bytes] = {}
+        # (07/11/2026) Piper IN-PROCESS: model ONNX 63MB load 1 lần giữ RAM
+        # (~5.2s lúc synth đầu tiên), synthesize về sau ~125-160ms/câu — thay
+        # cho spawn CLI 5.9s/lần và Edge-TTS cloud flaky 80% NoAudioReceived.
+        self._piper_voice: Any | None = None
+        self._piper_load_attempted: bool = False
 
     def get_config(self) -> dict[str, Any]:
         voice_info = self.get_active_voice()
@@ -384,6 +393,11 @@ class TTSManager:
         if not clean_text:
             return None, "Văn bản sau chuẩn hóa rỗng."
 
+        # (07/11/2026) Cache hit — trả audio đã synth cho cùng (voice, text).
+        cache_key = f"{target_voice_id}::{clean_text}"
+        cached = self._audio_cache.get(cache_key)
+        if cached:
+            return cached, ""
         # Handle Mock provider
         if self.config.provider == TTSProvider.MOCK.value:
             self.config.status = TTSStatus.READY.value
@@ -435,39 +449,69 @@ class TTSManager:
                 except RuntimeError:
                     return asyncio.run(coro)
 
-            # (31/10/2026) FIX LOA PI5 KHÔNG PHÁT: Microsoft Edge TTS thi thoảng
-            # trả "No audio was received" (flakiness DRM token — đo được ~20-80%
-            # fail tùy thời điểm). Retry tối đa 5 lần, backoff ngắn, trước khi bỏ.
-            import time as _time
-            last_err: str = ""
-            for attempt in range(5):
-                try:
-                    self.config.status = TTSStatus.SPEAKING.value
-                    audio_bytes = _run_coroutine(_do_synth())
-                    if audio_bytes and len(audio_bytes) > 0:
+        # (07/11/2026) FIX NGẮT QUÃNG + TRÔI CHẢY: Edge-TTS cloud đo được flaky
+        # NẶNG (8/10 lần NoAudioReceived ~2.7-3.1s/attempt) — câu trả lời bị chờ
+        # 6-12s rồi rớt xuống piper CLI (spawn process + load ONNX 63MB mỗi lần
+        # = 5.9s) → giọng lúc có lúc không, không trọn câu. Giải pháp piper
+        # IN-PROCESS (Q-3 đã duyệt voice local): load model MỖI LẦN duy nhất
+        # vào RAM (5.2s lúc khởi động server), synthesize sau đó ~125-160ms/câu,
+        # WAV 22050Hz mono — không phụ thuộc mạng, trôi chảy trọn câu chữ.
+        try:
+            if self._piper_voice is None:
+                self._load_piper_voice()
+            if self._piper_voice is not None:
+                import io as _io
+                import wave as _wave
+                chunks = list(self._piper_voice.synthesize(clean_text))
+                if chunks:
+                    rate = chunks[0].sample_rate or 22050
+                    buf = _io.BytesIO()
+                    with _wave.Wave_write(buf) as w:
+                        w.setnchannels(chunks[0].sample_channels or 1)
+                        w.setsampwidth(2)
+                        w.setframerate(rate)
+                        for ch in chunks:
+                            w.writeframes(ch.audio_int16_bytes)
+                    audio = buf.getvalue()
+                    if audio:
+                        if len(self._audio_cache) > 100:
+                            self._audio_cache.clear()
+                        self._audio_cache[cache_key] = audio
                         self.config.status = TTSStatus.READY.value
-                        self.config.connection_status = "CONNECTED"
+                        self.config.connection_status = "CONNECTED (piper local)"
                         self.config.last_error = ""
-                        return audio_bytes, ""
-                    last_err = "Microsoft Edge TTS không trả về luồng âm thanh."
-                except Exception as exc:
-                    last_err = f"Lỗi kết nối Microsoft Edge TTS: {exc}"
-                if attempt < 4:
-                    _time.sleep(0.5)
-            # (07/11/2026, duyệt 'các công việc chưa hoàn thiện') AUTO-FALLBACK:
-            # Edge fail bền 5 lần → tự thử piper local 1 lần trong cùng request
-            # (model data/piper_voices/vi_VN-vais1000-medium.onnx — Q-3 đã duyệt).
-            # Không đổi provider config toàn cục; trả WAV kèm ghi chú trong error="".
+                        return audio, ""
+        except Exception as piper_exc:
+            last_err = f"Piper in-process lỗi: {piper_exc}"
+
+        # (31/10/2026) FIX LOA PI5 KHÔNG PHÁT: Microsoft Edge TTS thi thoảng
+        # trả "No audio was received" (flakiness DRM token — đo được ~20-80%
+        # fail tùy thời điểm). Retry tối đa 5 lần, backoff ngắn, trước khi bỏ.
+        # (07/11/2026) CHỈ LÀM LAST RESORT: piper local đã phủ ở trên; Edge giờ
+        # chỉ thử khi piper chưa sẵn sàng — 2 attempt, fail nhanh.
+        import time as _time
+        last_err_edge: str = ""
+        for attempt in range(2):
             try:
-                fb_audio, fb_err = self._synthesize_with_piper(clean_text)
-                if fb_audio:
+                self.config.status = TTSStatus.SPEAKING.value
+                audio_bytes = _run_coroutine(_do_synth())
+                if audio_bytes and len(audio_bytes) > 0:
                     self.config.status = TTSStatus.READY.value
-                    self.config.connection_status = "CONNECTED (piper fallback)"
-                    self.config.last_error = f"Edge-TTS lỗi ({last_err[:80]}) → phát bằng piper local."
-                    return fb_audio, ""
-                last_err = f"{last_err} | piper fallback cũng lỗi: {fb_err}"
-            except Exception as fb_exc:
-                last_err = f"{last_err} | piper fallback cũng lỗi: {fb_exc}"
+                    self.config.connection_status = "CONNECTED"
+                    self.config.last_error = ""
+                    if len(self._audio_cache) > 100:
+                        self._audio_cache.clear()
+                    self._audio_cache[cache_key] = audio_bytes
+                    return audio_bytes, ""
+                last_err_edge = "Microsoft Edge TTS không trả về luồng âm thanh."
+            except Exception as exc:
+                last_err_edge = f"Lỗi kết nối Microsoft Edge TTS: {exc}"
+            if attempt < 1:
+                _time.sleep(0.3)
+        if last_err:
+            last_err = f"{last_err} | {last_err_edge}"
+            # (07/11/2026) Piper in-process đã thử ở trên — nếu tới đây nghĩa là
+            # cả piper lẫn Edge đều fail → báo lỗi trung thực.
             self.mark_unavailable(last_err)
             return None, self.config.last_error
 
@@ -494,13 +538,52 @@ class TTSManager:
         return None, self.config.last_error
 
 
+    def _load_piper_voice(self) -> None:
+        """Load piper model ONNX vào RAM (MỖI TIẾN TRÌNH 1 LẦN) — 07/11/2026.
+
+        PiperVoice.synthesize sau đó ~125-160ms/câu vs spawn CLI 5.9s/lần.
+        Ghi lỗi vào self.config.last_error nhưng KHÔNG raise — caller tự rớt
+        xuống Edge-TTS cloud nếu model thiếu.
+        """
+        if self._piper_load_attempted:
+            return
+        self._piper_load_attempted = True
+        from pathlib import Path as _P
+        model = _P(__file__).resolve().parents[3] / "data" / "piper_voices" / "vi_VN-vais1000-medium.onnx"
+        if not model.exists():
+            self.config.last_error = f"Piper voice model không tồn tại: {model.name}. Chạy cài đặt Q-3."
+            return
+        try:
+            from piper import PiperVoice
+            self._piper_voice = PiperVoice.load(str(model))
+        except Exception as exc:
+            self.config.last_error = f"Piper in-process load lỗi: {exc}"
+
     def _synthesize_with_piper(self, clean_text: str) -> tuple[bytes | None, str]:
         """Tổng hợp WAV bằng piper local (Q-3). Trả (audio, error).
 
-        Dùng cho provider==piper VÀ auto-fallback khi Edge-TTS fail bền.
+        (07/11/2026) ƯU TIÊN in-process voice đã load (_piper_voice ~150ms);
+        chỉ khi chưa load được mới rớt spawn CLI (5.9s/lần, chỉ dùng 1 lần).
         piper CLI '-f -' lỗi PermissionError trên Windows (wave.py mở temp file)
         → synth ra file tạm rồi đọc bytes, xoá sau.
         """
+        if self._piper_voice is None:
+            self._load_piper_voice()
+        if self._piper_voice is not None:
+            import io as _io
+            import wave as _wave
+            chunks = list(self._piper_voice.synthesize(clean_text))
+            if chunks:
+                rate = chunks[0].sample_rate or 22050
+                buf = _io.BytesIO()
+                with _wave.Wave_write(buf) as w:
+                    w.setnchannels(chunks[0].sample_channels or 1)
+                    w.setsampwidth(2)
+                    w.setframerate(rate)
+                    for ch in chunks:
+                        w.writeframes(ch.audio_int16_bytes)
+                return buf.getvalue() or None, ("" if buf.tell() > 44 else "Piper trả về WAV rỗng.")
+
         import subprocess as _sp
         import sys as _sys
         import tempfile as _tempfile
