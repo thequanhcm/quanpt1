@@ -40,8 +40,13 @@ WAKE_PHRASES = (
     # biến thể TONY cũ (quá độ — owner quen miệng):
     "tony", "tony ơi", "tony oi", "hi tony", "hay tony", "hey tony",
     "hay tony ơi", "hay tony oi", "hi tony ơi", "hi tony oi",
-    "tôi nghĩ", "toi nghi", "tới mì", "toi mi", "mì tươi", "mi tuoi",
-    "tôi nghe", "tôi ơi", "toi oi", "chào trợ lý", "chao tro ly",
+    # (10/11/2026) SIẾT FALSE-POSITIVE TV: bỏ 'tới mì'/'toi mi'/'mì tươi'/
+    # 'mi tuoi'/'tôi nghĩ'/'tôi nghe'/'tôi ơi'/'toi oi' khỏi WAKE_PHRASES —
+    # tiếng TV YouTube (La La School, Ghiền Mì Gõ…) lặp qua mic đã khớp
+    # những cụm này → TV tự bật CHERRY ~15 lần/ngày, CHERRY trả lời lời thoại
+    # trong video và lưu thành "kỷ niệm" sai. Cụm "tôi ơi"/"tới mì" vẫn khớp
+    # qua _fuzzy_hit ở dưới nhưng bị siết về 2 lỗi chữ (không phải 3).
+    "chào trợ lý", "chao tro ly",
     "trợ lý ơi", "tro ly oi",
 )
 # Từ khóa phụ trong lúc nghe: "ngủ đi" → sleep ngay (đồng bộ lệnh DM)
@@ -199,6 +204,10 @@ def main():
                 # (31/10/2026) Vosk small nhận "TONY ơi" thành 'thừa'/'tôi'/
                 # 'vực'... — khớp mờ từng token (Levenshtein <=2) với tên + 'ơi':
                 # (06/11/2026) thêm bộ tên CHERRY + giữ TONY quá độ.
+                # (10/11/2026) SIẾT FALSE-POSITIVE TV: khớp cụm siết từ ≤3 lỗi
+                # xuống ≤2 lỗi — 'với mục'/'với mỹ'/'tôi bất'/'tải về' (tiếng TV)
+                # khớp 'tới mì'/'tôi ơi' với 3 lỗi đã khiến TV tự wake CHERRY
+                # cả chục lần/ngày. 2 lỗi vẫn giữ 'cherry ơi'/'tony ơi' thật.
                 def _lev(a: str, b: str) -> int:
                     if abs(len(a) - len(b)) > 2:
                         return 9
@@ -211,8 +220,7 @@ def main():
                         prev = cur
                     return prev[-1]
 
-                # (06/11/2026) SIẾT FALSE-POSITIVE (duyệt audit 06/11):
-                # - 'ơi' phải là token ĐỘC LẬP (không tách từ giữa từ khác —
+                # (10/11/2026) 'ơi' phải là token ĐỘC LẬP (không tách từ giữa từ khác —
                 #   'ngoài khơi' không còn sinh token 'ơi').
                 # - bỏ 'toi'/'tôi' khỏi danh sách tên (Vosk nhận 'TONY ơi' thành
                 #   'tôi ơi' đã có cụm khớp mờ riêng bên dưới) → TV noise như
@@ -227,10 +235,12 @@ def main():
                 has_oi = any(t in ("ơi", "oi", "ơi!") for t in tokens)
                 if has_name and has_oi:
                     return True
-                # cụm đầy đủ khớp mờ 1 lỗi:
-                return any(_lev(txt[:24], p) <= 3 for p in
+                # cụm đầy đủ khớp mờ 2 lỗi (siết từ 3 — anti TV-noise 10/11):
+                # 'tới mì' (biến thể TONY quá độ) bị bỏ — TV 'với mỹ' khớp nó
+                # với đúng 2 lỗi; owner đã dùng CHERRY từ 06/11 nên không cần.
+                return any(_lev(txt[:24], p) <= 2 for p in
                            ("cherry ơi", "cherry oi", "cheri oi",
-                            "tony ơi", "tôi ơi", "tony oi", "tới mì"))
+                            "tony ơi", "tôi ơi", "tony oi"))
 
             if any(p in text for p in WAKE_PHRASES) or _fuzzy_hit(text):
                 print(f"[WAKE] NGHE THẤY: '{text}' → wake!", flush=True)
