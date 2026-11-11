@@ -91,6 +91,31 @@ MULTI_LANGUAGE_VOICES: list[TTSVoiceInfo] = [
 ]
 
 # Bảng tra nhanh locale → voice mặc định (fallback về tiếng Việt nếu thiếu):
+# (11/11/2026, owner: "nhiều giọng tiếng Việt chuẩn") Piper local Việt Nam
+# — hoạt động OFFLINE, không phụ thuộc mạng Microsoft. vivos-x_low: giọng nam
+# trẻ trung (16kHz, ~28MB); vais1000-medium: giọng nữ chính (22kHz, ~63MB).
+PIPER_VIETNAMESE_VOICES: list[TTSVoiceInfo] = [
+    TTSVoiceInfo(
+        voice_id="piper-vi_VN-vais1000-medium",
+        name="Piper Vais1000 (Nữ, Local Offline)",
+        locale="vi-VN",
+        gender=TTSGender.FEMALE.value,
+        provider=TTSProvider.PIPER.value,
+        is_online=False,
+        description="Giọng nữ Việt Nam piper local — hoạt động offline, phản hồi ~150ms, không phụ thuộc mạng.",
+    ),
+    TTSVoiceInfo(
+        voice_id="piper-vi_VN-vivos-x_low",
+        name="Piper Vivos (Nam, Local Offline)",
+        locale="vi-VN",
+        gender=TTSGender.MALE.value,
+        provider=TTSProvider.PIPER.value,
+        is_online=False,
+        description="Giọng nam Việt Nam piper local — hoạt động offline, nhẹ (~28MB), khởi động nhanh.",
+    ),
+]
+
+
 LANGUAGE_VOICE_MAP: dict[str, str] = {
     "vi": "vi-VN-HoaiMyNeural",
     "vi-VN": "vi-VN-HoaiMyNeural",
@@ -235,9 +260,12 @@ def normalize_text_for_vietnamese_tts(text: str, max_chars: int = 500) -> str:
 class TTSManager:
     """Centralized manager for Vietnamese Female TTS configuration, synthesis, and lifecycle."""
 
-    def __init__(self, config: TTSConfig | None = None) -> None:
+    def __init__(self, config: TTSConfig | None = None, persist: bool = True) -> None:
         self.config = config or TTSConfig()
-        self.available_voices = list(STANDARD_VIETNAMESE_VOICES)
+        # (11/11/2026) persist=False: instance test — không đọc/ghi file preference
+        self._persist_enabled = persist
+        # (11/11/2026) Danh mục đầy đủ: Edge-TTS VN chuẩn + Piper VN local.
+        self.available_voices = list(STANDARD_VIETNAMESE_VOICES) + list(PIPER_VIETNAMESE_VOICES)
         self.active_voice_id = self.config.tts_voice_preference
         # (07/11/2026) Audio cache theo (voice, text) — voice/interact hỏi lại cùng
         # câu (lời chào, câu lặp) không synthesize lại; tránh Edge-TTS flakiness
@@ -246,8 +274,59 @@ class TTSManager:
         # (07/11/2026) Piper IN-PROCESS: model ONNX 63MB load 1 lần giữ RAM
         # (~5.2s lúc synth đầu tiên), synthesize về sau ~125-160ms/câu — thay
         # cho spawn CLI 5.9s/lần và Edge-TTS cloud flaky 80% NoAudioReceived.
+        # (11/11/2026) Cache nhiều model piper theo voice_id — chọn giọng nào
+        # load giọng đó, giữ RAM các giọng đã dùng (mỗi model ~28-63MB).
+        self._piper_voices: dict[str, Any] = {}
+        self._piper_load_attempted: set[str] = set()
+        # Backward-compat: code cũ truy cập _piper_voice sẽ thấy giọng vais1000
         self._piper_voice: Any | None = None
-        self._piper_load_attempted: bool = False
+        # (11/11/2026) Nạp lựa chọn giọng đã lưu (data/tts_preference.json)
+        self.load_preference()
+
+    # (11/11/2026) Persist lựa chọn giọng — sống qua restart server
+    _PREF_FILE = None  # lazy
+
+    def _pref_path(self):
+        if self._PREF_FILE is None:
+            from pathlib import Path as _P
+            self._PREF_FILE = _P(__file__).resolve().parents[3] / "data" / "tts_preference.json"
+        return self._PREF_FILE
+
+    def save_preference(self) -> None:
+        if not getattr(self, "_persist_enabled", True):
+            return
+        try:
+            import json as _json
+            self._pref_path().write_text(_json.dumps({
+                "voice_id": self.config.tts_voice_preference,
+                "tts_enabled": self.config.tts_enabled,
+                "rate": self.config.rate,
+                "pitch": self.config.pitch,
+                "volume": self.config.volume,
+                "updated_at": time.time(),
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception:
+            pass  # persist là best-effort, không chặn synth
+
+    def load_preference(self) -> None:
+        if not getattr(self, "_persist_enabled", True):
+            return
+        try:
+            import json as _json
+            f = self._pref_path()
+            if not f.exists():
+                return
+            data = _json.loads(f.read_text(encoding="utf-8"))
+            vid = str(data.get("voice_id", "")).strip()
+            if vid:
+                self.set_voice_preference(vid)
+            if "tts_enabled" in data:
+                self.config.tts_enabled = bool(data["tts_enabled"])
+            for k in ("rate", "pitch", "volume"):
+                if k in data:
+                    setattr(self.config, k, float(data[k]))
+        except Exception:
+            pass
 
     def get_config(self) -> dict[str, Any]:
         voice_info = self.get_active_voice()
@@ -290,6 +369,7 @@ class TTSManager:
         self.config.status = TTSStatus.READY.value
         self.config.last_error = ""
         self.config.updated_at = time.time()
+        self.save_preference()
         return True
 
     def update_config(
@@ -457,12 +537,19 @@ class TTSManager:
         # vào RAM (5.2s lúc khởi động server), synthesize sau đó ~125-160ms/câu,
         # WAV 22050Hz mono — không phụ thuộc mạng, trôi chảy trọn câu chữ.
         try:
-            if self._piper_voice is None:
-                self._load_piper_voice()
-            if self._piper_voice is not None:
+            # (11/11/2026) ROUTE ĐÚNG GIỌNG: voice piper-* → piper local; voice
+            # Edge (vi-VN-*) → Edge-TTS cloud. Không còn piper-first mù quáng.
+            _piper_key = target_voice_id if target_voice_id in self._PIPER_MODEL_FILES else None
+            _active_piper = None
+            if _piper_key is not None:
+                if self._piper_voices.get(_piper_key) is None:
+                    self._load_piper_voice(_piper_key)
+                _active_piper = self._piper_voices.get(_piper_key)
+            last_err = ""  # (11/11/2026) init trước — piper có thể bị skip hoàn toàn
+            if _active_piper is not None:
                 import io as _io
                 import wave as _wave
-                chunks = list(self._piper_voice.synthesize(clean_text))
+                chunks = list(_active_piper.synthesize(clean_text))
                 if chunks:
                     rate = chunks[0].sample_rate or 22050
                     buf = _io.BytesIO()
@@ -478,7 +565,8 @@ class TTSManager:
                             self._audio_cache.clear()
                         self._audio_cache[cache_key] = audio
                         self.config.status = TTSStatus.READY.value
-                        self.config.connection_status = "CONNECTED (piper local)"
+                        _vlbl = _piper_key or "vi_VN-vais1000-medium"
+                        self.config.connection_status = f"CONNECTED (piper local: {_vlbl})"
                         self.config.last_error = ""
                         return audio, ""
         except Exception as piper_exc:
@@ -508,12 +596,50 @@ class TTSManager:
                 last_err_edge = f"Lỗi kết nối Microsoft Edge TTS: {exc}"
             if attempt < 1:
                 _time.sleep(0.3)
-        if last_err:
-            last_err = f"{last_err} | {last_err_edge}"
-            # (07/11/2026) Piper in-process đã thử ở trên — nếu tới đây nghĩa là
-            # cả piper lẫn Edge đều fail → báo lỗi trung thực.
-            self.mark_unavailable(last_err)
-            return None, self.config.last_error
+        # (11/11/2026) Cả Edge lẫn piper đều fail (hoặc piper bị skip) → báo lỗi
+        # TỔNG HỢP trung thực: gộp last_err_edge + last_err (nếu có).
+        # (11/11/2026) AUTO-FALLBACK THEO GIỌI KHI EDGE DIE: Edge-TTS cloud chết
+        # (NoAudioReceived bền — pattern đã đo 07/11). Rớt về piper cùng giới tính
+        # thay vì im lặng: HoaiMy→vais1000 (nữ), NamMinh→vivos (nam).
+        _fb_map = {
+            "vi-VN-HoaiMyNeural": "piper-vi_VN-vais1000-medium",
+            "vi-VN-NamMinhNeural": "piper-vi_VN-vivos-x_low",
+        }
+        _fb_key = _fb_map.get(target_voice_id)
+        if _fb_key:
+            if self._piper_voices.get(_fb_key) is None:
+                try:
+                    self._load_piper_voice(_fb_key)
+                except Exception as load_exc:
+                    last_err_edge = f"{last_err_edge} | piper fallback load lỗi: {load_exc}"
+            _fb_voice = self._piper_voices.get(_fb_key)
+            if _fb_voice is not None:
+                try:
+                    import io as _io2
+                    import wave as _wave2
+                    chunks2 = list(_fb_voice.synthesize(clean_text))
+                    if chunks2:
+                        buf2 = _io2.BytesIO()
+                        with _wave2.Wave_write(buf2) as w2:
+                            w2.setnchannels(chunks2[0].sample_channels or 1)
+                            w2.setsampwidth(2)
+                            w2.setframerate(chunks2[0].sample_rate or 22050)
+                            for ch2 in chunks2:
+                                w2.writeframes(ch2.audio_int16_bytes)
+                        audio2 = buf2.getvalue()
+                        if audio2:
+                            if len(self._audio_cache) > 100:
+                                self._audio_cache.clear()
+                            self._audio_cache[cache_key] = audio2
+                            self.config.status = TTSStatus.READY.value
+                            self.config.connection_status = f"CONNECTED (piper fallback: {_fb_key})"
+                            self.config.last_error = ""
+                            return audio2, ""
+                except Exception as fb_exc:
+                    last_err_edge = f"{last_err_edge} | piper fallback lỗi: {fb_exc}"
+        _combined = " | ".join(x for x in (last_err, last_err_edge) if x)
+        self.mark_unavailable(_combined or "Tất cả provider TTS đều thất bại.")
+        return None, self.config.last_error
 
         # Handle Piper provider — (01/11/2026, Q-3 ĐÃ DUYỆT) fallback LOCAL khi
         # Edge-TTS 403 bền: piper-tts + voice vi_VN-vais1000-medium trong
@@ -538,24 +664,38 @@ class TTSManager:
         return None, self.config.last_error
 
 
-    def _load_piper_voice(self) -> None:
-        """Load piper model ONNX vào RAM (MỖI TIẾN TRÌNH 1 LẦN) — 07/11/2026.
+    # Bảng ánh xạ voice_id -> tên file model piper (11/11/2026)
+    _PIPER_MODEL_FILES: dict[str, str] = {
+        "piper-vi_VN-vais1000-medium": "vi_VN-vais1000-medium.onnx",
+        "piper-vi_VN-vivos-x_low": "vi_VN-vivos-x_low.onnx",
+        "vi_VN-vais1000-medium": "vi_VN-vais1000-medium.onnx",
+    }
+    _PIPER_DEFAULT_MODEL = "vi_VN-vais1000-medium.onnx"
 
-        PiperVoice.synthesize sau đó ~125-160ms/câu vs spawn CLI 5.9s/lần.
-        Ghi lỗi vào self.config.last_error nhưng KHÔNG raise — caller tự rớt
-        xuống Edge-TTS cloud nếu model thiếu.
-        """
-        if self._piper_load_attempted:
+    def _load_piper_voice(self, voice_id: str | None = None) -> None:
+        """Load piper model ONNX vào RAM (mỗi giọng 1 lần, cache theo voice_id)."""
+        key = voice_id or ""
+        if key in self._piper_load_attempted:
             return
-        self._piper_load_attempted = True
+        model_file = self._PIPER_MODEL_FILES.get(key, self._PIPER_DEFAULT_MODEL)
+        # Model này đã load qua giọng khác -> dùng lại
+        for vid, vobj in self._piper_voices.items():
+            if vobj is not None and self._PIPER_MODEL_FILES.get(vid, self._PIPER_DEFAULT_MODEL) == model_file:
+                self._piper_voices[key] = vobj
+                self._piper_load_attempted.add(key)
+                return
+        self._piper_load_attempted.add(key)
         from pathlib import Path as _P
-        model = _P(__file__).resolve().parents[3] / "data" / "piper_voices" / "vi_VN-vais1000-medium.onnx"
+        model = _P(__file__).resolve().parents[3] / "data" / "piper_voices" / model_file
         if not model.exists():
             self.config.last_error = f"Piper voice model không tồn tại: {model.name}. Chạy cài đặt Q-3."
             return
         try:
             from piper import PiperVoice
-            self._piper_voice = PiperVoice.load(str(model))
+            voice = PiperVoice.load(str(model))
+            self._piper_voices[key] = voice
+            if model_file == self._PIPER_DEFAULT_MODEL:
+                self._piper_voice = voice
         except Exception as exc:
             self.config.last_error = f"Piper in-process load lỗi: {exc}"
 
@@ -567,12 +707,15 @@ class TTSManager:
         piper CLI '-f -' lỗi PermissionError trên Windows (wave.py mở temp file)
         → synth ra file tạm rồi đọc bytes, xoá sau.
         """
-        if self._piper_voice is None:
-            self._load_piper_voice()
-        if self._piper_voice is not None:
+        # (11/11/2026) Chọn giọng piper theo active preference nếu là giọng piper-*
+        _vid = self.config.tts_voice_preference if self.config.tts_voice_preference in self._PIPER_MODEL_FILES else ""
+        if self._piper_voices.get(_vid) is None:
+            self._load_piper_voice(_vid)
+        _active_piper = self._piper_voices.get(_vid) or self._piper_voice
+        if _active_piper is not None:
             import io as _io
             import wave as _wave
-            chunks = list(self._piper_voice.synthesize(clean_text))
+            chunks = list(_active_piper.synthesize(clean_text))
             if chunks:
                 rate = chunks[0].sample_rate or 22050
                 buf = _io.BytesIO()

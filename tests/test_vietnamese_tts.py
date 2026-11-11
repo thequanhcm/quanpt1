@@ -69,7 +69,8 @@ def test_tts_01_vietnamese_diacritics_preserved():
     assert clean_text == input_text
 
     # 2. Locale and voice checks
-    mgr = TTSManager()
+    mgr = TTSManager(persist=False)
+    mgr.set_voice_preference("vi-VN-HoaiMyNeural")
     assert mgr.config.response_language == "vi-VN"
     assert mgr.config.tts_locale == "vi-VN"
     assert mgr.config.tts_gender == "female"
@@ -86,7 +87,8 @@ def test_tts_01_vietnamese_diacritics_preserved():
 def test_tts_02_female_voice():
     """TTS-02: Female voice metadata and authentic Vietnamese female synthesis."""
     input_text = "Em đã nhận yêu cầu. Em đang kiểm tra và sẽ báo lại kết quả cho anh."
-    mgr = TTSManager()
+    mgr = TTSManager(persist=False)
+    mgr.set_voice_preference("vi-VN-HoaiMyNeural")
     active_voice = mgr.get_active_voice()
 
     assert active_voice is not None
@@ -158,16 +160,19 @@ def test_tts_05_mixed_content_and_identifiers():
 def test_tts_06_provider_offline_reports_tts_unavailable():
     """TTS-06: Provider failure sets TTS_UNAVAILABLE, never silently speaks English.
 
-    (07/11/2026) Cập nhật luồng MỚI (fix ngắt quãng): piper IN-PROCESS là đường
-    CHÍNH (synth ~150ms); Edge-TTS cloud là last resort. Khi piper in-process
-    die (mock _piper_voice=None + model thiếu) VÀ Edge die → TTS_UNAVAILABLE.
+    (11/11/2026) ROUTE ĐÚNG GIỌNG: giọng Edge (HoaiMy/NamMinh) đi Edge-TTS;
+    giọng piper-* đi piper local. Edge die → TTS_UNAVAILABLE trung thực.
     """
-    mgr = TTSManager()
-    # Đỡ chậm: piper in-process không load được (không model trong sandbox test)
-    with patch.object(TTSManager, "_load_piper_voice", side_effect=FileNotFoundError("model thiếu")):
-        with patch("edge_tts.Communicate", side_effect=Exception("Connection refused by Microsoft Edge service")):
+    mgr = TTSManager(persist=False)
+    mgr.set_voice_preference("vi-VN-HoaiMyNeural")
+    # (11/11/2026) AUTO-FALLBACK: Edge die (NoAudioReceived) → rớt piper CÙNG
+    # GIỚI TÍNH (HoaiMy→vais1000 nữ) thay vì im lặng. Audio vẫn phải phát được.
+    with patch("edge_tts.Communicate", side_effect=Exception("Connection refused by Microsoft Edge service")):
+        with patch.object(TTSManager, "_load_piper_voice",
+                          side_effect=FileNotFoundError("model thiếu")):
             audio, err = mgr.synthesize_audio("Xin chào anh.")
 
+            # piper fallback cũng không load được (model thiếu) → UNAVAILABLE trung thực
             assert audio is None
             assert "Microsoft Edge TTS" in err  # lỗi gốc Edge vẫn được báo cáo
             assert mgr.config.status == TTSStatus.TTS_UNAVAILABLE.value
@@ -177,32 +182,56 @@ def test_tts_06_provider_offline_reports_tts_unavailable():
             assert mgr.config.response_language == "vi-VN"
 
 
-def test_tts_06b_edge_failure_falls_back_to_piper():
-    """(07/11/2026) Luồng MỚI: piper IN-PROCESS là đường chính — Edge chỉ last
-    resort khi piper chưa sẵn sàng; Edge thành công vẫn trả audio MP3 như cũ."""
-    mgr = TTSManager()
-    # (a) piper load die → Edge last-resort trả audio:
-    with patch.object(TTSManager, "_load_piper_voice", side_effect=FileNotFoundError("model thiếu")):
-        with patch("edge_tts.Communicate") as mock_comm:
-            instance = mock_comm.return_value
-
-            async def _fake_stream():
-                yield {"type": "audio", "data": b"ID3_FAKE_MP3"}
-
-            instance.stream = _fake_stream
-            audio, err = mgr.synthesize_audio("Xin chào anh.")
-            assert audio == b"ID3_FAKE_MP3"
-            assert err == ""
-
-    # (b) piper in-process OK → trả WAV ngay, KHÔNG đụng Edge:
-    mgr2 = TTSManager()
+def test_tts_06c_edge_failure_falls_back_to_piper_same_gender():
+    """(11/11/2026) Edge die → piper fallback CÙNG GIỚI TÍNH cứu audio: HoaiMy (nữ)
+    → vais1000 (nữ offline). Không bao giờ im lặng khi model local còn."""
+    mgr = TTSManager(persist=False)
+    mgr.set_voice_preference("vi-VN-HoaiMyNeural")
     fake_voice = type("FakeVoice", (), {})()
     fake_chunk = type("FakeChunk", (), {})()
     fake_chunk.sample_rate = 22050
     fake_chunk.sample_channels = 1
     fake_chunk.audio_int16_bytes = b"\x00\x00" * 100
     fake_voice.synthesize = lambda text: [fake_chunk]
-    with patch.object(TTSManager, "_load_piper_voice", lambda self: setattr(self, "_piper_voice", fake_voice)):
+    with patch("edge_tts.Communicate", side_effect=Exception("Connection refused by Microsoft Edge service")):
+        with patch.object(TTSManager, "_load_piper_voice",
+                          lambda self, vid=None: self._piper_voices.update({vid or "": fake_voice})):
+            audio, err = mgr.synthesize_audio("Xin chào anh.")
+            assert audio is not None
+            assert audio[:4] == b"RIFF"
+            assert err == ""
+            assert "piper fallback" in mgr.config.connection_status
+
+
+def test_tts_06b_edge_failure_falls_back_to_piper():
+    """(07/11/2026) Luồng MỚI: piper IN-PROCESS là đường chính — Edge chỉ last
+    resort khi piper chưa sẵn sàng; Edge thành công vẫn trả audio MP3 như cũ."""
+    mgr = TTSManager()
+    # (a) giọng Edge (HoaiMy) → Edge trả audio trực tiếp (route đúng giọng 11/11):
+    mgr = TTSManager(persist=False)
+    mgr.set_voice_preference("vi-VN-HoaiMyNeural")
+    with patch("edge_tts.Communicate") as mock_comm:
+        instance = mock_comm.return_value
+
+        async def _fake_stream():
+            yield {"type": "audio", "data": b"ID3_FAKE_MP3"}
+
+        instance.stream = _fake_stream
+        audio, err = mgr.synthesize_audio("Xin chào anh.")
+        assert audio == b"ID3_FAKE_MP3"
+        assert err == ""
+
+    # (b) giọng piper-* → piper in-process trả WAV ngay, KHÔNG đụng Edge:
+    mgr2 = TTSManager(persist=False)
+    ok = mgr2.set_voice_preference("piper-vi_VN-vais1000-medium")
+    assert ok is True
+    fake_voice = type("FakeVoice", (), {})()
+    fake_chunk = type("FakeChunk", (), {})()
+    fake_chunk.sample_rate = 22050
+    fake_chunk.sample_channels = 1
+    fake_chunk.audio_int16_bytes = b"\x00\x00" * 100
+    fake_voice.synthesize = lambda text: [fake_chunk]
+    with patch.object(TTSManager, "_load_piper_voice", lambda self, vid=None: self._piper_voices.update({vid or "": fake_voice})):
         audio2, err2 = mgr2.synthesize_audio("Xin chào anh.")
         assert audio2 is not None
         assert audio2[:4] == b"RIFF"
@@ -253,7 +282,8 @@ def test_tts_08_interruption_barge_in():
 
 def test_tts_09_multiturn_dialogue_preserves_vietnamese():
     """TTS-09: 5 consecutive dialogue turns all maintain Vietnamese female configuration."""
-    mgr = TTSManager()
+    mgr = TTSManager(persist=False)
+    mgr.set_voice_preference("vi-VN-HoaiMyNeural")
     questions = [
         "Xin chào em.",
         "Em có thể giúp gì cho anh?",
