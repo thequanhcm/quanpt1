@@ -66,3 +66,31 @@ reports/brain0_audit_result.json
 # Edge runtime artifacts (06/11) — server ghi runtime, không commit
 src/data/edge_devices.db
 data/edge_media/
+
+# Runtime data untrack (12/11) — server/watchdog/daemon tự ghi, không commit.
+# Files vẫn nằm trên đĩa; chỉ bỏ khỏi git. Model piper (.onnx) VẪN track.
+data/alert_owner_ack.json
+data/conversation_state.json
+data/fed_alert_last.json
+data/netchat_responder_state.json
+data/self_model_last.json
+data/q4_batch_ledger.json
+data/skill_registry.json
+data/knowledge_db/
+data/test_knowledge_db/
+data/edge_media/
+data/netchat_files/
+data/uat_logs/
+data/audio/
+data/piper_voices/test_*.wav
+data/test_pi5_cam.jpg
+data/tmp_*.wav
+data/tmp_*.jpg
+data/test_vivos.wav
+data/_pi5_*
+data/edge_runtime.json
+data/edge_reconcile_log.jsonl
+data/learning_daemon.lock
+data/tts_preference.json
+reports/intelligence_maturity/ciee/QUARANTINE_EXPORT_*.csv
+reports/intelligence_maturity/ciee/_quarantine_summary_*.json
