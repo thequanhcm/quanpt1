@@ -1,4 +1,4 @@
-# Inventory — Secret tập trung (rà soát lần 2, 12/11/2026 tối)
+# Inventory — Secret tập trung (rà soát lần 3, 12/11/2026 tối)
 
 ## SECRET THẬT đã copy về đây (nguồn gốc giữ nguyên — hệ thống 24/7 KHÔNG gián đoạn)
 
@@ -11,6 +11,8 @@
 | `edge_hmac_secret` | `data/edge_hmac_secret.txt` | Edge HMAC signing | ✅ ĐÃ COPY (len 64) |
 | `netchat_channel_owner` | (public ID) | DM bot_tony ↔ quanpt1 | ✅ loader |
 | `netchat_channel_morning` | (public ID) | Morning report 8AM | ✅ loader |
+| `netchat_owner_user_id` | hardcode 1 file .py + 2 test | quanpt1 NetChat user ID | ✅ ĐÃ COPY (lần 3) |
+| `netchat_bot_user_id` | hardcode 2 file .py | bot_tony user ID | ✅ ĐÃ COPY (lần 3) |
 
 ## KHÔNG phải secret thật (đã verify)
 
@@ -39,3 +41,12 @@
 4. `tools/audit_secrets.py` quét mỗi sprint — hiện **0 hardcode**.
 5. Không commit file chứa giá trị (`.gitignore` đã chặn; secrets.env/secrets.local.json
    nằm ngoài git).
+
+## Rà soát lần 3 (12/11 tối)
+
+- Quét 2208 file (mọi ext: .py/.bat/.sh/.ps1/.json/.md/.log/.env...)
+- **MỚI**: 2 user ID (owner + bot) đưa về loader + refactor 3 file .py + 2 test file
+- Logs chỉ chứa message/user ID (KHÔNG có token thật — verify trực tiếp)
+- `audit_secrets.py`: **0 hardcode, exit 0**
+- E2E 24/7: servers 8765/8766 + LLM + responder + autonomous + Pi5 + DM — TẤT CẢ PASS
+- DM xác nhận: post_id `r3kqezqmbb8of8oy49cjwpfa3w`

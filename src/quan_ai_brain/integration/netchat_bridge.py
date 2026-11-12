@@ -56,7 +56,7 @@ DEFAULT_CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoq
 CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 DEFAULT_CHANNEL_NAME = "Trợ lý Tony Pham"
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
-BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
+BOT_USER_ID = _get_secret("netchat_bot_user_id", "66opztx9ut8rjxny555xhj84je")  # (12/11) loader
 
 # ---------------------------------------------------------------------------
 # (02/11/2026, owner yêu cầu) VN-LANG — chuẩn hoá tiếng Việt TẦNG CUỐI cho DM.

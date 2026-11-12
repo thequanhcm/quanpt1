@@ -42,9 +42,9 @@ from loader import get_secret as _get_secret
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
 CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
-OWNER_NETCHAT_USER_ID = "3b1ughs36i8e9p46im8opnms8w"  # quanpt1
+OWNER_NETCHAT_USER_ID = _get_secret("netchat_owner_user_id", "3b1ughs36i8e9p46im8opnms8w")  # (12/11) loader
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
-BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
+BOT_USER_ID = _get_secret("netchat_bot_user_id", "66opztx9ut8rjxny555xhj84je")  # (12/11) loader
 
 _local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
 _script_cand = [

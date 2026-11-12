@@ -176,7 +176,7 @@ DM_CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr
 OWNER_USERNAME = "quanpt1"
 CHANNEL_NAME = "Trợ lý Tony Pham"  # (07/11) TÊN KÊNH API THẬT trên NetChat — CHỈ đổi khi owner đổi tên kênh phía NetChat; CHERRY = tên trợ lý, không phải tên kênh.
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
-BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
+BOT_USER_ID = _get_secret("netchat_bot_user_id", "66opztx9ut8rjxny555xhj84je")  # (12/11) loader
 CATCHUP_WINDOW_MIN = 720  # (01/11/2026, owner) sau restart/treo: quét lại TẤT CẢ
 # tin anh gửi trong 12 giờ qua chưa được trả lời — không bỏ lỡ tin nào.
 # (27/10/2026) Chống trả lời trùng sau restart: lưu các message_id ĐÃ trả lời

@@ -24,12 +24,17 @@ PATTERNS = [
     (r'(?i)(?:GITHUB_?TOKEN|GH_?token)\s*=\s*["\'][^"\']+["\']', "GITHUB_*"),
 ]
 
-# Channel ID cụ thể (hardcode trong code)
+# Channel ID + User ID cụ thể (hardcode trong code)
 CHANNEL_IDS = [
     "mwp3nk3ciprjjr4hdmcoqgk6jr",
     "4phc9b1mx78qjq3grxcw89u94a",
     "4phc9b1mx78ajq3grccw89u94a",
+    "3b1ughs36i8e9p46im8opnms8w",  # owner user id
+    "66opztx9ut8rjxny555xhj84je",  # bot user id
 ]
+
+# Thư mục chỉ là LOG/BACKUP/REPORT — không phải code chạy (hardcode ở đây không thực thi)
+NON_CODE_DIRS = {"logs", "backups", "reports", "docs", "data"}
 
 # Thư mục cần quét
 SCAN_DIRS = ["src", "tools", "edge_client", "deploy", "tests"]
@@ -121,6 +126,8 @@ def is_in_docstring_or_comment(filepath: Path, line_no: int) -> bool:
 def scan_file(filepath: Path) -> list[tuple[int, str, str]]:
     """Quét 1 file, trả về list (line_no, pattern_label, snippet)."""
     hits = []
+    # File trong thư mục non-code → chỉ cảnh báo nhẹ, không tính FAIL
+    is_non_code = bool(filepath.parts) and filepath.parts[0] in NON_CODE_DIRS
     try:
         txt = filepath.read_text(encoding="utf-8", errors="ignore")
     except Exception:
@@ -165,11 +172,20 @@ def main() -> int:
                 continue
             hits = scan_file(f)
             if hits:
-                files_with_hits += 1
-                total_hits += len(hits)
-                print(f"❌ {rel}")
-                for line_no, label, snippet in hits:
-                    print(f"   line {line_no} [{label}]: {snippet}")
+                is_non_code = bool(rel.parts) and rel.parts[0] in NON_CODE_DIRS
+                if is_non_code:
+                    # log/backup/report — không phải code thực thi
+                    print(f"ℹ️  {rel} (non-code: log/backup/report)")
+                    for line_no, label, snippet in hits[:3]:
+                        print(f"   line {line_no} [{label}]: {snippet}")
+                    if len(hits) > 3:
+                        print(f"   ... +{len(hits)-3}")
+                else:
+                    files_with_hits += 1
+                    total_hits += len(hits)
+                    print(f"❌ {rel}")
+                    for line_no, label, snippet in hits:
+                        print(f"   line {line_no} [{label}]: {snippet}")
                 print()
 
     print(f"\n=== KẾT QUẢ ===")

@@ -16,6 +16,15 @@ from quan_ai_brain.governance.approval_cards import ApprovalCardStore, new_task_
 from quan_ai_brain.governance.netchat_approval_adapter import NetChatApprovalAdapter
 from quan_ai_brain.governance.policy import PolicyEngine, ActionRequest, RiskLevel, DecisionStatus
 
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+from pathlib import Path
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+TEST_OWNER_UID = _get_secret('netchat_owner_user_id', '3b1ughs36i8e9p46im8opnms8w')
+
 
 CARD_MD = (
     "[XIN PHÊ DUYỆT] — Mã nhiệm vụ: {code}\n"
@@ -139,7 +148,7 @@ def test_new_task_code_unique():
 
 def test_plain_duyet_maps_to_single_pending(adapter, card_store):
     _mk_card(card_store, "TASK-ONE0001")
-    reply = adapter.handle_owner_message("Duyệt", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("Duyệt", sender_user_id=TEST_OWNER_UID, post=False)
     # phải NÓI RÕ duyệt gì — không được trả lời mơ hồ
     assert "TASK-ONE0001" in reply
     assert "ĐÃ DUYỆT" in reply
@@ -150,7 +159,7 @@ def test_plain_duyet_maps_to_single_pending(adapter, card_store):
 def test_plain_duyet_with_multiple_pending_asks_for_code(adapter, card_store):
     _mk_card(card_store, "TASK-MUL0001")
     _mk_card(card_store, "TASK-MUL0002")
-    reply = adapter.handle_owner_message("Duyệt", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("Duyệt", sender_user_id=TEST_OWNER_UID, post=False)
     assert "CẦN MÃ HỒ SƠ" in reply
     assert "TASK-MUL0001" in reply and "TASK-MUL0002" in reply
     # nothing approved
@@ -160,7 +169,7 @@ def test_plain_duyet_with_multiple_pending_asks_for_code(adapter, card_store):
 def test_plain_duyet_when_nothing_pending_is_honest(adapter, card_store):
     _mk_card(card_store, "TASK-DON0001")
     card_store.approve_card("TASK-DON0001", approver="quanpt1")  # no longer pending
-    reply = adapter.handle_owner_message("Duyệt", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("Duyệt", sender_user_id=TEST_OWNER_UID, post=False)
     # KHÔNG được lặp lại câu "Mọi quyết định đã được xử lý" gây hiểu nhầm
     assert "Mọi quyết định đã được xử lý" not in reply
     assert "KHÔNG CÓ HỒ SƠ" in reply
@@ -169,7 +178,7 @@ def test_plain_duyet_when_nothing_pending_is_honest(adapter, card_store):
 
 def test_duyet_with_exact_code(adapter, card_store):
     _mk_card(card_store, "TASK-CODE001")
-    reply = adapter.handle_owner_message("DUYỆT TASK-CODE001", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("DUYỆT TASK-CODE001", sender_user_id=TEST_OWNER_UID, post=False)
     assert "ĐÃ DUYỆT — TASK-CODE001" in reply
     assert "quanpt1" in reply
     assert "governance.db" in reply
@@ -177,8 +186,8 @@ def test_duyet_with_exact_code(adapter, card_store):
 
 def test_duyet_twice_is_explained_not_reexecuted(adapter, card_store):
     _mk_card(card_store, "TASK-TWICE01")
-    r1 = adapter.handle_owner_message("DUYỆT TASK-TWICE01", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
-    r2 = adapter.handle_owner_message("Duyệt", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    r1 = adapter.handle_owner_message("DUYỆT TASK-TWICE01", sender_user_id=TEST_OWNER_UID, post=False)
+    r2 = adapter.handle_owner_message("Duyệt", sender_user_id=TEST_OWNER_UID, post=False)
     assert "ĐÃ DUYỆT — TASK-TWICE01" in r1
     # lần 2 phải giải thích consume-once, chỉ rõ hồ sơ đã duyệt lúc nào
     assert "consume-once" in r2
@@ -188,7 +197,7 @@ def test_duyet_twice_is_explained_not_reexecuted(adapter, card_store):
 
 def test_duyet_unknown_code_lists_existing_cards(adapter, card_store):
     _mk_card(card_store, "TASK-HAVE01")
-    reply = adapter.handle_owner_message("DUYỆT TASK-KHONGCO", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("DUYỆT TASK-KHONGCO", sender_user_id=TEST_OWNER_UID, post=False)
     assert "KHÔNG TÌM THẤY" in reply
     assert "Vì sao" in reply
     assert "TASK-HAVE01" in reply  # gợi ý hồ sơ thật đang có
@@ -196,7 +205,7 @@ def test_duyet_unknown_code_lists_existing_cards(adapter, card_store):
 
 def test_reject_with_reason(adapter, card_store):
     _mk_card(card_store, "TASK-REJ0002")
-    reply = adapter.handle_owner_message("TỪ CHỐI TASK-REJ0002: rủi ro cao", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("TỪ CHỐI TASK-REJ0002: rủi ro cao", sender_user_id=TEST_OWNER_UID, post=False)
     assert "ĐÃ TỪ CHỐI — TASK-REJ0002" in reply
     assert "rủi ro cao" in reply
     assert "KHÔNG thực hiện" in reply
@@ -204,7 +213,7 @@ def test_reject_with_reason(adapter, card_store):
 
 def test_sua_request_creates_amendment_flow(adapter, card_store):
     _mk_card(card_store, "TASK-SUA0001")
-    reply = adapter.handle_owner_message("SỬA TASK-SUA0001: chỉ làm bước 1", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("SỬA TASK-SUA0001: chỉ làm bước 1", sender_user_id=TEST_OWNER_UID, post=False)
     assert "GHI NHẬN YÊU CẦU SỬA" in reply
     assert "chỉ làm bước 1" in reply
     assert "KHÔNG thực hiện" in reply  # chưa duyệt lại thì không chạy
@@ -219,13 +228,13 @@ def test_non_owner_is_refused_with_identity_reason(adapter, card_store):
 
 
 def test_non_command_returns_empty(adapter):
-    assert adapter.handle_owner_message("anh có thể phê duyệt được không?", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False) == ""
-    assert adapter.handle_owner_message("Xin chào bot", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False) == ""
+    assert adapter.handle_owner_message("anh có thể phê duyệt được không?", sender_user_id=TEST_OWNER_UID, post=False) == ""
+    assert adapter.handle_owner_message("Xin chào bot", sender_user_id=TEST_OWNER_UID, post=False) == ""
 
 
 def test_chat_with_task_code_but_no_verb_is_unknown_explained(adapter, card_store):
     _mk_card(card_store, "TASK-QQQ0001")
-    reply = adapter.handle_owner_message("TASK-QQQ0001 là gì vậy anh?", sender_user_id="3b1ughs36i8e9p46im8opnms8w", post=False)
+    reply = adapter.handle_owner_message("TASK-QQQ0001 là gì vậy anh?", sender_user_id=TEST_OWNER_UID, post=False)
     assert "CHƯA HIỂU LỆNH" in reply
     assert "TASK-QQQ0001" in reply
 
