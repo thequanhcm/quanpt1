@@ -1101,6 +1101,16 @@ class EdgeDaemonState:
             }
 
 
+# (12/11/2026) TỐI ƯU CAMERA: 1 lock chặn 2 tiến trình rpicam-still tranh
+# camera (2 request song song trước đây → cả hai fail "CAMERA_UNAVAILABLE");
+# frame cache TTL ngắn — MJPEG/snapshot/stream trong 0.6s tái dùng khung vừa
+# chụp, không đè nhau lên CSI bus; timeout 8s cho cold-start rpicam.
+CAMERA_CAPTURE_LOCK = threading.Lock()
+CAMERA_FRAME_CACHE: dict = {"data": None, "epoch": 0.0}
+CAMERA_FRAME_TTL_SEC = 0.6
+CAMERA_CAPTURE_TIMEOUT_SEC = 8.0
+
+
 class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
     """Local HTTP handler serving Kiosk UI files and local Edge APIs."""
 
@@ -2156,9 +2166,9 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         self._send_error_json(f"Unknown audio action: {action}", 400)
 
-    def _exec_system_cmd(self, cmd: list[str]) -> bool:
+    def _exec_system_cmd(self, cmd: list[str], timeout: float = 5.0) -> bool:
         try:
-            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=timeout)
             return True
         except Exception:
             return False
@@ -2386,11 +2396,19 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_api_kiosk_camera_mjpeg(self) -> None:
         """(31/10/2026) MJPEG live stream cho kiosk.js — multipart/x-mixed-replace.
-        Frame mới mỗi ~0.7s bằng rpicam-still (Camera Module 3 CSI); dừng khi
-        client ngắt kết nối hoặc camera_streaming=False."""
+        (12/11/2026) TỐI ƯU QUYỀN RIÊNG TƯ + TRÁNH TRANH CHẤP: kiểm CẢ
+        camera_enabled LẪN camera_streaming — trước đây chỉ check enabled,
+        "DỪNG XEM" (stop_live) không tắt được MJPEG, camera vẫn chụp âm thầm.
+        Frame mới mỗi ~0.7s dùng cache (TTL 0.6s → gần như mỗi vòng chụp 1
+        khung mới, không tranh lock với snapshot); dừng khi client ngắt hoặc
+        camera_streaming=False."""
         with self.daemon_state.lock:
-            if not self.daemon_state.camera_enabled:
-                self.daemon_state.camera_enabled = True  # 'bật camera' = cho phép
+            self.daemon_state.camera_enabled = True  # 'bật camera' = cho phép
+            streaming = self.daemon_state.camera_streaming
+        if not streaming:
+            # DỪNG XEM đang có hiệu lực → không mở stream (quyền riêng tư)
+            self._send_error_json("Camera live is stopped (camera_streaming=False)", 403)
+            return
         try:
             self.send_response(200)
             self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=camframe")
@@ -2400,7 +2418,8 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             while True:
                 with self.daemon_state.lock:
                     still_enabled = self.daemon_state.camera_enabled
-                if not still_enabled:
+                    still_streaming = self.daemon_state.camera_streaming
+                if not (still_enabled and still_streaming):
                     break
                 frame = self._capture_camera_frame()
                 if not frame:
@@ -2419,54 +2438,81 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             pass  # client ngắt — bình thường khi overlay đóng
 
     def _capture_camera_frame(self) -> bytes | None:
-        """Trigger camera frame capture on Pi 5 using ffmpeg v4l2 or fallback to latest snapshot."""
+        """Capture camera frame với lock + cache — tối ưu 12/11.
+
+        Trước đây: không lock → 2 request song song (VD MJPEG + snapshot) nổ
+        2 tiến trình rpicam-still tranh camera → cả hai fail; mỗi frame lại
+        chụp mới dù 0.2s trước vừa có khung. Giờ:
+        1. Cache TTL 0.6s — khung còn tươi tái dùng, không chụp lại.
+        2. CAMERA_CAPTURE_LOCK — chỉ 1 tiến trình rpicam tại 1 thời điểm,
+           request khác chờ (không fail vội).
+        3. Timeout 8s — rpicam cold-start ~1.4-2.5s, treo thì trả None sau 8s
+           thay vì treo handler.
+        """
+        now = time.time()
+        cached = CAMERA_FRAME_CACHE.get("data")
+        if cached and (now - float(CAMERA_FRAME_CACHE.get("epoch") or 0)) < CAMERA_FRAME_TTL_SEC:
+            return cached
+
         snapshot_file = STATIC_DIR / "assets" / "avatar" / "camera_snapshot.jpg"
 
-        if sys.platform != "win32" and (Path("/dev/video0").exists() or shutil.which("rpicam-still")):
-            import shutil
-            snapshot_file.unlink(missing_ok=True)
-            # (31/10/2026) Camera Module 3 CSI: ưu tiên rpicam (libcamera stack);
-            # fswebcam/ffmpeg v4l2 chỉ dành cho webcam USB.
-            if shutil.which("rpicam-still"):
-                self._exec_system_cmd(["rpicam-still", "-o", str(snapshot_file),
-                                       "--width", "640", "--height", "480",
-                                       "--nopreview", "-t", "1200"])
-            elif shutil.which("rpicam-jpeg"):
-                self._exec_system_cmd(["rpicam-jpeg", "-o", str(snapshot_file),
-                                       "--width", "640", "--height", "480",
-                                       "--nopreview", "-t", "1200"])
-            elif shutil.which("fswebcam"):
-                self._exec_system_cmd(["fswebcam", "-r", "640x480", "-S", "10", "--no-banner", "-q", str(snapshot_file)])
-            elif shutil.which("ffmpeg"):
-                cmd_fast = [
-                    "ffmpeg", "-y", "-f", "v4l2", "-input_format", "mjpeg", "-video_size", "640x480",
-                    "-i", "/dev/video0", "-ss", "00:00:00.8", "-frames:v", "1", "-q:v", "3", str(snapshot_file), "-loglevel", "quiet"
-                ]
-                self._exec_system_cmd(cmd_fast)
-                if not snapshot_file.exists() or snapshot_file.stat().st_size < 100:
-                    cmd_fallback = [
-                        "ffmpeg", "-y", "-f", "v4l2", "-video_size", "640x480",
-                        "-i", "/dev/video0", "-ss", "00:00:00.8", "-frames:v", "1", str(snapshot_file), "-loglevel", "quiet"
+        with CAMERA_CAPTURE_LOCK:
+            # Double-check cache sau khi chờ lock — request trước vừa chụp xong
+            now = time.time()
+            cached = CAMERA_FRAME_CACHE.get("data")
+            if cached and (now - float(CAMERA_FRAME_CACHE.get("epoch") or 0)) < CAMERA_FRAME_TTL_SEC:
+                return cached
+
+            if sys.platform != "win32" and (Path("/dev/video0").exists() or shutil.which("rpicam-still")):
+                import shutil
+                snapshot_file.unlink(missing_ok=True)
+                # (31/10/2026) Camera Module 3 CSI: ưu tiên rpicam (libcamera stack);
+                # fswebcam/ffmpeg v4l2 chỉ dành cho webcam USB.
+                if shutil.which("rpicam-still"):
+                    self._exec_system_cmd(["rpicam-still", "-o", str(snapshot_file),
+                                           "--width", "640", "--height", "480",
+                                           "--nopreview", "-t", "1200"],
+                                          timeout=CAMERA_CAPTURE_TIMEOUT_SEC)
+                elif shutil.which("rpicam-jpeg"):
+                    self._exec_system_cmd(["rpicam-jpeg", "-o", str(snapshot_file),
+                                           "--width", "640", "--height", "480",
+                                           "--nopreview", "-t", "1200"],
+                                          timeout=CAMERA_CAPTURE_TIMEOUT_SEC)
+                elif shutil.which("fswebcam"):
+                    self._exec_system_cmd(["fswebcam", "-r", "640x480", "-S", "10", "--no-banner", "-q", str(snapshot_file)],
+                                          timeout=CAMERA_CAPTURE_TIMEOUT_SEC)
+                elif shutil.which("ffmpeg"):
+                    cmd_fast = [
+                        "ffmpeg", "-y", "-f", "v4l2", "-input_format", "mjpeg", "-video_size", "640x480",
+                        "-i", "/dev/video0", "-ss", "00:00:00.8", "-frames:v", "1", "-q:v", "3", str(snapshot_file), "-loglevel", "quiet"
                     ]
-                    self._exec_system_cmd(cmd_fallback)
+                    self._exec_system_cmd(cmd_fast, timeout=CAMERA_CAPTURE_TIMEOUT_SEC)
+                    if not snapshot_file.exists() or snapshot_file.stat().st_size < 100:
+                        cmd_fallback = [
+                            "ffmpeg", "-y", "-f", "v4l2", "-video_size", "640x480",
+                            "-i", "/dev/video0", "-ss", "00:00:00.8", "-frames:v", "1", str(snapshot_file), "-loglevel", "quiet"
+                        ]
+                        self._exec_system_cmd(cmd_fallback, timeout=CAMERA_CAPTURE_TIMEOUT_SEC)
 
-        if snapshot_file.exists() and snapshot_file.is_file():
-            try:
-                data = snapshot_file.read_bytes()
-                if len(data) > 100:
-                    return data
-            except Exception:
-                pass
+            if snapshot_file.exists() and snapshot_file.is_file():
+                try:
+                    data = snapshot_file.read_bytes()
+                    if len(data) > 100:
+                        CAMERA_FRAME_CACHE["data"] = data
+                        CAMERA_FRAME_CACHE["epoch"] = time.time()
+                        return data
+                except Exception:
+                    pass
 
-        # Also check reports/camera_snapshot_pi5.jpg as baseline fixture if needed
-        workspace = STATIC_DIR.parent
-        report_snap = workspace / "reports" / "camera_snapshot_pi5.jpg"
-        if report_snap.exists() and report_snap.is_file():
-            try:
-                return report_snap.read_bytes()
-            except Exception:
-                pass
-        return None
+            # Also check reports/camera_snapshot_pi5.jpg as baseline fixture if needed
+            workspace = STATIC_DIR.parent
+            report_snap = workspace / "reports" / "camera_snapshot_pi5.jpg"
+            if report_snap.exists() and report_snap.is_file():
+                try:
+                    return report_snap.read_bytes()
+                except Exception:
+                    pass
+            return None
 
     def _serve_static_file(self, filename: str, content_type: str) -> None:
         target = STATIC_DIR / filename
