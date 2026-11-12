@@ -96,3 +96,6 @@ data/learning_daemon.lock
 data/tts_preference.json
 reports/intelligence_maturity/ciee/QUARANTINE_EXPORT_*.csv
 reports/intelligence_maturity/ciee/_quarantine_summary_*.json
+
+# CPSL hidden set (Phase B) — KHONG commit, chi owner giu local
+data/cognitive/cpsl/hidden/

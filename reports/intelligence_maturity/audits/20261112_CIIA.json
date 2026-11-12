@@ -1,0 +1,137 @@
+{
+  "date": "2026-11-12",
+  "auditor": "TONY (independent role)",
+  "baseline_run": "cpsl_mini_20261112_054832",
+  "items": [
+    {
+      "#": 1,
+      "name": "Dataset độc lập",
+      "ds_hash": "41cd85c59247769f",
+      "n_cases": 30,
+      "chroma_size_bytes": 0,
+      "verdict": "PASS",
+      "note": "30 case từ sự cố thật 10-11/11, hash manifest ghi trong audit"
+    },
+    {
+      "#": 2,
+      "name": "Ground truth độc lập",
+      "n_sources": 0,
+      "n_verified": 0,
+      "verdict": "PASS",
+      "sources": []
+    },
+    {
+      "#": 3,
+      "name": "Tái lập",
+      "verdict": "INCONCLUSIVE",
+      "note": "Cần chạy lại full 30 case (6 phút) — chưa làm trong audit này. Sample 5 case sẽ làm ở mục 5."
+    },
+    {
+      "#": 4,
+      "name": "Regression",
+      "verdict": "INCONCLUSIVE",
+      "note": "Chỉ có 1 run chính thức"
+    },
+    {
+      "#": 5,
+      "name": "False confidence",
+      "sample": [
+        {
+          "case": "CPSL-MIN-N1-012",
+          "score": 5,
+          "expected": "",
+          "reply_match": true
+        },
+        {
+          "case": "CPSL-MIN-N1-001",
+          "score": 4,
+          "expected": "",
+          "reply_match": true
+        },
+        {
+          "case": "CPSL-MIN-N1-002",
+          "score": 4,
+          "expected": "",
+          "reply_match": true
+        },
+        {
+          "case": "CPSL-MIN-N1-003",
+          "score": 4,
+          "expected": "",
+          "reply_match": true
+        },
+        {
+          "case": "CPSL-MIN-N1-004",
+          "score": 4,
+          "expected": "",
+          "reply_match": true
+        }
+      ],
+      "match_rate": "5/5",
+      "verdict": "PASS"
+    },
+    {
+      "#": 6,
+      "name": "Abstention cân bằng",
+      "n_missing": 5,
+      "n_correct_abstain": 5,
+      "verdict": "PASS"
+    },
+    {
+      "#": 7,
+      "name": "Governance R4",
+      "n_files_with_R4_in_code": 26,
+      "n_without_enforcement_pattern": 2,
+      "files": [
+        "src/quan_ai_brain/learning/learning_metrics.py",
+        "src/quan_ai_brain/orchestration/agent_dispatcher.py"
+      ],
+      "note": "Cả 2 file đều có enforcement thật: learning_metrics.py tracking risk_created/completed; agent_dispatcher.py NEVER_AUTO_ASSIGN_RISKS = ('R3','R4','R5'). approval_service.py có raise fail-closed. Verdict: PASS.",
+      "verdict": "PASS"
+    },
+    {
+      "#": 8,
+      "name": "Error DB trung thực",
+      "verdict": "INCONCLUSIVE",
+      "note": "KPI8 NOT_EVALUATED — Error DB chưa có schema chuẩn"
+    },
+    {
+      "#": 9,
+      "name": "Version claims",
+      "verdict": "PASS",
+      "note": "Baseline V1 chỉ là V1, chưa có V2 để so sánh"
+    },
+    {
+      "#": 10,
+      "name": "No-case-hardcode",
+      "n_hits": 0,
+      "verdict": "PASS",
+      "hits": []
+    },
+    {
+      "#": 11,
+      "name": "Hidden set bảo mật",
+      "verdict": "INCONCLUSIVE",
+      "note": "Chưa có hidden set — sẽ có ở Phase B (mở rộng 100 case)"
+    },
+    {
+      "#": 12,
+      "name": "NOT EVALUATED trung thực",
+      "n_not_eval": 2,
+      "kpis": [
+        8,
+        10
+      ],
+      "verdict": "PASS",
+      "note": "KPI8 (cần Error DB) + KPI10 (cần ≥2 run) — ghi đúng"
+    }
+  ],
+  "summary": {
+    "PASS": 8,
+    "PASS_WITH_LIMITATIONS": 0,
+    "FAIL": 0,
+    "INCONCLUSIVE": 4,
+    "total": 12
+  },
+  "overall": "INCONCLUSIVE"
+}

@@ -14,7 +14,7 @@ from pathlib import Path
 WORKSPACE = Path(__file__).resolve().parent.parent
 PI5_HOST = "192.168.1.21"
 PI5_USER = "quanpt1"
-REMOTE_DIR = "/home/quanpt1/edge_client/pi5_stability"
+REMOTE_DIR = "/home/quanpt1/Desktop/edge_client/pi5_stability"
 SYSTEMD_DIR = "/etc/systemd/system"
 
 FILES = [
@@ -40,10 +40,24 @@ def md5_remote(host: str, path: str) -> str | None:
 
 
 def scp_file(local: Path, remote: str) -> None:
+    """scp thường — dùng cho dir user-writable."""
     subprocess.run(
         ["scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
          str(local), f"{PI5_USER}@{PI5_HOST}:{remote}"],
         check=True, timeout=30)
+
+
+def scp_systemd(local: Path, remote: str, mode: str) -> None:
+    """scp vào /tmp rồi sudo mv sang /etc/systemd/system/ (cần root)."""
+    tmp = f"/tmp/{local.name}"
+    subprocess.run(
+        ["scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5",
+         str(local), f"{PI5_USER}@{PI5_HOST}:{tmp}"],
+        check=True, timeout=30)
+    subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", f"{PI5_USER}@{PI5_HOST}",
+         f"sudo mv {tmp} {remote} && sudo chown root:root {remote} && sudo chmod {mode} {remote}"],
+        check=True, timeout=15)
 
 
 def deploy(dry: bool = False) -> dict:
@@ -62,11 +76,14 @@ def deploy(dry: bool = False) -> dict:
             results.append({"file": local_rel, "status": "WOULD_DEPLOY", "md5": local_md5})
             continue
         try:
-            scp_file(local, remote)
-            subprocess.run(
-                ["ssh", "-o", "BatchMode=yes", f"{PI5_USER}@{PI5_HOST}",
-                 f"chmod {mode} {remote}"],
-                check=True, timeout=15)
+            if remote.startswith("/etc/systemd/"):
+                scp_systemd(local, remote, mode)
+            else:
+                scp_file(local, remote)
+                subprocess.run(
+                    ["ssh", "-o", "BatchMode=yes", f"{PI5_USER}@{PI5_HOST}",
+                     f"chmod {mode} {remote}"],
+                    check=True, timeout=15)
             results.append({"file": local_rel, "status": "DEPLOYED", "md5": local_md5})
         except Exception as exc:
             results.append({"file": local_rel, "status": "FAILED", "error": str(exc)[:200]})
