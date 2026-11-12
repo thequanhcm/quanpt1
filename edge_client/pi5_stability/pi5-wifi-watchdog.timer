@@ -1,0 +1,11 @@
+[Unit]
+Description=Pi5 WiFi watchdog timer (every 30s)
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

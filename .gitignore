@@ -90,6 +90,8 @@ data/test_vivos.wav
 data/_pi5_*
 data/edge_runtime.json
 data/edge_reconcile_log.jsonl
+data/pi5_monitor_state.json
+data/pi5_monitor.log
 data/learning_daemon.lock
 data/tts_preference.json
 reports/intelligence_maturity/ciee/QUARANTINE_EXPORT_*.csv

@@ -858,6 +858,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_edge_status()
             return
 
+        if path == "/api/executive/edge/pi5-stability":
+            self._handle_api_edge_pi5_stability()
+            return
+
         if path == "/api/executive/edge/telemetry":
             self._handle_api_edge_telemetry()
             return
@@ -4060,6 +4064,69 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "success": True,
             "edge": _GLOBAL_EDGE_MONITOR.get_status(),
         })
+
+    def _handle_api_edge_pi5_stability(self) -> None:
+        """GET /api/executive/edge/pi5-stability — Pi5 liveness monitor (12/11/2026).
+
+        Đọc state từ tools/pi5_monitor.py (probe mỗi 5 phút qua Task Scheduler)
+        + reconcile log gần nhất. Read-only, không gọi SSH.
+        """
+        try:
+            workspace = _find_workspace_root()
+            state_path = workspace / "data" / "pi5_monitor_state.json"
+            log_path = workspace / "data" / "pi5_monitor.log"
+            reconcile_path = workspace / "data" / "edge_reconcile_log.jsonl"
+
+            monitor_state = {}
+            if state_path.exists():
+                try:
+                    monitor_state = json.loads(state_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+            last_reconcile = None
+            if reconcile_path.exists():
+                try:
+                    lines = reconcile_path.read_text(encoding="utf-8").strip().splitlines()
+                    if lines:
+                        last_reconcile = json.loads(lines[-1])
+                except Exception:
+                    pass
+
+            # Tính "lost_for_sec" nếu đang mất
+            lost_for_sec = None
+            if monitor_state.get("last_lost_utc"):
+                try:
+                    lost_dt = datetime.fromisoformat(monitor_state["last_lost_utc"])
+                    lost_for_sec = int((datetime.now(timezone.utc) - lost_dt).total_seconds())
+                except Exception:
+                    pass
+
+            # Đọc 5 dòng log gần nhất
+            recent_log = []
+            if log_path.exists():
+                try:
+                    lines = log_path.read_text(encoding="utf-8").strip().splitlines()
+                    recent_log = lines[-5:]
+                except Exception:
+                    pass
+
+            self._send_json({
+                "success": True,
+                "monitor_state": monitor_state,
+                "lost_for_sec": lost_for_sec,
+                "is_alive": monitor_state.get("consecutive_lost_probes", 0) == 0,
+                "last_reconcile": last_reconcile,
+                "recent_log": recent_log,
+                "monitor_task": "QUAN_AI_BRAIN_PI5_MONITOR_5MIN",
+                "stability_config": {
+                    "wifi_watchdog_md5_local": "abb425546d35",
+                    "deploy_script": "tools/pi5_stability_deploy.py",
+                    "note": "Chạy deploy khi Pi5 online để cài systemd timer 30s",
+                },
+            })
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]}, status=500)
 
     def _handle_api_edge_telemetry(self) -> None:
         _GLOBAL_EDGE_MONITOR.check_deadline()

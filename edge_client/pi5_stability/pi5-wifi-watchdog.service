@@ -1,0 +1,14 @@
+# Pi5 WiFi watchdog — systemd service + timer (12/11/2026)
+# Deploy tại /etc/systemd/system/pi5-wifi-watchdog.{service,timer}
+# Chạy mỗi 30s, idempotent, không cần root runtime (chỉ cần sudo cho NM restart/reboot)
+
+[Unit]
+Description=Pi5 WiFi auto-reconnect watchdog
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=oneshot
+User=quanpt1
+ExecStart=/home/quanpt1/edge_client/pi5_stability/wifi_watchdog.sh
+# Cho phép NM restart + reboot không cần password (sudoers.d đã có từ trước)
