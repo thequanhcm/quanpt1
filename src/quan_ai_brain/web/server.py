@@ -890,6 +890,20 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_edge_camera_serve_image(parsed.query)
             return
 
+        # (12/11/2026) Dashboard Intelligence Maturity — READ-ONLY (Phase 3):
+        # 0 POST, không cho thay đổi gì; người duyệt vẫn là owner qua chat/card.
+        if path == "/api/intelligence/scorecard":
+            self._handle_api_intelligence_scorecard()
+            return
+
+        if path == "/api/intelligence/audit-status":
+            self._handle_api_intelligence_audit_status()
+            return
+
+        if path == "/api/intelligence/errors":
+            self._handle_api_intelligence_errors(parsed.query)
+            return
+
         if path == "/api/executive/roles":
             self._handle_api_executive_roles()
             return
@@ -5027,6 +5041,106 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
     def _handle_api_music_status(self) -> None:
         res = _send_edge_request("/api/kiosk/music/status", method="GET")
         self._send_json({"success": True, "edge_music": res.get("music"), "playing": res.get("playing", False)})
+
+    # ============ (12/11/2026) INTELLIGENCE MATURITY DASHBOARD — READ-ONLY ============
+    def _handle_api_intelligence_scorecard(self) -> None:
+        """GET /api/intelligence/scorecard — 12 KPI CISC run mới nhất + trend.
+
+        Read-only. Khi chưa có benchmark (bảng trống) → status='NOT_EVALUATED'
+        đầy đủ 12 KPI + eval_state='BASELINE_NOT_ESTABLISHED' — không bịa số.
+        """
+        try:
+            from quan_ai_brain.intelligence.kpi_store import KpiStore, KPI_NAMES
+            store = KpiStore()
+            run = store.latest_run()
+            kpis: list[dict] = []
+            if run:
+                rows = store.run_kpis(run["run_id"])
+                by_id = {r["kpi_id"]: r for r in rows}
+                for kid in range(1, 13):
+                    r = by_id.get(kid)
+                    kpis.append({
+                        "kpi_id": kid,
+                        "kpi_name": KPI_NAMES[kid],
+                        "status": r["status"] if r else "NOT_EVALUATED",
+                        "value": r["value"] if r else None,
+                        "unit": (r["unit"] if r else "ratio"),
+                        "sample_size": (r["sample_size"] if r else None),
+                        "confidence": ([r["confidence_low"], r["confidence_high"]]
+                                       if r and r["confidence_low"] is not None else None),
+                        "red_flag": bool(r["red_flag"]) if r else False,
+                    })
+            else:
+                kpis = [{
+                    "kpi_id": kid, "kpi_name": KPI_NAMES[kid],
+                    "status": "NOT_EVALUATED", "value": None, "unit": "ratio",
+                    "sample_size": None, "confidence": None, "red_flag": False,
+                } for kid in range(1, 13)]
+
+            measured = sum(1 for k in kpis if k["status"] == "MEASURED")
+            trend = {}
+            if run:
+                for kid in range(1, 13):
+                    t = store.kpi_trend(kid, limit=7)
+                    if t:
+                        trend[str(kid)] = [
+                            {"run_id": x["run_id"], "value": x["value"],
+                             "red_flag": bool(x["red_flag"]), "at": x["started_at_utc"]}
+                            for x in reversed(t)  # cũ → mới cho sparkline
+                        ]
+            self._send_json({
+                "success": True,
+                "eval_state": "BASELINE_ESTABLISHED" if measured >= 3 else "BASELINE_NOT_ESTABLISHED",
+                "last_eval_utc": run["finished_at_utc"] if run else None,
+                "last_run": run,
+                "coverage": {"measured": measured, "total": 12},
+                "kpis": kpis,
+                "trend": trend,
+            })
+        except Exception as exc:
+            self._send_json({"success": False, "error": str(exc)[:200]}, status=500)
+
+    def _handle_api_intelligence_audit_status(self) -> None:
+        """GET /api/intelligence/audit-status — trạng thái CIIA (read-only).
+
+        Trung thực: hiện tại chưa có audit dashboard → NOT_RUN + link protocol.
+        """
+        self._send_json({
+            "success": True,
+            "audit_state": "NOT_RUN",
+            "protocol": "reports/intelligence_maturity/CHERRY_INDEPENDENT_AUDIT_PROTOCOL.md",
+            "last_audit": None,
+            "detail": "Chưa có audit độc lập dashboard (CIIA Phase 5 chờ). "
+                      "Audit baseline Task E (11/11) là audit nền, không phải audit dashboard.",
+        })
+
+    def _handle_api_intelligence_errors(self, query) -> None:
+        """GET /api/intelligence/errors?status=OPEN — Error DB OPEN items.
+
+        Error DB (data/cognitive/errors.db) Phase D chưa dựng → trả danh sách
+        lỗi ĐÃ BIẾT từ audit (nhãn rõ nguồn), không bịa chu trình.
+        """
+        known = [
+            {"error_id": "RETRIEVAL_GAP", "severity": "HIGH", "status": "OPEN",
+             "title": "Reasoning V9 chỉ thấy 148/10.874 knowledge_units",
+             "discovered_utc": "2026-11-11T00:00:00+00:00",
+             "source": "Phase A audit (CIEE probe)", "cycle_state": "NOT_STARTED"},
+            {"error_id": "CONFLICT_DEADCODE", "severity": "MEDIUM", "status": "OPEN",
+             "title": "ConflictDetector V31 dùng schema cũ, không khớp knowledge_units V9",
+             "discovered_utc": "2026-11-11T00:00:00+00:00",
+             "source": "Phase A audit (CIEE probe B2)", "cycle_state": "NOT_STARTED"},
+        ]
+        try:
+            status_filter = (urllib.parse.parse_qs(query.query).get("status") or ["OPEN"])[0]
+        except Exception:
+            status_filter = "OPEN"
+        items = [e for e in known if status_filter in ("ALL", "", e["status"])]
+        self._send_json({
+            "success": True,
+            "source": "KNOWN_FROM_AUDIT (Error DB Phase D chưa dựng — chưa có data/cognitive/errors.db)",
+            "count": len(items),
+            "errors": items,
+        })
 
     def _handle_api_edge_camera_status(self) -> None:
         """Fetch remote camera status from Pi 5."""
