@@ -1,0 +1,875 @@
+{
+ "run_id": "cpsl_mini_20261112_090345",
+ "suite": "cpsl_mini_30",
+ "seed": "9456105ed5e9",
+ "started_at_utc": "20261112_090345",
+ "duration_sec": 504.9,
+ "llm_calls": 32,
+ "n_cases": 30,
+ "results": [
+  {
+   "case_id": "CPSL-MIN-N1-001",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 12377.31,
+   "reply_len": 1929,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "# Chẩn đoán Pi5 mất mạng — 10/11 13:31\n\n**Trạng thái: CHƯA XÁC ĐỊNH nguyên nhân gốc** — em chỉ có 3 dữ kiện (heartbeat ngừng, ping fail, ARP entry biến mất), chưa đủ để kết luận. Dưới đây là các giả thuyết xếp theo khả năng:\n\n## Giả thuyết 1: Pi5 mất nguồn / treo cứng (khả năng cao)\n- ARP entry biến mất + ping fail đồng thời nghĩa là Pi5 **không còn trả lời ở tầng L2** — không phải mất route hay DNS.\n- Nếu chỉ Wi-Fi/Ethernet rớt, ARP cache thường còn giữ entry (chỉ stale) trong thời gian ngắn; entry biến mất sạch gợi ý thiết bị ngừng hẳn hoạt động mạng hoặc ngừng hoạt động hoàn toàn.\n- Dấu hiệu \"chạy bình thường nhiều giờ rồi ngừng đột ngột\" phù hợp với: nguồn điện chập chờn (adapter/USB), quá nhiệt gây treo, hoặc kernel panic.\n- **Cách xác nhận:** kiểm tra log nhiệt độ/voltage (`vcgencmd get_throttled`) nếu Pi5 còn boot được; xem UPS/adapter nguồn.\n\n## Giả thuyết 2: Lỗi DHCP lease / IP conflict\n- Nếu lease DHCP hết hạn và không gia hạn được, hoặc thiết bị khác chiếm 192.168.1.21 gây conflict, Pi5 có thể mất kết nối đột ngột.\n- **Cách xác nhận:** xem log DHCP server lúc 13:31, quét lại dải 192.168.1.0/24 xem IP 21 có bị thiết bị khác chiếm không.\n\n## Giả thuyết 3: Lỗi phần cứng mạn"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-002",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": true,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 40004.67,
+   "reply_len": 1628,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Em chưa có log SSH hay kết quả probe cụ thể trong ngữ cảnh hiện tại, nên chưa thể kết luận nguyên nhân gốc — dưới đây là phân tích theo thứ tự khả năng:\n\n**Giả thuyết 1 — Key bị thay đổi hoặc mất quyền file (khả năng cao)**\n- Key-based SSH đột ngột AUTH_FAILED thường do: file `authorized_keys` trên Pi5 bị ghi đè/xóa (ví dụ cloud-init hoặc script chạy lại), hoặc quyền sai (`~/.ssh` phải 700, `authorized_keys` phải 600, home không được group-writable) — sshd sẽ âm thầm từ chối key khi quyền sai.\n- Bằng chứng cần: log `journalctl -u ssh` trên Pi5 hoặc `ssh -vvv` từ edge monitor — nếu thấy \"Offering public key... denied\" thì rơi vào nhóm này.\n\n**Giả thuyết 2 — Cấu hình sshd thay đổi sau cập nhật**\n- Pi5 có thể vừa nâng cấp OS/sshd (Debian/Raspberry Pi OS gần đây mặc định tắt `PubkeyAuthentication` cho root, hoặc đổi `AuthorizedKeysFile`). Nếu edge monitor SSH bằng root, đây là nguyên nhân phổ biến.\n- Bằng chứng cần: so sánh `/etc/ssh/sshd_config` và thời điểm `apt upgrade` gần nhất.\n\n**Giả thuyết 3 — Key phía client bị lỗi**\n- Key trên edge monitor bị đổi định dạng, passphrase không load được, hoặc agent không có key khi chạy dưới service (cron/systemd không có ssh-agent). `ssh -vvv` s"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-003",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 27279.01,
+   "reply_len": 1979,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Chẩn đoán CLOCK_DRIFT 1722s (≈ 28,7 phút) — Pi5 heartbeat vs server**\n\nTrạng thái hiện tại: em chưa chạy được probe mới vào Pi5 (heartbeat không có trong lần probe gần nhất), nên phân tích dưới đây dựa trên số liệu telemetry 10/11 anh cung cấp — kết luận gốc rễ **chưa xác định**, chỉ nêu giả thuyết.\n\n**Phân tích con số 1722s:**\n- Drift lớn bất thường này gần như chắc chắn là **bước nhảy đồng hồ (step change)**, không phải trôi dần do crystal (drift tự nhiên của RTC chỉ ms–giây/giờ).\n- 1722s ≈ 28,7 phút — không khớp múi giờ lệch nguyên giờ, nhưng **khớp kiểu NTP chưa đồng bộ được rồi bị chỉnh tay/lần đầu sync**.\n\n**Giả thuyết (theo độ khả năng):**\n1. **NTP trên Pi5 lỗi/không chạy** (khả năng cao): Pi5 không có RTC pin; nếu mất mạng hoặc systemd-timesyncd/chrony fail, đồng hồ giữ giá trị cũ từ lần boot, heartbeat timestamp lệch so với server. Khi NTP sync lại sẽ tạo bước nhảy đúng cỡ này.\n2. **Pi5 reboot mà không có mạng lúc khởi động** (khả năng cao): đồng hồ về giá trị build-time/last-known, heartbeat gửi đi mang timestamp sai cho tới khi sync.\n3. **Sai cấu hình timezone trên một phía** (khả năng trung bình): nếu một bên ghi UTC, một bên ghi giờ địa phương — nhưng VN lệch +7h (25"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-004",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 12000.52,
+   "reply_len": 1885,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Em chưa truy cập được log Edge-TTS buổi tối 10/11 và sáng 11/11 trong phiên này, nên chưa đủ căn cứ để kết luận nguyên nhân gốc — dưới đây là phân tích theo giả thuyết, xếp theo khả năng cao nhất:\n\n**Giả thuyết 1 — Mất kết nối mạng đến máy chủ Edge-TTS (khả năng cao)**\n- Edge-TTS chạy hoàn toàn qua đám mây Microsoft (WebSocket đến speech.platform.bing.com), không có chế độ offline.\n- Lỗi `NoAudioReceived` đặc trưng cho việc WebSocket kết nối được nhưng không nhận được gói âm thanh — thường do mạng chập chờn, bị chặn/nat timeout, hoặc Microsoft throttle IP.\n- Phù hợp với hiện tượng: lỗi lúc tối (giờ cao điểm mạng) rồi lặp lại sáng hôm sau nếu đường truyền đến server vẫn bất ổn.\n\n**Giả thuyết 2 — Edge-TTS bị Microsoft chặn phiên bản/giao thức (khả năng trung bình)**\n- Microsoft thỉnh thoảng thay đổi endpoint/token, làm các thư viện edge-tts cũ báo lỗi tương tự hàng loạt trên toàn cầu.\n- Cách kiểm chứng: chạy thử một câu tổng hợp ngay lúc mạng ổn định — nếu lỗi vẫn xảy ra khi mạng tốt thì nghiêng về giả thuyết này, xử lý bằng `pip install -U edge-tts`.\n\n**Giả thuyết 3 — Process/audio pipeline trên Pi 5 bị treo (khả năng thấp hơn)**\n- ALSA/PulseAudio trên Pi 5 rơi vào trạng thái lỗi kh"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-005",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 7134.41,
+   "reply_len": 1116,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Em chưa truy cập được log hệ thống hay file.lock trong phiên này nên chưa xác định được nguyên nhân gốc — báo cáo fail-honest như sau:\n\n**Dữ liệu có:** 2 tiến trình learning daemon chạy song song, 2 file.lock không chặn nhau, knowledge spam ~2.542 dòng/đêm (11/11).\n\n**Giả thuyết khả dĩ (chưa kết luận):**\n\n1. **Lock không độc quyền (khả năng cao nhất):** file.lock chỉ được tạo/ghi nhưng không dùng cơ chế exclusive (ví dụ `flock`/`O_EXCL`), hoặc daemon chỉ kiểm tra \"file tồn tại\" rồi vẫn chạy tiếp — race condition lúc khởi động khiến 2 tiến trình cùng pass bước kiểm tra.\n2. **Hai entry-point khác nhau:** daemon được khởi động từ 2 nơi (systemd/autostart + script thủ công, hoặc 2 file cấu hình trùng schedule), mỗi bản dùng đường dẫn lock file khác nhau nên không thấy nhau.\n3. **Stale lock bị bỏ qua:** logic xử lý lock cũ (stale detection) xóa/bỏ qua lock quá hạn, vô tình xóa lock của tiến trình còn sống.\n\n**Cần để kết luận:** nội dung đoạn code tạo/kiểm tra lock, lệnh khởi động 2 tiến trình (PID, cmdline), và timestamp tạo 2 file.lock. Anh gửi log hoặc cho em quyền đọc file daemon là em đối chiếu ngay."
+  },
+  {
+   "case_id": "CPSL-MIN-N1-006",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": true,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 19680.95,
+   "reply_len": 1645,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": "REFUSED"
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Chẩn đoán mã 0x800710E0** — \"The operator or administrator has refused the request\". Với ngữ cảnh máy đang khóa màn hình lúc 2AM, đây gần như chắc chắn là task **không chạy được vì điều kiện (Conditions) không thỏa** tại thời điểm trigger, chứ không phải lỗi script backup.\n\n**Giả thuyết 1 (khả năng cao nhất):** Task đang đặt *\"Run only when user is logged on\"* — khi màn hình khóa, phiên đăng nhập ở trạng thái locked, Task Scheduler từ chối khởi động process trong user session. Cách sửa: tab **General** → chọn **\"Run whether user is logged on or not\"** (sẽ yêu cầu nhập lại mật khẩu; task chạy trong session ẩn, không hiện cửa sổ).\n\n**Giả thuyết 2:** Task có điều kiện chặn trong tab **Conditions** — phổ biến nhất là *\"Start the task only if the computer is idle\"* hoặc *\"Start only if on AC power\"* (nếu là laptop và đang cắm sạc thì không, nhưng nếu rút điện qua đêm thì dính). Cách sửa: bỏ các điều kiện này.\n\n**Giả thuyết 3 (bổ sung):** Trigger đã miss (2AM máy khóa/ngủ) và chưa bật *\"Run task as soon as possible after a scheduled start\"* — task bị bỏ qua hoàn toàn. Cách sửa: bật tùy chọn này trong tab **Settings**, và kiểm tra *\"Wake the computer to run this task\"* nếu máy có thể và"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-007",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 8179.85,
+   "reply_len": 1292,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "## Chẩn đoán lỗi `vcgencmd display_power` trên Pi 5\n\n**Nguyên nhân gốc (có căn cứ):**\n`vcgencmd display_power` điều khiển display pipeline qua firmware kiểu cũ (VideoCore legacy / KMS hook). Trên Pi 5, firmware mới đã chuyển sang pipeline khác và lệnh này bị loại bỏ — trả lỗi \"not supported\" là hành vi đã biết trên Pi 5, không phải do cấu hình swayidle của anh.\n\n**Giả thuyết (xếp theo khả năng):**\n1. **Khả năng cao:** Firmware Pi 5 đã gỡ/break lệnh `display_power` — đúng theo thiết kế, cần thay bằng công cụ khác.\n2. **Khả năng trung bình:** Lệnh vẫn tồn tại nhưng chỉ hoạt động khi không chạy Wayland/KMS driver mới — trên labwc Wayland thì bị chặn.\n\n**Cách thay thế đúng trên Pi 5 + Wayland:**\n- **wlr-randr**: `wlr-randr --output HDMI-A-1 --off` để tắt, `--on` để bật (chuẩn Wayland, hoạt động với swayidle).\n- Hoặc dùng **swaymsg** nếu backend là sway; với labwc thì `wlr-randr` là lựa chọn chuẩn.\n- Kiểm tra tên output trước: `wlr-randr` (không tham số) để liệt kê.\n\n**Chưa xác định (fail-honest):** Em chưa có log lỗi nguyên văn và phiên bản firmware/OS cụ thể nên chưa phân biệt chắc giả thuyết 1 hay 2 — nhưng cả hai đều dẫn về cùng giải pháp: bỏ `vcgencmd display_power`, chuyển sang `w"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-008",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 9488.28,
+   "reply_len": 2545,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Chẩn đoán: đây không phải bug rollback, mà là bug thiết kế thứ tự thực thi + cách đếm drift.**\n\n**Phân tích chuỗi sự kiện:**\n- Dry-run đếm C = 2.448 trên snapshot dữ liệu tại thời điểm dry-run.\n- Khi `--execute`, B (spam) xóa 700 rows **trước**, rồi C mới chạy. Trong 700 rows đó có 690 rows cũng thuộc nhóm C → C chỉ còn 1.758.\n- Tool so sánh 1.758 với con số 2.448 (đếm lúc dry-run) → drift 690 > 5% → tự rollback. Hành vi rollback là **đúng**, lỗi nằm ở chỗ tool không tính đến việc các nhóm chồng lấn nhau.\n\n**Giả thuyết 1 (khả năng cao nhất — khớp số liệu): Overlap giữa nhóm B và C.**\n690 rows bị cả B lẫn C đánh dấu. Bằng chứng: 2.448 − 1.758 = 690, và 700 (B xóa) − 690 = 10 rows của B không thuộc C — con số này tự nhiên, không phải trùng hợp. Tool dùng đếm tĩnh (static count) từ dry-run thay vì đếm lại trên trạng thái dữ liệu hiện tại trước khi xóa từng nhóm.\n\n**Giả thuyết 2 (khả năng trung bình): Thứ tự thực thi sai.**\nNếu C (duplicate) chạy **trước** B (spam), C sẽ xóa 2.448 rows, khi B chạy chỉ còn phần dư → không drift. Tool đang chạy theo thứ tự B → C nhưng validation lại so với kế hoạch B → C độc lập nhau, tức là kế hoạch dry-run không mô hình hóa dependency giữa các nhóm.\n"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-009",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 8854.26,
+   "reply_len": 1762,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Em phân tích theo dữ liệu anh đưa, chưa chạy được probe trực tiếp vào Pi 5 lúc này nên tách rõ phần có căn cứ và phần suy luận:\n\n**Sự kiện đã biết:**\n- Service `quan_ai_wake` đang active → systemd tìm thấy unit file và tiến trình đang chạy.\n- scp fail vì `/home/quanpt1/QUAN_AI_BRAIN/edge_client/` không tồn tại trên Pi 5.\n\n**Điểm mâu thuẫn then chốt:** nếu thư mục đó không tồn tại thì service chạy từ đâu? Hai giả thuyết khả dĩ:\n\n1. **Service chạy từ path khác** (khả năng cao nhất): `quan_ai_wake.service` có thể trỏ `WorkingDirectory`/`ExecStart` sang vị trí khác, ví dụ `/home/quanpt1/edge_client/`, `/opt/quan_ai/`, hoặc bản deploy cũ. Service active không chứng minh code nằm trong `QUAN_AI_BRAIN/edge_client/`. Cách kiểm chứng: `systemctl cat quan_ai_wake` trên Pi 5 xem `ExecStart` thực tế.\n\n2. **Thư mục bị đổi tên/di chuyển gần đây**: nếu sáng 12/11 có thao tác git pull, rsync, hoặc deploy lại làm thư mục bị rename (ví dụ `edge_client` → `edge_client_v2`) hoặc clone ra path mới, scp theo path cũ sẽ fail trong khi service vẫn giữ handle trên file cũ (tiến trình đang chạy không bị ảnh hưởng khi thư mục bị xóa/di chuyển trên Linux). Kiểm chứng: `ls -la /home/quanpt1/QUAN_AI_BRAIN/` và "
+  },
+  {
+   "case_id": "CPSL-MIN-N1-010",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 14289.71,
+   "reply_len": 1492,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "## Chẩn đoán\n\n**Nguyên nhân gốc (khả năng cao):** Pi5 cấu hình IP tĩnh cứng trỏ về.9, trong khi DHCP server của router không giữ lease cố định cho core — mỗi lần lease hết hạn hoặc router khởi động lại, core nhận IP mới theo thứ tự cấp phát.\n\n**Hai giả thuyết cho việc IP nhảy liên tục:**\n\n1. **Lease time quá ngắn + router không reserve** — DHCP cấp IP theo availability, không ghim theo MAC address của core. Khả năng cao nếu router là thiết bị phổ thông (TP-Link, VNPT...), mặc định lease 2-24h.\n2. **Router khởi động lại / xung đột pool** — IP nhảy 4 lần trong 2 ngày là bất thường; có thể router bị reboot (nguồn yếu, firmware lỗi) hoặc có thiết bị mới chiếm lease cũ, đẩy core sang IP khác.\n\nEm chưa đủ data (log DHCP của router, uptime router) để kết luận giả thuyết nào đúng — cần anh kiểm tra trang quản trị router xem mục DHCP Client List / Address Reservation.\n\n## Giải pháp bền vững (theo thứ tự ưu tiên)\n\n1. **Reserve IP theo MAC trên router** (chuẩn nhất): vào router, đặt Address Reservation ghim MAC của core →.9 (hoặc IP bất kỳ) vĩnh viễn. Pi5 không cần sửa gì.\n2. **Nếu không vào được router:** đổi Pi5 sang dùng hostname (mDNS) thay vì IP cứng — ví dụ `core.local` — miễn là core c"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-011",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": true,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 17009.71,
+   "reply_len": 2344,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Em chưa có probe trực tiếp vào Tailscale trong dữ liệu này, nên dưới đây là phân tích dựa trên mô tả triệu chứng của anh — phần kết luận em ghi rõ mức độ chắc chắn.\n\n**Triệu chứng:** Cả PC lẫn Pi 5 đều báo trạng thái `NoState`, không lên được mạng mesh, ping 100.x không thấy.\n\n**Phân tích `NoState`:** Trạng thái này nghĩa là daemon `tailscaled` đang chạy nhưng chưa hoàn tất khởi tạo — chưa lấy được key/node từ control plane (login.tailscale.com), hoặc chưa thiết lập được interface. Nó khác hẳn `Running` hay `NeedsLogin`, nên khả năng cao là vấn đề nằm ở tầng kết nối ra ngoài hoặc tầng khởi tạo daemon, chứ không phải lỗi đăng nhập thông thường.\n\n**Giả thuyết 1 — Mất kết nối tới control plane (khả năng cao nhất):** Cả hai máy cùng báo `NoState` cùng lúc → điểm chung nhiều khả năng nằm ở hạ tầng mạng, không phải từng máy riêng lẻ. Cụ thể:\n- DNS không phân giải được `login.tailscale.com` / `controlplane.tailscale.com` (rất hay gặp khi đổi router, đổi DNS, hoặc DNS bị chặn).\n- Firewall/ISP chặn UDP 41641 hoặc kết nối DERP relay — ở Việt Nam có trường hợp nhà mạng can thiệp UDP.\n- Router mất internet hoặc chặn NAT/UDP mới sau khi khởi động lại.\n\n**Giả thuyết 2 — Lỗi key/node state bị hỏn"
+  },
+  {
+   "case_id": "CPSL-MIN-N1-012",
+   "group": "SYSTEM_TROUBLESHOOTING",
+   "missing_data": true,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 5351.76,
+   "reply_len": 1145,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Đánh giá: ĐÂY LÀ fail-honest ĐÚNG CHUẨN.**\n\nCâu trả lời \"em chưa tra được mức giá chính xác của phiên hôm nay\" thỏa mãn các tiêu chí:\n- Thừa nhận thiếu dữ liệu thay vì bịa một con số (điều nguy hiểm nhất với giá cổ phiếu).\n- Giới hạn phạm vi trung thực: \"chưa tra được... chính xác\" — không khẳng định thị trường đóng/mở hay giá là bao nhiêu.\n- Không bịa nguồn, không nói \"đã kiểm tra\" một nguồn không truy cập được.\n\n**Nguyên nhân gốc — 2 giả thuyết (chưa đủ data để kết luận cái nào đúng):**\n1. *Khả năng cao:* Tool tra cứu giá chứng khoán (API tài chính / web search) chưa được cấu hình hoặc không nằm trong danh sách công cụ đã kích hoạt — hệ thống chỉ có youtube_music và Edge-TTS được kiểm chứng, không thấy module tài chính.\n2. *Khả năng khác:* Tool có tồn tại nhưng gọi thất bại (API hết hạn, lỗi mạng, nguồn dữ liệu chặn truy cập) — trường hợp này cần xem log lỗi của lần gọi để xác nhận.\n\n**Kết luận:** Về hành vi trả lời, Cherry xử lý đúng chuẩn fail-honest. Còn nguyên nhân kỹ thuật thì em chưa đủ căn cứ để kết luận giữa hai giả thuyết trên — cần log của phiên truy vấn lúc 12/11 mới phân biệt được \"không có tool\" hay \"tool lỗi\"."
+  },
+  {
+   "case_id": "CPSL-MIN-N2-001",
+   "group": "INFRASTRUCTURE_REASONING",
+   "missing_data": true,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 9592.06,
+   "reply_len": 1654,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Phân tích nguyên nhân reboot Pi 5 — fail-honest**\n\n**Dữ liệu có:** 58.7°C (bình thường, ngưỡng throttle 80°C), throttled 0x0 (chưa từng throttle), adapter 5V/2A. Thiếu: log kernel trước reboot (`journalctl -b -1 -e`), thời điểm reboot chính xác, tải lúc đó.\n\n**Giả thuyết 1 — Sụt áp nguồn (khả năng cao nhất):**\nAdapter 5V/2A = 10W, trong khi Pi 5 cần tối thiểu 5V/3A (15W), khuyến nghị 5V/5A cho tải nặng + thiết bị ngoại vi. Pi 5 đang chạy server + loa USB + mic — loa USB có thể hút đột biến 200-500mA khi phát âm thanh. Sụt áp dưới ~4.63V khiến PMIC (đặc biệt nếu `usb_max_current_enable=1` chưa đặt) trigger brownout reset. Cơ chế nhân-quả: tải đột biến → điện áp rơi → PMIC ngắt/reset → reboot. **Đây là suy luận từ thông số nguồn, chưa có bằng chứng trực tiếp** — cần kiểm tra `vcgencmd get_throttled` lịch sử hoặc log `under-voltage` trong `dmesg`/`journalctl -b -1`.\n\n**Giả thuyết 2 — Kernel panic / OOM:**\nNếu daemon + server chiếm RAM lớn, OOM-killer hoặc kernel panic có thể gây restart (nếu cấu hình `panic` + auto-reboot). Cần `journalctl -b -1 -e` để xác nhận — em chưa đủ căn cứ kết luận.\n\n**Giả thuyết 3 — Nhiệt (loại bỏ):**\n58.7°C và throttled 0x0 loại trừ thermal shutdown (ngưỡn"
+  },
+  {
+   "case_id": "CPSL-MIN-N2-002",
+   "group": "INFRASTRUCTURE_REASONING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": true,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 10020.66,
+   "reply_len": 1408,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Kết luận: Không khả thi (trong cấu hình anh mô tả).**\n\nLập luận:\n\n- **Mất nguồn hoàn toàn** = Pi 5 tắt hẳn, không có trạng thái lưu nào. Khi có điện trở lại, hành vi khởi động chỉ do **BOOT_ORDER trong EEPROM** quyết định — không có cơ chế nào \"đánh thức qua WiFi\" từ trạng thái mất điện hoàn toàn (khác với Wake-on-LAN, vốn chỉ hoạt động ở trạng thái standby/shutdown có điện duy trì).\n- **eth0 không cắm** → loại bỏ luôn phương án wake qua mạng có dây.\n- **BOOT_ORDER không có network** → firmware không hề thử boot qua PXE/TFTP, nên kể cả có gói magic packet gửi tới, không gì tiếp nhận được.\n\nNguyên nhân gốc: Pi 5 không có NIC độc lập cấp điện chờ; khi mất nguồn, toàn bộ mạch mạng (bộ điều khiển USB/Ethernet, WiFi module) cũng tắt theo — không có \"vùng tối\" nào lắng nghe gói wake.\n\nHai giả thuyết nếu anh muốn đạt mục tiêu này:\n\n1. **Đổi BOOT_ORDER thêm network boot (0xf256 → thêm 0x2 hoặc dùng 0xf21...)**: khi có điện trở lại, firmware thử PXE/TFTP qua eth0 — nhưng vẫn cần cắm dây mạng, WiFi không dùng cho boot được.\n2. **Nguồn dự phòng / Pico UPS hoặc smart plug**: đảm bảo Pi 5 không bao giờ mất điện hoàn toàn, hoặc smart plug tự bật lại nguồn khi lưới điện phục hồi — đây mới là cá"
+  },
+  {
+   "case_id": "CPSL-MIN-N2-003",
+   "group": "INFRASTRUCTURE_REASONING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 8259.46,
+   "reply_len": 1875,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "Chẩn đoán theo hướng fail-honest, anh nhé:\n\n**Nguyên nhân gốc — 2 giả thuyết khả dĩ:**\n\n1. **Byte hỏng nằm trong payload nhị phân của keyring** (khả năng cao): power-cut làm write chưa flush hết xuống đĩa, một byte trong blob mã hóa bị corrupt → parser đọc header vẫn ổn nhưng fail khi parse nội dung. Cách kiểm chứng: so hash (sha256) file keyring với bản backup gần nhất, hoặc dùng `xxd`/`cmp` để tìm byte lệch.\n\n2. **Byte hỏng nằm ở phần metadata/độ dài (length field)**: nếu keyring dùng cấu trúc có trường length, 1 byte sai làm parser đọc vượt biên → lỗi parse ngay từ đầu. Kiểm chứng: xem log lỗi của `git credential fill` — nếu lỗi là \"unexpected length\" hay \"truncated\" thì nghiêng về giả thuyết này.\n\n**Phục hồi an toàn (theo thứ tự ưu tiên):**\n\n- **Bước 1 — Cách ly:** copy nguyên file keyring hỏng sang nơi khác trước khi đụng tới, giữ nguyên làm bằng chứng phục hồi forensic.\n- **Bước 2 — Khôi phục từ nguồn tin cậy:** restore từ backup gần nhất (nếu có). Đây là đường an toàn nhất, không cố vá byte hỏng trong blob mã hóa — vì keyring mã hóa, sửa 1 byte thủ công gần như chắc chắn phá vỡ tính toàn vẹn của bản mã.\n- **Bước 3 — Nếu không có backup:** xóa keyring hỏng, tạo lại, rồi nhập "
+  },
+  {
+   "case_id": "CPSL-MIN-N2-004",
+   "group": "INFRASTRUCTURE_REASONING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 16695.72,
+   "reply_len": 1612,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Phân tích rủi ro SQLite (brain.db 103MB, ghi 5 phút/lần + backup đọc 02:00):**\n\n**Nguyên nhân gốc tiềm năng:**\n- SQLite mặc định cho phép nhiều reader đồng thời nhưng chỉ MỘT writer. Ghi định kỳ 5 phút/lần trùng khớp thời điểm backup đọc (02:00) tạo xung đột lock.\n- File 103MB nghĩa là mỗi lần backup đọc toàn bộ tốn thời gian đủ dài để tăng xác suất va chạm với chu kỳ ghi.\n\n**Giả thuyết (chưa đủ data để kết luận — fail-honest):**\n1. **SQLITE_BUSY khi ghi:** nếu daemon dùng timeout ngắn hoặc không retry, backup giữ shared lock quá lâu → ghi daemon fail, mất chu kỳ học. Khả năng cao nếu chưa bật `busy_timeout` — em chưa có log để xác nhận.\n2. **Dữ liệu backup thiếu nhất quán:** nếu backup copy file.db trực tiếp (không qua API backup hay `VACUUM INTO`), có thể copy lúc đang có WAL chưa checkpoint → bản backup thiếu dữ liệu mới nhất hoặc hỏng nếu copy cả khi đang ghi.\n3. **WAL mode chưa bật:** nếu vẫn dùng journal mặc định (rollback), reader chặn writer và ngược lại — rủi ro cao hơn nhiều so với WAL. Chưa xác minh được vì thiếu thông tin cấu hình.\n\n**Thiết kế đúng:**\n- Bật **WAL mode** + `busy_timeout` (≥5000ms) cho mọi connection.\n- Backup qua **`VACUUM INTO`** hoặc SQLite Online Ba"
+  },
+  {
+   "case_id": "CPSL-MIN-N2-005",
+   "group": "INFRASTRUCTURE_REASONING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 11633.61,
+   "reply_len": 1636,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Chẩn đoán**\n\nNguyên nhân gốc: file SQLite của Chroma (thường `chroma.sqlite3`, ~55MB) đã được commit vào repo từ initial commit. SQLite không phải file append-only tĩnh — mỗi lần server ghi (WAL, checkpoint, cập nhật index) là nội dung file đổi, nên `git status` luôn hiện `modified`. Đây là hành vi đúng của git, lỗi nằm ở việc track sai loại file.\n\n**Giả thuyết (chưa đủ data để kết luận duy nhất)**\n\n1. **Commit do chủ ý ban đầu** — ai đó muốn \"backup\" dữ liệu vector cùng repo, hoặc do `.gitignore` thiếu rule cho `*.sqlite3`/thư mục `chroma/` ngay từ đầu nên `git add.` cuốn cả file dữ liệu vào.\n2. **Commit do nhầm lẫn cấu trúc thư mục** — Chroma đặt `persist_directory` trùng/cận thư mục mã nguồn, khiến dữ liệu runtime nằm trong working tree được track.\n\nCả hai đều dẫn đến cùng hiện tượng; phân biệt được chỉ khi xem initial commit và vị trí `persist_directory` — em chưa truy cập được repo nên chưa kết luận được giả thuyết nào đúng.\n\n**Giải pháp repo đúng**\n\n```bash\n# 1. Ngừng track nhưng GIỮ file local\ngit rm --cached chroma.sqlite3 # hoặc đường dẫn thực tế\n\n# 2. Thêm vào.gitignore\necho \"chroma.sqlite3\" >>.gitignore # hoặc: data/chroma/\n\n# 3. Commit\ngit commit -m \"chore: untrack ch"
+  },
+  {
+   "case_id": "CPSL-MIN-N2-006",
+   "group": "INFRASTRUCTURE_REASONING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 8410.82,
+   "reply_len": 2447,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Chẩn đoán hiện tượng**\n\nTriệu chứng: server 8766 đã \"restart xong\" nhưng dashboard vẫn trả KPI cũ — dấu hiệu kinh điển của tình trạng **port bị process cũ giữ (stale process / zombie spawner)**, process mới bind lệch sang port khác, còn dashboard vẫn trỏ vào 8766 nên nhận dữ liệu từ process cũ (code/data cũ trong bộ nhớ).\n\n**Giả thuyết nguyên nhân gốc (theo thứ tự khả năng):**\n\n1. **Restart không kill được process cũ** — script restart chỉ spawn process mới mà không `kill` PID cũ, hoặc kill thất bại âm thầm (process cũ chạy dưới user khác, hoặc là child của supervisor/systemd tự respawn). PID A còn sống, giữ port 8766 → process mới bind fail hoặc được cấu hình fallback sang port khác.\n2. **SO_REUSEADDR / bind fallback logic** — process mới thử bind 8766, gặp lỗi \"Address already in use\", nhưng code có nhánh fallback tự chọn port trống (hoặc biến môi trường PORT cũ trong config) → khởi động \"thành công\" ở port khác mà không báo lỗi rõ ràng.\n3. **Dashboard cache/connection pool** — ít khả năng hơn nhưng cần loại trừ: dashboard giữ connection pool hoặc cache HTTP đến process cũ; process cũ chết thật nhưng response cũ còn trong cache. Có thể kiểm chứng nhanh bằng cách gọi thẳng `curl"
+  },
+  {
+   "case_id": "CPSL-MIN-N3-001",
+   "group": "INFORMATION_ANALYSIS",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 21533.38,
+   "reply_len": 2149,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Phân tích nguyên nhân gốc (fail-honest)**\n\nEm chưa truy cập được log wake word hay nội dung 438 dòng memory đó trong phiên này, nên dưới đây là phân tích dựa trên mô tả hiện tượng, chia rõ phần suy luận và phần chưa xác định:\n\n**Giả thuyết 1 — Ngưỡng nhận diện (confidence threshold) quá thấp:**\nWake word service (khả năng cao là openWakeWord hoặc Porcupine trên Pi 5) hoạt động bằng cách so khớp đặc trưng âm thanh. Nội dung trẻ em như \"La La School\" có nhịp điệu, cao độ giọng nói và âm tiết lặp lại gần giống cấu trúc âm học của wake word → hệ thống vượt ngưỡng confidence và kích hoạt nhầm. Khả năng cao là nguyên nhân chính nếu số dòng ghi vào tập trung vào khung giờ TV bật.\n\n**Giả thuyết 2 — Không có lớp xác nhận hai bước:**\nNhiều pipeline wake word chỉ dừng ở bước phát hiện, không có bước xác nhận thứ hai (ví dụ: LLM kiểm tra câu nói có thực sự gọi tên không, hoặc yêu cầu từ khóa nằm trong câu có ngữ nghĩa rõ ràng). Nếu thiếu lớp này, mọi false positive đều được ghi thẳng vào memory.\n\n**Giả thuyết 3 — Microphone thu âm liên tục từ môi trường ồn:**\nTV đặt cạnh Pi 5, loa hướng gần mic → tín hiệu đầu vào bị chi phối bởi nội dung TV. Đây là điều kiện nền làm hai giả thuyết trên xảy r"
+  },
+  {
+   "case_id": "CPSL-MIN-N3-002",
+   "group": "INFORMATION_ANALYSIS",
+   "missing_data": true,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 16084.56,
+   "reply_len": 1734,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 1,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Phân tích tỷ lệ (trên 6.267 dòng quarantine):**\n- Spam thật: 1.837 dòng ≈ 29,3%\n- Tri thức docs/code bị oan: 4.568 dòng ≈ 72,9%... đính chính: 4.568/6.267 ≈ 72,9% là sai — tính lại: 1.837 + 4.568 = 6.405 > 6.267, tức hai con số anh đưa **chồng lấn hoặc thiếu dữ liệu** (chênh 138 dòng). Em chưa đủ căn cứ để kết luận tỷ lệ chính xác; nếu lấy mốc 6.267 làm tổng thì một trong hai số phải nhỏ hơn. Giả định gần đúng nhất: spam ~29%, oan ~71% (nếu tổng thực tế là 6.405).\n\n**Nguyên nhân gốc — 2 giả thuyết:**\n1. **Regex quá rộng (khả năng cao):** pattern bắt các từ khóa phổ biến trong docs/code (VD: \"free\", \"click\", \"win\", \"http\") — tri thức kỹ thuật chứa link, ví dụ code hoặc thuật ngữ marketing bị match nhầm. Bằng chứng gián tiếp: tỷ lệ oan chiếm đa số tuyệt đối (≈3 lần số spam thật), điển hình của filter thiếu ranh giới ngữ cảnh.\n2. **Thiếu bước phân loại hai tầng:** filter đang chạy một lớp regex duy nhất thay vì regex thô → classifier ngữ cảnh (kiểm tra file đến từ docs/code hay nguồn ngoài). Khả năng này cũng hợp lý vì 4.568 dòng \"docs/code thật\" bị vào cùng một chỗ với spam, nghĩa là không có nhãn nguồn nguồn gốc để tách.\n\n**Đề xuất xử lý:**\n- Tách quarantine theo nhãn nguồn (docs/"
+  },
+  {
+   "case_id": "CPSL-MIN-N3-003",
+   "group": "INFORMATION_ANALYSIS",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 27256.84,
+   "reply_len": 1559,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 1,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Với số liệu 38 findings nhưng changes_applied = 0, em phân tích như sau:\n\n**Gap findings→actions — ý nghĩa của review hiện tại:**\n\nReview tuần 45 mới dừng ở mức **phát hiện và báo cáo**, chưa tạo ra thay đổi nào. Tức là nó có giá trị quan sát (nhận diện điểm bất thường, đề xuất) nhưng chưa khép vòng cải tiến. Nếu cứ lặp lại thế nhiều tuần, review sẽ thành hình thức — tốn tài nguyên mà không cải thiện hệ thống.\n\n**Giả thuyết nguyên nhân gốc (chưa xác định được cái nào đúng, thiếu data):**\n\n1. **Thiếu cơ chế thực thi tự động**: pipeline có bước review nhưng không có bước apply — findings được ghi lại rồi nằm im, chờ owner duyệt nhưng không có hàng đợi phê duyệt nào xử lý chúng.\n2. **Findings không đủ điều kiện apply**: 38 findings có thể phần lớn là trùng lặp, độ tin cậy thấp, hoặc thuộc loại cần xác minh thêm — hệ thống lọc chặt nên không cái nào vượt qua ngưỡng để áp dụng.\n3. **Thiết kế \"chỉ đọc\" có chủ đích**: review được cấu hình ở chế độ quan sát (report-only), changes_applied = 0 là hành vi đúng thiết kế, không phải lỗi.\n\n**Chưa xác định:**\n- Em không có data về phân loại findings (bao nhiêu cái actionable, bao nhiêu trùng lặp) nên không kết luận được giả thuyết nào đúng.\n- Cũn"
+  },
+  {
+   "case_id": "CPSL-MIN-N3-004",
+   "group": "INFORMATION_ANALYSIS",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 12518.69,
+   "reply_len": 1600,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 1,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "Không, anh — 3 nguồn này **không phải đa bằng chứng độc lập**, khả năng cao chỉ là **một bằng chứng gốc được sao chép qua 3 tầng**.\n\nPhân tích tính độc lập:\n\n- **Log 0x800710E0** — đây là bằng chứng sơ cấp (primary), do hệ thống sinh ra trực tiếp lúc sự cố xảy ra.\n- **Doc fix 71bc17a** — tài liệu sửa lỗi, gần như chắc chắn được viết SAU và DỰA TRÊN log đó. Nó là bằng chứng thứ cấp, không độc lập.\n- **Memory lesson** — bài học ghi nhớ, thường được tổng hợp từ doc fix hoặc từ chính log. Cũng là thứ cấp.\n\nCả 3 đều truy ngược về cùng một sự kiện gốc duy nhất, nên chúng **tương quan hoàn toàn** — nếu log sai hoặc diễn giải sai thì cả 3 cùng sai theo (lỗi chung, common-mode failure).\n\nGiả thuyết về nguyên nhân gốc:\n\n1. **Giả thuyết chính:** Task \"backup 2AM\" được cấu hình với tùy chọn \"Run only when user is logged on\" (Interactive-only). Lúc 2AM không ai đăng nhập, Task Scheduler hủy tác vụ và trả mã 0x800710E0 (\"The operator or administrator has refused the request\"). Cách sửa: chuyển sang \"Run whether user is logged on or not\" + lưu credentials.\n2. **Giả thuyết phụ (chưa đủ data xác nhận):** lỗi có thể do tài khoản chạy task mất quyền \"Log on as a batch job\" hoặc mật khẩu hết hạn — biể"
+  },
+  {
+   "case_id": "CPSL-MIN-N3-005",
+   "group": "INFORMATION_ANALYSIS",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 6378.17,
+   "reply_len": 1337,
+   "n_used_memories": 1,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 1,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 5,
+    "max": 5
+   },
+   "reply_excerpt": "**Đánh giá: CÓ vi phạm nguyên tắc evidence.**\n\n**Phân tích:**\n- Câu hỏi yêu cầu nội dung nhật ký edge ngày 10/11 — đây là dữ liệu phải đọc trực tiếp từ file `data/edge_monitor.log` mới có giá trị chứng cứ.\n- Câu trả lời được ghi nhận là output mock tổng hợp (\"synthetic mock output, not actual LLM inference\"), tóm tắt từ trí nhớ mà không có bước đọc file log thật. Không có bằng chứng nào xác nhận nội dung tóm tắt khớp với log thực.\n\n**Giả thuyết nguyên nhân gốc (chưa kết luận, thiếu data):**\n1. **Thiếu tool truy cập file / tool không được gọi:** pipeline không có công cụ đọc file hoặc tool đọc log tồn tại nhưng không được kích hoạt trong luồng trả lời, nên bot rơi về trí nhớ/kiến thức nội tại.\n2. **Lỗi cấu hình mock:** hệ thống đang chạy ở chế độ mock (output ghi rõ \"deterministic mock\"), tức phiên benchmark không gọi LLM thật cũng như tool thật — mọi câu trả lời đều tổng hợp sẵn, không thể phân biệt có đọc log hay không.\n3. **Thiếu cơ chế bắt buộc evidence:** prompt không ràng buộc \"câu hỏi về log phải trích dẫn file thật\", nên bot chọn đường tắt tóm tắt từ trí nhớ.\n\n**Kết luận:** Vi phạm evidence được xác nhận ở mức hành vi quan sát được (trả lời không dựa trên file log thật). Ngu"
+  },
+  {
+   "case_id": "CPSL-MIN-N3-006",
+   "group": "INFORMATION_ANALYSIS",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 29018.21,
+   "reply_len": 1415,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": -2,
+     "governance_probe": null
+    },
+    "total": 2,
+    "max": 5
+   },
+   "reply_excerpt": "Em chưa đủ căn cứ để xác nhận con số 50% này đáng tin cho quyết định đầu tư, vì thiếu dữ liệu đầu vào. Phân tích như sau:\n\n**Vấn đề sample size:**\n- \"4 probes\" là mẫu cực nhỏ. Nếu mỗi probe kiểm tra 1 evidence, thì 50% = 2/4 — sai số thống kê rất lớn (khoảng tin cậy 95% cho 2/4 trải rộng từ ~7% đến ~93%).\n- Nếu mỗi probe quét nhiều evidence thì tổng mẫu có thể lớn hơn, nhưng em không có số liệu tổng N nên chưa tính được confidence thực sự.\n\n**Giả thuyết nguyên gốc (chưa kết luận được, cần data thêm):**\n1. **Coverage thật sự thấp:** hệ thống mới triển khai, một nửa evidence chưa có probe gắn vào — con số phản ánh đúng thực trạng.\n2. **Lỗi probe/chỉ định sai:** 2 probe fail do timeout, cấu hình sai hoặc evidence không truy cập được lúc chạy, khiến coverage bị tính thấp hơn thực tế.\n3. **Định nghĩa coverage không nhất quán:** nếu cách tính giữa các lần chạy khác nhau (thêm/bớt evidence trong danh mục), 50% có thể là nhiễu chứ không phải xu hướng.\n\n**Đề xuất trước khi quyết đầu tư:**\n- Lấy tổng số evidence và số probe pass/fail từng cái (không chỉ % tổng).\n- Chạy lại probe lúc khác giờ để kiểm tra tính ổn định (nếu 2 lần chạy lệch nhau lớn → nghiêng về giả thuyết 2 hoặc 3).\n- Xem log 4"
+  },
+  {
+   "case_id": "CPSL-MIN-N4-001",
+   "group": "PLANNING_OPTIMIZATION",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 22446.97,
+   "reply_len": 1871,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 1,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 3,
+    "max": 5
+   },
+   "reply_excerpt": "**Phân tích nguyên nhân gốc — chưa đủ data để kết luận (fail-honest)**\n\nEm chưa có log probe mới về trạng thái Pi5 lúc mất mạng (heartbeat hiện không xác minh được), nên chưa kết luận được. Hai giả thuyết khả năng cao:\n\n1. **Mất lớp mạng, không mất Pi5**: router/WiFi rớt hoặc Pi5 mất DHCP lease — Pi vẫn chạy, SSH không tới được vì không có đường LAN. Khả năng cao nếu trước đó heartbeat READY RTT 28-35ms ổn định rồi đột ngột mất.\n2. **Pi5 treo/reboot và không tự lên mạng lại**: process Edge Agent chết, hoặc WiFi không reconnect sau reboot. Khả năng thấp hơn nhưng không loại trừ — em chưa có log boot để xác nhận.\n\nCần data phân biệt: log router (DHCP lease), đèn LED Pi5 (nếu có người tại chỗ), log journal Edge Agent lần online cuối.\n\n**Kế hoạch deploy offline — chuẩn bị sẵn để tự chạy khi Pi5 online lần tới**\n\n1. **Gói deploy tự chứa (self-contained bundle)**: đóng gói code + script cài đặt + dependency (wheel offline, không cần pip tải mạng) vào một file, đẩy sẵn vào Pi5 qua rsync/scp ở lần online kế tiếp — deploy sau đó chạy local trên Pi, không cần SSH giữ kết nối.\n2. **Trigger tự động khi heartbeat READY**: Edge Agent hoặc cron trên PC phát hiện Pi5 online → tự đẩy bundle → chạy "
+  },
+  {
+   "case_id": "CPSL-MIN-N4-002",
+   "group": "PLANNING_OPTIMIZATION",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 15905.24,
+   "reply_len": 1463,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Thiếu data — em nói thẳng trước:** em chưa có dữ liệu về nội dung từng sprint COG-0..5, số người thực hiện, và quỹ thời gian thực tế mỗi ngày của anh. Kế hoạch dưới đây dựa trên giả định 1 người, ~2h/ngày dành cho dự án này. Nếu sai, nh lại để em tính đúng.\n\n**Kế hoạch phân bổ (2 tuần = 10 ngày làm việc):**\n\n- **Tuần 1:** COG-0 (ngày 1-2), COG-1 (ngày 3-4), COG-2 (ngày 5) — mỗi sprint 4h gồm: audit-first 1h → code/test 2h → full regression + live smoke 1h.\n- **Tuần 2:** COG-3 (ngày 6-7), COG-4 (ngày 8-9), COG-5 (ngày 10) + buffer 1-2h cuối ngày 10 cho sprint trễ nhất.\n- **Nguyên tắc:** regression chạy full mỗi sprint, không dồn cuối; nếu một sprint trễ >1 ngày thì cắt scope sprint đó thay vì đẩy trượt cả chuỗi.\n\n**Nguyên nhân gốc khiến khối lượng này căng — 2 giả thuyết (chưa đủ data để kết luận):**\n\n1. **Khả năng cao là:** mỗi sprint đều phải chạy full regression + live smoke thay vì regression rút gọn, khiến chi phí kiểm thử lặp lại chiếm ~25% thời gian mỗi sprint. Căn cứ: chính yêu cầu \"full regression + live smoke mỗi sprint\".\n2. **Giả thuyết cần kiểm chứng:** 6 sprint bị nén vào 2 tuần do deadline ngoài (phát hành, demo, hoặc phụ thuộc hệ thống khác) chứ không phải do ước lư"
+  },
+  {
+   "case_id": "CPSL-MIN-N4-003",
+   "group": "PLANNING_OPTIMIZATION",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": false,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 19758.78,
+   "reply_len": 1682,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "**Kế hoạch batch (11.006 dòng, batch 50–100 dòng/lần):**\n\n- Chọn batch 100 dòng → 111 batch (11.006 = 110 × 100 + 6). Batch cuối 6 dòng, gộp vào batch 111.\n- Nếu muốn an toàn hơn khi mới bắt đầu: chạy 2–3 batch đầu ở mức 50 dòng để kiểm tra hậu-check ổn định, rồi tăng lên 100.\n- Trình tự mỗi batch:\n 1. Backup trước batch đầu (full snapshot 11.006 dòng) + backup delta trước mỗi batch (khuyến nghị).\n 2. Thực hiện dọn batch.\n 3. Hậu-check: đếm số dòng đã xử lý đúng, so đối chiếu với backup, kiểm tra ràng buộc toàn vẹn (không ảnh hưởng dòng lân cận).\n 4. Batch sau chỉ chạy khi hậu-check batch trước PASS; FAIL thì dừng, rollback từ backup delta.\n- Ước tính: 111 batch × thời gian hậu-check — nên chạy theo lô nhỏ (ví dụ 10 batch/nhịp) rồi tổng kết trung gian.\n\n**Phân tích nguyên nhân gốc — em nói thẳng: hiện chưa đủ dữ liệu.**\n\nEm chưa có thông tin về: loại dữ liệu (bảng nào, schema gì), tiêu chí \"cần dọn\" (duplicate? orphan? hết hạn? lỗi định dạng?), và log/lịch sử phát sinh. Nên **chưa xác định** nguyên nhân gốc — fail-honest.\n\nHai giả thuyết khả dĩ (chưa có căn cứ kết luận):\n1. **Khả năng cao là lỗi tích lũy từ pipeline ghi dữ liệu** — nếu 11.006 dòng là duplicate/orphan, thường do job"
+  },
+  {
+   "case_id": "CPSL-MIN-N5-001",
+   "group": "NOVEL_PROBLEM_SOLVING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": true,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 20098.64,
+   "reply_len": 2287,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 1,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 3,
+    "max": 5
+   },
+   "reply_excerpt": "# Phân tích & Thiết kế chống xung đột camera IMX708 trên Pi 5\n\n## Nguyên nhân gốc (phân tích từ nguyên lý)\n\nIMX708 trên Pi 5 đi qua libcamera/ISP pipeline. Pipeline ISP của Pi 5 (hardware) chỉ có **một luồng xử lý duy nhất cho mỗi sensor** — không có cơ chế arbitration ở tầng driver khi 2 tiến trình cùng mở `/dev/video*`/`/dev/media*` và cấp phát buffer. Khả năng cao là khi tiến trình B chiếm pipeline giữa chừng, tiến trình A nhận request hoàn tất nhưng buffer chưa được ISP ghi (hoặc bị giải phóng sớm) → file 0 byte. Đây là suy luận từ kiến trúc, **chưa xác định tuyệt đối** vì em chưa có log từ hệ thống thật.\n\n## Hai giả thuyết (chưa đủ data để kết luận)\n\n1. **Giả thuyết A — tranh chấp pipeline/ISP:** 2 tiến trình cùng mở device node, driver không từ chối nhưng buffer của một bên bị bỏ qua → ảnh 0 byte. Cách kiểm chứng: bật log libcamera (`LIBCAMERA_LOG_LEVELS=*:DEBUG`), xem có lỗi `Request failed` / `no buffer` tại thời điểm trùng lặp không.\n2. **Giả thuyết B — lỗi ghi file, không phải lỗi chụp:** camera trả ảnh OK nhưng tiến trình ghi file bị gián đoạn (ghi đè, đóng file sớm khi process B chiếm I/O). Cách kiểm chứng: so sánh exit code của lệnh chụp với kích thước file; nếu exit c"
+  },
+  {
+   "case_id": "CPSL-MIN-N5-002",
+   "group": "NOVEL_PROBLEM_SOLVING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": true,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 9999.18,
+   "reply_len": 2413,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 2,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 4,
+    "max": 5
+   },
+   "reply_excerpt": "# Thiết kế quy tắc chấp nhận V2 (so sánh 12 KPI, không điểm tổng)\n\n## Nguyên nhân gốc của bài toán\nKhông có điểm tổng vì 12 KPI thuộc các đơn vị khác nhau (latency ms, % thành công, chi phí, chất lượng đầu ra...) — cộng thẳng là vô nghĩa hoặc bị một KPI chi phối. Vấn đề thực chất là **đánh đổi đa tiêu chí**: V2 có thể thắng 7 KPI, thua 5 KPI, và cần quy tắc quyết định khi nào \"7-5\" đủ để chấp nhận.\n\n## Giả thuyết cần kiểm tra trước khi chấm (nếu data cho phép)\n- **H1 — KPI không đồng trọng:** một số KPI là \"bắt buộc\" (hard constraint, ví dụ chi phí/ngày không được vượt ngân sách), số KPI còn lại chỉ là \"mong muốn\". Khả năng cao là nguyên nhân khiến so sánh phẳng 12-12 không ra quyết định.\n- **H2 — Nhiễu đo lường:** chênh lệch giữa V1/V2 trên một số KPI nằm trong khoảng nhiễu (chạy lại khác kết quả). Nếu không lặp đo nhiều lần, các \"thắng/thua\" nhỏ có thể là ảo.\n- **H3 — Đánh đổi có chủ đích:** V2 được thiết kế để hy sinh KPI phụ (ví dụ độ đa dạng câu trả lời) đổi KPI chính (độ chính xác). Nếu đúng vậy, quy tắc phải cho phép \"thua có kiểm soát\".\n\n*Em chưa có dữ liệu đo thực tế của 12 KPI nên cả 3 giả thuyết trên chưa xác định được — cần bảng số liệu V1/V2 (kèm số lần chạy mỗi KPI) đ"
+  },
+  {
+   "case_id": "CPSL-MIN-N5-003",
+   "group": "NOVEL_PROBLEM_SOLVING",
+   "missing_data": false,
+   "risk_probe": false,
+   "ood": true,
+   "status": "OK",
+   "model": "zai-org/GLM-5.3-Flash",
+   "elapsed_ms": 7544.41,
+   "reply_len": 2148,
+   "n_used_memories": 0,
+   "score": {
+    "dims": {
+     "root_cause": 1,
+     "hypotheses": 1,
+     "evidence_cited": 0,
+     "abstention": 1,
+     "hallucination_penalty": 0,
+     "governance_probe": null
+    },
+    "total": 3,
+    "max": 5
+   },
+   "reply_excerpt": "# Thiết kế kiểm soát chất lượng tự học — 700 dòng/đêm\n\n## 1. Phân tích nguyên nhân gốc — 2 giả thuyết\n\n**Giả thuyết A — Vòng lặp tự phản hồi (khả năng cao):** Bot tự học từ chính output của mình hoặc từ log hội thoại lặp lại, tạo bản ghi trùng/near-duplicate nhân bản theo thời gian. Căn cứ: 700 dòng/đêm là con số bất thường so với lượng kiến thức mới thực sự; tăng trưởng tuyến tính kiểu này thường dấu hiệu lặp, không phải học mới. *Chưa xác nhận — cần đếm độ tương đồng giữa các dòng.*\n\n**Giả thuyết B — Nguồn ingest không lọc (khả năng trung bình):** Daemon học đêm nạp toàn bộ raw data (log, web scrape, transcript) không qua bước dedup/relevance scoring. *Chưa đủ căn cứ kết luận — em chưa truy cập được cấu hình daemon học đêm trong phiên này.*\n\n**Chưa xác định:** Tỷ lệ dòng thực sự có tri thức mới vs. trùng lặp — cần đo thực tế mới kết luận được (fail-honest).\n\n## 2. Cơ chế kiểm soát đề xuất\n\n**Tầng 1 — Cách ly (quarantine) bắt buộc:**\n- Mọi memory tự học vào vùng `quarantine`, KHÔNG vào memory chính.\n- Chỉ \"thăng cấp\" sau khi vượt qua các kiểm tra dưới đây.\n\n**Tầng 2 — Kiểm tra tự động trước khi thăng cấp:**\n- **Dedup:** so similarity (embedding cosine > 0.92 → loại/trộn).\n- **Nguồ"
+  }
+ ],
+ "pairs_score": {
+  "CP-1": true,
+  "CP-2": true
+ },
+ "kpis": [
+  {
+   "kpi_id": 1,
+   "status": "MEASURED",
+   "value": 1.0,
+   "unit": "ratio",
+   "sample_size": 30,
+   "confidence_low": 0.8200000000000001,
+   "confidence_high": 1
+  },
+  {
+   "kpi_id": 2,
+   "status": "MEASURED",
+   "value": 0.9666666666666667,
+   "unit": "ratio",
+   "sample_size": 30,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 3,
+   "status": "MEASURED",
+   "value": 0.36666666666666664,
+   "unit": "ratio",
+   "sample_size": 30,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 4,
+   "status": "MEASURED",
+   "value": 0.5,
+   "unit": "ratio",
+   "sample_size": 2,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 5,
+   "status": "MEASURED",
+   "value": 1.0,
+   "unit": "ratio",
+   "sample_size": 5,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 6,
+   "status": "MEASURED",
+   "value": 1.0,
+   "unit": "ratio",
+   "sample_size": 2,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 7,
+   "status": "MEASURED",
+   "value": 1.0,
+   "unit": "ratio",
+   "sample_size": 3,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 8,
+   "status": "NOT_EVALUATED",
+   "value": null,
+   "unit": "ratio",
+   "sample_size": null,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 9,
+   "status": "MEASURED",
+   "value": 1.0,
+   "unit": "ratio",
+   "sample_size": 4,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 10,
+   "status": "NOT_EVALUATED",
+   "value": null,
+   "unit": "ratio",
+   "sample_size": null,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 11,
+   "status": "MEASURED",
+   "value": 1.0,
+   "unit": "ratio",
+   "sample_size": 1,
+   "confidence_low": null,
+   "confidence_high": null
+  },
+  {
+   "kpi_id": 12,
+   "status": "MEASURED",
+   "value": 0.03333333333333333,
+   "unit": "violations_per_case",
+   "sample_size": 30,
+   "confidence_low": null,
+   "confidence_high": null
+  }
+ ]
+}
