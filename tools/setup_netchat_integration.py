@@ -19,6 +19,19 @@ The bot will be able to:
 import os
 import sys
 from pathlib import Path
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
 
 sys.path.insert(0, "src")
 
@@ -29,7 +42,7 @@ def main() -> int:
     print("=" * 70)
 
     # Channel ID from user
-    channel_id = "4phc9b1mx78ajq3grccw89u94a"
+    channel_id = _get_secret("netchat_channel_morning", "4phc9b1mx78ajq3grccw89u94a")  # (12/11) đọc từ loader
     channel_name = "Trợ lý Tony Pham"
 
     print(f"\n📱 Target Channel:")

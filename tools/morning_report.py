@@ -24,13 +24,25 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import Any
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 NETCHAT_BOT = (
     r"C:/Users/DELL/AppData/Local/netmind_desktop/netmind-agent/venv/Scripts/python.exe",
     r"C:/Users/DELL/AppData/Local/netmind_desktop/skills/bot-netchat/netchat_bot.py",
 )
-CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"
+CHANNEL_ID = _get_secret("netchat_channel_morning", "4phc9b1mx78qjq3grxcw89u94a")  # (12/11) đọc từ loader
 
 STATUS_URLS = {
     "dashboard_8765": "http://127.0.0.1:8765/api/status",
@@ -179,6 +191,7 @@ def send_to_netchat(message: str) -> bool:
         if r1.returncode == 0 and '"id"' in out:
             return True
     import re
+
 
     m = re.search(r"CONFIRM-REQUIRED:\s*([a-f0-9]+)", out)
     if not m:

@@ -14,10 +14,18 @@ mỗi chu kỳ; DM alert qua bridge chuẩn (ID DM bot_tony ↔ quanpt1).
 """
 from __future__ import annotations
 
-import re
-from pathlib import Path
-from typing import Any
 
+
+
+from pathlib import Path
+import re
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 WORKSPACE = Path(__file__).resolve().parent.parent
 
 _PID_RE = r"(?:pid\s*)?(?P<pid>\d{1,7})"
@@ -45,7 +53,7 @@ def _dm_send(text: str) -> None:
     """DM alert cho owner qua bridge chuẩn (fire-and-forget, fail-honest)."""
     try:
         from quan_ai_brain.integration.netchat_bridge import send_message
-        send_message("mwp3nk3ciprjjr4hdmcoqgk6jr", text)
+        send_message(_get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr"), text)  # (12/11) đọc từ loader
     except Exception:
         pass
 
@@ -401,10 +409,12 @@ def _agents_registry():
 def _levels_machine():
     from quan_ai_brain.security.threat_levels import ThreatLevelMachine
 
+
     return ThreatLevelMachine(WORKSPACE / "data" / "sentinel_threat_levels.db")
 
 
 def handle_sentinel_dashboard() -> str:
+
     registry = _agents_registry()
     counts = registry.counts()
     level = _levels_machine().current_level()

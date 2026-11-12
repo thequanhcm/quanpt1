@@ -25,6 +25,18 @@ from pathlib import Path
 from typing import Any
 
 from quan_ai_brain.core.audit import AuditLogger
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 _local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
 _script_cand = [
@@ -40,8 +52,8 @@ _py_cand = [
 NETCHAT_PYTHON = next((p for p in _py_cand if p.exists()), _py_cand[0])
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-DEFAULT_CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
-CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+DEFAULT_CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
+CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 DEFAULT_CHANNEL_NAME = "Trợ lý Tony Pham"
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
 BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
@@ -299,6 +311,7 @@ def run_command(text: str) -> dict[str, Any]:
     (questions never trigger state changes; result includes ticket IDs).
     """
     from tools.netchat_command_center import route_message
+
 
     text = (text or "").strip()
     if not text:

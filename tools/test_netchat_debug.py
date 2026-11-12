@@ -1,11 +1,25 @@
+from pathlib import Path
 """Manual test for NetChat auto-responder - Debug step by step."""
 import json
 import subprocess
 import sys
 import urllib.request
 import urllib.error
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
-CHANNEL_ID = "4phc9b1mx78qjq3grxcw89u94a"
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+
+CHANNEL_ID = _get_secret("netchat_channel_morning", "4phc9b1mx78qjq3grxcw89u94a")  # (12/11) đọc từ loader
 NETCHAT_SCRIPT = r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"
 PYTHON_EXE = r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"
 

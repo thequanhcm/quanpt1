@@ -27,6 +27,12 @@ scp file edge_client/wake_word_service.py, display power, gửi DM NetChat —
 không đụng OS/secret/DB).
 """
 from __future__ import annotations
+from pathlib import Path
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 import hashlib
 import json
@@ -36,6 +42,13 @@ import threading
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_PATH = BASE_DIR / "data" / "edge_reconcile_log.jsonl"
@@ -56,7 +69,7 @@ CONFIG = {
     "notify_owner": True,
     "netchat_py": r"E:\BRAIN\.venv\Scripts\python.exe",
     "netchat_bot": r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py",
-    "netchat_dm_id": "mwp3nk3ciprjjr4hdmcoqgk6jr",  # DM duy nhất bot_tony → owner
+    "netchat_dm_id": _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader,  # DM duy nhất bot_tony → owner
 }
 
 _lock = threading.Lock()
@@ -343,6 +356,7 @@ def check_reconcile_from_core_api() -> None:
     gọi check_edge_pi5_reconcile. Fail-honest tuyệt đối — không raise."""
     try:
         import urllib.request
+
 
         with urllib.request.urlopen(
             "http://127.0.0.1:8766/api/executive/edge/status", timeout=4

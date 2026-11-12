@@ -27,9 +27,21 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from quan_ai_brain.governance.approval_cards import ApprovalCardStore  # noqa: E402
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 OWNER_NETCHAT_USER_ID = "3b1ughs36i8e9p46im8opnms8w"  # quanpt1
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
 BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
@@ -158,6 +170,7 @@ class NetChatApprovalAdapter:
             task_code = parsed.get("task_code") or ""
             try:
                 from quan_ai_brain.governance.netchat_info_gap_adapter import has_waiting_task
+
 
                 if has_waiting_task(task_code):
                     return ""  # info-gap reply — caller tự xử lý

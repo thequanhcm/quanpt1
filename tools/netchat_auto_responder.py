@@ -16,6 +16,18 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 # (01/11/2026) FIX P0 ROOT-CAUSE — "Command router error: No module named
 # 'tools.netchat_command_center'": khi responder được spawn thừa hưởng
@@ -156,11 +168,11 @@ Anh muốn em giải thích chi tiết phần nào ạ?"""
 
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
+CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader, fallback cũ
 # (31/10/2026) DM bot↔quanpt1: owner trả lời trong DM nhưng responder cũ chỉ
 # đọc kênh → tin DM bị bỏ qua (sự cố 01:42: 'Chào em' trong DM không được trả lời).
 # Giờ responder theo dõi CẢ HAI nguồn và trả lời đúng nơi owner nhắn.
-DM_CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+DM_CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 OWNER_USERNAME = "quanpt1"
 CHANNEL_NAME = "Trợ lý Tony Pham"  # (07/11) TÊN KÊNH API THẬT trên NetChat — CHỈ đổi khi owner đổi tên kênh phía NetChat; CHERRY = tên trợ lý, không phải tên kênh.
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
@@ -1432,6 +1444,7 @@ def main():
                 if m2:
                     backoff = max(backoff, min(int(m2.group(1)) + 2, 3600))
             time.sleep(backoff)
+
 
 if __name__ == "__main__":
     try:

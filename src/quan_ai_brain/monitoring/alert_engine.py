@@ -9,16 +9,16 @@ Nguyên tắc:
 - Fail-honest: lỗi gửi không được nuốt — ghi lại vào DB với sent=False.
 """
 from __future__ import annotations
-
-import json
-import sqlite3
-import threading
-import time
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
-from quan_ai_brain.monitoring.health_state import CRITICAL, NORMAL, UNKNOWN, WARNING
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+
 
 DEFAULT_COOLDOWN_SEC = 300.0
 _DB_NAME = "health_alerts.db"
@@ -145,14 +145,18 @@ class AlertEngine:
         try:
             from quan_ai_brain.integration.netchat_bridge import send_message
             return send_message(
-                "mwp3nk3ciprjjr4hdmcoqgk6jr", _vn_message(message))  # noqa: E501
+                _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr"),  # (12/11) đọc từ loader
+                _vn_message(message),
+            )  # noqa: E501
         except Exception as exc:
             return {"success": False, "error": f"send_error:{type(exc).__name__}"}
+
 
     # ---------- API chính ----------
     def evaluate_checks(self, component_id: str,
                         checks: dict[str, dict[str, Any]],
                         thresholds: dict[str, tuple[str, str]]) -> list[dict[str, Any]]:
+
         """Đánh giá bảng ngưỡng trên snapshot checks của 1 component.
 
         thresholds: {check_id: (warn_expr, crit_expr)} với expr dạng
