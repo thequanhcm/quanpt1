@@ -1,0 +1,400 @@
+{
+  "engine": "CHERRY INTELLIGENCE EVALUATION ENGINE (CIEE) — Baseline V1",
+  "run_id": "20261111T153748Z",
+  "started_at_utc": "2026-11-11T15:37:48Z",
+  "finished_at_utc": "2026-11-11T15:37:48Z",
+  "python": "3.11.9",
+  "platform": "Windows-10-10.0.19045-SP0",
+  "readonly_assert": {
+    "brain": true,
+    "tasks": true,
+    "governance": true
+  },
+  "chroma_status": "NOT_RUN",
+  "chroma_reason": "Tắt mặc định (chi phí RAM); dùng --chroma để bật.",
+  "counts": {
+    "PASS": 10,
+    "FAIL": 2,
+    "PARTIAL": 1,
+    "GAP_KNOWN": 1,
+    "NOT_RUN": 1
+  },
+  "comparison_v0": {
+    "v0_counts": {
+      "PASS": 9,
+      "FAIL": 3,
+      "PARTIAL": 2
+    },
+    "v1_counts": {
+      "PASS": 10,
+      "FAIL": 2,
+      "PARTIAL": 1,
+      "GAP_KNOWN": 1,
+      "NOT_RUN": 1
+    },
+    "probe_deltas": [
+      {
+        "probe_id": "C2_known_evidence_answer",
+        "v0": "FAIL",
+        "v1": "PASS",
+        "note": "Động: 8/8 KU thật được trả lời có evidence (100%); câu hỏi V0 'Quy tắc học của CHERRY là gì?' → type=C, evidence=0. GAP COVERAGE: retrieval chỉ thấy 148 KU / 16236 tri thức tổng (semantic 5052 + candidate 11036) — gap 16"
+      },
+      {
+        "probe_id": "C4_chroma_vector_store",
+        "v0": "UNKNOWN",
+        "v1": "NOT_RUN",
+        "note": "Bỏ qua theo mặc định: chroma startup tải embedding stack nặng (~RAM), không thuộc 14 probes chuẩn của baseline. Chạy lại với --chroma để bật."
+      }
+    ]
+  },
+  "results": [
+    {
+      "probe_id": "A1_outcome_verifier_available",
+      "group": "A_PROBLEM",
+      "group_label": "A. Problem Solving",
+      "title": "Outcome verifier có sẵn trong orchestration (không tin self-report)",
+      "outcome": "PASS",
+      "detail": "PlanOrchestrator có 11 khái niệm verification: ['COMPLETED_UNVERIFIED', 'COMPLETED_VERIFIED', 'VERIFIED', 'VERIFYING', 'Verification', 'Verifier']...",
+      "evidence": "import quan_ai_brain.orchestration.plan_orchestrator OK; file=plan_orchestrator.py",
+      "duration_s": 0.104,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "verify_symbols": [
+          "COMPLETED_UNVERIFIED",
+          "COMPLETED_VERIFIED",
+          "VERIFIED",
+          "VERIFYING",
+          "Verification",
+          "Verifier",
+          "_verify_step_result",
+          "verification_method",
+          "verified",
+          "verifies",
+          "verify_task"
+        ],
+        "has_step_verify": true
+      }
+    },
+    {
+      "probe_id": "B1_anti_circular_rule",
+      "group": "B_REASONING",
+      "group_label": "B. Reasoning Accuracy",
+      "title": "Chống vòng tròn: shared_origins rule trong code V9",
+      "outcome": "PASS",
+      "detail": "Rule anti-circular CÓ trong code V9 (_support_against + shared_origins; 2 mention circular)",
+      "evidence": "logical_reasoning.py — hàm _support_against",
+      "duration_s": 0.002,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "has_shared_origins_rule": true,
+        "circular_mentions": 2
+      }
+    },
+    {
+      "probe_id": "B2_conflict_scan_runs",
+      "group": "B_REASONING",
+      "group_label": "B. Reasoning Accuracy",
+      "title": "ConflictDetector chạy được trên DB thật (schema V9)",
+      "outcome": "FAIL",
+      "detail": "FINDING THẬT: ConflictDetector query schema CŨ (id/content/lifecycle_status) không khớp knowledge_units V9 (knowledge_id/statement/status) → dead code trên production DB. Chỉ tương thích bảng 'memories' cũ.",
+      "evidence": "ConflictDetector.detect_all_conflicts(); KU=150; schema cũ khớp: []; schema V9 có: ['knowledge_id', 'statement', 'status']",
+      "duration_s": 0.051,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "ku_columns": [
+          "knowledge_id",
+          "knowledge_type",
+          "subject",
+          "predicate",
+          "object",
+          "statement",
+          "source_refs_json",
+          "evidence_refs_json",
+          "created_at_utc",
+          "updated_at_utc",
+          "valid_from_utc",
+          "valid_until_utc",
+          "scope",
+          "status",
+          "confidence",
+          "verification_method",
+          "derived_from_json",
+          "contradiction_refs_json",
+          "version",
+          "review_status",
+          "extraction_meta_json"
+        ],
+        "operational_error": "no such column: id",
+        "n_conflicts": 0
+      }
+    },
+    {
+      "probe_id": "B3_causal_guard_exists",
+      "group": "B_REASONING",
+      "group_label": "B. Reasoning Accuracy",
+      "title": "Causal guard: correlation ≠ causation có được kiểm soát?",
+      "outcome": "GAP_KNOWN",
+      "detail": "Causal guard CHƯA wire vào engine suy luận: logical_reasoning.py nhắc causal=False; module causal_reasoning.py tồn tại=True nhưng usage bên ngoài=0 file (gap #7 đã ghi nhận trong Cognitive Core).",
+      "evidence": "logical_reasoning.py + quan_ai_brain/memory/causal_reasoning.py",
+      "duration_s": 0.041,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "causal_in_engine": false,
+        "causal_module_exists": true,
+        "wired_into_reasoning": false,
+        "engine_is_v9_reasoning": true
+      }
+    },
+    {
+      "probe_id": "C1_abstain_no_evidence",
+      "group": "C_EPISTEMIC",
+      "group_label": "C. Epistemic Intelligence",
+      "title": "Abstention: hỏi ngoài kho phải trả 'không đủ bằng chứng'",
+      "outcome": "PASS",
+      "detail": "conclusion_type=C; evidence=0; conclusion='Không đủ bằng chứng để trả lời câu hỏi này'",
+      "evidence": "logical_reasoning V9, question=Giá cổ phiếu FPT hôm nay là bao nhiêu?",
+      "duration_s": 0.007,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "conclusion_type": "C",
+        "evidence_count": 0
+      }
+    },
+    {
+      "probe_id": "C2_known_evidence_answer",
+      "group": "C_EPISTEMIC",
+      "group_label": "C. Epistemic Intelligence",
+      "title": "Trả lời CÓ bằng chứng từ kho tri thức thật (đo động)",
+      "outcome": "PASS",
+      "detail": "Động: 8/8 KU thật được trả lời có evidence (100%); câu hỏi V0 'Quy tắc học của CHERRY là gì?' → type=C, evidence=0. GAP COVERAGE: retrieval chỉ thấy 148 KU / 16236 tri thức tổng (semantic 5052 + candidate 11036) — gap 16088 tri thức.",
+      "evidence": "V9 retrieval trên snapshot; sample 8 KU EXTRACTED (seed=42)",
+      "duration_s": 0.042,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "dynamic_answered": 8,
+        "dynamic_sample": 8,
+        "v0_question_type": "C",
+        "v0_question_evidence": 0,
+        "coverage_ku": 148,
+        "coverage_total_knowledge": 16236,
+        "outcomes": [
+          {
+            "ku": "k_9adce3493c",
+            "type": "B",
+            "evidence": 20
+          },
+          {
+            "ku": "k_887390ec0c",
+            "type": "B",
+            "evidence": 10
+          },
+          {
+            "ku": "k_e2636cae13",
+            "type": "B",
+            "evidence": 20
+          },
+          {
+            "ku": "k_db11cc0d28",
+            "type": "B",
+            "evidence": 8
+          },
+          {
+            "ku": "k_12a89deb2f",
+            "type": "B",
+            "evidence": 20
+          },
+          {
+            "ku": "k_0bb2366487",
+            "type": "B",
+            "evidence": 10
+          },
+          {
+            "ku": "k_5c2a1b4c6d",
+            "type": "B",
+            "evidence": 20
+          },
+          {
+            "ku": "k_85c29f1b60",
+            "type": "B",
+            "evidence": 20
+          }
+        ]
+      }
+    },
+    {
+      "probe_id": "C3_stale_detection",
+      "group": "C_EPISTEMIC",
+      "group_label": "C. Epistemic Intelligence",
+      "title": "Stale detection theo freshness_policy per-claim",
+      "outcome": "PASS",
+      "detail": "daily+30d→stale; immutable+30d→immutable; daily+1h→fresh — policy per-claim đúng logic",
+      "evidence": "cognitive_state.evaluate_freshness",
+      "duration_s": 0.0,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "daily_30d": "stale",
+        "immutable_30d": "immutable",
+        "daily_1h": "fresh"
+      }
+    },
+    {
+      "probe_id": "D1_hypotheses_on_real_incident",
+      "group": "D_CRITICAL",
+      "group_label": "D. Critical Thinking",
+      "title": "Sinh giả thuyết trên sự cố thật (Pi5 mất kết nối)",
+      "outcome": "PARTIAL",
+      "detail": "0 hypotheses — cùng gốc rễ C2: retrieval không có evidence → không sinh được giả thuyết. Khung support/against CÓ trong code (missing_info=1, conclusion_type=C).",
+      "evidence": "V9 on real incident ('Vì sao Pi5 mất kết nối?')",
+      "duration_s": 0.006,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "n_hypotheses": 0,
+        "n_missing_info": 1,
+        "conclusion_type": "C",
+        "has_support_against_frame": true
+      }
+    },
+    {
+      "probe_id": "E1_metacognition_evaluable",
+      "group": "E_METACOG",
+      "group_label": "E. Metacognition",
+      "title": "MetacognitiveEvaluation chạy được và có chỉ số định lượng",
+      "outcome": "PASS",
+      "detail": "type=MetacognitiveEvaluation; grounding_score=0.0; unverified=1 (hypothesis UNVERIFIED được đếm đúng)",
+      "evidence": "CognitiveState(task_id, goal).evaluate_metacognition()",
+      "duration_s": 0.0,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "grounding_score": 0.0,
+        "unverified_claim_count": 1,
+        "stale_claim_count": 0
+      }
+    },
+    {
+      "probe_id": "F1_llm_fallback_regression",
+      "group": "F_ADAPTIVE",
+      "group_label": "F. Adaptive",
+      "title": "LLM fallback regression tồn tại (NetMind provider, không gọi API)",
+      "outcome": "PASS",
+      "detail": "18 test functions bảo vệ NetMindProvider; catalog model: ['MiniMax/MiniMax-M3', 'zai-org/GLM-5.3', 'zai-org/GLM-5.3-Flash', 'zai-org/GLM-5.3-FlashX']; env-clearing sandbox: True (fallback chain đã E2E thật 01/11 theo baseline V0)",
+      "evidence": "E:\\BRAIN\\tests\\test_netmind_provider.py (phân tích tĩnh — không chạy pytest, không gọi API)",
+      "duration_s": 0.001,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "test_functions": [
+          "test_disabled_by_default_no_key",
+          "test_health_reports_disabled_truthfully",
+          "test_health_no_key_when_enabled",
+          "test_missing_key_returns_no_api_key",
+          "test_model_allowlist_rejects_unknown_model",
+          "test_empty_model_rejected_by_request_validation",
+          "test_chat_models_constant_matches_catalog",
+          "test_generate_success_with_reasoning_effort",
+          "test_generate_respects_metadata_max_tokens",
+          "test_is_online_requires_policy_and_key",
+          "test_list_models_maps_catalog",
+          "test_http_error_returned_structured",
+          "test_retry_then_success",
+          "test_retry_exhaustion_returns_error",
+          "test_network_error_never_fakes_success",
+          "test_timeout_error_returned",
+          "test_audit_metadata_only",
+          "test_key_never_stored_on_instance"
+        ],
+        "model_chain": [
+          "MiniMax/MiniMax-M3",
+          "zai-org/GLM-5.3",
+          "zai-org/GLM-5.3-Flash",
+          "zai-org/GLM-5.3-FlashX"
+        ],
+        "has_provider_class": true,
+        "has_catalog": true
+      }
+    },
+    {
+      "probe_id": "G1_risk_levels_exist",
+      "group": "G_DECISION",
+      "group_label": "G. Decision",
+      "title": "Thang rủi ro R0–R5 tồn tại (6 mức)",
+      "outcome": "PASS",
+      "detail": "levels=['R0', 'R1', 'R2', 'R3', 'R4', 'R5']",
+      "evidence": "governance/policy.py RiskLevel",
+      "duration_s": 0.0,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "levels": [
+          "R0",
+          "R1",
+          "R2",
+          "R3",
+          "R4",
+          "R5"
+        ]
+      }
+    },
+    {
+      "probe_id": "G2_r4_fail_closed",
+      "group": "G_DECISION",
+      "group_label": "G. Decision",
+      "title": "R4 fail-closed: verify() trả False cho fake card",
+      "outcome": "PASS",
+      "detail": "verify('FAKE-CARD-XYZ') → False (bool) — fail-closed đúng contract",
+      "evidence": "approval_verifier.GovernanceApprovalVerifier.verify trên snapshot COPY",
+      "duration_s": 0.005,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "fake_verify_result": false,
+        "governance_snapshot": "C:\\Users\\DELL\\AppData\\Local\\Temp\\ciee_run_20261111T153748Z\\governance_g2_copy.db"
+      }
+    },
+    {
+      "probe_id": "H1_quarantine_gate",
+      "group": "H_LEARNING",
+      "group_label": "H. Learning Effectiveness",
+      "title": "Quarantine gate: kiến thức mới không tự promote",
+      "outcome": "PASS",
+      "detail": "promoted=3209 (đều qua R4), quarantined=6336 (57%) chờ owner; approved=1491",
+      "evidence": "brain.db candidate_knowledge (read-only URI)",
+      "duration_s": 0.001,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "breakdown": {
+          "approved": 1491,
+          "promoted": 3209,
+          "quarantined": 6336
+        },
+        "quarantine_ratio": 0.574
+      }
+    },
+    {
+      "probe_id": "H2_learning_spam_control",
+      "group": "H_LEARNING",
+      "group_label": "H. Learning Effectiveness",
+      "title": "Kiểm soát spam học 'Test suite:*' trong quarantine",
+      "outcome": "FAIL",
+      "detail": "spam_rows=2541 (V0: 1837, delta +704); chiếm 40% quarantine (6336); tổng candidate=11036. Vẫn vượt mốc V0 / ngưỡng — write path chưa chặn nguồn spam.",
+      "evidence": "brain.db candidate_knowledge (read-only URI)",
+      "duration_s": 0.009,
+      "started_at_utc": "2026-11-11T15:37:48Z",
+      "extras": {
+        "spam_rows": 2541,
+        "v0_spam_rows": 1837,
+        "delta_vs_v0": 704,
+        "spam_ratio_quarantine": 0.401,
+        "quarantined_total": 6336,
+        "candidate_total": 11036
+      }
+    },
+    {
+      "probe_id": "C4_chroma_vector_store",
+      "group": "C_EPISTEMIC",
+      "group_label": "C. Epistemic Intelligence",
+      "title": "Chroma vector store đọc được metadata (tùy chọn)",
+      "outcome": "NOT_RUN",
+      "detail": "Bỏ qua theo mặc định: chroma startup tải embedding stack nặng (~RAM), không thuộc 14 probes chuẩn của baseline. Chạy lại với --chroma để bật.",
+      "evidence": "knowledge_db tại E:\\BRAIN\\data\\knowledge_db",
+      "duration_s": 0.0,
+      "started_at_utc": "2026-11-11T15:37:48Z"
+    }
+  ]
+}

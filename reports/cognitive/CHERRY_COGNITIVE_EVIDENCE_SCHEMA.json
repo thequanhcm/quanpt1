@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CHERRY Cognitive Evidence Record",
+  "version": "1.0-draft",
+  "description": "Schema bản ghi bằng chứng nhận thức. Mọi trường phải phản ánh dữ liệu thật; KHÔNG được đánh dấu verified khi chưa có kiểm tra. Trạng thái chưa kiểm chứng = NOT_VERIFIED.",
+  "type": "object",
+  "required": ["session_id", "task", "created_at_utc", "status"],
+  "properties": {
+    "session_id": {"type": "string", "pattern": "^COG-[0-9]{8}-[0-9a-f]{8}$"},
+    "task": {"type": "string", "minLength": 1},
+    "created_at_utc": {"type": "string", "format": "date-time"},
+    "status": {
+      "type": "string",
+      "enum": ["ANSWER", "ASK", "WAIT", "ACT", "BLOCKED", "NOT_VERIFIED"]
+    },
+    "input_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["source_id", "source_type", "captured_at_utc", "modality"],
+        "properties": {
+          "source_id": {"type": "string"},
+          "source_type": {"type": "string"},
+          "captured_at_utc": {"type": "string", "format": "date-time"},
+          "modality": {"type": "string", "enum": ["voice", "text", "image", "system", "sensor"]},
+          "direct_or_inferred": {"type": "string", "enum": ["DIRECT", "INFERRED"]},
+          "raw_ref": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "verified_facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["statement", "evidence_ref", "verified"],
+        "properties": {
+          "statement": {"type": "string"},
+          "evidence_ref": {"type": "string"},
+          "verified": {"type": "boolean"},
+          "trust_level": {
+            "type": "string",
+            "enum": ["OWNER_VERIFIED", "SYSTEM_VERIFIED", "TRUSTED_SOURCE", "MODEL_INFERENCE", "UNKNOWN_SOURCE", "UNTRUSTED_SOURCE"]
+          }
+        }
+      }
+    },
+    "inferences": {"type": "array", "items": {"type": "string"}},
+    "hypotheses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "support_count", "against_count"],
+        "properties": {
+          "text": {"type": "string"},
+          "support_count": {"type": "integer", "minimum": 0},
+          "against_count": {"type": "integer", "minimum": 0},
+          "likelihood": {"type": ["string", "null"], "enum": ["HIGH", "MEDIUM", "LOW", null]},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["between", "kind"],
+        "properties": {
+          "between": {"type": "array", "items": {"type": "string"}, "minItems": 2},
+          "kind": {"type": "string", "enum": ["SEMANTIC", "TEMPORAL", "LOGICAL", "SOURCE", "CONTEXT"]},
+          "resolved": {"type": "boolean"}
+        }
+      }
+    },
+    "confidence_assessment": {
+      "type": "object",
+      "properties": {
+        "aggregate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "note": {"type": "string",
+          "description": "BẮT BUỘC: chỉ số khai báo, KHÔNG phải xác suất hiệu chuẩn"},
+        "missing_info": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "kind": {"type": "string", "enum": ["ANSWER", "ASK", "WAIT", "ACT"]},
+        "content": {"type": "string"},
+        "ask_question": {"type": ["string", "null"]}
+      }
+    },
+    "permission_check": {
+      "type": "object",
+      "properties": {
+        "risk_level": {"type": "string", "enum": ["R0", "R1", "R2", "R3", "R4", "R5"]},
+        "allowed": {"type": ["boolean", "null"]},
+        "policy_ref": {"type": ["string", "null"]},
+        "owner_approval_required": {"type": "boolean"}
+      }
+    },
+    "action_result": {
+      "type": ["object", "null"],
+      "properties": {
+        "executed": {"type": "boolean"},
+        "output_ref": {"type": ["string", "null"]},
+        "error": {"type": ["string", "null"]},
+        "rolled_back": {"type": "boolean"}
+      }
+    },
+    "outcome_verified": {
+      "type": "boolean",
+      "description": "true CHỈ khi có bằng chứng đo được (probe/API/test thật). Không đo được → false."
+    },
+    "reflection": {
+      "type": ["object", "null"],
+      "properties": {
+        "understood_request": {"type": "string"},
+        "assumptions_made": {"type": "array", "items": {"type": "string"}},
+        "counter_evidence_found": {"type": "array", "items": {"type": "string"}},
+        "could_be_wrong_because": {"type": ["string", "null"]},
+        "prediction_matched_outcome": {"type": ["boolean", "null"]},
+        "lesson_learned": {"type": ["string", "null"]},
+        "method_adjustment": {"type": ["string", "null"]}
+      }
+    },
+    "owner_approval": {
+      "type": ["object", "null"],
+      "properties": {
+        "card_code": {"type": ["string", "null"]},
+        "auth_method": {"type": ["string", "null"]},
+        "approved_by": {"type": ["string", "null"]},
+        "approved_at_utc": {"type": ["string", "null"]}
+      }
+    },
+    "audit": {
+      "type": "object",
+      "properties": {
+        "evidence_files": {"type": "array", "items": {"type": "string"}},
+        "sha256_manifest": {"type": "array", "items": {"type": "string"}},
+        "regression_run": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
