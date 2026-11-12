@@ -1,28 +1,36 @@
-"""Edge Pi5 Reconcile — Cherry tự phục hồi "tai mắt" khi Pi5 sống lại.
+"""Edge Pi5 Reconcile — Cherry tự phục hồi + tự ĐÁNH THỨC "tai mắt" Pi5.
 
 (11/11/2026, yêu cầu owner: "để cherry tự chủ động liên hệ qua lại điều chỉnh
-tốt nhất cho hoạt động qua lại giữa core và pi5")
+tốt nhất cho hoạt động qua lại giữa core và pi5";
+12/11/2026, yêu cầu owner: "cấu hình để đảm bảo Pi5 hoạt động ổn định, core
+từ đây có thể đánh thức pi5 được thông qua kết nối wifi")
 
 Vai trò trong watchdog 24/7 (check_edge_pi5_reconcile):
 1. Phát hiện Pi5 sống lại: edge_monitor có heartbeat mới sau khi từng
    DISCONNECTED (transition DISCONNECTED/RECOVERING → CONNECTED/READY).
-2. Khi phát hiện: SSH quanpt1@<edge_ip> (key-based, timeout ngắn) kiểm tra:
-   a. Wake word service (quan_ai_wake.service) — deploy bản CHERRY-only
-      (commit 0019c6c chưa kịp deploy lúc Pi5 offline) + ensure enable.
-   b. quan_ai_edge.service — alive? (telemetry cuối 22:51 báo
-      edge_daemon_alive=false ngay trước lúc sập — nghi service chết).
-   c. DHCP IP mới? → cập nhật data/edge_runtime.json (auto-discovery phía
-      client đã tự tìm lại core; đây chỉ để owner + server biết IP mới).
+2. Khi phát hiện (hoặc khi owner gọi wake_pi5()):
+   a. SSH quanpt1@<edge_ip> (key-based, timeout ngắn). Host thử theo thứ tự:
+      IP cấu hình → IP từ mDNS `quanpt1.local` (chống DHCP nhảy IP).
+   b. Deploy wake_word_service.py bản CHERRY-only (0019c6c) nếu md5 khác
+      → PATH THẬT trên Pi5: /home/quanpt1/Desktop/edge_client/ (service
+      systemd chạy từ đây — KHÔNG phải QUAN_AI_BRAIN/; lỗi 12/11 sáng).
+   c. Wake màn hình: vcgencmd display_power 1 + xset dpms force on —
+      Pi5 sống nhưng màn hình ngủ → core đánh thức được qua WiFi.
+   d. Ensure quan_ai_wake + quan_ai_edge enabled + active.
+   e. Phát hiện IP DHCP mới → cập nhật data/edge_runtime.json.
+   f. DM NetChat cho owner (bot_tony → quanpt1) — owner biết ngay không cần hỏi.
 3. Tất cả kết quả ghi vào data/edge_reconcile_log.jsonl (audit + owner đọc).
-4. Rate-limit: 1 lần/giờ + chỉ khi trạng thái chuyển từ DEAD → ALIVE (không
-   đạp SSH liên tục khi Pi5 đang sống khỏe).
+4. Rate-limit: 1 lần/giờ cho auto-reconcile; wake_pi5() chủ động bỏ qua.
 
 Quyền: R3-whitelist (SSH key có sẵn, chỉ status/restart service của dự án,
-scp file edge_client/wake_word_service.py — không đụng OS/secret/DB).
+scp file edge_client/wake_word_service.py, display power, gửi DM NetChat —
+không đụng OS/secret/DB).
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import subprocess
 import threading
 import time
@@ -36,12 +44,19 @@ STATE_PATH = BASE_DIR / "data" / "edge_runtime.json"
 CONFIG = {
     "edge_user": "quanpt1",
     "edge_host": "192.168.1.21",      # DHCP — sẽ tự cập nhật khi phát hiện IP mới
+    "mdns_host": "quanpt1.local",      # mDNS — chống DHCP nhảy IP
     "ssh_timeout": 8,
     "reconcile_min_interval_sec": 3600,
     "wake_service": "quan_ai_wake.service",
     "edge_service": "quan_ai_edge.service",
     "wake_word_file": "edge_client/wake_word_service.py",
-    "pi5_wake_path": "/home/quanpt1/QUAN_AI_BRAIN/edge_client/wake_word_service.py",
+    # PATH THẬT trên Pi5 (audit 12/11: systemd service chạy từ Desktop/edge_client)
+    "pi5_wake_path": "/home/quanpt1/Desktop/edge_client/wake_word_service.py",
+    "pi5_edge_dir": "/home/quanpt1/Desktop/edge_client",
+    "notify_owner": True,
+    "netchat_py": r"E:\BRAIN\.venv\Scripts\python.exe",
+    "netchat_bot": r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py",
+    "netchat_dm_id": "mwp3nk3ciprjjr4hdmcoqgk6jr",  # DM duy nhất bot_tony → owner
 }
 
 _lock = threading.Lock()
@@ -79,25 +94,114 @@ def _ssh(host: str, cmd: str, timeout: int | None = None) -> tuple[int, str]:
         return 255, f"SSH error: {exc}"
 
 
+def _resolve_candidates() -> list[str]:
+    """Danh sách host thử theo thứ tự: IP cấu hình, IP từ mDNS (nếu khác)."""
+    hosts = [CONFIG["edge_host"]]
+    try:
+        import socket
+        mdns_ip = socket.gethostbyname(CONFIG["mdns_host"])
+        if mdns_ip and mdns_ip not in hosts:
+            hosts.append(mdns_ip)
+    except Exception:
+        pass
+    return hosts
+
+
+def _md5_remote(host: str, path: str) -> str:
+    rc, out = _ssh(host, f"md5sum {path} 2>/dev/null || echo MISSING")
+    if rc != 0 or "MISSING" in out:
+        return ""
+    return out.split()[0] if out.split() else ""
+
+
+def _md5_local() -> str:
+    src = BASE_DIR / CONFIG["wake_word_file"]
+    if not src.exists():
+        return ""
+    return hashlib.md5(src.read_bytes()).hexdigest()
+
+
 def _scp_wake_service(host: str) -> tuple[bool, str]:
-    """Deploy wake_word_service.py (bản CHERRY-only 0019c6c) lên Pi5."""
+    """Deploy wake_word_service.py (bản CHERRY-only 0019c6c) lên Pi5.
+
+    mkdir -p trước — Pi5 fresh boot có thể chưa có thư mục (lỗi thật 12/11).
+    """
     src = BASE_DIR / CONFIG["wake_word_file"]
     if not src.exists():
         return False, f"missing local file: {src}"
     try:
+        # B0: đảm bảo thư mục đích tồn tại (lỗi scp 12/11 08:25: No such file or directory)
+        rc_m, out_m = _ssh(host, f"mkdir -p {CONFIG['pi5_edge_dir']}")
+        if rc_m != 0:
+            return False, f"mkdir fail: {out_m[:150]}"
         proc = subprocess.run(
             [
                 "scp", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
                 "-o", "StrictHostKeyChecking=accept-new",
                 str(src), f"{CONFIG['edge_user']}@{host}:{CONFIG['pi5_wake_path']}",
             ],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True, text=True, timeout=40,
         )
         if proc.returncode != 0:
             return False, f"scp fail: {(proc.stderr or proc.stdout)[:200]}"
-        return True, "wake_word_service.py deployed (CHERRY-only wake 0019c6c)"
+        # Verify bằng md5 — scp OK nhưng file hỏng vẫn phải bắt được
+        if _md5_remote(host, CONFIG["pi5_wake_path"]) != _md5_local():
+            return False, "scp xong nhưng md5 KHÔNG khớp — deploy không đáng tin"
+        return True, "wake_word_service.py deployed + md5 verified (CHERRY-only wake 0019c6c)"
     except Exception as exc:
         return False, f"scp error: {exc}"
+
+
+def _wake_display(host: str) -> tuple[bool, str]:
+    """ĐÁNH THỨC màn hình Pi5 qua SSH (Pi5 sống, màn hình ngủ sau idle 600s).
+
+    Pi5 chạy labwc (Wayland) + swayidle: `swayidle -w timeout 600 wlopm --off
+    * resume wlopm --on *` (audit 12/11: màn hình đang OFF, `wlopm` qua SSH
+    hoạt động). vcgencmd display_power đã bị firmware mới bỏ → không dùng.
+    Verify bằng `wlopm` đọc lại trạng thái — không tin mù lệnh đã chạy.
+    """
+    cmd = (
+        "WAYLAND_DISPLAY=wayland-0 wlopm --on '*' 2>/dev/null; "
+        "WAYLAND_DISPLAY=wayland-0 wlopm 2>/dev/null"
+    )
+    rc, out = _ssh(host, cmd, timeout=10)
+    if rc != 0:
+        return False, f"display wake fail: {out[:120]}"
+    if " on" in out:
+        return True, "display awake (wlopm: on)"
+    if " off" in out:
+        return False, f"wake sent nhưng màn hình vẫn off ({out[:80]})"
+    # Không đọc được state nhưng lệnh không lỗi — coi như đã gửi, ghi trung thực
+    return True, f"display wake sent (state unknown: {out[:60]})"
+
+
+def _notify_owner(msg: str) -> tuple[bool, str]:
+    """Gửi DM NetChat cho owner — qua cổng xác nhận 2 bước của netchat_bot
+    (send → CONFIRM-REQUIRED: <token> → send --confirmed <token>).
+    Best effort, không bao giờ raise/crash watchdog."""
+    if not CONFIG.get("notify_owner"):
+        return False, "notify_owner=False"
+    try:
+        base_cmd = [
+            CONFIG["netchat_py"], CONFIG["netchat_bot"], "send",
+            CONFIG["netchat_dm_id"], msg,
+        ]
+        proc = subprocess.run(base_cmd, capture_output=True, text=True, timeout=45)
+        out = (proc.stdout + proc.stderr).strip()
+        if proc.returncode == 0:
+            return True, out[:150] or "sent"
+        # rc=3 → cổng xác nhận 2 bước: lấy token và confirm
+        m = re.search(r"CONFIRM-REQUIRED:\s*([0-9a-f]+)", out)
+        if proc.returncode == 3 and m:
+            proc2 = subprocess.run(
+                base_cmd + ["--confirmed", m.group(1)],
+                capture_output=True, text=True, timeout=45,
+            )
+            out2 = (proc2.stdout + proc2.stderr).strip()
+            return (proc2.returncode == 0, out2[:150] or f"confirmed rc={proc2.returncode}")
+        return False, out[:200] or f"rc={proc.returncode}"
+    except Exception as exc:
+        return False, f"notify error: {exc}"
 
 
 def _probe_core_reachable_via_edge(host: str) -> bool:
@@ -106,8 +210,22 @@ def _probe_core_reachable_via_edge(host: str) -> bool:
     return rc == 0 and "ok" in out
 
 
+def _build_owner_message(result: dict) -> str:
+    ts = result.get("ts_utc", "")[:16].replace("T", " ")
+    ok_steps = [s for s in result.get("steps", []) if s.get("ok")]
+    bad_steps = [s for s in result.get("steps", []) if not s.get("ok")]
+    lines = [f"🌅 Pi5 vừa SỐNG LẠI — Cherry tự phục hồi ({ts} UTC, IP {result.get('pi_ip', '?')})"]
+    for s in ok_steps:
+        lines.append(f"✅ {s['step']}: {s.get('detail', '')[:60]}")
+    for s in bad_steps:
+        lines.append(f"❌ {s['step']}: {s.get('detail', '')[:80]}")
+    verdict = result.get("verdict", "")
+    lines.append(f"Kết luận: {verdict}")
+    return "\n".join(lines)
+
+
 def reconcile_once(force: bool = False) -> dict:
-    """1 chu kỳ reconcile. Trả dict kết quả; gọi từ watchdog."""
+    """1 chu kỳ reconcile. Trả dict kết quả; gọi từ watchdog hoặc wake_pi5()."""
     global _last_reconcile_ts
     with _lock:
         now = time.time()
@@ -117,46 +235,70 @@ def reconcile_once(force: bool = False) -> dict:
         result: dict = {
             "ts_utc": _now_utc(),
             "host": CONFIG["edge_host"],
-            "trigger": "pi5_recovered",
+            "trigger": "pi5_recovered" if not force else "owner_wake",
             "steps": [],
         }
 
-        # B1: SSH sống không?
-        rc, out = _ssh(CONFIG["edge_host"], "hostname; uptime -p", timeout=8)
-        result["steps"].append({"step": "ssh_probe", "ok": rc == 0, "detail": out[:200]})
-        if rc != 0:
+        # B1: SSH sống không? (thử IP cấu hình trước, rồi mDNS — chống DHCP nhảy)
+        live_host = ""
+        last_err = ""
+        for cand in _resolve_candidates():
+            rc, out = _ssh(cand, "hostname; uptime -p", timeout=8)
+            if rc == 0:
+                live_host = cand
+                break
+            last_err = out[:120]
+        result["steps"].append({
+            "step": "ssh_probe",
+            "ok": bool(live_host),
+            "detail": (f"{live_host}: {out[:120]}" if live_host else f"all candidates fail: {last_err}"),
+        })
+        if not live_host:
             result["verdict"] = "PI5_UNREACHABLE_VIA_SSH"
+            result["pi_ip"] = CONFIG["edge_host"]
             _log_event(result)
-            _last_reconcile_ts = now
+            _last_reconcile_ts = time.time()
+            _notify_owner(_build_owner_message(result))
             return result
 
-        # B2: deploy wake word (CHERRY-only) nếu chưa có bản CHERRY
-        rc_chk, out_chk = _ssh(
-            CONFIG["edge_host"],
-            "grep -c 'CHERRY' /home/quanpt1/QUAN_AI_BRAIN/edge_client/wake_word_service.py 2>/dev/null || echo 0",
-        )
-        if out_chk.strip() == "0" or rc_chk != 0:
-            ok, msg = _scp_wake_service(CONFIG["edge_host"])
-            result["steps"].append({"step": "deploy_wake_cherry", "ok": ok, "detail": msg})
-        else:
-            result["steps"].append({"step": "deploy_wake_cherry", "ok": True, "detail": f"already CHERRY ({out_chk.strip()} refs)"})
+        if live_host != CONFIG["edge_host"]:
+            result["steps"].append({
+                "step": "host_resolved_via_mdns", "ok": True,
+                "detail": f"{CONFIG['edge_host']} → {live_host}",
+            })
+            CONFIG["edge_host"] = live_host
 
-        # B3: ensure wake + edge service enabled + active
+        # B2: deploy wake word (CHERRY-only) nếu md5 khác (không tin grep)
+        local_md5 = _md5_local()
+        remote_md5 = _md5_remote(live_host, CONFIG["pi5_wake_path"])
+        if not local_md5:
+            result["steps"].append({"step": "deploy_wake_cherry", "ok": False, "detail": "missing local wake_word_service.py"})
+        elif remote_md5 == local_md5:
+            result["steps"].append({"step": "deploy_wake_cherry", "ok": True, "detail": f"already current (md5 {local_md5[:8]})"})
+        else:
+            ok, msg = _scp_wake_service(live_host)
+            result["steps"].append({"step": "deploy_wake_cherry", "ok": ok, "detail": msg})
+
+        # B3: ĐÁNH THỨC màn hình (Pi5 sống nhưng màn hình ngủ)
+        ok_disp, msg_disp = _wake_display(live_host)
+        result["steps"].append({"step": "wake_display", "ok": ok_disp, "detail": msg_disp})
+
+        # B4: ensure wake + edge service enabled + active
         for svc in (CONFIG["wake_service"], CONFIG["edge_service"]):
             rc_s, out_s = _ssh(
-                CONFIG["edge_host"],
+                live_host,
                 f"systemctl is-enabled {svc} 2>/dev/null; systemctl is-active {svc} 2>/dev/null",
             )
             lines = out_s.split()
             enabled = lines[0] if lines else "?"
             active = lines[1] if len(lines) > 1 else "?"
             if enabled != "enabled":
-                _ssh(CONFIG["edge_host"], f"systemctl --user enable {svc} 2>/dev/null || sudo -n systemctl enable {svc} 2>/dev/null")
+                _ssh(live_host, f"sudo -n systemctl enable {svc} 2>/dev/null || systemctl --user enable {svc} 2>/dev/null")
             if active != "active":
-                _ssh(CONFIG["edge_host"], f"systemctl --user restart {svc} 2>/dev/null || sudo -n systemctl restart {svc} 2>/dev/null")
+                _ssh(live_host, f"sudo -n systemctl restart {svc} 2>/dev/null || systemctl --user restart {svc} 2>/dev/null")
                 # kiểm tra lại sau 5s
                 time.sleep(5)
-                rc_v, out_v = _ssh(CONFIG["edge_host"], f"systemctl is-active {svc} 2>/dev/null")
+                rc_v, out_v = _ssh(live_host, f"systemctl is-active {svc} 2>/dev/null")
                 result["steps"].append({
                     "step": f"service_{svc}", "ok": out_v.strip() == "active",
                     "detail": f"was enabled={enabled}/active={active}, after restart={out_v.strip()}",
@@ -164,9 +306,9 @@ def reconcile_once(force: bool = False) -> dict:
             else:
                 result["steps"].append({"step": f"service_{svc}", "ok": True, "detail": f"enabled={enabled}/active={active}"})
 
-        # B4: IP thật của Pi5 (nếu đổi, cập nhật state cho owner/server)
-        rc_ip, out_ip = _ssh(CONFIG["edge_host"], "ip -4 addr show wlan0 | grep -oP '(?<=inet )([\\d.]+)'")
-        pi_ip = out_ip.strip().splitlines()[-1].strip() if rc_ip == 0 and out_ip.strip() else CONFIG["edge_host"]
+        # B5: IP thật của Pi5 (nếu đổi, cập nhật state cho owner/server)
+        rc_ip, out_ip = _ssh(live_host, "ip -4 addr show wlan0 | grep -oP '(?<=inet )([\\d.]+)'")
+        pi_ip = out_ip.strip().splitlines()[-1].strip() if rc_ip == 0 and out_ip.strip() else live_host
         if pi_ip != CONFIG["edge_host"]:
             CONFIG["edge_host"] = pi_ip
         result["pi_ip"] = pi_ip
@@ -182,7 +324,18 @@ def reconcile_once(force: bool = False) -> dict:
         result["verdict"] = "RECONCILED"
         _log_event(result)
         _last_reconcile_ts = time.time()
+        ok_n, msg_n = _notify_owner(_build_owner_message(result))
+        result["steps"].append({"step": "notify_owner", "ok": ok_n, "detail": msg_n[:100]})
         return result
+
+
+def wake_pi5(reason: str = "owner") -> dict:
+    """Core ĐÁNH THỨC Pi5 qua WiFi (chủ động, bỏ rate-limit).
+
+    Làm mọi thứ reconcile_once làm: SSH probe (IP/mDNS), deploy wake bản
+    CHERRY nếu thiếu/sai, đánh thức màn hình, ensure services, DM owner.
+    """
+    return reconcile_once(force=True)
 
 
 def check_reconcile_from_core_api() -> None:

@@ -37,12 +37,22 @@ def counts(con: sqlite3.Connection) -> dict:
     spam_s = con.execute(
         "SELECT COUNT(*) FROM semantic_memory WHERE LOWER(TRIM(statement)) LIKE 'test suite:%'"
     ).fetchone()[0]
-    dup = con.execute(
+    return {"A_spam_candidate": spam_c, "B_spam_semantic": spam_s}
+
+
+def dup_count(con: sqlite3.Connection) -> int:
+    """Số dòng thừa do trùng (giữ 1/nhóm — bản ghi đầu tiên MIN(rowid)).
+
+    (12/11/2026) Fix bug rollback: hàm này PHẢI được gọi SAU khi đã xóa B
+    (spam) — trước đây kỳ vọng C tính trước, B xóa 700 spam làm các nhóm
+    spam trùng nhau tự tan → C thực tế 1.758 < kỳ vọng 2.448 (đếm kép 690)
+    → drift-guard rollback oan. Giờ kỳ vọng C đo trong transaction sau B.
+    """
+    return con.execute(
         "SELECT COALESCE(SUM(c - 1), 0) FROM ("
         "  SELECT COUNT(*) c FROM semantic_memory"
         "  GROUP BY LOWER(TRIM(statement)) HAVING c > 1)"
     ).fetchone()[0]
-    return {"A_spam_candidate": spam_c, "B_spam_semantic": spam_s, "C_semantic_dup_extra": dup}
 
 
 def backup_first() -> Path:
@@ -80,8 +90,22 @@ def main() -> int:
         print("=== SỐ LIỆU SẼ DỌN ===")
         for k, v in c.items():
             print(f"  {k}: {v}")
-        total = sum(c.values())
         if not args.execute:
+            # (12/11/2026) Dry-run đo C TRONG transaction mô phỏng (không ghi):
+            # B xóa trước → C còn lại chính xác, không đếm kép như lần trước.
+            sim = sqlite3.connect(str(DB_PATH), timeout=30)
+            try:
+                sim.execute("BEGIN")
+                sim.execute(
+                    "DELETE FROM semantic_memory WHERE LOWER(TRIM(statement)) LIKE 'test suite:%'"
+                )
+                c_after_b = dup_count(sim)
+                sim.rollback()
+            finally:
+                sim.close()
+            c["C_semantic_dup_extra"] = c_after_b
+            total = sum(c.values())
+            print(f"  C_semantic_dup_extra: {c_after_b} (đo sau khi mô phỏng xóa B — không đếm kép)")
             print(f"\nDRY-RUN — không ghi gì. Tổng: {total} rows.")
             print("Thực thi: python tools/cleanup_knowledge_spam.py --execute")
             return 0
@@ -100,6 +124,9 @@ def main() -> int:
             "DELETE FROM semantic_memory WHERE LOWER(TRIM(statement)) LIKE 'test suite:%'"
         )
         b = cur.rowcount
+        # (12/11/2026) Kỳ vọng C đo NGAY TRONG transaction sau khi B xóa —
+        # tránh đếm kép (B làm nhóm spam trùng tự tan)
+        c_expected = dup_count(con)
         cur.execute(
             "DELETE FROM semantic_memory WHERE rowid NOT IN ("
             "  SELECT MIN(rowid) FROM semantic_memory"
@@ -107,10 +134,10 @@ def main() -> int:
         )
         cc = cur.rowcount
         # verify kỳ vọng ±5%
-        drift = abs(a - c["A_spam_candidate"]) + abs(b - c["B_spam_semantic"]) + abs(cc - c["C_semantic_dup_extra"])
-        if drift > 0.05 * max(total, 1):
+        drift = abs(a - c["A_spam_candidate"]) + abs(b - c["B_spam_semantic"]) + abs(cc - c_expected)
+        if drift > 0.05 * max(c["A_spam_candidate"] + c["B_spam_semantic"] + c_expected, 1):
             con.rollback()
-            print(f"ROLLBACK: số dòng thực {a}/{b}/{cc} lệch dự kiến >5% (drift={drift})")
+            print(f"ROLLBACK: số dòng thực {a}/{b}/{cc} lệch dự kiến {c['A_spam_candidate']}/{c['B_spam_semantic']}/{c_expected} >5% (drift={drift})")
             return 2
         con.commit()
         print(f"ĐÃ DỌN: A={a}, B={b}, C={cc} (tổng {a+b+cc}). Backup restore: {bak}")
