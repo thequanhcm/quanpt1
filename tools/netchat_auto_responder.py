@@ -1172,8 +1172,24 @@ def main():
     print("\nMonitoring for new messages... (Ctrl+C to stop)\n")
     
     # Send greeting message on startup/restart
+    # (12/11/2026, audit tổng thể) CHỐNG SPAM GREETING: restart loop 14:01-14:23
+    # hôm nay gửi 10 greeting giống nhau vì mỗi lần restart đều gửi. Giờ chỉ gửi
+    # nếu greeting trước cách >60 phút (state lưu data/greeting_last_sent.txt).
     print("🚀 System starting up...")
-    send_greeting_message()
+    try:
+        _greet_state = Path(_BRAIN_ROOT) / "data" / "greeting_last_sent.txt"
+        _now = time.time()
+        _last = 0.0
+        if _greet_state.exists():
+            _last = float(_greet_state.read_text(encoding="utf-8").strip() or 0)
+        if _now - _last > 3600:
+            if send_greeting_message():
+                _greet_state.parent.mkdir(parents=True, exist_ok=True)
+                _greet_state.write_text(str(_now), encoding="utf-8")
+        else:
+            print(f"   ⏭️ Skip greeting (last sent {(_now - _last)/60:.0f}m ago < 60m) — chống spam restart loop")
+    except Exception as _ge:
+        print(f"   ⚠️ greeting guard error: {_ge}")
     print()
 
     seen_ids: set[str] = set()

@@ -99,3 +99,8 @@ reports/intelligence_maturity/ciee/_quarantine_summary_*.json
 
 # CPSL hidden set (Phase B) — KHONG commit, chi owner giu local
 data/cognitive/cpsl/hidden/
+
+data/cherry_autonomous_state.json
+data/greeting_last_sent.txt
+logs/cherry_autonomous.log
+logs/pythonw_stdout_test.log
