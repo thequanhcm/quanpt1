@@ -10,5 +10,5 @@ Wants=NetworkManager.service
 [Service]
 Type=oneshot
 User=quanpt1
-ExecStart=/home/quanpt1/edge_client/pi5_stability/wifi_watchdog.sh
+ExecStart=/home/quanpt1/Desktop/edge_client/pi5_stability/wifi_watchdog.sh
 # Cho phép NM restart + reboot không cần password (sudoers.d đã có từ trước)

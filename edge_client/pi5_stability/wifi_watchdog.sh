@@ -12,8 +12,8 @@
 #   (PC monitor đọc file này khi SSH được để biết Pi5 có reboot tự nhiên không)
 
 set -u
-LOG="/home/quanpt1/edge_client/pi5_stability/wifi_watchdog.log"
-STATUS="/home/quanpt1/edge_client/pi5_stability/boot_status.json"
+LOG="/home/quanpt1/Desktop/edge_client/pi5_stability/wifi_watchdog.log"
+STATUS="/home/quanpt1/Desktop/edge_client/pi5_stability/boot_status.json"
 GATEWAY="192.168.1.1"
 WIFI_IF="wlan0"
 NM_RESTART_MARK="/tmp/wifi_nm_restart_pending"
