@@ -1,63 +1,41 @@
-# Inventory — Secret đã chuyển về folder tập trung
+# Inventory — Secret tập trung (rà soát lần 2, 12/11/2026 tối)
 
-Ngày tạo: 12/11/2026
-Sprint: Refactor credentials tập trung
+## SECRET THẬT đã copy về đây (nguồn gốc giữ nguyên — hệ thống 24/7 KHÔNG gián đoạn)
 
-## Bảng secret
-
-| Key | Nguồn cũ | Consumer | Trạng thái |
+| Key | Nguồn gốc (hệ thống đang đọc) | Consumer | Giá trị |
 |---|---|---|---|
-| `netmind_api_key` | `.env` | NetMind cloud API | ⏳ Chờ owner điền |
-| `netchat_bot_token` | `.env.production` | NetChat DM bot | ⏳ Chờ owner điền |
-| `netchat_channel_owner` | hardcode 7 file .py | DM owner (quanpt1) | ✅ Đã chuyển (giá trị public) |
-| `netchat_channel_morning` | hardcode 2 file .py | Morning report channel | ✅ Đã chuyển (giá trị public) |
-| `edge_shared_secret` | `edge_client/config.json` | Pi5 ↔ PC auth | ⏳ Chờ owner điền |
-| `edge_hmac_secret` | `data/edge_hmac_secret.txt` | Edge HMAC signing | ⏳ Chờ owner điền |
-| `app_secret_key` | `.env.production` | Flask app | ⏳ Chờ owner điền |
-| `encryption_key` | `.env.production` | Data encryption | ⏳ Chờ owner điền |
-| `jwt_secret` | `.env.production` | JWT signing | ⏳ Chờ owner điền |
-| `smtp_password` | `.env.production` | SMTP relay | ⏳ Chờ owner điền |
+| `netmind_api_key` | `.env` + HKCU\Environment registry | netmind_provider (LLM 24/7) | ✅ ĐÃ COPY (len 25) |
+| `netchat_bot_token` | skill `bot-netchat/.env` | netchat_bot.py + responder fallback (DM 24/7) | ✅ ĐÃ COPY (len 26) |
+| `netchat_bot_url` | skill `bot-netchat/.env` | netchat_bot.py | ✅ ĐÃ COPY |
+| `edge_shared_secret` | `edge_client/config.json` | Pi5 ↔ PC HMAC auth (24/7) | ✅ ĐÃ COPY (len 64) |
+| `edge_hmac_secret` | `data/edge_hmac_secret.txt` | Edge HMAC signing | ✅ ĐÃ COPY (len 64) |
+| `netchat_channel_owner` | (public ID) | DM bot_tony ↔ quanpt1 | ✅ loader |
+| `netchat_channel_morning` | (public ID) | Morning report 8AM | ✅ loader |
 
-## File cũ cần xử lý
+## KHÔNG phải secret thật (đã verify)
 
-| File | Hành động |
+| File | Lý do |
 |---|---|
-| `.env` | Giữ nguyên (NetMind API key) — sẽ refactor sau khi owner duyệt |
-| `.env.production` | Giữ nguyên — sẽ refactor sau khi owner duyệt |
-| `edge_client/config.json` | Giữ nguyên — sẽ refactor sau khi owner duyệt |
-| `data/edge_hmac_secret.txt` | Giữ nguyên — sẽ refactor sau khi owner duyệt |
-| `logs/dm_token2.txt` ... `dm_token5.txt` | Runtime, xóa được (token tạm) |
+| `.env.production` | Toàn bộ SECRET/KEY/PASSWORD/TOKEN là PLACEHOLDER `<...>` — chưa dùng |
+| `docker-compose.yml` | Placeholder `change-me` / `admin` (Postgres/Grafana chưa deploy) |
+| `tests/test_*.py` | Test fixture (mock token) |
+| `tools/v42_optimize_user.ps1:12` | GUID của scheduled task Corel, không phải API key |
+| `src/.../edge/models.py` | Tên constant (schema field) |
+| `src/.../integration/manifest.py` | Placeholder `API_KEY = "API_KEY"` |
 
-## File hardcode CHANNEL_ID cần refactor
+## Backup cũ chứa secret (khuyến nghị owner xóa sau duyệt)
 
-| File | Line | Giá trị cũ |
-|---|---|---|
-| `src/quan_ai_brain/governance/netchat_approval_adapter.py` | 32 | `mwp3nk3ciprjjr4hdmcoqgk6jr` |
-| `src/quan_ai_brain/governance/netchat_info_gap_adapter.py` | 36 | `mwp3nk3ciprjjr4hdmcoqgk6jr` |
-| `src/quan_ai_brain/integration/netchat_bridge.py` | 43 | `mwp3nk3ciprjjr4hdmcoqgk6jr` |
-| `src/quan_ai_brain/integration/netchat_bridge.py` | 44 | `mwp3nk3ciprjjr4hdmcoqgk6jr` |
-| `tools/morning_report.py` | 33 | `4phc9b1mx78qjq3grxcw89u94a` |
-| `tools/netchat_auto_responder.py` | 159 | `mwp3nk3ciprjjr4hdmcoqgk6jr` |
-| `tools/netchat_auto_responder.py` | 163 | `mwp3nk3ciprjjr4hdmcoqgk6jr` |
-| `tools/setup_netchat_integration.py` | 32 | `4phc9b1mx78ajq3grccw89u94a` |
-| `tools/test_netchat_debug.py` | 8 | `4phc9b1mx78qjq3grxcw89u94a` |
-
-## Test fixtures (KHÔNG cần chuyển — đã là test)
-
-| File | Ghi chú |
+| File | Nội dung |
 |---|---|
-| `tests/test_authenticated_verifier.py:32` | `test_owner_secret_passcode_2026` |
-| `tests/test_llm_provider.py:309` | `super_secret_password` |
-| `tests/test_long_term_memory.py:284` | `***` |
-| `tests/test_memory.py:10` | `secret-value` |
-| `tests/test_owner_signature_verifier.py:233` | `test_owner_secret_key` |
-| `tests/test_redaction.py:5` | `top-secret` |
-| `src/quan_ai_brain/integration/manifest.py:26` | `API_KEY = "API_KEY"` (placeholder) |
+| `backups/rename_cherry_20261106/config.json` | Copy cũ của edge shared_secret |
+| `logs/dm_token2.txt` ... `dm_token5.txt` | DM confirm token runtime (tạm) |
 
-## Bước tiếp theo (sau khi owner duyệt)
+## Quy tắc hoạt động 24/7 sau tập trung
 
-1. Owner điền giá trị thật vào `secrets.env` + `secrets.local.json`
-2. Refactor 9 file .py để dùng `loader.get_secret()` thay hardcode
-3. Xóa hardcode CHANNEL_ID trong 9 file
-4. Test E2E: gửi DM, morning report, edge auth
-5. Commit refactor (KHÔNG commit file secret)
+1. **Consumer code KHÔNG đổi nguồn đọc** — server/responder/Pi5 đang chạy tiếp tục đọc
+   từ env var + skill .env + edge config → KHÔNG cần restart, không gián đoạn.
+2. Folder này là **SOURCE OF TRUTH** cho owner xem/rotate secret.
+3. Khi rotate: owner đổi giá trị tại nguồn + cập nhật file ở đây trong cùng 1 lần.
+4. `tools/audit_secrets.py` quét mỗi sprint — hiện **0 hardcode**.
+5. Không commit file chứa giá trị (`.gitignore` đã chặn; secrets.env/secrets.local.json
+   nằm ngoài git).
