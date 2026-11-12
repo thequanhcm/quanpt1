@@ -1,0 +1,93 @@
+/* ============================================================
+   INTELLIGENCE MATURITY TAB — styles (Phase 3, 12/11)
+   Dùng CSS vars của app + biến cục bộ intel-*; không đụng executive.css.
+   ============================================================ */
+
+/* Khu vực A: overview */
+.intel-overview {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  margin-bottom: 10px;
+}
+.intel-eval-state {
+  font-weight: 700; letter-spacing: 0.5px; font-size: 0.85rem;
+  color: var(--foreground, #e6e6e6);
+  border: 1px solid rgba(128,128,128,0.35);
+  padding: 3px 10px; border-radius: 12px;
+}
+.intel-overview .intel-sub {
+  color: rgba(128,128,128,0.9); font-size: 0.78rem;
+}
+
+/* Badges */
+.intel-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.4px;
+  border: 1px solid rgba(128,128,128,0.4); color: rgba(128,128,128,0.9);
+  white-space: nowrap;
+}
+.intel-badge-measured { color: #2fb26a; border-color: rgba(47,178,106,0.5); }
+.intel-badge-noteval  { color: rgba(128,128,128,0.85); }
+.intel-badge-blocked  { color: #e0a63a; border-color: rgba(224,166,58,0.5); }
+.intel-badge-auditreq { color: #e05a5a; border-color: rgba(224,90,90,0.5); }
+.intel-badge-redflag  { color: #ff6b6b; border-color: rgba(255,107,107,0.6);
+  background: rgba(224,90,90,0.12); }
+
+/* KPI grid */
+.intel-kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px; margin-top: 8px;
+}
+.intel-kpi {
+  border: 1px solid rgba(128,128,128,0.28); border-radius: 8px;
+  padding: 9px 11px; display: flex; flex-direction: column; gap: 4px;
+  background: rgba(127,127,127,0.05);
+}
+.intel-kpi-redflag {
+  border-color: rgba(224,90,90,0.55);
+  background: rgba(224,90,90,0.07);
+}
+.intel-kpi-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;
+}
+.intel-kpi-name { font-size: 0.74rem; font-weight: 600; line-height: 1.25; }
+.intel-kpi-value { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.intel-val-measured { color: var(--foreground, #e6e6e6); }
+.intel-val-na { color: rgba(128,128,128,0.75); font-size: 0.95rem; }
+.intel-kpi-meta { font-size: 0.66rem; color: rgba(128,128,128,0.85); }
+.intel-kpi-trend { color: rgba(128,128,128,0.7); }
+.intel-spark-red { color: #ff6b6b; }
+
+/* Errors */
+.intel-err {
+  border-left: 3px solid rgba(224,166,58,0.7);
+  padding: 6px 10px; margin-bottom: 6px;
+  background: rgba(224,166,58,0.05); border-radius: 0 6px 6px 0;
+}
+.intel-err-high { border-left-color: rgba(224,90,90,0.8);
+  background: rgba(224,90,90,0.05); }
+.intel-err-title { font-weight: 600; font-size: 0.78rem; }
+.intel-err-meta { color: rgba(128,128,128,0.85); font-size: 0.68rem; margin-top: 2px; }
+
+.intel-empty, .intel-error {
+  color: rgba(128,128,128,0.85); font-size: 0.75rem; padding: 8px 2px;
+}
+.intel-error { color: #ff6b6b; }
+
+/* Panels 2 cột dưới (audit + errors) */
+.intel-two-col {
+  display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; margin-top: 12px;
+}
+@media (max-width: 900px) { .intel-two-col { grid-template-columns: 1fr; } }
+.intel-panel {
+  border: 1px solid rgba(128,128,128,0.28); border-radius: 10px;
+  padding: 10px 12px; background: rgba(127,127,127,0.04);
+}
+.intel-panel-title {
+  font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.8px;
+  color: rgba(128,128,128,0.9); font-weight: 700; margin-bottom: 8px;
+}
+.intel-audit-detail { color: rgba(128,128,128,0.85); font-size: 0.72rem; margin-top: 6px; }
+
+.intel-readonly-note {
+  margin-top: 10px; font-size: 0.68rem; color: rgba(128,128,128,0.8);
+}
