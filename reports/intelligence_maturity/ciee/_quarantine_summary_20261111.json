@@ -1,0 +1,13 @@
+{
+ "total": 6378,
+ "clusters": {
+  "khác": 3313,
+  "skills/": 1224,
+  "SPAM test-suite": 1841
+ },
+ "spam_ids_count": 1841,
+ "spam_id_range": [
+  "know_0003cb149399",
+  "know_ffe9a9376d75"
+ ]
+}

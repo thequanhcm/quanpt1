@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CHERRY INTELLIGENCE MATURITY DASHBOARD — MOCKUP Phase 1</title>
+<style>
+  /* Dùng CSS vars của app — frame tự inject; standalone fallback vars dưới cùng */
+  :root {
+    --foreground: #e6e6e6;
+    --muted-foreground: #8a8a93;
+    --accent: #4f8cff;
+    --border: #2c2c33;
+    --card: #17171c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    color: var(--foreground);
+    background: var(--card);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    padding: 0;
+  }
+  .mock-banner {
+    background: #7a1f1f; color: #fff; text-align: center;
+    padding: 6px 10px; font-weight: 600; letter-spacing: 0.4px;
+    font-size: 12px;
+  }
+  .wrap { padding: 14px 16px; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 16px; letter-spacing: 0.5px; }
+  .sub { color: var(--muted-foreground); font-size: 12px; margin-top: 2px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; align-items: stretch; }
+  .panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; min-width: 0;
+  }
+  .panel h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+    color: var(--muted-foreground); margin-bottom: 10px; font-weight: 600;
+  }
+  .grow { flex: 1 1 380px; }
+
+  /* Coverage + eval state */
+  .evalstate { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 10.5px; font-weight: 600; letter-spacing: 0.3px;
+    border: 1px solid var(--border); color: var(--muted-foreground);
+  }
+  .badge.measured { color: #35c26e; border-color: #23543a; }
+  .badge.noteval { color: var(--muted-foreground); }
+  .badge.blocked { color: #e0a63a; border-color: #6e5420; }
+  .badge.auditreq { color: #e05a5a; border-color: #6e2626; }
+  .badge.redflag { color: #ff6b6b; border-color: #8a2626; background: rgba(224,90,90,0.12); }
+
+  /* KPI grid */
+  .kgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px; }
+  .kpi {
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+    display: flex; flex-direction: column; gap: 4px; background: rgba(255,255,255,0.02);
+  }
+  .kpi .name { font-size: 11.5px; font-weight: 600; }
+  .kpi .val { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .kpi .meta { font-size: 10.5px; color: var(--muted-foreground); }
+  .kpi .na { color: var(--muted-foreground); font-weight: 600; font-size: 13px; }
+  .kpi.rf { border-color: #8a2626; background: rgba(224,90,90,0.08); }
+  .kpi .rfline { color: #ff6b6b; font-size: 10.5px; font-weight: 600; }
+
+  /* Trend table */
+  table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted-foreground); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.5px; }
+  td.num { font-variant-numeric: tabular-nums; }
+  .empty-note { color: var(--muted-foreground); font-size: 11.5px; padding: 8px 2px; }
+
+  /* Errors */
+  .err { border-left: 3px solid #e05a5a; padding: 6px 10px; margin-bottom: 6px; background: rgba(224,90,90,0.05); border-radius: 0 6px 6px 0; }
+  .err .t { font-weight: 600; font-size: 11.5px; }
+  .err .d { color: var(--muted-foreground); font-size: 10.5px; margin-top: 2px; }
+
+  /* Troubleshooting */
+  .tsgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .ts { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; }
+  .ts .k { font-size: 10.5px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: 0.5px; }
+  .ts .v { font-size: 13px; font-weight: 600; margin-top: 3px; }
+  .ok { color: #35c26e; } .warn { color: #e0a63a; } .bad { color: #ff6b6b; }
+
+  .footer { color: var(--muted-foreground); font-size: 10.5px; padding: 4px 2px 10px; }
+</style>
+</head>
+<body>
+  <div class="mock-banner">⚠ MOCKUP PHASE 1 — DỮ LIỆU MINH HỌA, CHƯA NỐI API THẬT (Phase 3 mới nối). Giá trị phản ánh đúng thực trạng baseline V0 ngày 11/11/2026.</div>
+  <div class="wrap">
+    <div>
+      <h1>CHERRY INTELLIGENCE MATURITY DASHBOARD</h1>
+      <div class="sub">Bảng điều hành trưởng thành trí tuệ Cherry — read-only · không điểm tổng · NOT EVALUATED hiển thị trung thực · cập nhật khi chạy benchmark</div>
+    </div>
+
+    <!-- KHU VỰC A: OVERVIEW -->
+    <div class="panel">
+      <h2>Khu vực A — Intelligence Overview</h2>
+      <div class="evalstate">
+        <span class="badge noteval">BASELINE NOT ESTABLISHED</span>
+        <span class="badge">Cognitive Core: chưa có (COG-1..5 chờ)</span>
+        <span class="badge">Reasoning Engine: V9</span>
+        <span class="badge">Memory Engine: semantic 2.594 + chroma 4.790</span>
+        <span class="badge">Evaluation Engine: Harness có sẵn — benchmark intelligence CHƯA chạy</span>
+        <span class="badge">LLM: GLM-5.3-Flash (NetMind cloud) + Ollama DISABLED (chủ ý)</span>
+        <span class="badge">Đánh giá gần nhất: 11/11/2026 (baseline V0 tool-level)</span>
+        <span class="badge">Benchmark hoàn thành: 0 chính thức · đạt: 0 · thất bại: 0 · thiếu bằng chứng: 12</span>
+      </div>
+      <div style="margin-top:8px" class="sub">Coverage đo được: <b>3/12 KPI</b> (25%) — 9/12 NOT EVALUATED vì chưa có CPSL dataset + calibrator + Error DB (Phase B-D).</div>
+    </div>
+
+    <!-- KHU VỰC A2: 12 KPI -->
+    <div class="panel">
+      <h2>12 KPI CISC — từng KPI riêng biệt (không cộng điểm)</h2>
+      <div class="kgrid">
+        <div class="kpi"><span class="name">1 · Problem Solving Accuracy</span><span class="na">NOT EVALUATED</span><span class="meta">cần CPSL + ground truth (Phase B)</span></div>
+        <div class="kpi"><span class="name">2 · Reasoning Validity</span><span class="na">NOT EVALUATED</span><span class="meta">cần CPSL + reasoning logs</span></div>
+        <div class="kpi rf"><span class="name">3 · Evidence Coverage</span><span class="val">50%</span><span class="meta">n=4 · CI: — (n quá nhỏ) · baseline V0</span><span class="rfline">RED FLAG: giảm &gt;5% so lần chạy trước (demo cơ chế)</span></div>
+        <div class="kpi"><span class="name">4 · False Confidence Rate</span><span class="na">NOT EVALUATED</span><span class="meta">cần calibrator (Phase C)</span></div>
+        <div class="kpi"><span class="name">5 · Appropriate Abstention</span><span class="na">NOT EVALUATED</span><span class="meta">probe C1 PASS 0.01s — chưa là KPI (thiếu dataset)</span></div>
+        <div class="kpi"><span class="name">6 · Contradiction Detection</span><span class="na">NOT EVALUATED</span><span class="meta">ConflictDetector V31 dead-code — cần fix (Phase 2)</span></div>
+        <div class="kpi"><span class="name">7 · Causal Reasoning Accuracy</span><span class="na">NOT EVALUATED</span><span class="meta">cần causal module (COG-2)</span></div>
+        <div class="kpi"><span class="name">8 · Self-Correction Success</span><span class="na">NOT EVALUATED</span><span class="meta">review_findings 114 / changes 3 — chưa đủ tiêu chí</span></div>
+        <div class="kpi"><span class="name">9 · Transfer Learning</span><span class="na">NOT EVALUATED</span><span class="meta">cần CPSL OOD split (Phase B)</span></div>
+        <div class="kpi"><span class="name">10 · Regression Stability</span><span class="na">NOT EVALUATED</span><span class="meta">cần ≥2 benchmark chính thức</span></div>
+        <div class="kpi"><span class="name">11 · Decision Safety</span><span class="val">PASS</span><span class="meta">0 R4-without-approval · G2 fail-closed verified · baseline V0</span></div>
+        <div class="kpi"><span class="name">12 · Governance Compliance</span><span class="val">0 violations</span><span class="meta">trong phiên đo 11/11 · baseline V0</span></div>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- KHU VỰC B: BENCHMARK HISTORY -->
+      <div class="panel grow">
+        <h2>Khu vực B — Benchmark History (7 lần gần nhất)</h2>
+        <table>
+          <tr><th>#</th><th>Thời điểm</th><th>Suite</th><th>KPI3</th><th>KPI11</th><th>KPI12</th><th>Ghi chú</th></tr>
+          <tr><td>—</td><td colspan="6" class="empty-note">CHƯA CÓ benchmark chính thức nào — baseline V0 (tool-level, 11/11) không tính vào trend. Bảng tự điền khi Phase 4 chạy CPSL mini.</td></tr>
+        </table>
+      </div>
+
+      <!-- KHU VỰC C: AUDIT -->
+      <div class="panel" style="flex: 0 1 300px;">
+        <h2>Khu vực C — Audit Status (CIIA)</h2>
+        <div class="evalstate" style="flex-direction:column; align-items:flex-start; gap:6px;">
+          <span class="badge noteval">NOT RUN — chưa có audit độc lập dashboard</span>
+          <span class="badge">Protocol: CHERRY_INDEPENDENT_AUDIT_PROTOCOL.md (CIIA)</span>
+          <span class="badge">Audit độc lập baseline: Task E 11/11 — PASS (không phải audit dashboard)</span>
+          <span class="badge auditreq">AUDIT REQUIRED khi Phase 3 deploy</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <!-- KHU VỰC D: ERRORS -->
+      <div class="panel grow">
+        <h2>Khu vực D — Error DB (OPEN)</h2>
+        <div class="err"><div class="t">RETRIEVAL_GAP — Reasoning V9 chỉ thấy 148/10.874 KU</div><div class="d">Phát hiện 11/11 Phase A · chu trình 10 bước: chưa bắt đầu (Error DB Phase D dựng bảng) · severity HIGH</div></div>
+        <div class="err"><div class="t">CONFLICT_DEADCODE — ConflictDetector V31 schema cũ</div><div class="d">Probe B2 · chưa sửa (Phase 2) · severity MEDIUM</div></div>
+        <div class="sub" style="margin-top:6px">Nguồn Phase 3: data/cognitive/errors.db — Error DB chưa dựng → hiển thị 2 lỗi đã biết từ audit, nhãn rõ.</div>
+      </div>
+
+      <!-- KHU VỰC E: VERSION COMPARISON -->
+      <div class="panel" style="flex: 0 1 320px;">
+        <h2>Khu vực E — Version Comparison</h2>
+        <table>
+          <tr><th>KPI</th><th>V0</th><th>COG V1</th></tr>
+          <tr><td colspan="3" class="empty-note">CHƯA CÓ phiên bản COG V1 — so sánh khả dụng từ Phase 4. Quy tắc: V2 &gt; V1 chỉ khi KPI tăng không kéo KPI khác giảm &gt;5% và chi phí ≤2×.</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- KHU VỰC F: SYSTEM TROUBLESHOOTING (data THẬT từ edge telemetry) -->
+    <div class="panel">
+      <h2>Khu vực F — System Troubleshooting</h2>
+      <div class="tsgrid">
+        <div class="ts"><div class="k">Pi5 Edge</div><div class="v ok">ONLINE (READY)</div></div>
+        <div class="ts"><div class="k">Heartbeat</div><div class="v ok">0.8s trước · RTT 29ms</div></div>
+        <div class="ts"><div class="k">Camera IMX708</div><div class="v ok">OK — lock+cache mới</div></div>
+        <div class="ts"><div class="k">Wake CHERRY</div><div class="v ok">deployed (md5 verified)</div></div>
+        <div class="ts"><div class="k">Backup 2AM</div><div class="v ok">watchdog-owned · OK 02:00</div></div>
+        <div class="ts"><div class="k">Ollama</div><div class="v warn">DISABLED (chủ ý owner)</div></div>
+        <div class="ts"><div class="k">Edge-TTS cloud</div><div class="v warn">DEAD — piper fallback che</div></div>
+        <div class="ts"><div class="k">Knowledge Spam</div><div class="v ok">ĐÃ DỌN 4.299 rows (12/11)</div></div>
+      </div>
+      <div class="sub" style="margin-top:8px">Quy tắc: khi Pi5 offline, khối này hiển thị "BLOCKED — Pi5 offline từ &lt;timestamp&gt;" thay vì số cũ (mockup đang mô phỏng trạng thái ONLINE thật 12/11).</div>
+    </div>
+
+    <div class="footer">Phase 1 mockup tĩnh — 12/11/2026 · KHÔNG điểm tổng (Goodhart guard) · 0 POST endpoint · N/A-insufficient nguyên tắc · Phase 2 (kpi_store ADD-ONLY) chờ owner duyệt.</div>
+  </div>
+</body>
+</html>
