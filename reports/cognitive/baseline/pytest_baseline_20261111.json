@@ -1,0 +1,39 @@
+{
+  "run_at": "2026-11-11T22:20+07:00 (session 20261110_090445_ccefa8)",
+  "command": ".venv/Scripts/python.exe -m pytest tests/ -q -p no:cacheprovider",
+  "duration": "736.76s (12:16)",
+  "result": "6 failed, 3669 passed, 28 skipped",
+  "failures": [
+    {
+      "test": "test_cognitive_loop.py::test_api_health_returns_evidence_based_components",
+      "reason": "whitelist thiếu 'DISABLED' — ollama_daemon trả DISABLED (đã gỡ theo quyết định owner 02/11) nhưng contract cũ chỉ nhận HEALTHY/DEGRADED/OFFLINE/UNKNOWN/UNVERIFIED",
+      "classification": "TEST CONTRACT CŨ — không phải bug runtime; honesty thực ra ĐÚNG (báo DISABLED thật)"
+    },
+    {
+      "test": "test_cognitive_loop.py::test_api_health_ollama_offline_is_honest",
+      "reason": "cùng nhóm — assert 'DISABLED' not in ('HEALTHY','OFFLINE')",
+      "classification": "TEST CONTRACT CŨ"
+    },
+    {
+      "test": "test_v3_sprint6_hardening.py::test_backup_fresh_after_manual_run",
+      "reason": "backup mới nhất 44.3h (09/11) — backup 2AM đêm 10-11/11 không tạo file; task result 2147946720",
+      "classification": "VẤN ĐỀ VẬN HÀNH THẬT — đưa vào COG-0"
+    },
+    {
+      "test": "test_digital_human_avatar_v2.py::test_vietnamese_female_tts_default_configuration",
+      "reason": "tts_voice_preference đọc từ data/tts_preference.json (piper-vais1000 sau test E2E đa giọng) — test hardcode mặc định HoaiMy",
+      "classification": "SIDE-EFFECT COMMIT 348622b — preference persist hoạt động đúng, test cần tách persist (pattern TTS-09)"
+    },
+    {
+      "test": "test_digital_identity_persona.py::test_voice_pipeline_spoken_sanitization_preserves_self_intro",
+      "reason": "test đòi 'Anh Quân' nhưng self-intro mới (PR #16) dùng 'anh Quân, Quanpt1' — assert cũ hẹp",
+      "classification": "TEST CŨ NHIỄM TONY→CHERRY đổi intro — không phải bug runtime"
+    },
+    {
+      "test": "test_media_only_dm.py::test_photo_success_returns_empty_text_only_image",
+      "reason": "caption mới '📷 Em gửi ảnh vừa chụp ạ!' (caption chuẩn owner) thiếu tên file — test đòi metadata gộp caption",
+      "classification": "TEST CŨ vs caption chuẩn owner 11/11 — cần cập nhật test"
+    }
+  ],
+  "note": "3669 passed = baseline tổng thể KHỎE; 6 fail đã phân loại từng cái"
+}

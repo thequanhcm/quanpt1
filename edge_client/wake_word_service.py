@@ -31,18 +31,14 @@ SAMPLE_RATE = 16000
 # RỘNG (đã kiểm chứng cách khớp với "Tony ơi" từ 31/10). Wake là hành động
 # vô hại (chỉ bật màn hình) nên chấp nhận false-positive thấp.
 WAKE_PHRASES = (
-    # (06/11/2026) OWNER ĐỔI TÊN: cherry / cherry ơi / hi cherry / hay cherry
-    # (cũ: tony — giữ biến thể cũ 1 tuần quá độ rồi bỏ) + biến thể dấu/không dấu
-    # Vosk hay trả về ("cherry" → "cherry"/"cheri"/"ché ri"):
-    "cherry", "cherry ơi", "cherry oi", "hi cherry", "hay cherry", "hey cherry",
-    "hay cherry ơi", "hay cherry oi", "hi cherry ơi", "hi cherry oi",
-    "cheri", "ché ri", "che ri", "chè ri",
-    # biến thể TONY cũ (quá độ — owner quen miệng):
-    "tony", "tony ơi", "tony oi", "hi tony", "hay tony", "hey tony",
-    "hay tony ơi", "hay tony oi", "hi tony ơi", "hi tony oi",
-    "tôi nghĩ", "toi nghi", "tới mì", "toi mi", "mì tươi", "mi tuoi",
-    "tôi nghe", "tôi ơi", "toi oi", "chào trợ lý", "chao tro ly",
-    "trợ lý ơi", "tro ly oi",
+    # (11/11/2026) OWNER CHỐT BỘ TỪ ĐÁNH THỨC — CHỈ CHERRY, bỏ hết TONY quá độ:
+    # "Cherry ơi" / "Cherry" / "Cherry à" + biến thể Vosk hay trả về
+    # ("cherry" → "cherry"/"cheri"/"ché ri"/"che ri"):
+    "cherry", "cherry ơi", "cherry oi", "cherry à", "cherry a",
+    "cheri", "cheri ơi", "cheri oi", "cheri à", "cheri a",
+    "ché ri", "ché ri ơi", "ché ri à",
+    "che ri", "che ri ơi", "che ri oi", "che ri à", "che ri a",
+    "chè ri", "chè ri ơi", "chè ri à",
 )
 # Từ khóa phụ trong lúc nghe: "ngủ đi" → sleep ngay (đồng bộ lệnh DM)
 SLEEP_PHRASES = ("ngủ đi", "ngu di", "ngu ngu", "đi ngủ")
@@ -199,6 +195,10 @@ def main():
                 # (31/10/2026) Vosk small nhận "TONY ơi" thành 'thừa'/'tôi'/
                 # 'vực'... — khớp mờ từng token (Levenshtein <=2) với tên + 'ơi':
                 # (06/11/2026) thêm bộ tên CHERRY + giữ TONY quá độ.
+                # (10/11/2026) SIẾT FALSE-POSITIVE TV: khớp cụm siết từ ≤3 lỗi
+                # xuống ≤2 lỗi — 'với mục'/'với mỹ'/'tôi bất'/'tải về' (tiếng TV)
+                # khớp 'tới mì'/'tôi ơi' với 3 lỗi đã khiến TV tự wake CHERRY
+                # cả chục lần/ngày. 2 lỗi vẫn giữ 'cherry ơi'/'tony ơi' thật.
                 def _lev(a: str, b: str) -> int:
                     if abs(len(a) - len(b)) > 2:
                         return 9
@@ -211,26 +211,24 @@ def main():
                         prev = cur
                     return prev[-1]
 
-                # (06/11/2026) SIẾT FALSE-POSITIVE (duyệt audit 06/11):
-                # - 'ơi' phải là token ĐỘC LẬP (không tách từ giữa từ khác —
-                #   'ngoài khơi' không còn sinh token 'ơi').
-                # - bỏ 'toi'/'tôi' khỏi danh sách tên (Vosk nhận 'TONY ơi' thành
-                #   'tôi ơi' đã có cụm khớp mờ riêng bên dưới) → TV noise như
-                #   '...ngoài khơi...' không khớp has_name nữa.
-                tokens = txt.replace(" ơi", " ơi ").split()
+                # (10/11/2026) 'ơi'/'à' phải là token ĐỘC LẬP (không tách từ giữa
+                #   từ khác — 'ngoài khơi' không sinh token 'ơi').
+                # (11/11/2026) OWNER CHỐT: chỉ tên CHERRY — bỏ 'tony'/'tó-ni' khỏi
+                #   danh sách tên, bỏ cụm 'tony ơi'/'tôi ơi'/'tony oi' khỏi khớp
+                #   mờ. Thêm token đuôi 'à' ("Cherry à" = wake chuẩn owner).
+                tokens = txt.replace(" ơi", " ơi ").replace(" à", " à ").split()
                 has_name = any(
                     _lev(t, w) <= 2
                     for t in tokens
-                    for w in ("cherry", "cheri", "ché ri", "che ri",
-                              "tony", "tony.", "tó-ni")
+                    for w in ("cherry", "cheri", "ché ri", "che ri", "chè ri")
                 )
-                has_oi = any(t in ("ơi", "oi", "ơi!") for t in tokens)
-                if has_name and has_oi:
+                has_tail = any(t in ("ơi", "oi", "ơi!", "à", "a", "à!") for t in tokens)
+                if has_name and has_tail:
                     return True
-                # cụm đầy đủ khớp mờ 1 lỗi:
-                return any(_lev(txt[:24], p) <= 3 for p in
+                # cụm đầy đủ khớp mờ 2 lỗi (siết từ 3 — anti TV-noise 10/11):
+                return any(_lev(txt[:24], p) <= 2 for p in
                            ("cherry ơi", "cherry oi", "cheri oi",
-                            "tony ơi", "tôi ơi", "tony oi", "tới mì"))
+                            "cherry à", "cherry a", "cheri à"))
 
             if any(p in text for p in WAKE_PHRASES) or _fuzzy_hit(text):
                 print(f"[WAKE] NGHE THẤY: '{text}' → wake!", flush=True)

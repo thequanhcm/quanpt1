@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=5.4-light">
+    <link rel="stylesheet" href="/static/style.css?v=5.5-light">
     <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png">
 </head>
 <body class="dark-theme">
@@ -95,6 +95,10 @@
                             Giọng đọc TTS
                         </span>
                         <span id="tts-status-badge" class="tts-badge ready" title="Trạng thái giọng đọc tiếng Việt">vi-VN (Hoài My)</span>
+                        <button class="btn-voice-picker" id="btn-open-voice-picker" title="Chọn giọng đọc — nhiều giọng tiếng Việt chuẩn (nữ/nam, online/offline)">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                            Đổi giọng
+                        </button>
                     </div>
                     <select class="model-select" id="model-selector">
                         <option value="zai-org/GLM-5.3-Flash" selected>GLM-5.3-Flash (Nhanh nhất - NetMind Cloud)</option>
@@ -269,7 +273,23 @@
         </div>
     </div>
 
-    <script src="/static/avatar_engine.js?v=5.4"></script>
-    <script src="/static/app.js?v=5.4"></script>
+    <!-- Modal Voice Picker (11/11/2026 — nhiều giọng tiếng Việt chuẩn) -->
+    <div class="modal-overlay" id="modal-voice-picker" style="display: none;">
+        <div class="modal-card voice-picker-card">
+            <div class="modal-header">
+                <h3>Chọn Giọng Đọc Tiếng Việt</h3>
+                <button class="btn-close" id="btn-close-voice-picker">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="voice-picker-desc">Giọng <strong>Online</strong> qua Microsoft Edge (tự nhiên nhất) — giọng <strong>Offline</strong> chạy trực tiếp trên máy (không cần mạng, phản hồi nhanh). Bấm ▶ để nghe thử trước khi chọn.</p>
+                <div id="voice-picker-list" class="voice-picker-list">
+                    <div style="color: var(--text-muted);">Đang tải danh sách giọng...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/avatar_engine.js?v=5.5"></script>
+    <script src="/static/app.js?v=5.5"></script>
 </body>
 </html>

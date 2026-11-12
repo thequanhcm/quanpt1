@@ -122,6 +122,11 @@ CONFIG.setdefault("learning_daemon_log", os.path.join(BASE_DIR, "logs", "learnin
 CONFIG.setdefault("disk_free_min_percent", 10.0)
 CONFIG.setdefault("max_component_fail_streak", 3)  # circuit breaker threshold
 CONFIG.setdefault("max_daemon_restart_per_hour", 5)  # Sprint 7 (b): cap giống server
+# (11/11/2026, COG-0) Backup 2AM do Task Scheduler chạy "Interactive only" bị
+# từ chối khi máy khóa (0x800710E0, đêm 10-11 mất backup). Watchdog chạy 24/7
+# không phụ thuộc phiên đăng nhập → sở hữu backup, Task Scheduler chỉ dự phòng.
+CONFIG.setdefault("daily_backup_hour", 2)
+CONFIG.setdefault("daily_backup_max_attempts", 2)
 
 _component_fail_streaks: dict[str, int] = {}
 _component_states: dict[str, str] = {}  # component_id -> HEALTHY|DEGRADED|OFFLINE
@@ -422,6 +427,49 @@ def check_recurring_instances() -> None:
         logger.warning(f"Recurring check error (fail-honest, bỏ qua): {e}")
 
 
+def check_daily_backup() -> None:
+    """(11/11/2026, COG-0) Backup hằng ngày do watchdog sở hữu.
+
+    Nguyên nhân gốc mất backup đêm 10-11: Task Scheduler QUAN_AI_BRAIN_BACKUP_2AM
+    chạy "Interactive only" → 2AM máy khóa → Windows từ chối (0x800710E0
+    "operator or administrator has refused the request"). Watchdog chạy 24/7
+    như background process không phụ thuộc phiên đăng nhập → chạy backup tại
+    đúng giờ CONFIG['daily_backup_hour'] (giờ máy), 1 lần/ngày (marker theo
+    ngày lịch), retry tối đa daily_backup_max_attempts/cycle; fail-honest:
+    lỗi chỉ log, không giết watchdog. Task Scheduler giữ nguyên làm dự phòng
+    (nó chạy được thì watchdog thấy backup mới trong ngày → skip).
+    """
+    marker = Path(CONFIG["log_dir"]) / "daily_backup_last.txt"
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        if marker.exists():
+            last_date = marker.read_text(encoding="utf-8").strip()
+            if last_date == datetime.now().strftime("%Y-%m-%d"):
+                return  # hôm nay đã backup OK (kể cả do Task Scheduler chạy)
+    except OSError:
+        pass
+    if datetime.now().hour != CONFIG["daily_backup_hour"]:
+        return
+    try:
+        from tools.backup_database import main as run_backup
+
+        ok = run_backup()
+        attempts = 1
+        while not ok and attempts < CONFIG["daily_backup_max_attempts"]:
+            time.sleep(60)
+            ok = run_backup()
+            attempts += 1
+        if ok:
+            marker.write_text(datetime.now().strftime("%Y-%m-%d"), encoding="utf-8")
+            logger.info("Daily backup OK (watchdog-owned, verify integrity pass)")
+        else:
+            logger.error(
+                f"Daily backup FAILED sau {attempts} lần — cần owner kiểm tra logs/backup.log"
+            )
+    except Exception as e:
+        logger.warning(f"Daily backup error (fail-honest, bỏ qua): {e}")
+
+
 def check_disk_space() -> bool:
     """GAP-R3: workspace drive free-space guard (fail before DB corruption)."""
     try:
@@ -629,6 +677,19 @@ def main() -> int:
             # (02/11/2026, DEOM M6) Template recurring đến hạn → tạo instance
             # vào work_queue chuẩn (fail-honest, rate-limit 60s).
             check_recurring_instances()
+
+            # (11/11/2026, COG-0) Backup 2AM do watchdog sở hữu (Task Scheduler
+            # Interactive-only bị từ chối khi máy khóa — mất backup đêm 10-11).
+            check_daily_backup()
+
+            # (11/11/2026, owner) Edge Pi5 reconcile — Cherry tự liên hệ Pi5
+            # khi nó sống lại: deploy wake CHERRY + kiểm service + ghi log.
+            try:
+                from tools.edge_pi5_reconcile import check_reconcile_from_core_api
+
+                check_reconcile_from_core_api()
+            except Exception as _edge_exc:
+                logger.debug(f"Edge reconcile skipped: {_edge_exc}")
 
             # Check if server is running
             if both_servers_healthy():

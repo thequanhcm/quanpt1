@@ -1,0 +1,100 @@
+[
+  {
+    "group": "C_EPISTEMIC",
+    "probe": "C1_abstain_no_evidence",
+    "outcome": "PASS",
+    "detail": "{'conclusion': 'Không đủ bằng chứng để trả lời câu hỏi này', 'type': 'C'}",
+    "evidence": "logical_reasoning V9, 0.01s"
+  },
+  {
+    "group": "C_EPISTEMIC",
+    "probe": "C2_known_evidence_answer",
+    "outcome": "FAIL",
+    "detail": "{'type': 'C', 'evidence': 0}",
+    "evidence": "V9 retrieval, 0.01s"
+  },
+  {
+    "group": "C_EPISTEMIC",
+    "probe": "C3_stale_detection",
+    "outcome": "PASS",
+    "detail": "Sai cách gọi đầu (policy hourly + claim 1 ngày vẫn FRESH là đúng logic); với policy daily + claim 1 tháng → STALE. Năng lực có thật: FRESH/STALE/EXPIRED/IMMUTABLE + freshness_policy per-claim.",
+    "evidence": "cognitive_state.evaluate_freshness"
+  },
+  {
+    "group": "B_REASONING",
+    "probe": "B1_anti_circular_rule",
+    "outcome": "PASS",
+    "detail": "{'shared_origins_in_code': True}",
+    "evidence": "logical_reasoning.py"
+  },
+  {
+    "group": "B_REASONING",
+    "probe": "B2_conflict_scan_runs",
+    "outcome": "FAIL",
+    "detail": "FINDING THẬT: ConflictDetector V31 query schema CŨ (id/content/lifecycle_status) không khớp knowledge_units V9 (knowledge_id/statement/status) → dead code trên production DB. Nó chỉ tương thích bảng 'memories' cũ.",
+    "evidence": "ConflictDetector"
+  },
+  {
+    "group": "B_REASONING",
+    "probe": "B3_causal_guard_exists",
+    "outcome": "GAP_KNOWN",
+    "detail": "{'causal_mentioned': False}",
+    "evidence": "logical_reasoning.py"
+  },
+  {
+    "group": "D_CRITICAL",
+    "probe": "D1_hypotheses_on_real_incident",
+    "outcome": "PARTIAL",
+    "detail": "{'n_hypotheses': 0, 'type': 'C'}",
+    "evidence": "V9 on real incident"
+  },
+  {
+    "group": "A_PROBLEM",
+    "probe": "A1_outcome_verifier_available",
+    "outcome": "PASS",
+    "detail": "{'status': 'module_exists'}",
+    "evidence": "orchestration.plan_orchestrator"
+  },
+  {
+    "group": "G_DECISION",
+    "probe": "G1_risk_levels_exist",
+    "outcome": "PASS",
+    "detail": "{'levels': ['R0', 'R1', 'R2', 'R3', 'R4', 'R5']}",
+    "evidence": "governance/policy.py"
+  },
+  {
+    "group": "G_DECISION",
+    "probe": "G2_r4_fail_closed",
+    "outcome": "PASS",
+    "detail": "verify() trả False cho fake card (contract bool fail-closed, doc: 'Trả về True CHỈ khi toàn bộ chuỗi bằng chứng khớp'). Probe đầu gọi sai signature.",
+    "evidence": "approval_verifier"
+  },
+  {
+    "group": "H_LEARNING",
+    "probe": "H1_quarantine_gate",
+    "outcome": "PASS",
+    "detail": "{'promoted': 3209, 'quarantined': 6267}",
+    "evidence": "brain.db"
+  },
+  {
+    "group": "H_LEARNING",
+    "probe": "H2_learning_spam_control",
+    "outcome": "FAIL",
+    "detail": "{'spam_rows': 1837}",
+    "evidence": "brain.db"
+  },
+  {
+    "group": "F_ADAPTIVE",
+    "probe": "F1_llm_fallback_regression",
+    "outcome": "PASS",
+    "detail": "{'fallback_tests': True}",
+    "evidence": "test_netmind_provider.py"
+  },
+  {
+    "group": "E_METACOG",
+    "probe": "E1_metacognition_evaluable",
+    "outcome": "PASS",
+    "detail": "{'type': 'MetacognitiveEvaluation'}",
+    "evidence": "cognitive_state"
+  }
+]

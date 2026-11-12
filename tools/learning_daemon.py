@@ -22,6 +22,7 @@ Sprint 7 (b) governance fix (27/10/2026):
   locked khi regression chạy song song → traceback → SystemExit).
 """
 import json
+import msvcrt
 import os
 import re
 import subprocess
@@ -213,13 +214,18 @@ def ingest_test_results(engine: KnowledgeIngestionEngine) -> int:
             skipped = match.group(2) or "0"
             failed = match.group(3) or "0"
             stmt = f"Test suite: {passed} passed, {skipped} skipped, {failed} failed"
+            # (11/11/2026, COG-0) FIX SPAM GỐC: trước đây skip_duplicates=False →
+            # mỗi chu kỳ 5 phút nạp 1 hàng "Test suite: …" MỚI dù nội dung y hệt
+            # (source_version=timestamp luôn khác) → 2.500+ hàng rác. Bật
+            # idempotent: chỉ nạp khi chuỗi kết quả thực sự ĐỔI (số passed/failed
+            # khác) — đúng nghĩa "học từ kết quả kiểm thử", không học lại lời.
             engine.ingest(
                 content=stmt,
                 source_type=KnowledgeSource.TEST_EVIDENCE,
                 source_ref=f"pytest:latest (báo cáo {age_days:.0f} ngày)",
                 source_version=datetime.now(timezone.utc).isoformat(),
                 tags=["testing", "pytest", "quality"],
-                skip_duplicates=False,
+                skip_duplicates=True,
             )
             return 1
 
@@ -263,8 +269,67 @@ def _log_crash(fatal: BaseException) -> None:
         pass  # Không bao giờ chết vì logging
 
 
+def _acquire_single_instance_lock() -> int:
+    """(11/11/2026, COG-0) Chỉ cho phép 1 instance daemon ghi vào brain.db.
+
+    Nguyên nhân gốc dual-instance 11/11: instance mồ côi (cha đã chết qua
+    restart watchdog cũ) sống sót song song instance watchdog-spawn — không có
+    gì chặn 2 process ingest cùng lúc. Cơ chế: giữ lock EXCLUSIVE trên
+    data/learning_daemon.lock bằng msvcrt (Windows) — OS tự nhả khi process
+    chết nên không bao giờ stale-kẹt. Trả về 0 = mình giữ lock; >0 = PID của
+    instance đang giữ lock (đọc được từ file) → thoát ngay exit 0 (KHÔNG
+    coi là lỗi để watchdog/systemd không loop-respawn).
+    """
+    lock_path = CONFIG["workspace"] / "data" / "learning_daemon.lock"
+    try:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        # (fix 11/11, lần 2) buffer=' buffering=0: read(64) trên TextIO vẫn nạp
+        # cả buffer 8KB → chạm byte khóa → Errno 13 → fail-open sai ý. Binary
+        # unbuffered chỉ đọc đúng 64 byte. PID ở offset 0; byte LOCK ở 512
+        # (có thể ngoài EOF — LockFileEx hỗ trợ). PID trước đây nằm trùng byte
+        # khóa → instance 2 đọc chính PID thì bị từ chối.
+        created = not lock_path.exists()
+        fh = open(lock_path, "r+b" if not created else "w+b", buffering=0)
+        fh.seek(0)
+        raw = fh.read(64) or b""
+        old = raw.split(b"\n")[0].decode("utf-8", "ignore").strip()
+        try:
+            fh.seek(512)
+            msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError:
+            # Lock bị giữ bởi instance khác → thoát êm
+            print(
+                f"[LOCK] Learning daemon CHỈ CHẠY 1 INSTANCE — PID {old or '?'} "
+                "đang giữ lock. Thoát (exit 0).",
+                flush=True,
+            )
+            fh.close()
+            return int(old) if old.isdigit() else -1
+        # Mình giữ lock — ghi PID (offset 0), KHÔNG đụng byte 512
+        fh.seek(0)
+        payload = (str(os.getpid())).encode()
+        fh.write(payload + b"\n")
+        fh.truncate(len(payload) + 1)
+        fh.flush()
+        # Giữ tham chiếu toàn cục tránh GC đóng file → mất lock
+        global _lock_file_handle
+        _lock_file_handle = fh
+        return 0
+    except Exception as e:  # fail-open: không được chết vì lock I/O
+        print(f"[LOCK] Không thể kiểm tra lock ({e}) — tiếp tục (fail-open).", flush=True)
+        return 0
+
+
+_lock_file_handle = None
+
+
 def main() -> int:
     """Main learning daemon loop."""
+    # (11/11/2026, COG-0) Single-instance: instance thứ 2 thoát ngay, êm.
+    holder = _acquire_single_instance_lock()
+    if holder != 0:
+        return 0
+
     print("=" * 70)
     print("QUAN AI BRAIN Continuous Learning Daemon — Starting")
     print("=" * 70)

@@ -4645,10 +4645,13 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         })
 
     def _handle_api_voice_get_tts_voices(self) -> None:
+        from quan_ai_brain.voice.tts_config import MULTI_LANGUAGE_VOICES, STANDARD_VIETNAMESE_VOICES
         active = GLOBAL_TTS_MANAGER.get_active_voice()
         self._send_json({
             "success": True,
             "voices": [v.to_dict() for v in GLOBAL_TTS_MANAGER.available_voices],
+            "vietnamese_voices": [v.to_dict() for v in STANDARD_VIETNAMESE_VOICES],
+            "multilingual_voices": [v.to_dict() for v in MULTI_LANGUAGE_VOICES],
             "active_voice": active.to_dict() if active else None,
         })
 
@@ -4710,7 +4713,27 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             text=clean_text,
         )
 
+        # (11/11/2026) voice_id trong response = giọng THỰC PHÁT (đúng bằng chứng):
+        # nếu yêu cầu giọng Edge nhưng Edge die và rớt piper fallback, connection_status
+        # sẽ ghi "piper fallback: ..." → báo voice piper tương ứng, không nói dối client.
         active = GLOBAL_TTS_MANAGER.get_active_voice()
+        _conn = str(GLOBAL_TTS_MANAGER.config.connection_status or "")
+        _resp_voice = GLOBAL_TTS_MANAGER.active_voice_id
+        _resp_locale = active.locale if active else "vi-VN"
+        _resp_gender = active.gender if active else "female"
+        if "piper fallback:" in _conn:
+            _fb_vid = _conn.split("piper fallback:", 1)[1].strip().rstrip(")")
+            _fb_v = next((v for v in GLOBAL_TTS_MANAGER.available_voices if v.voice_id == _fb_vid), None)
+            if _fb_v:
+                _resp_voice = _fb_v.voice_id
+                _resp_locale = _fb_v.locale
+                _resp_gender = _fb_v.gender
+        elif voice_id:
+            _req_v = next((v for v in GLOBAL_TTS_MANAGER.available_voices if v.voice_id == voice_id), None)
+            if _req_v:
+                _resp_voice = _req_v.voice_id
+                _resp_locale = _req_v.locale
+                _resp_gender = _req_v.gender
         audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
         self._send_json({
             "success": True,
@@ -4718,9 +4741,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "audio_base64": audio_b64,
             "format": "audio/mpeg",
             "text": clean_text,
-            "voice_id": active.voice_id if active else GLOBAL_TTS_MANAGER.active_voice_id,
-            "locale": active.locale if active else "vi-VN",
-            "gender": active.gender if active else "female",
+            "voice_id": _resp_voice,
+            "locale": _resp_locale,
+            "gender": _resp_gender,
+            "connection_status": _conn,
             "timeline": timeline.to_dict(),
         })
 

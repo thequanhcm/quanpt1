@@ -309,7 +309,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try { window.speechSynthesis.cancel(); } catch (_) {}
         }
         if (state.ttsEnabled) {
-            setTTSStatus('READY', 'vi-VN (Hoài My)');
+            setTTSStatus('READY', voiceDisplayName(voiceCache.find(v => v.voice_id === state.activeVoiceId) || {voice_id: state.activeVoiceId, name: state.activeVoiceId, gender: 'female'}));
         } else {
             setTTSStatus('DISABLED', 'Đã tắt');
         }
@@ -335,6 +335,120 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     initTTSConfig();
 
+    // ============ 11/11/2026 — VOICE PICKER (nhiều giọng tiếng Việt chuẩn) ============
+    const modalVoicePicker = document.getElementById('modal-voice-picker');
+    const btnOpenVoicePicker = document.getElementById('btn-open-voice-picker');
+    const btnCloseVoicePicker = document.getElementById('btn-close-voice-picker');
+    const voicePickerList = document.getElementById('voice-picker-list');
+    let voiceCache = [];
+    let previewAudio = null;
+
+    function voiceDisplayName(v) {
+        if (v.voice_id === 'vi-VN-HoaiMyNeural') return 'Hoài My (Nữ — Edge Online)';
+        if (v.voice_id === 'vi-VN-NamMinhNeural') return 'Nam Minh (Nam — Edge Online)';
+        if (v.voice_id === 'piper-vi_VN-vais1000-medium') return 'Vais1000 (Nữ — Offline Local)';
+        if (v.voice_id === 'piper-vi_VN-vivos-x_low') return 'Vivos (Nam — Offline Local)';
+        return v.name || v.voice_id;
+    }
+
+    function renderVoiceList(activeId) {
+        if (!voicePickerList) return;
+        if (!voiceCache.length) {
+            voicePickerList.innerHTML = '<div style="color: var(--text-muted);">Không tải được danh sách giọng.</div>';
+            return;
+        }
+        voicePickerList.innerHTML = '';
+        voiceCache.forEach(v => {
+            const isActive = v.voice_id === activeId;
+            const row = document.createElement('div');
+            row.className = 'voice-row' + (isActive ? ' active' : '');
+            row.innerHTML = `
+                <div class="voice-row-main">
+                    <span class="voice-gender-icon">${v.gender === 'male' ? '👨' : '👩'}</span>
+                    <div class="voice-info">
+                        <strong>${voiceDisplayName(v)}</strong>
+                        <span class="voice-sub">${v.is_online ? '🌐 Online — Edge-TTS' : '💻 Offline — Piper Local'} · ${v.locale}</span>
+                    </div>
+                </div>
+                <div class="voice-row-actions">
+                    <button class="btn-voice-preview" data-vid="${v.voice_id}" title="Nghe thử giọng này">▶ Nghe thử</button>
+                    <button class="btn-voice-apply" data-vid="${v.voice_id}" ${isActive ? 'disabled' : ''}>${isActive ? '✓ Đang dùng' : 'Chọn'}</button>
+                </div>
+            `;
+            row.querySelector('.btn-voice-preview').addEventListener('click', () => previewVoice(v));
+            row.querySelector('.btn-voice-apply').addEventListener('click', () => applyVoice(v));
+            voicePickerList.appendChild(row);
+        });
+    }
+
+    async function previewVoice(v) {
+        try {
+            if (previewAudio) { try { previewAudio.pause(); } catch (_) {} }
+            setTTSStatus('SPEAKING', 'Đang nghe thử...');
+            const res = await fetch('/api/voice/tts-synthesize', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    text: 'Xin chào, em là Cherry. Đây là giọng đọc thử nghiệm.',
+                    voice_id: v.voice_id,
+                }),
+            });
+            const data = await res.json();
+            if (data.success && data.audio_base64) {
+                previewAudio = new Audio('data:audio/mpeg;base64,' + data.audio_base64);
+                previewAudio.onended = () => setTTSStatus(state.ttsEnabled ? 'READY' : 'DISABLED', state.ttsEnabled ? voiceDisplayName(v) : 'Đã tắt');
+                await previewAudio.play();
+            } else {
+                setTTSStatus('ERROR', 'Nghe thử lỗi');
+            }
+        } catch (e) {
+            console.warn('preview error:', e);
+            setTTSStatus('ERROR', 'Nghe thử lỗi');
+        }
+    }
+
+    async function applyVoice(v) {
+        try {
+            const res = await fetch('/api/voice/tts-config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ voice_id: v.voice_id }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                state.activeVoiceId = v.voice_id;
+                setTTSStatus(state.ttsEnabled ? 'READY' : 'DISABLED', voiceDisplayName(v));
+                renderVoiceList(v.voice_id);
+            } else {
+                alert('Không đổi được giọng: ' + (data.error || 'lỗi không rõ'));
+            }
+        } catch (e) {
+            alert('Lỗi kết nối khi đổi giọng: ' + e.message);
+        }
+    }
+
+    async function openVoicePicker() {
+        modalVoicePicker.style.display = 'flex';
+        voicePickerList.innerHTML = '<div style="color: var(--text-muted);">Đang tải danh sách giọng...</div>';
+        try {
+            const res = await fetch('/api/voice/tts-voices');
+            const data = await res.json();
+            if (data.success) {
+                voiceCache = data.vietnamese_voices || data.voices || [];
+                renderVoiceList(state.activeVoiceId);
+            }
+        } catch (e) {
+            voicePickerList.innerHTML = '<div style="color: var(--accent-rose);">Lỗi tải giọng: ' + e.message + '</div>';
+        }
+    }
+
+    if (btnOpenVoicePicker) btnOpenVoicePicker.addEventListener('click', openVoicePicker);
+    if (btnCloseVoicePicker) btnCloseVoicePicker.addEventListener('click', () => { modalVoicePicker.style.display = 'none'; });
+    if (modalVoicePicker) modalVoicePicker.addEventListener('click', (e) => {
+        if (e.target === modalVoicePicker) modalVoicePicker.style.display = 'none';
+    });
+    // ==================== END VOICE PICKER ====================
+
     // TTS Toggle Change
     ttsToggle.addEventListener('change', (e) => {
         state.ttsEnabled = e.target.checked;
@@ -342,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stopAudio();
             setTTSStatus('DISABLED', 'Đã tắt');
         } else {
-            setTTSStatus('READY', 'vi-VN (Hoài My)');
+            setTTSStatus('READY', voiceDisplayName(voiceCache.find(v => v.voice_id === state.activeVoiceId) || {voice_id: state.activeVoiceId, name: state.activeVoiceId, gender: 'female'}));
         }
     });
 
@@ -484,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 audio.onended = () => {
                     state.currentAudio = null;
                     setAvatarState('IDLE');
-                    if (state.ttsEnabled) setTTSStatus('READY', 'vi-VN (Hoài My)');
+                    if (state.ttsEnabled) setTTSStatus('READY', voiceDisplayName(voiceCache.find(v => v.voice_id === state.activeVoiceId) || {voice_id: state.activeVoiceId, name: state.activeVoiceId, gender: 'female'}));
                 };
                 audio.onerror = (err) => {
                     console.warn('Audio playback error, falling back to browser:', err);
