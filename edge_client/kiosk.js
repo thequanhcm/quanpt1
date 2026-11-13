@@ -30,6 +30,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const browRight = document.getElementById("avatar-brow-right");
   const symbolOverlay = document.getElementById("avatar-symbol-overlay");
   const symbolText = document.getElementById("avatar-symbol-text");
+  // (13/11/2026) Overlay effects: caption + particles canvas
+  const stateCaption = document.getElementById("state-caption");
+  const particlesCanvas = document.getElementById("particles-canvas");
 
   let currentAvatarState = "IDLE";
   let isCoreConnected = true;
@@ -68,6 +71,28 @@ document.addEventListener("DOMContentLoaded", () => {
     SLEEPING: { css: "state-sleeping", browL: "M 65 68 L 115 68", browR: "M 165 68 L 215 68", symbol: "💤" },
   };
 
+  // (13/11/2026) Caption tiếng Việt cho từng state (mẫu pi5 template.mp4)
+  const STATE_CAPTIONS = {
+    IDLE: "SẴN SÀNG",
+    LISTENING: "ĐANG LẮNG NGHE",
+    THINKING: "ĐANG SUY LUẬN",
+    RESEARCHING: "ĐANG NGHIÊN CỨU",
+    LEARNING: "ĐANG HỌC",
+    SPEAKING: "ĐANG NÓI",
+    HAPPY: "HOÀN THÀNH",
+    SUCCESS: "THÀNH CÔNG",
+    EMPATHETIC: "ĐỒNG CẢM",
+    CONFUSED: "CHƯA RÕ",
+    WARNING: "CẢNH BÁO",
+    WAITING_FOR_OWNER: "CHỜ PHÊ DUYỆT",
+    BLOCKED: "ĐÃ CHẶN",
+    ERROR: "SỰ CỐ",
+    SAFE_MODE: "ĐÓNG BĂNG",
+    OFFLINE: "MẤT KẾT NỐI",
+    RECONNECTING: "ĐANG KẾT NỐI LẠI",
+    SLEEPING: "TẠM NGHỈ",
+  };
+
   function setAvatarState(stateKey) {
     if (!STATE_CONFIG[stateKey]) stateKey = "IDLE";
     currentAvatarState = stateKey;
@@ -91,6 +116,14 @@ document.addEventListener("DOMContentLoaded", () => {
         symbolOverlay.style.display = "block";
       } else {
         symbolOverlay.style.display = "none";
+      }
+    }
+
+    // (13/11/2026) Cập nhật caption theo state
+    if (stateCaption) {
+      const captionText = STATE_CAPTIONS[stateKey] || stateKey;
+      if (stateCaption.textContent !== captionText) {
+        stateCaption.textContent = captionText;
       }
     }
 
@@ -755,4 +788,57 @@ document.addEventListener("DOMContentLoaded", () => {
   // Poll daemon every 1 second
   pollDaemonStatus();
   setInterval(pollDaemonStatus, 1000);
+
+  // (13/11/2026) PARTICLES ANIMATION: 30-50 hạt ánh sáng bay quanh avatar
+  // (mẫu pi5 template.mp4). Tối ưu cho Pi5: cap 12 FPS, alpha thấp, không shadowBlur.
+  function initParticles() {
+    if (!particlesCanvas) return;
+    const ctx = particlesCanvas.getContext("2d");
+    const w = particlesCanvas.width;
+    const h = particlesCanvas.height;
+    const NUM = 40;
+
+    const particles = [];
+    for (let i = 0; i < NUM; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: 1.0 + Math.random() * 1.8,
+        alpha: 0.3 + Math.random() * 0.5,
+        hue: 180 + Math.random() * 40, // cyan-blue range
+      });
+    }
+
+    let lastTs = 0;
+    const FRAME_MS = 83; // ~12 FPS
+
+    function loop(ts) {
+      if (ts - lastTs >= FRAME_MS) {
+        lastTs = ts;
+        ctx.clearRect(0, 0, w, h);
+
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+
+          // Wrap around edges
+          if (p.x < 0) p.x = w;
+          if (p.x > w) p.x = 0;
+          if (p.y < 0) p.y = h;
+          if (p.y > h) p.y = 0;
+
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+          ctx.fillStyle = `hsla(${p.hue}, 90%, 70%, ${p.alpha})`;
+          ctx.fill();
+        }
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+  initParticles();
 });

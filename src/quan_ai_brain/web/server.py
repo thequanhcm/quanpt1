@@ -870,6 +870,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_edge_list_files()
             return
 
+        # (13/11/2026, owner) Truyền tin 2 chiều: PC tải file VỀ từ Pi 5
+        if path == "/api/executive/edge/files/download":
+            self._handle_api_edge_download_file(parsed.query)
+            return
+
         if path == "/api/executive/edge/audio/status":
             self._handle_api_edge_audio_status()
             return
@@ -5040,6 +5045,51 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             data={"filename": clean_name},
         )
         self._send_json(resp)
+
+    def _handle_api_edge_download_file(self, query_str: str) -> None:
+        """(13/11/2026, owner) GET /api/executive/edge/files/download?name=...
+
+        Truyền tin 2 chiều: proxy tới Pi 5 GET /api/kiosk/files/download —
+        trả JSON {filename, size_bytes, content_b64, source} nguyên vẹn về browser.
+        Pi 5 offline → 502 với thông báo rõ (fail-honest).
+        """
+        from urllib.parse import parse_qs, urlparse
+        name = (parse_qs(query_str).get("name") or [""])[0]
+        if not name:
+            self._send_error_json("Missing name", 400)
+            return
+        resp = _send_edge_request(
+            f"/api/kiosk/files/download?name={urllib.parse.quote(name)}",
+            method="GET",
+            timeout=10.0,
+        )
+        if isinstance(resp, dict) and resp.get("success"):
+            self._send_json(resp)
+            return
+
+        # (13/11/2026) Fallback: Pi 5 offline → phục vụ từ bản PC đã lưu (assets/avatar
+        # hoặc root edge_client) để truyền tin không gián đoạn khi WiFi chập chờn.
+        import base64 as _b64
+        workspace = _find_workspace_root()
+        for local_dir in (workspace / "edge_client" / "assets" / "avatar", workspace / "edge_client"):
+            target = local_dir / Path(name).name
+            if target.exists() and target.is_file():
+                try:
+                    data = target.read_bytes()
+                    stat = target.stat()
+                    self._send_json({
+                        "success": True,
+                        "filename": target.name,
+                        "size_bytes": stat.st_size,
+                        "mtime": int(stat.st_mtime),
+                        "content_b64": _b64.b64encode(data).decode("ascii"),
+                        "source": "PC-local (Pi 5 offline)",
+                    })
+                    return
+                except Exception:
+                    pass
+        err = str((resp or {}).get("error", "Pi 5 không phản hồi"))[:200]
+        self._send_error_json(f"Tải về từ Pi 5 thất bại: {err}", 502)
 
     def _handle_api_edge_remote_action(self, body: dict) -> None:
         self._handle_api_edge_control(body)

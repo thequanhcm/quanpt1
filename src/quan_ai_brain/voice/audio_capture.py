@@ -22,6 +22,14 @@ from typing import Callable, Optional
 
 import numpy as np
 
+# (13/11/2026) pyaudio import module-level — _audio_callback dùng pyaudio.paContinue
+# nhưng trước đây pyaudio chỉ import local trong start() → NameError giữa stream
+# (bug lộ ra khi 'ghi âm' qua DM lần đầu).
+try:
+    import pyaudio
+except ImportError:  # fail-honest: start() sẽ báo lỗi cụ thể khi không cài
+    pyaudio = None
+
 logger = logging.getLogger(__name__)
 
 

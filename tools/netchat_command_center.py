@@ -76,6 +76,11 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "ack_alert": ("giữ nguyên", "giu nguyen", "tắt cảnh báo", "tat canh bao",
                   "đã xác nhận cảnh báo", "da xac nhan canh bao",
                   "không cảnh báo nữa", "khong canh bao nua"),
+    # (13/11/2026) Ghi âm mic PC N giây/phút → faster-whisper STT → text gửi owner
+    # (yêu cầu thật 09:46: "Em ghi âm trong 1 phút và tóm tắt..."). R0 (đọc mic
+    # local, không tác động ngoài) — chạy thật, fail-honest.
+    "voice_record": ("ghi âm", "ghi am", "record audio", "record voice",
+                     "ghi tiếng", "ghi tieng", "ghi lại âm thanh", "ghi lai am thanh"),
     "tony_speak": ("tony nói", "tony noi", "kêu tony nói", "keu tony noi", "nói với anh", "noi voi anh",
                 "cherry nói", "cherry noi", "kêu cherry nói", "keu cherry noi"),  # (06/11) CHERRY song song TONY
     "tony_face": ("biểu cảm", "bieu cam", "đổi biểu cảm", "doi bieu cam", "set expression", "mặt vui", "mat vui",
@@ -177,6 +182,15 @@ STATE_CHANGING = {"approve", "tony_on", "tony_pi_live", "tony_pi_live_off", "ton
                   # ĐỨNG ĐẦU câu (startswith), không match giữa câu
                   "relay_on", "relay_off"}
 
+# (13/11/2026) Alias KHÔNG DẤU ngắn — substring quá phổ biến trong tiếng Việt
+# ('nội dung' chứa 'dung' → 'Em ghi âm trong 1 phút... nội dung...' bị nuốt thành
+# lệnh STOP — bug thật 13/11 screenshot owner). Các alias này CHỈ kích hoạt khi
+# ĐỨNG ĐẦU câu (mệnh lệnh); giữa câu phải dùng từ CÓ DẤU ('dừng', 'ngừng'...).
+_UNACCENTED_IMPERATIVE_ONLY = {
+    "dung", "dung lai", "ngung", "dong bang", "tam dung",   # stop/freeze
+    "mo", "bat", "tat",                                      # pc_open/pc_close
+}
+
 # UDC-1: lệnh dừng khẩn thiết bị phải ĐI TRƯỚC pattern 'stop' rộng
 # ('dừng khẩn thiết bị' chứa 'dừng' → bị stop nuốt) — xử lý đặc biệt
 # trong detect_intent ngay đầu hàm. Động từ dừng BẮT BUỘC có mặt
@@ -273,6 +287,10 @@ def run_pending_action(chat_session_id: str) -> str | None:
 
 _POLITE_PREFIXES = ("giúp anh", "giup anh", "giúp em", "giup em", "làm ơn", "lam on",
                     "vui lòng", "vui long", "cho anh", "cho em", "cho tôi", "cho toi",
+                    # (13/11/2026) Gọi tên + 'ơi' = MỆNH LỆNH trực tiếp (owner dùng
+                    # 'cherry ơi tắt hình thể' — trước đây bị kẹt 'ơi' → lệnh rơi
+                    # xuyên sang tony_status). Phải đứng TRƯỚC 'tony'/'cherry' đơn.
+                    "tony ơi", "tony oi", "cherry ơi", "cherry oi",
                     "tony", "cherry", "em", "bạn", "ban")  # (06/11) + cherry
 
 
@@ -306,11 +324,21 @@ def _strip_polite_prefixes(text: str) -> str:
 
 
 def _is_question(t: str) -> bool:
-    """Câu hỏi ('?'/tận cùng 'không'/'chứ'/'nào') không bao giờ kích hoạt lệnh."""
+    """Câu hỏi ('?'/tận cùng 'không'/'chứ'/'nào'/'là gì'...) không bao giờ kích hoạt lệnh.
+
+    (13/11/2026) Thêm cụm hỏi định nghĩa 'là gì'/'gi vậy'/'gi thế'/'thế nào' —
+    'nội dung báo cáo là gì' trước đây bị nuốt thành lệnh 'report' (containment
+    match 'báo cáo') thay vì đi GLM trả lời định nghĩa.
+    """
     if "?" in t:
         return True
     tt = t.rstrip("!. ").lower()
-    return tt.endswith("không") or tt.endswith("chứ") or tt.endswith("nào")
+    if (tt.endswith("không") or tt.endswith("chứ") or tt.endswith("nào")
+            or tt.endswith("là gì") or tt.endswith("gi vậy") or tt.endswith("gi thế")
+            or tt.endswith("thế nào") or tt.endswith("như nào")):
+        return True
+    # Cụm hỏi đứng giữa câu ('là gì' + dấu chấm hỏi đã strip)
+    return bool(re.search(r"\blà gì\b|\bgì vậy\b|\bgì thế\b", tt))
 
 
 def detect_intent(text: str) -> str | None:
@@ -426,7 +454,12 @@ def detect_intent(text: str) -> str | None:
             if t.startswith(p):
                 return intent
             if (not question and intent not in STATE_CHANGING
-                    and intent != "help" and f" {p} " in f" {t} "):
+                    and intent != "help"
+                    # (13/11/2026) Alias không dấu ngắn chỉ nhận ở ĐẦU câu —
+                    # 'nội dung'/'sử dụng' chứa 'dung' đã nuốt nhầm câu hỏi
+                    # thật của owner thành lệnh STOP (bug 13/11).
+                    and p not in _UNACCENTED_IMPERATIVE_ONLY
+                    and f" {p} " in f" {t} "):
                 return intent
     return None
 
@@ -1048,7 +1081,18 @@ def handle_tony_pi_screenshot(text: str = "", payload: dict[str, Any] | None = N
     from pathlib import Path as _P
     from tools.netchat_action_executor import send_file_to_dm
 
-    PI = "quanpt1@100.100.83.59"
+    # (13/11/2026) IP cũ 100.100.83.59 (mạng ngoài) timeout — Pi5 LAN 192.168.1.21;
+    # đọc động từ config.json edge_client (core_host/kiosk) với fallback LAN.
+    _cfg = {}
+    try:
+        import json as _json
+        _cfg = _json.loads((WORKSPACE / "edge_client" / "config.json").read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    _kiosk_ip = str(_cfg.get("kiosk_host") or "").strip()
+    if _kiosk_ip in ("", "0.0.0.0"):
+        _kiosk_ip = "192.168.1.21"
+    PI = f"quanpt1@{_kiosk_ip}"
     ts = time.strftime("%Y%m%d_%H%M%S")
     remote_png = f"/tmp/kiosk_shot_{ts}.png"
     pc_dir = _P(__file__).resolve().parent.parent / "data" / "netchat_files"
@@ -1420,6 +1464,22 @@ def handle_tony_websearch(text: str, payload: dict[str, Any] | None = None) -> s
     return f"⚠️ Không mở được tìm kiếm trên Pi 5: {info}\n(Kiểm tra: gõ 'hình thể')"
 
 
+def _fallback_play_on_pc(query: str) -> str | None:
+    """(13/11/2026) Fallback phát nhạc trên loa PC khi Pi5 lỗi: search YouTube →
+    mở tab browser mặc định. Trả câu thông báo hoặc None nếu search hỏng."""
+    try:
+        from quan_ai_brain.media.youtube_music import search_youtube_music
+        results = search_youtube_music(query, max_results=1)
+        if not results:
+            return None
+        top = results[0]
+        import webbrowser
+        webbrowser.open(top["url"])
+        return f"phát trên loa PC (browser): “{str(top['title'])[:80]}”"
+    except Exception:
+        return None
+
+
 def handle_tony_music_play(text: str, payload: dict[str, Any] | None = None) -> str:
     """'cherry phát nhạc <tên>' / 'bật nhạc <tên>' — dùng engine YouTube Music
     có sẵn (search + play trên loa Pi 5)."""
@@ -1438,8 +1498,17 @@ def handle_tony_music_play(text: str, payload: dict[str, Any] | None = None) -> 
         if data.get("success"):
             title = str(data.get("title", ""))[:80]
             return f"🎵 Đang phát trên loa Pi 5: “{title}” (LƯU Ý: loa BT phải đang bật nguồn)"
+        # (13/11/2026) Fallback loa PC: Pi5 lỗi/không phản hồi → phát YouTube trên PC
+        # (browser mặc định) — vẫn đảm bảo 'phát được bài được yêu cầu'.
+        pc = _fallback_play_on_pc(q)
+        if pc:
+            return f"⚠️ Pi 5 không phát được ({_vn_err(str(data.get('error', 'không rõ')), 80)}) → {pc}"
         return f"⚠️ Không phát được: {_vn_err(data.get('error', 'không rõ'), 120)}"
     except Exception as exc:
+        # (13/11/2026) Pi5 offline/timeout → fallback loa PC thay vì báo lỗi khô.
+        pc = _fallback_play_on_pc(q)
+        if pc:
+            return f"⚠️ Pi 5 không phản hồi ({type(exc).__name__}) → {pc}"
         return f"⚠️ Lỗi phát nhạc: {type(exc).__name__}: {exc}"
 
 
@@ -1696,6 +1765,125 @@ def handle_pc_lock(payload: dict[str, Any] | None = None) -> str:
         return f"⚠️ Lỗi khóa máy: {type(exc).__name__}: {exc}"
 
 
+def _parse_record_duration(text: str) -> int:
+    """Parse thời lượng ghi âm từ lệnh (mặc định 60s, min 5s, max 300s)."""
+    import re as _re
+    t = (text or "").lower()
+    m = _re.search(r"(\d+)\s*(phút|phut|minute)", t)
+    if m:
+        return max(5, min(300, int(m.group(1)) * 60))
+    m = _re.search(r"(\d+)\s*(giây|giay|giờ ngắn|second|s\b)", t)
+    if m:
+        return max(5, min(300, int(m.group(1))))
+    return 60
+
+
+def handle_voice_record(payload: dict[str, Any] | None = None) -> str:
+    """'ghi âm N phút': record mic PC → faster-whisper STT → gửi text tóm tắt.
+
+    Pipeline thật (không mock): AudioCapture (pyaudio, 16kHz mono) ghi N giây
+    → file WAV tạm → voice_stt.transcribe (faster-whisper small int8 CPU vi)
+    → text. Tóm tắt nội dung do LLM làm ở bước sau (responder đã có pipeline
+    map-reduce qua /api/chat) — handler trả TEXT NGUYÊN bản ghi + metadata.
+    Fail-honest: thiếu mic/thiếu pyaudio → báo lỗi cụ thể, không bịa text.
+    """
+    import time as _time
+    import wave as _wave
+
+    duration = _parse_record_duration(str(payload or ""))
+    import sys as _sys
+    try:
+        _sys.path.insert(0, str(WORKSPACE / "src"))
+        from quan_ai_brain.voice.audio_capture import AudioCapture, AudioConfig
+    except Exception as exc:
+        return (f"⚠️ Không load được AudioCapture: {exc}\n"
+                "• Hành động tiếp theo: kiểm tra pyaudio trong venv (pip install pyaudio).")
+
+    chunks: list[bytes] = []
+
+    def _collect(chunk) -> None:
+        # AudioChunk có .data (bytes)
+        data = getattr(chunk, "data", None) or getattr(chunk, "bytes", b"")
+        if data:
+            chunks.append(bytes(data))
+
+    cap = AudioCapture(AudioConfig(sample_rate=16000, channels=1))
+    if not cap.start(callback=_collect):
+        return ("🛑 Không mở được micro PC (AudioCapture.start = False).\n"
+                "• Hành động tiếp theo: kiểm tra mic mặc định trong Windows Settings → Sound.")
+
+    reply_prefix = f"🎙️ Đang ghi âm {duration}s từ mic PC... (bắt đầu)"
+    # (13/11/2026) Owner feedback: đợi 60s + STT ~65s mà không thấy gì thì tưởng
+    # CHERRY không phản hồi → gửi tin XÁC NHẬN NGAY khi bắt đầu ghi âm. Fail-honest:
+    # gửi lỗi → vẫn chạy pipeline, chỉ thiếu tin tiến độ.
+    try:
+        from quan_ai_brain.integration import netchat_bridge as _nb2
+        _OWNER_DM_CHANNEL = "mwp3nk3ciprjjr4hdmcoqgk6jr"  # DM bot_tony
+        _nb2.send_message(_OWNER_DM_CHANNEL,
+            f"🎙️ Em đang ghi âm {duration}s từ mic PC (xong ghi + nhận diện ~{duration + 70}s "
+            "sẽ gửi tóm tắt nhé anh)...")
+    except Exception:
+        pass  # không chặn pipeline ghi âm
+    try:
+        _time.sleep(duration)
+    finally:
+        cap.stop()
+    if not chunks:
+        return ("🛑 Ghi âm xong nhưng KHÔNG có dữ liệu âm thanh (mic im lặng hoặc driver lỗi).\n"
+                "• Hành động tiếp theo: thử nói to hơn khi ghi hoặc kiểm tra mic.")
+
+    # Ghi WAV tạm + STT
+    out_dir = WORKSPACE / "data" / "voice_records"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    wav_path = out_dir / f"record_{_time.strftime('%Y%m%d_%H%M%S')}.wav"
+    with _wave.open(str(wav_path), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(b"".join(chunks))
+
+    try:
+        from voice_stt import transcribe  # tools/voice_stt.py (cùng tools dir)
+        text = transcribe(wav_path)
+    except Exception as exc:
+        return (f"⚠️ Đã ghi âm {duration}s → {wav_path.name} nhưng STT lỗi: {exc}\n"
+                f"• File WAV đã lưu — anh có thể nghe lại/tải về.")
+
+    if not text:
+        return (f"🎙️ Đã ghi âm {duration}s ({wav_path.name}) nhưng không nhận diện được "
+                "lời nói (im lặng/too noisy).")
+
+    # (13/11/2026) Tóm tắt nội dung qua /api/chat (GLM) — yêu cầu owner: "tóm tắt
+    # các nội dung ghi âm bằng văn bản". Fail-honest: LLM lỗi → trả nguyên bản.
+    summary = ""
+    try:
+        import json as _json
+        import urllib.request as _uq
+        _data = _json.dumps({
+            "query": f"Nhiệm vụ: tóm tắt trực tiếp đoạn văn bản dưới đây (đã nhận diện "
+                     f"từ bản ghi âm — KHÔNG cần file nào khác, tóm tắt ngay phần văn "
+                     f"bản này). Viết tiếng Việt, gọn 5-8 gạch đầu dòng, giữ đúng số "
+                     f"liệu/tên riêng, không bịa thêm. Nếu nội dung quá ngắn thì tóm "
+                     f"lại 1-2 câu.\n\nNỘI DUNG BẢN GHI ÂM:\n{text[:4000]}",
+            "session_id": "voice_record_summary",
+        }).encode("utf-8")
+        _req = _uq.Request("http://127.0.0.1:8765/api/chat", data=_data,
+                           headers={"Content-Type": "application/json"})
+        with _uq.urlopen(_req, timeout=90) as _resp:
+            _r = _json.loads(_resp.read().decode("utf-8"))
+            summary = str(_r.get("answer") or "").strip()
+    except Exception:
+        summary = ""  # fail-honest: không tóm tắt được → trả nguyên bản ghi
+
+    if summary:
+        return (f"🎙️ GHI ÂM XONG ({duration}s, {wav_path.name})\n"
+                f"\n📌 TÓM TẮT:\n{summary}\n"
+                f"\n📝 NGUYÊN BẢN NHẬN DIỆN:\n{text}")
+    return (f"🎙️ GHI ÂM XONG ({duration}s, {wav_path.name})\n"
+            f"\n📝 NỘI DUNG NHẬN DIỆN:\n{text}\n"
+            f"\n(Chưa tóm tắt được — server LLM không phản hồi; anh reply tin này để em thử lại.)")
+
+
 HANDLERS = {
     "approve": handle_approve,
     "status": handle_status,
@@ -1740,6 +1928,8 @@ HANDLERS = {
     "tony_reverse_prompt": handle_tony_reverse_prompt,
     # (01/11/2026, owner-ACK) 'giữ nguyên/tắt cảnh báo' — ghi nhận quyết định
     "ack_alert": handle_ack_alert,
+    # (13/11/2026) ghi âm mic + STT thật
+    "voice_record": handle_voice_record,
 }
 
 # Intent cần đối số (text sau từ khóa)
@@ -1758,12 +1948,19 @@ _ARG_KEYWORD_RES: list[tuple[str, re.Pattern[str]]] = [
     ("relay_off", re.compile(r"^\s*(?:tắt|tat)\s+(?:rơ\s*le|ro\s*le|relay)\b(.*)$", re.IGNORECASE)),
     ("tony_face", re.compile(r"^\s*(?:biểu\s+cảm|bieu\s+cam|đổi\s+biểu\s+cảm|doi\s+bieu\s+cam|set\s+expression)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     ("tony_volume", re.compile(r"^\s*(?:âm\s+lượng|am\s+luong|volume)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
+    # (13/11/2026) PHẢI đứng TRƯỚC pc_open: 'mở nhạc/mở bài hát/nghe bài' từng rơi vào
+    # pc_open (mở app PC sai). Phủ rộng mọi cách nói 'phát/bật/mở/nghe/play + nhạc/bài'
+    # — owner: 'phát nhạc thì có thể phát tất cả các bài nào được yêu cầu'.
+    ("tony_music_play", re.compile(
+        r"^\s*(?:(?:tony|cherry)\s+)?"
+        r"(?:phát|phat|bật|bat|mở|mo|nghe|play)\s+"
+        r"(?:nhạc|nhac|bài\s*hát|bai\s*hat|bài|bai|ca\s*khúc|ca\s*khuc|music|track|bảng\s*nhạc)"
+        r"\s*[:：]?\s*(.+)$", re.IGNORECASE)),
     ("pc_open", re.compile(r"^\s*(?:mở|mo|bật|bat|bật\s+lên|bat\s+len|khởi\s+động|khoi\s+dong|open)\s+(.+)$", re.IGNORECASE)),
     ("pc_close", re.compile(r"^\s*(?:đóng|dong|tắt|tat|tắt\s+đi|tat\s+di|close|kill)\s+(.+)$", re.IGNORECASE)),
     # (31/10/2026) Pi5: youtube/tìm kiếm/phát nhạc có đối số
     ("tony_youtube", re.compile(r"^\s*(?:tony|cherry)?\s*\s*(?:mở|mo|bật|bat|xem)\s+(?:youtube|video)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     ("tony_websearch", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:tìm|tim|tra\s+cứu|tra\s+cuu|tìm\s+kiếm|tim\s+kiem)(?:\s+kiếm|\s+giúp\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
-    ("tony_music_play", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:phát|phat|bật|bat|mở|mo|nghe)\s+(?:nhạc|nhac|bài|bai|bài\s+hát|bai\s+hat)\s*[:：]?\s*(.+)$", re.IGNORECASE)),
     # (31/10/2026) hiển thị ảnh lên Pi5 — 'N giây' là phần đối số
     ("tony_show_image", re.compile(r"^\s*(?:hiển\s+thị|hien\s+thi)\s+(?:lại\s+|lai\s+)?(?:ảnh|anh)\b.*?\bpi(?:\s*5)?\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     # (31/10/2026) TAI: 'nghe từ pi [N giây]' — thu âm mic Pi5 gửi DM
@@ -1898,6 +2095,14 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
         except Exception as exc:
             return _pi_intent, f"⚠️ Lỗi thực thi lệnh '{_pi_intent}': {type(exc).__name__}: {exc}"
 
+    # 2.5) (13/11/2026) Music stop TRƯỚC arg intents: 'tắt nhạc/dừng nhạc' từng bị
+    # pc_close nuốt ('tắt' + đối số 'nhạc' → đóng 'app nhạc' không tồn tại).
+    if not _is_question(t_for_args) and _is_music_stop(t_for_args):
+        try:
+            return "tony_music_stop", HANDLERS["tony_music_stop"]()
+        except Exception as exc:
+            return "tony_music_stop", f"⚠️ Lỗi dừng nhạc: {type(exc).__name__}: {exc}"
+
     # 3) Lệnh có đối số (tony nói/biểu cảm/âm lượng/mở-đóng app) — khớp regex trước intent thường
     for intent_arg, kw_re in _ARG_KEYWORD_RES:
         m_arg = kw_re.match(t_for_args)
@@ -1954,6 +2159,9 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
         if handler is None:
             return intent, f"⚠️ Lệnh '{intent}' chưa có handler (lỗi cấu hình)."
         try:
+            if intent == "voice_record":
+                # (13/11/2026) ghi âm cần thời lượng từ tin gốc ('ghi âm 1 phút')
+                return intent, handler(text)
             return intent, handler()
         except Exception as exc:
             return intent, f"⚠️ Lỗi thực thi lệnh '{intent}': {type(exc).__name__}: {exc}"

@@ -104,3 +104,5 @@ data/cherry_autonomous_state.json
 data/greeting_last_sent.txt
 logs/cherry_autonomous.log
 logs/pythonw_stdout_test.log
+# (13/11/2026) Ghi âm mic runtime (wav) — không commit
+data/voice_records/

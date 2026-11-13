@@ -588,6 +588,239 @@ body {
   font-family: monospace;
 }
 
+/* ================= (13/11/2026) HOLOGRAM CYLINDER OVERLAY ================= */
+/* Trụ kính trong suốt bao quanh avatar (mẫu pi5 template.mp4) */
+.hologram-cylinder {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cylinder-glass {
+  position: absolute;
+  width: 62%;
+  height: 88%;
+  top: 4%;
+  border-radius: 50% / 8%;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 229, 255, 0.04) 0%,
+    rgba(0, 229, 255, 0.12) 20%,
+    rgba(0, 229, 255, 0.04) 50%,
+    rgba(0, 229, 255, 0.12) 80%,
+    rgba(0, 229, 255, 0.04) 100%
+  );
+  border-left: 1px solid rgba(0, 229, 255, 0.35);
+  border-right: 1px solid rgba(0, 229, 255, 0.35);
+  box-shadow:
+    inset 0 0 40px rgba(0, 229, 255, 0.15),
+    0 0 20px rgba(0, 229, 255, 0.1);
+  animation: cylinderPulse 4s ease-in-out infinite alternate;
+}
+
+@keyframes cylinderPulse {
+  from { opacity: 0.7; }
+  to { opacity: 1.0; }
+}
+
+.cylinder-led-ring {
+  position: absolute;
+  width: 70%;
+  height: 70%;
+  top: 12%;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  box-shadow:
+    0 0 12px rgba(255, 255, 255, 0.5),
+    inset 0 0 12px rgba(255, 255, 255, 0.3);
+  animation: ledRingRotate 8s linear infinite;
+}
+
+@keyframes ledRingRotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cylinder-base {
+  position: absolute;
+  width: 72%;
+  height: 4%;
+  bottom: 6%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.85) 0%,
+    rgba(0, 0, 0, 0.6) 60%,
+    transparent 100%
+  );
+  border-top: 1px solid rgba(0, 229, 255, 0.4);
+  box-shadow: 0 0 16px rgba(0, 229, 255, 0.3);
+}
+
+/* ================= (13/11/2026) PARTICLES CANVAS ================= */
+.particles-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* ================= (13/11/2026) LASER BAR (THINKING) ================= */
+.laser-bar {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 58%;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 229, 255, 0.8) 20%,
+    rgba(255, 255, 255, 1.0) 50%,
+    rgba(0, 229, 255, 0.8) 80%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 8px rgba(0, 229, 255, 0.8),
+    0 0 16px rgba(0, 229, 255, 0.4);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 4;
+  transition: opacity 0.3s ease;
+}
+
+.state-thinking .laser-bar,
+.state-researching .laser-bar {
+  opacity: 1;
+  animation: laserScan 2s ease-in-out infinite;
+}
+
+@keyframes laserScan {
+  0%, 100% { transform: scaleX(1.0); opacity: 0.8; }
+  50% { transform: scaleX(1.05); opacity: 1.0; }
+}
+
+/* ================= (13/11/2026) LIGHTNING BOLTS (SPEAKING) ================= */
+.lightning-bolts {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 4;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.state-speaking .lightning-bolts {
+  opacity: 1;
+}
+
+.bolt {
+  position: absolute;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    rgba(168, 85, 247, 0.9) 30%,
+    rgba(255, 255, 255, 1.0) 50%,
+    rgba(168, 85, 247, 0.9) 70%,
+    transparent 100%
+  );
+  box-shadow: 0 0 6px rgba(168, 85, 247, 0.8);
+  opacity: 0;
+}
+
+.state-speaking .bolt {
+  animation: boltFlicker 1.2s ease-in-out infinite;
+}
+
+.bolt-1 { left: 16%; top: 8%; height: 80%; animation-delay: 0s; }
+.bolt-2 { left: 32%; top: 12%; height: 72%; animation-delay: 0.3s; }
+.bolt-3 { right: 32%; top: 10%; height: 76%; animation-delay: 0.6s; }
+.bolt-4 { right: 16%; top: 14%; height: 68%; animation-delay: 0.9s; }
+
+@keyframes boltFlicker {
+  0%, 100% { opacity: 0; }
+  10%, 30%, 50%, 70%, 90% { opacity: 0.9; }
+  20%, 40%, 60%, 80% { opacity: 0.3; }
+}
+
+/* ================= (13/11/2026) STATE CAPTION ================= */
+.state-caption {
+  position: absolute;
+  bottom: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan-primary);
+  text-shadow:
+    0 0 8px rgba(0, 229, 255, 0.6),
+    0 0 16px rgba(0, 229, 255, 0.3);
+  padding: 4px 14px;
+  background: rgba(5, 8, 17, 0.7);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 5;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.state-listening .state-caption { color: #06b6d4; border-color: rgba(6, 182, 212, 0.5); }
+.state-thinking .state-caption { color: #a855f7; border-color: rgba(168, 85, 247, 0.5); }
+.state-speaking .state-caption { color: #3b82f6; border-color: rgba(59, 130, 246, 0.5); }
+.state-happy .state-caption { color: #10b981; border-color: rgba(16, 185, 129, 0.5); }
+.state-warning .state-caption { color: #f97316; border-color: rgba(249, 115, 22, 0.5); }
+.state-blocked .state-caption { color: #ef4444; border-color: rgba(239, 68, 68, 0.5); }
+.state-offline .state-caption { color: #64748b; border-color: rgba(100, 116, 139, 0.5); }
+.state-sleeping .state-caption { color: #475569; border-color: rgba(71, 85, 105, 0.5); }
+
+/* ================= (13/11/2026) RESPONSIVE — MÀN LỚN 65 INCH ================= */
+/* Mặc định: 800x480 (DSI). Scale theo viewport cho màn HDMI lớn. */
+@media (min-width: 1280px) {
+  .kiosk-header { height: 36px; }
+  .device-pill { font-size: 0.85rem; }
+  .clock-display { font-size: 1.15rem; }
+  .kiosk-waveform { width: 200px; height: 24px; }
+  .vu-caption { font-size: 0.65rem; }
+  .kiosk-footer { height: 56px; }
+  .kiosk-btn { height: 48px; font-size: 1.0rem; padding: 0 14px; }
+  .state-caption { font-size: 1.1rem; padding: 6px 20px; }
+  .marquee-track { font-size: 0.85rem; }
+}
+
+@media (min-width: 1920px) {
+  .kiosk-header { height: 44px; }
+  .device-pill { font-size: 1.0rem; }
+  .clock-display { font-size: 1.35rem; }
+  .kiosk-waveform { width: 260px; height: 30px; }
+  .vu-caption { font-size: 0.75rem; }
+  .kiosk-footer { height: 68px; }
+  .kiosk-btn { height: 58px; font-size: 1.2rem; padding: 0 18px; }
+  .state-caption { font-size: 1.4rem; padding: 8px 28px; }
+  .marquee-track { font-size: 1.0rem; }
+  .consultation-banner { font-size: 0.8rem; padding: 10px 14px; }
+}
+
+@media (min-width: 2560px) {
+  .kiosk-header { height: 52px; }
+  .device-pill { font-size: 1.15rem; }
+  .clock-display { font-size: 1.55rem; }
+  .kiosk-waveform { width: 320px; height: 36px; }
+  .kiosk-footer { height: 80px; }
+  .kiosk-btn { height: 68px; font-size: 1.4rem; padding: 0 22px; }
+  .state-caption { font-size: 1.7rem; padding: 10px 36px; }
+  .marquee-track { font-size: 1.15rem; }
+}
+
 /* ================= PURE FACE-ONLY EMBODIMENT MODE ================= */
 body.face-only-mode .kiosk-header,
 body.face-only-mode .micro-transcript,
