@@ -287,6 +287,10 @@ def run_pending_action(chat_session_id: str) -> str | None:
 
 _POLITE_PREFIXES = ("giúp anh", "giup anh", "giúp em", "giup em", "làm ơn", "lam on",
                     "vui lòng", "vui long", "cho anh", "cho em", "cho tôi", "cho toi",
+                    # (13/11/2026) Gọi tên + 'ơi' = MỆNH LỆNH trực tiếp (owner dùng
+                    # 'cherry ơi tắt hình thể' — trước đây bị kẹt 'ơi' → lệnh rơi
+                    # xuyên sang tony_status). Phải đứng TRƯỚC 'tony'/'cherry' đơn.
+                    "tony ơi", "tony oi", "cherry ơi", "cherry oi",
                     "tony", "cherry", "em", "bạn", "ban")  # (06/11) + cherry
 
 
@@ -1077,7 +1081,18 @@ def handle_tony_pi_screenshot(text: str = "", payload: dict[str, Any] | None = N
     from pathlib import Path as _P
     from tools.netchat_action_executor import send_file_to_dm
 
-    PI = "quanpt1@100.100.83.59"
+    # (13/11/2026) IP cũ 100.100.83.59 (mạng ngoài) timeout — Pi5 LAN 192.168.1.21;
+    # đọc động từ config.json edge_client (core_host/kiosk) với fallback LAN.
+    _cfg = {}
+    try:
+        import json as _json
+        _cfg = _json.loads((WORKSPACE / "edge_client" / "config.json").read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    _kiosk_ip = str(_cfg.get("kiosk_host") or "").strip()
+    if _kiosk_ip in ("", "0.0.0.0"):
+        _kiosk_ip = "192.168.1.21"
+    PI = f"quanpt1@{_kiosk_ip}"
     ts = time.strftime("%Y%m%d_%H%M%S")
     remote_png = f"/tmp/kiosk_shot_{ts}.png"
     pc_dir = _P(__file__).resolve().parent.parent / "data" / "netchat_files"
