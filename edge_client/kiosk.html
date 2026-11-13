@@ -45,7 +45,27 @@
         <div class="avatar-card">
           <!-- Digital Human (Avatar V2 - Cybernetic Assistant) Viewport -->
           <div class="kiosk-avatar-viewport digital-human-viewport state-idle" id="avatar-viewport">
+            <!-- (13/11/2026) HOLOGRAM CYLINDER: trụ kính trong suốt bao quanh avatar
+                 (mẫu pi5 template.mp4) — gradient trụ đứng + viền LED trắng xoay -->
+            <div class="hologram-cylinder" id="hologram-cylinder">
+              <div class="cylinder-glass"></div>
+              <div class="cylinder-led-ring"></div>
+              <div class="cylinder-base"></div>
+            </div>
+            <!-- (13/11/2026) PARTICLES: 30-50 hạt ánh sáng bay quanh avatar -->
+            <canvas id="particles-canvas" class="particles-canvas" width="720" height="720"></canvas>
+            <!-- (13/11/2026) LASER BAR: thanh laser ngang eo khi THINKING -->
+            <div class="laser-bar" id="laser-bar"></div>
+            <!-- (13/11/2026) LIGHTNING BOLTS: 4-6 tia điện tím chạy dọc khung kính khi SPEAKING -->
+            <div class="lightning-bolts" id="lightning-bolts">
+              <div class="bolt bolt-1"></div>
+              <div class="bolt bolt-2"></div>
+              <div class="bolt bolt-3"></div>
+              <div class="bolt bolt-4"></div>
+            </div>
             <canvas id="kiosk-avatar-canvas" width="720" height="720" class="digital-human-canvas"></canvas>
+            <!-- (13/11/2026) STATE CAPTION: caption dưới avatar đổi theo state -->
+            <div class="state-caption" id="state-caption">SẴN SÀNG</div>
           </div>
         </div>
       </main>
