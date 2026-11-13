@@ -1,0 +1,7 @@
+[Unit]
+Description=QUAN AI BRAIN audio route auto-switch (HDMI uu tien, fallback BT SRS-XB33)
+After=pipewire.service bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/quanpt1/Desktop/edge_client/audio_route.py

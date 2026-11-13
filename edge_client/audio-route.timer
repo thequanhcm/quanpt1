@@ -1,0 +1,11 @@
+[Unit]
+Description=Chay audio_route moi 30 giay
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=audio-route.service
+
+[Install]
+WantedBy=timers.target
