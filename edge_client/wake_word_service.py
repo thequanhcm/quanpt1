@@ -73,6 +73,106 @@ def sleep_kiosk():
     except Exception as exc:
         print(f"[WAKE] lỗi pause: {exc}", flush=True)
 
+# ---------------------------------------------------------------------------
+# (13/11/2026) LỌC TẠP ÂM + ÂM THANH MÔI TRƯỜNG — 3 lớp DSP
+# Owner yêu cầu sau buổi đo: mic Jieli RMS 130-205 khi owner gọi (≈ −48dBFS),
+# TV/nhạc nền 122-147 → SNR≈0dB. Các lớp dưới giúp Vosk chỉ nhận tiếng nói.
+# ---------------------------------------------------------------------------
+
+class NoiseFloorEstimator:
+    """Bám mức tạp âm nền phòng bằng trung bình trượt bất đối xứng.
+
+    - Nền thấp dần (phòng im hơn): bám NHANH (down factor) — tránh kẹt
+      floor cao làm gate nuốt tiếng nói.
+    - Tiếng nói/tiếng to: KHÔNG được kéo floor lên nhanh (up factor nhỏ,
+      và chỉ khi RMS > floor × 1.8) — tiếng nói chỉ 0.25-2s không đủ kéo.
+    """
+
+    def __init__(self, init: float = 150.0, up: float = 0.002,
+                 down: float = 0.08) -> None:
+        self.level = init
+        self._up = up
+        self._down = down
+
+    def update(self, rms: float) -> float:
+        if rms < self.level:
+            self.level += (rms - self.level) * self._down
+        else:
+            # Nền tăng: bám chậm nhưng CHẮC CHẮN (TV bật lâu = nền mới);
+            # tiếng nói ngắn 0.25-2s chỉ nâng floor <1% → vô hại.
+            self.level += (rms - self.level) * self._up
+        return self.level
+
+    def is_speech(self, rms: float, snr: float = 2.2,
+                  absolute_min: float = 90.0) -> bool:
+        return rms >= max(absolute_min, self.level * snr)
+
+
+def make_highpass(cutoff_hz: float = 180.0, rate: int = 16000):
+    """Trả hàm lọc high-pass 1 bậc (single-pole) cắt tần số trầm.
+
+    Cắt rumble/HVAC/TV-bass (<180Hz) nhưng giữ dải giọng nói (300-3400Hz).
+    Dùng danh sách hệ số tĩnh — không cấp phát trong vòng lặp nóng.
+    """
+    import math as _math
+    rc = 1.0 / (2.0 * _math.pi * cutoff_hz)
+    dt = 1.0 / rate
+    alpha = rc / (rc + dt)
+    state = {"prev_in": 0.0, "prev_out": 0.0}
+
+    def _filter(x: float) -> float:
+        y = alpha * (state["prev_out"] + x - state["prev_in"])
+        state["prev_in"] = x
+        state["prev_out"] = y
+        return y
+
+    return _filter
+
+
+# instance dùng chung cho vòng lặp chính + test
+_hp = make_highpass()
+_noise = NoiseFloorEstimator(init=140.0)
+
+
+def _agc_boost(samples, floor_level: float = 100.0):
+    """AGC normalize về 9000, gain max 24x, clip guard 32000 (test helper)."""
+    import math as _math
+    if not samples:
+        return samples
+    rms = _math.sqrt(sum(x * x for x in samples) / len(samples))
+    base = max(rms, 90.0, floor_level)
+    gain = min(24.0, 9000.0 / max(base, 1))
+    out = samples
+    for _i in range(len(out)):
+        v = int(out[_i] * gain)
+        # clip guard LUÔN áp (kể cả gain<1) — đảm bảo biên ≤ ±32000
+        out[_i] = 32000 if v > 32000 else (-32000 if v < -32000 else v)
+    return out
+
+
+def _process_chunk(chunk: bytes, noise_est: NoiseFloorEstimator):
+    """Xử lý 1 chunk PCM16 → (chunk_mới|None, gated?).
+
+    Pipeline: high-pass → đo RMS → gate theo SNR → trả chunk đã lọc
+    (chưa AGC — AGC áp trong vòng lặp chính sau gate).
+    Dùng cho test; vòng lặp chính nội tuyến 3 lớp để tránh overhead.
+    """
+    import array as _array, math as _math
+    samples = _array.array("h")
+    samples.frombytes(chunk)
+    if not samples:
+        return None, True
+    samples = _array.array("h", [
+        int(max(-32768, min(32767, v * 32768)))
+        for v in map(_hp, (s / 32768.0 for s in samples))
+    ])
+    rms = _math.sqrt(sum(x * x for x in samples) / len(samples))
+    noise_est.update(rms)
+    if not noise_est.is_speech(rms):
+        return None, True
+    return samples.tobytes(), False
+
+
 def main():
     print(f"[WAKE] nạp model {MODEL_PATH} ...", flush=True)
     model = Model(MODEL_PATH)
@@ -129,6 +229,8 @@ def main():
 
     cooldown_until = 0.0
     _last_debug = 0.0
+    _gated = 0  # (13/11/2026) đếm chunk bị gate — báo cáo lọc tạp âm
+    _last_gate_report = 0.0
     while True:
         try:
             if proc is None or proc.poll() is not None:
@@ -156,28 +258,50 @@ def main():
                     time.sleep(2)
                 continue
 
-            # (31/10/2026) AGC: mic Jieli hẹp 30–50cm + tiếng xa rất yếu —
-            # normalize RMS mỗi chunk về mức mục tiêu 9000 (~-11dBFS), gain
-            # tối đa 8x, clip guard 32000. Tiếng to giữ nguyên, tiếng nhỏ kéo lên:
+            # (13/11/2026) LỌC TẠP ÂM 3 LỚP — owner yêu cầu lọc tạp âm + âm
+            # thanh môi trường (TV/nhạc/phòng): đo được mic chỉ RMS 130-205
+            # khi owner gọi xa, trong khi TV nền 122-147 → SNR≈0dB, Vosk
+            # transcribe TV chứ không nghe owner. Xử lý theo thứ tự:
+            #   Lớp 1: high-pass 1 bậc fc≈180Hz — cắt rumble/HVAC/TV-bass
+            #   Lớp 2: noise floor adaptive (percentile bám nền phòng)
+            #   Lớp 3: speech gate theo SNR + AGC gain max 24x (cũ 8x)
             try:
                 import struct as _struct, array as _array, math as _math
                 samples = _array.array("h")
                 samples.frombytes(chunk)
+
+                # Lớp 1: high-pass cắt trầm
+                samples = _array.array("h", [
+                    int(max(-32768, min(32767, v * 32768)))
+                    for v in map(_hp, (s / 32768.0 for s in samples))
+                ])
+
                 if samples:
                     _rms = _math.sqrt(
                         sum(x * x for x in samples) / len(samples))
-                    if _rms > 60:  # không khuếch đại tĩnh điện nền
-                        _gain = min(8.0, 9000.0 / max(_rms, 1))
-                    else:
-                        _gain = 1.0
+                    _noise.update(_rms)
+
+                    # Lớp 3a: speech gate — chunk chỉ toàn tạp âm thì bỏ,
+                    # không đưa Vosk (chặn TV/xe/nhạc transcribe nhầm).
+                    # Ngưỡng: RMS phải vượt noise floor × 2.2 (~7dB SNR)
+                    # và tuyệt đối > 90 (tĩnh điện) mới coi là tiếng nói.
+                    _speech_rms = max(_rms, 90.0)
+                    if _rms < max(90.0, _noise.level * 2.2):
+                        _gated += 1
+                        continue
+
+                    # Lớp 3b: AGC normalize về 9000 (~-11dBFS), gain tối đa
+                    # 24x (cũ 8x — mic Jieli xa nguồn chỉ RMS 130-205),
+                    # clip guard 32000:
+                    _gain = min(24.0, 9000.0 / max(_speech_rms, 1))
                     if _gain > 1.01:
                         for _i in range(len(samples)):
                             _v = int(samples[_i] * _gain)
                             samples[_i] = (32000 if _v > 32000
                                            else (-32000 if _v < -32000 else _v))
-                        chunk = samples.tobytes()
+                    chunk = samples.tobytes()
             except Exception:
-                pass  # AGC fail → dùng chunk gốc (vẫn nghe khi tiếng to)
+                pass  # lọc fail → dùng chunk gốc (vẫn nghe khi tiếng to)
 
             if recognizer.AcceptWaveform(chunk):
                 text = json.loads(recognizer.Result()).get("text", "").strip().lower()
@@ -186,8 +310,11 @@ def main():
 
             now = time.time()
             if text and now >= _last_debug + 5.0:
-                print(f"[WAKE-DBG] Vosk: '{text}'", flush=True)
+                # (13/11/2026) kèm thống kê gate + noise floor để owner audit
+                print(f"[WAKE-DBG] Vosk: '{text}' (gate {_gated} chunk, "
+                      f"floor {_noise.level:.0f})", flush=True)
                 _last_debug = now
+                _gated = 0
             if not text or now < cooldown_until:
                 continue
 

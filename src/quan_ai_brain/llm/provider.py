@@ -15,6 +15,20 @@ from typing import Any, Iterator
 
 NETMIND_CHAT_MODELS = (NETMIND_CHAT_MODEL, NETMIND_DEEP_REASONING_MODEL)
 
+
+# (13/11/2026, yêu cầu owner) LINH ĐỘNG ĐIỀU CHUYỂN MODEL CLOUD:
+# request.model là model cloud thì được nhận diện qua allow-list ĐỘNG của
+# provider (catalog live ∪ verified) — không còn bám cứng 2 ID cũ.
+def _is_netmind_model(netmind: "NetMindProvider | None", model: str) -> bool:
+    if netmind is None or not model:
+        return False
+    if model in NETMIND_CHAT_MODELS:
+        return True  # fast-path verified — không probe /models
+    try:
+        return model in netmind.get_dynamic_catalog()
+    except Exception:  # noqa: BLE001 — /models lỗi → fail-closed về verified
+        return False
+
 # (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG khi NetMind cloud chết:
 # chuỗi ưu tiên local — model suy luận 7B trước, rồi nhỏ, rồi llama/mistral.
 # Chỉ chọn model CÓ THẬT trong Ollama tại thời điểm fail (không đoán mò).
@@ -143,7 +157,7 @@ class LLMProvider:
         """
         if isinstance(request, str):
             request = LLMRequest(prompt=request, model=self.default_model, **kwargs)
-        if self.netmind is not None and request.model in NETMIND_CHAT_MODELS:
+        if self.netmind is not None and _is_netmind_model(self.netmind, request.model):
             buffered: list[dict[str, Any]] = []
             error_event: dict[str, Any] | None = None
             for event in self.netmind.stream_chat(request):
@@ -154,6 +168,31 @@ class LLMProvider:
             if error_event is None:
                 yield from buffered
                 return
+            # (13/11/2026, yêu cầu owner) FAILOVER CLOUD→CLOUD: model được chọn
+            # chết giữa dòng → thử model cloud KHÁC còn served (thứ tự ưu tiên
+            # tốc độ đã benchmark) TRƯỚC khi rớt local. Replay toàn bộ từ đầu
+            # trên model mới — delta cũ đã discard, không lặp nội dung.
+            for alt_model in self.netmind.cloud_failover_order(exclude=request.model):
+                alt_req = LLMRequest(
+                    prompt=request.prompt,
+                    system_prompt=request.system_prompt,
+                    model=alt_model,
+                    metadata=request.metadata,
+                )
+                alt_buffered: list[dict[str, Any]] = []
+                alt_error: dict[str, Any] | None = None
+                for event in self.netmind.stream_chat(alt_req):
+                    if event.get("type") == "error":
+                        alt_error = event
+                        break
+                    alt_buffered.append(event)
+                if alt_error is None and any(e.get("type") == "delta" for e in alt_buffered):
+                    yield {"type": "meta", "model": alt_model, "note": (
+                        f"FAILOVER CLOUD — '{request.model}' lỗi [{error_event.get('code')}], "
+                        f"chuyển sang model NetMind '{alt_model}'."
+                    )}
+                    yield from alt_buffered
+                    return
             # (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG LOCAL cho stream:
             # cloud chết giữa dòng → thử Ollama local trước khi báo error.
             if allow_fallback is None:
@@ -226,11 +265,36 @@ class LLMProvider:
         if self.fallback_mode == FallbackMode.ALWAYS_MOCK or request.model == "mock":
             return self.mock.generate(request)
 
-        # 0. NetMind cloud routing — only for exact verified catalog model IDs.
-        if self.netmind is not None and request.model in NETMIND_CHAT_MODELS:
+        # 0. NetMind cloud routing — (13/11/2026) allow-list ĐỘNG (catalog live).
+        if self.netmind is not None and _is_netmind_model(self.netmind, request.model):
             nm_resp = self.netmind.generate(request)
             if nm_resp.success:
                 return nm_resp
+            # (13/11/2026, yêu cầu owner) FAILOVER CLOUD→CLOUD: model chọn chết
+            # → thử model cloud KHÁC còn served theo thứ tự ưu tiên tốc độ ĐO
+            # ĐƯỢC, trước khi rớt local (local chỉ là phương án offline cuối).
+            cloud_failover_codes = {
+                "TIMEOUT", "CONNECTION_ERROR", "HTTP_429", "HTTP_500",
+                "HTTP_502", "HTTP_503", "HTTP_504", "EMPTY_CONTENT",
+                "STREAM_ENDED_WITHOUT_FINAL", "NOT_EVENT_STREAM",
+                "JSON_DECODE_ERROR", "INVALID_RESPONSE_TYPE",
+            }
+            if nm_resp.error_code in cloud_failover_codes:
+                for alt_model in self.netmind.cloud_failover_order(exclude=request.model):
+                    alt_req = LLMRequest(
+                        prompt=request.prompt,
+                        system_prompt=request.system_prompt,
+                        model=alt_model,
+                        metadata=request.metadata,
+                        timeout_seconds=request.timeout_seconds,
+                    )
+                    alt_resp = self.netmind.generate(alt_req)
+                    if alt_resp.success:
+                        alt_resp.warning = (
+                            f"FAILOVER CLOUD — '{request.model}' lỗi [{nm_resp.error_code}], "
+                            f"đã chuyển sang model NetMind '{alt_model}'."
+                        )
+                        return alt_resp
             # (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG LOCAL: cloud chết
             # → thử Ollama local trước khi chấp nhận mock. Provenance vẫn rõ.
             if fallback:

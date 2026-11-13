@@ -5722,16 +5722,6 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         )
 
         spoken = res.spoken_text or res.response_text
-        audio_b64 = None
-        try:
-            import base64
-            voice_id = str(body.get("voice_id", "vi-VN-HoaiMyNeural"))
-            audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(spoken, voice_id=voice_id)
-            if audio_bytes:
-                audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
-        except Exception:
-            pass
-
         timeline_dict = res.mouth_timeline
         if not timeline_dict:
             timeline_dict = _GLOBAL_MOUTH_SYNC.generate_timeline(
@@ -5743,6 +5733,49 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         # Update telemetry state and dispatch to Raspberry Pi 5 if connected
         _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "SPEAKING"
         _GLOBAL_EDGE_TELEMETRY["transcript"] = spoken
+
+        # (13/11/2026) TỐI ƯU TỐC ĐỘ PHẢN HỒI (owner: "tăng tốc độ tối đa"):
+        # Trước đây synthesize_audio chạy ĐỒNG BỘ tại đây — Edge-TTS cloud chậm/
+        # 403 khiến HTTP trả sau 4-18s (đo E2E 18.37s). Giờ: trả reply NGAY
+        # (has_audio:false), synth TTS NỀN trong thread; khi xong đẩy audio xuống
+        # Pi5 bằng POST /api/kiosk/control action=speak (kiosk.js poll 1s nhận
+        # pending_audio_base64). Dashboard muốn chờ audio sync vẫn truyền
+        # tts_wait=true (body).
+        audio_b64 = None
+        tts_wait = bool(body.get("tts_wait", False))
+        voice_id = str(body.get("voice_id", "vi-VN-HoaiMyNeural"))
+
+        def _tts_background() -> None:
+            try:
+                import base64 as _b64
+                audio_bytes_bg, _err = GLOBAL_TTS_MANAGER.synthesize_audio(
+                    spoken, voice_id=voice_id)
+                if not audio_bytes_bg:
+                    return
+                audio_b64_bg = _b64.b64encode(audio_bytes_bg).decode("ascii")
+                cmd_data_bg = {
+                    "action": "speak",
+                    "text": spoken,
+                    "state": "SPEAKING",
+                    "timeline": timeline_dict,
+                    "audio_base64": audio_b64_bg,
+                }
+                threading.Thread(
+                    target=_send_edge_request,
+                    args=("/api/kiosk/control", "POST", cmd_data_bg, 10.0),
+                    daemon=True,
+                ).start()
+            except Exception:
+                pass
+
+        if tts_wait:
+            try:
+                import base64
+                audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(spoken, voice_id=voice_id)
+                if audio_bytes:
+                    audio_b64 = base64.b64encode(audio_bytes).decode("ascii")
+            except Exception:
+                pass
 
         if audio_b64:
             cmd_data = {
@@ -5757,6 +5790,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 args=("/api/kiosk/control", "POST", cmd_data, 10.0),
                 daemon=True,
             ).start()
+        elif not tts_wait:
+            threading.Thread(target=_tts_background, daemon=True).start()
 
         self._send_json({
             "success": True,
@@ -5766,6 +5801,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             "spoken_text": spoken,
             "audio_base64": audio_b64,
             "has_audio": bool(audio_b64),
+            "tts_mode": "wait" if tts_wait else "background",
             "active_role": res.active_role,
             "state": res.state,
             "barge_in": res.barge_in_occurred,
@@ -6830,6 +6866,20 @@ def run_executive_server(port: int = 8766, open_browser: bool = True, host: str 
               f"{health_mon.cycle_sec:.0f}s, PC+Pi5, alert qua NetChat DM)")
     except Exception as _hm_exc:
         print(f"  [WARN] HealthMonitor khong khoi dong duoc: {_hm_exc}")
+
+    # (13/11/2026) TỐI ƯU TỐC ĐỘ PHẢN HỒI: pre-load piper TTS vào RAM NGAY LÚC
+    # start (thread nền ~5s) — câu TTS đầu tiên sau khi server sống là ~150ms
+    # thay vì chờ load model 5.2s + Edge 403 retry 6.2s (bottleneck đã đo).
+    def _tts_warm_up_thread() -> None:
+        try:
+            _res = GLOBAL_TTS_MANAGER.warm_up()
+            _ok = sum(1 for v in _res.values() if v)
+            print(f"  TTS warm-up: {_ok}/{len(_res)} piper voice da load RAM "
+                  f"({', '.join(k for k, v in _res.items() if v) or 'khong gi'})")
+        except Exception as _wu_exc:
+            print(f"  [WARN] TTS warm-up loi: {_wu_exc}")
+
+    threading.Thread(target=_tts_warm_up_thread, daemon=True).start()
 
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(local_url)).start()

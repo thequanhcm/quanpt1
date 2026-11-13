@@ -280,6 +280,14 @@ class TTSManager:
         self._piper_load_attempted: set[str] = set()
         # Backward-compat: code cũ truy cập _piper_voice sẽ thấy giọng vais1000
         self._piper_voice: Any | None = None
+        # (13/11/2026) TỐI ƯU TỐC ĐỘ (owner: "tăng tốc độ tối đa"):
+        # Edge-TTS cloud 403 InvalidResponse BỀN → mỗi câu trả lời chờ 2 attempts
+        # (~6.2s lãng phí) trước khi rớt piper. Circuit breaker: sau 2 lần 403
+        # liên tiếp, bỏ hẳn Edge trong 10 phút — piper local (~150ms) phục vụ ngay.
+        self._edge_403_streak: int = 0
+        self._edge_403_until: float = 0.0
+        self._EDGE_403_THRESHOLD = 2
+        self._EDGE_403_COOLDOWN_S = 600.0
         # (11/11/2026) Nạp lựa chọn giọng đã lưu (data/tts_preference.json)
         self.load_preference()
 
@@ -432,6 +440,21 @@ class TTSManager:
         self.config.connection_status = "CONNECTED"
         self.config.updated_at = time.time()
 
+    # (13/11/2026) TỐI ƯU TỐC ĐỘ: pre-load model piper vào RAM NGAY LÚC server
+    # start (background thread) thay vì load 5.2s tại câu TTS đầu tiên. Sau warm,
+    # mỗi câu ~150ms local, không phụ thuộc Edge cloud.
+    def warm_up(self) -> dict[str, bool]:
+        """Load sẵn các giọng piper VN vào RAM. Trả về {voice_id: loaded_ok}."""
+        results: dict[str, bool] = {}
+        for vid in ("piper-vi_VN-vais1000-medium", "piper-vi_VN-vivos-x_low"):
+            try:
+                if self._piper_voices.get(vid) is None:
+                    self._load_piper_voice(vid)
+                results[vid] = self._piper_voices.get(vid) is not None
+            except Exception:
+                results[vid] = False
+        return results
+
     def synthesize_audio(
         self,
         text: str,
@@ -539,12 +562,27 @@ class TTSManager:
         try:
             # (11/11/2026) ROUTE ĐÚNG GIỌNG: voice piper-* → piper local; voice
             # Edge (vi-VN-*) → Edge-TTS cloud. Không còn piper-first mù quáng.
+            # (13/11/2026) CIRCUIT BREAKER: Edge 403 bền (đo 13/11: mỗi câu chờ
+            # 2 attempts ~6.2s rồi mới rớt piper) → khi streak ≥ 2, skip Edge
+            # hoàn toàn trong cooldown 10 phút, piper phục vụ ngay (~150ms).
+            # Khi một voice Edge được yêu cầu mà breaker mở, piper cùng giới
+            # tính qua _fb_map vẫn phục vụ (khối fallback bên dưới).
+            _edge_breaker_open = (
+                self._edge_403_streak >= self._EDGE_403_THRESHOLD
+                and _time_mod() < self._edge_403_until
+            )
             _piper_key = target_voice_id if target_voice_id in self._PIPER_MODEL_FILES else None
             _active_piper = None
             if _piper_key is not None:
                 if self._piper_voices.get(_piper_key) is None:
                     self._load_piper_voice(_piper_key)
                 _active_piper = self._piper_voices.get(_piper_key)
+            elif _edge_breaker_open and target_voice_id in _EDGE_FALLBACK_MAP:
+                # Breaker mở + giọng Edge → dùng ngay piper thay thế (không chờ 403)
+                _fb_fast = _EDGE_FALLBACK_MAP[target_voice_id]
+                if self._piper_voices.get(_fb_fast) is None:
+                    self._load_piper_voice(_fb_fast)
+                _active_piper = self._piper_voices.get(_fb_fast)
             last_err = ""  # (11/11/2026) init trước — piper có thể bị skip hoàn toàn
             if _active_piper is not None:
                 import io as _io
@@ -577,9 +615,17 @@ class TTSManager:
         # fail tùy thời điểm). Retry tối đa 5 lần, backoff ngắn, trước khi bỏ.
         # (07/11/2026) CHỈ LÀM LAST RESORT: piper local đã phủ ở trên; Edge giờ
         # chỉ thử khi piper chưa sẵn sàng — 2 attempt, fail nhanh.
+        # (13/11/2026) CIRCUIT BREAKER: khi breaker mở (403 bền), bỏ hẳn khối
+        # Edge này — _active_piper đã được đặt qua _EDGE_FALLMAP ở trên.
         import time as _time
         last_err_edge: str = ""
-        for attempt in range(2):
+        _skip_edge = (
+            self._edge_403_streak >= self._EDGE_403_THRESHOLD
+            and _time.time() < self._edge_403_until
+        )
+        if _skip_edge:
+            last_err_edge = "Edge-TTS bị circuit breaker tạm bỏ (403 bền) — dùng piper local."
+        for attempt in range(2 if not _skip_edge else 0):
             try:
                 self.config.status = TTSStatus.SPEAKING.value
                 audio_bytes = _run_coroutine(_do_synth())
@@ -587,6 +633,9 @@ class TTSManager:
                     self.config.status = TTSStatus.READY.value
                     self.config.connection_status = "CONNECTED"
                     self.config.last_error = ""
+                    # (13/11/2026) Edge thành công → reset circuit breaker
+                    self._edge_403_streak = 0
+                    self._edge_403_until = 0.0
                     if len(self._audio_cache) > 100:
                         self._audio_cache.clear()
                     self._audio_cache[cache_key] = audio_bytes
@@ -594,6 +643,11 @@ class TTSManager:
                 last_err_edge = "Microsoft Edge TTS không trả về luồng âm thanh."
             except Exception as exc:
                 last_err_edge = f"Lỗi kết nối Microsoft Edge TTS: {exc}"
+                # (13/11/2026) 403 InvalidResponse = bền → đếm streak, mở breaker
+                if "403" in str(exc):
+                    self._edge_403_streak += 1
+                    if self._edge_403_streak >= self._EDGE_403_THRESHOLD:
+                        self._edge_403_until = _time.time() + self._EDGE_403_COOLDOWN_S
             if attempt < 1:
                 _time.sleep(0.3)
         # (11/11/2026) Cả Edge lẫn piper đều fail (hoặc piper bị skip) → báo lỗi
@@ -764,4 +818,17 @@ class TTSManager:
 
 # Global singleton instance for centralized configuration
 GLOBAL_TTS_MANAGER = TTSManager()
+
+
+# (13/11/2026) Ánh xạ giọng Edge → piper thay thế cùng giới tính (module-level
+# để circuit breaker 403 dùng nhanh không phải định nghĩa lại mỗi lần synth).
+_EDGE_FALLBACK_MAP: dict[str, str] = {
+    "vi-VN-HoaiMyNeural": "piper-vi_VN-vais1000-medium",
+    "vi-VN-NamMinhNeural": "piper-vi_VN-vivos-x_low",
+}
+
+
+def _time_mod() -> float:
+    import time as _t
+    return _t.time()
 

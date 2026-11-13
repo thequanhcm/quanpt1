@@ -37,6 +37,17 @@ class LLMRouter:
     DEFAULT_DEEP_MODEL = "Qwen/Qwen3.5-122B-A10B-FP8"
     LOCAL_REASONING_FALLBACK_MODEL = "qwen2.5:7b"
 
+    # (13/11/2026, yêu cầu owner) THỨ TỰ ƯU TIÊN CLOUD THEO TỐC ĐỘ ĐO 13/11:
+    # GLM-5.3-Flash 0.34s < MiniMax-M3 0.61s < Qwen3.6-35B 2.09s (probe thật).
+    # Router khi thấy nhiều model cloud trong available_models sẽ chọn theo thứ
+    # tự này cho tier fast/reasoning — gateway thêm model mới vẫn tự thích ứng
+    # qua available_models (model lạ được xếp sau các model đã benchmark).
+    CLOUD_SPEED_PRIORITY = (
+        "zai-org/GLM-5.3-Flash",
+        "MiniMax/MiniMax-M3",
+        "Qwen/Qwen3.6-35B-A3B-FP8",
+    )
+
     _COMPLEX_PATTERNS = [
         re.compile(r"(?i)\b(?:plan|planning|architecture|decompose|dag|algorithm|refactor|benchmark)\b"),
         re.compile(r"(?i)\b(?:lập kế hoạch|kế hoạch|phân tích|kiến trúc|chia nhỏ|thuật toán|đánh giá|suy luận sâu)\b"),
@@ -126,6 +137,18 @@ class LLMRouter:
         # 3. Model availability validation
         if available_models:
             if not self._is_model_present(target, available_models):
+                # (13/11/2026, yêu cầu owner) LINH ĐỘNG ĐIỀU CHUYỂN: target
+                # không có trong catalog live → chọn model cloud NHANH NHẤT
+                # CÒN SERVED theo CLOUD_SPEED_PRIORITY (đã benchmark), thay vì
+                # rớt thẳng local. Gateway đổi catalog → router tự theo.
+                for cand in self.CLOUD_SPEED_PRIORITY:
+                    if cand != target and self._is_model_present(cand, available_models):
+                        return RoutingDecision(
+                            model=cand,
+                            tier=tier,
+                            reason=f"Preferred {target} not in live catalog; switched to fastest available cloud model {cand} (speed benchmark)",
+                            is_fallback=True,
+                        )
                 # If fast model not available, try fallback fast or reasoning
                 if tier == "fast" and self._is_model_present(self.FALLBACK_FAST_MODEL, available_models):
                     return RoutingDecision(

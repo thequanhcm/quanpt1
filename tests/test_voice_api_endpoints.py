@@ -106,6 +106,8 @@ def test_voice_telemetry(voice_server_instance: str) -> None:
 
 
 def test_voice_interact_endpoint(voice_server_instance: str) -> None:
+    # (13/11/2026) Mặc định API trả reply NGAY (has_audio:false, TTS chạy nền —
+    # tối ưu tốc độ phản hồi). Test audio sync qua tts_wait=true.
     payload = {
         "query": "Hi TONY",
         "is_push_to_talk": False,
@@ -123,7 +125,29 @@ def test_voice_interact_endpoint(voice_server_instance: str) -> None:
         assert data["success"] is True
         assert "response_text" in data
         assert "spoken_text" in data
-        assert data["has_audio"] is True
-        assert data["audio_base64"] is not None
+        assert data["tts_mode"] == "background"
+        assert data["has_audio"] is False
         assert "mouth_timeline" in data
+
+    # Chế độ sync (dashboard cũ / client cần audio trong response):
+    payload_wait = {
+        "query": "Hi TONY",
+        "is_push_to_talk": False,
+        "tts_wait": True,
+    }
+    body_wait = json.dumps(payload_wait).encode("utf-8")
+    req_wait = urllib.request.Request(
+        f"{voice_server_instance}/api/voice/interact",
+        data=body_wait,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req_wait, timeout=15.0) as resp:
+        assert resp.status == 200
+        data_wait = json.loads(resp.read().decode("utf-8"))
+        assert data_wait["success"] is True
+        assert data_wait["tts_mode"] == "wait"
+        assert data_wait["has_audio"] is True
+        assert data_wait["audio_base64"] is not None
+        assert "mouth_timeline" in data_wait
 
