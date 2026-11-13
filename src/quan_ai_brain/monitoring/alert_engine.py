@@ -9,7 +9,16 @@ Nguyên tắc:
 - Fail-honest: lỗi gửi không được nuốt — ghi lại vào DB với sent=False.
 """
 from __future__ import annotations
+
+import json
+import sqlite3
+import threading
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+from quan_ai_brain.monitoring.health_state import CRITICAL, NORMAL, UNKNOWN, WARNING
 
 # (12/11/2026) Loader secret tập trung
 import sys as _sys

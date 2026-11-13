@@ -1042,6 +1042,25 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
     
     28/10/2026: Fix prompt card parsing - extract actual question from card text.
     """
+    # TASK-AGENTIC-SEC-1 Slice (a): Input Injection Shield trên DM (EchoLeak surface).
+    # DM từ owner là bề mặt tấn công số 1 (slide 8: email = untrusted input).
+    # BLOCK → trả lời lịch sự, KHÔNG đưa vào LLM, KHÔNG chạy lệnh hệ thống.
+    try:
+        import sys as _sys
+        _brain_src = str(Path(__file__).resolve().parent.parent / "src")
+        if _brain_src not in _sys.path:
+            _sys.path.insert(0, _brain_src)
+        from quan_ai_brain.security.input_shield import BLOCKED_REPLY, scan_input
+        _shield = scan_input(message_text, source="netchat_dm")
+        if _shield.blocked:
+            print(f"   🛡️ Input Shield BLOCK (score={_shield.score}): {_shield.matched[:3]}")
+            return BLOCKED_REPLY
+        if _shield.verdict.value == "SANITIZE":
+            print(f"   🛡️ Input Shield SANITIZE (score={_shield.score}): {_shield.matched[:3]}")
+            message_text = _shield.sanitized_text
+    except Exception as _shield_err:
+        print(f"   ⚠️ Input Shield error (fail-open, đi tiếp): {_shield_err}")
+
     # (28/10/2026) Fix: Extract actual question from prompt card
     # NetChat prompt cards may send text like "Trả lời câu hỏi này" after the question
     # We need to extract the actual question before such phrases

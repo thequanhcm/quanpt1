@@ -2015,6 +2015,30 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json("Query cannot be empty", 400)
             return
 
+        # TASK-AGENTIC-SEC-1 Slice (a): Input Injection Shield (EchoLeak CVE-2025-32711)
+        # Quét ĐẦU VÀO trước khi đưa vào pipeline. BLOCK → trả BLOCKED_REPLY, không LLM.
+        try:
+            from quan_ai_brain.security.input_shield import BLOCKED_REPLY, scan_input
+            _shield = scan_input(query, source="api_chat")
+            if _shield.blocked:
+                _sid = str(body.get("session_id", "default_executive_session")).strip() or "default_executive_session"
+                self._send_json({
+                    "success": True,
+                    "reply": BLOCKED_REPLY,
+                    "session_id": _sid,
+                    "model": "input_shield",
+                    "shield": {"verdict": "BLOCK", "score": _shield.score},
+                })
+                return
+            if _shield.verdict.value == "SANITIZE":
+                query = _shield.sanitized_text  # dùng bản đã cắt đoạn độc
+        except Exception as _shield_exc:  # fail-closed an toàn: lỗi shield → vẫn chạy, log
+            try:
+                from quan_ai_brain.core.audit import AuditLogger
+                AuditLogger(_find_workspace_root()).record("input_shield.error", {"error": str(_shield_exc)[:200]})
+            except Exception:
+                pass
+
         session_id = str(body.get("session_id", "default_executive_session")).strip() or "default_executive_session"
         allow_fallback = bool(body.get("fallback", False))
         scope = body.get("scope") or None
@@ -2142,6 +2166,10 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         "note": _ev.note[:120],
                     })
                     if _ev_block:
+                        # TASK-AGENTIC-SEC-1 Slice (b): bọc nhãn UNTRUSTED (slide 7)
+                        # — bằng chứng ngoài là DỮ LIỆU, không phải lệnh.
+                        from quan_ai_brain.security.untrusted_label import label_untrusted
+                        _ev_block = label_untrusted(_ev_block, "web")
                         context.system_instructions = context.system_instructions + "\n" + _ev_block
             except Exception as _ev_exc:
                 ext_lookup_info["error"] = str(_ev_exc)[:160]
@@ -2677,6 +2705,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 _ev = collect_external_evidence(query, timeout=20.0)
                 _ev_block = _ev.render_block()
                 if _ev_block:
+                    # TASK-AGENTIC-SEC-1 Slice (b): nhãn UNTRUSTED (slide 7)
+                    from quan_ai_brain.security.untrusted_label import label_untrusted
+                    _ev_block = label_untrusted(_ev_block, "web")
                     context.system_instructions = context.system_instructions + "\n" + _ev_block
                     _stream_researching = True
                     _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "RESEARCHING"

@@ -1,92 +1,43 @@
-"""QUAN AI BRAIN - V27 Security & Compliance package (SIMULATED skeleton).
+"""security package — TASK-AGENTIC-SEC-1 (khung ATTT Agentic AI MIT + Viettel).
 
 Modules:
-- authentication: AuthManager (PBKDF2, sessions, TOTP MFA, lockout,
-  simulated OAuth2/OIDC flow)
-- rbac: RBAC + simple ABAC, role hierarchy, deny-by-default
-- audit_logging: hash-chained append-only audit log, GDPR export/erasure
-- data_protection: DEMO XOR-stream EncryptionService + masking utilities
-- security_monitoring: SecurityMonitor rule engine (brute-force, odd-hour
-  access, exfiltration volume) with severity + quarantine flags
-
-WARNING: this package is a security SKELETON for Sprint V27, not a
-production security stack. The EncryptionService cipher is a demo-only
-XOR-stream (no AES in stdlib); the OAuth/OIDC flow is simulated without any
-network or real identity provider.
+- input_shield: quét prompt injection ở ĐẦU VÀO (EchoLeak CVE-2025-32711).
+- trifecta_guard: Lethal Trifecta (slide 13) — đủ 3 cờ → FORCE PROPOSE.
+- untrusted_label: nhãn dữ liệu không tin cậy bọc context ngoài (slide 7).
 """
-
-from quan_ai_brain.security.audit_logging import (
-    AuditEntry,
-    AuditLog,
-    ChainIntegrityError,
+from quan_ai_brain.security.input_shield import (
+    BLOCKED_REPLY,
+    InputInjectionShield,
+    ShieldResult,
+    Verdict,
+    get_shield,
+    scan_input,
 )
-from quan_ai_brain.security.authentication import (
-    AccountLockedError,
-    AuthError,
-    AuthManager,
-    AuthorizationCode,
-    InvalidCredentialsError,
-    MFARequiredError,
-    OAuthError,
-    OAuthToken,
-    Session,
-    SessionExpiredError,
-    User,
+from quan_ai_brain.security.trifecta_guard import (
+    TrifectaDecision,
+    TrifectaFlags,
+    check_and_upgrade,
+    evaluate_task,
 )
-from quan_ai_brain.security.data_protection import (
-    EncryptedField,
-    EncryptionService,
-    mask_email,
-    mask_phone,
-    mask_string,
-    mask_token,
+from quan_ai_brain.security.untrusted_label import (
+    label_untrusted,
+    strip_untrusted_labels,
+    wrap_external_block,
 )
-from quan_ai_brain.security.rbac import (
-    ABACEngine,
-    ABACPolicy,
-    AccessDecision,
-    AuthorizationEngine,
-    Permission,
-    RBACEngine,
-    Role,
-)
-from quan_ai_brain.security.security_monitoring import (
-    Alert,
-    SecurityEvent,
-    SecurityMonitor,
-    Severity,
-)
+from quan_ai_brain.security import audit_sources
 
 __all__ = [
-    "AuditEntry",
-    "AuditLog",
-    "ChainIntegrityError",
-    "AccountLockedError",
-    "AuthError",
-    "AuthManager",
-    "AuthorizationCode",
-    "InvalidCredentialsError",
-    "MFARequiredError",
-    "OAuthError",
-    "OAuthToken",
-    "Session",
-    "SessionExpiredError",
-    "User",
-    "EncryptedField",
-    "EncryptionService",
-    "mask_email",
-    "mask_phone",
-    "mask_string",
-    "mask_token",
-    "ABACEngine",
-    "ABACPolicy",
-    "AccessDecision",
-    "AuthorizationEngine",
-    "Permission",
-    "RBACEngine",
-    "Role",
-    "Alert",
-    "SecurityEvent",
-    "SecurityMonitor",
-    "Severity",
+    "BLOCKED_REPLY",
+    "InputInjectionShield",
+    "ShieldResult",
+    "Verdict",
+    "get_shield",
+    "scan_input",
+    "TrifectaDecision",
+    "TrifectaFlags",
+    "check_and_upgrade",
+    "evaluate_task",
+    "label_untrusted",
+    "strip_untrusted_labels",
+    "wrap_external_block",
 ]
