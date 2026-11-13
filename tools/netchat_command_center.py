@@ -1798,6 +1798,17 @@ def handle_voice_record(payload: dict[str, Any] | None = None) -> str:
                 "• Hành động tiếp theo: kiểm tra mic mặc định trong Windows Settings → Sound.")
 
     reply_prefix = f"🎙️ Đang ghi âm {duration}s từ mic PC... (bắt đầu)"
+    # (13/11/2026) Owner feedback: đợi 60s + STT ~65s mà không thấy gì thì tưởng
+    # CHERRY không phản hồi → gửi tin XÁC NHẬN NGAY khi bắt đầu ghi âm. Fail-honest:
+    # gửi lỗi → vẫn chạy pipeline, chỉ thiếu tin tiến độ.
+    try:
+        from quan_ai_brain.integration import netchat_bridge as _nb2
+        _OWNER_DM_CHANNEL = "mwp3nk3ciprjjr4hdmcoqgk6jr"  # DM bot_tony
+        _nb2.send_message(_OWNER_DM_CHANNEL,
+            f"🎙️ Em đang ghi âm {duration}s từ mic PC (xong ghi + nhận diện ~{duration + 70}s "
+            "sẽ gửi tóm tắt nhé anh)...")
+    except Exception:
+        pass  # không chặn pipeline ghi âm
     try:
         _time.sleep(duration)
     finally:
