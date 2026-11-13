@@ -123,6 +123,19 @@ class NetChatApprovalAdapter:
     _PLAIN_APPROVE = re.compile(r"^\s*(duyệt|phe duyet|duyet|đồng ý|dong y|approved|ok anh|ok)\s*[.!]?\s*$", re.IGNORECASE)
     _PLAIN_REJECT = re.compile(r"^\s*(từ chối|tu choi|reject|ko duyệt|khong duyet|không duyệt)\s*[.!]?\s*$", re.IGNORECASE)
     _PLAIN_DETAIL = re.compile(r"^\s*(chi tiết|chi tiet|detail)\s*[.!]?\s*$", re.IGNORECASE)
+    # (13/11/2026) Câu hỏi tự nhiên về hồ sơ có mã TASK: "A đang hỏi chi tiết
+    # thông báo này", "thông báo này là gì", "card này nghĩa sao"... — trước đây
+    # parse() chỉ nhận tin BẮT ĐẦU bằng động từ → trả sai "CHƯA HIỂU LỆNH".
+    _QUESTION_HINT = re.compile(
+        r"(hỏi|chi tiết|chi tiet|nghĩa|là gì|la gi|gì|gi|kể|giải thích|thế nào|"
+        r"như thế nào|bao giờ|hạn|trạng thái|status|thông báo|nội dung|what|\?)",
+        re.IGNORECASE,
+    )
+    # Động từ HÀNH ĐỘNG phải ưu tiên trước (approve/reject/amend) — câu hỏi
+    # KHÔNG được ăn vào các intent thay đổi trạng thái.
+    _Q_APPROVE_HINT = re.compile(r"(\bduyệt\b|\bduyet\b|approve|đồng ý|dong y|ok duyệt)", re.IGNORECASE)
+    _Q_REJECT_HINT = re.compile(r"(từ chối|tu choi|reject)", re.IGNORECASE)
+    _Q_AMEND_HINT = re.compile(r"(sửa|sua|đổi phương án|doi phuong an|amend)", re.IGNORECASE)
 
     def parse(self, text: str) -> dict[str, Any]:
         """Trả về action: approve|reject|amend|detail|list|unknown + task_code."""
@@ -141,6 +154,20 @@ class NetChatApprovalAdapter:
                 guidance = t.split(":", 1)[1].strip() if ":" in t else ""
                 return {"action": "amend", "task_code": code, "guidance": guidance}
             if low.startswith(("chi tiết", "chi tiet", "detail")):
+                return {"action": "detail", "task_code": code}
+            # (13/11/2026) Tin có mã TASK nhưng KHÔNG bắt đầu bằng động từ:
+            # nếu là CÂU HỎI tự nhiên về hồ sơ ("A đang hỏi chi tiết thông báo
+            # này", "thông báo này là gì?") → coi như CHI TIẾT (chỉ đọc, an toàn).
+            # Nếu chứa động từ thay đổi trạng thái ở giữa câu → vẫn giữ intent đó.
+            if self._Q_REJECT_HINT.search(low):
+                reason = t.split(":", 1)[1].strip() if ":" in t else "Không nêu lý do"
+                return {"action": "reject", "task_code": code, "reason": reason}
+            if self._Q_AMEND_HINT.search(low):
+                guidance = t.split(":", 1)[1].strip() if ":" in t else ""
+                return {"action": "amend", "task_code": code, "guidance": guidance}
+            if self._Q_APPROVE_HINT.search(low):
+                return {"action": "approve", "task_code": code}
+            if self._QUESTION_HINT.search(low):
                 return {"action": "detail", "task_code": code}
             return {"action": "unknown", "task_code": code}
         # lệnh trần không có mã

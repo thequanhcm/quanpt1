@@ -232,11 +232,20 @@ def test_non_command_returns_empty(adapter):
     assert adapter.handle_owner_message("Xin chào bot", sender_user_id=TEST_OWNER_UID, post=False) == ""
 
 
-def test_chat_with_task_code_but_no_verb_is_unknown_explained(adapter, card_store):
-    _mk_card(card_store, "TASK-QQQ0001")
+def test_chat_with_task_code_but_no_verb_now_returns_detail(tmp_path):
+    """(13/11/2026) THAY ĐỔI HÀNH VI theo yêu cầu owner: câu hỏi tự nhiên có mã
+    TASK ('TASK-QQQ0001 là gì vậy anh?') giờ trả CHI TIẾT hồ sơ thay vì
+    'CHƯA HIỂU LỆNH' — owner gặp bot trả '❓ CHƯA HIỂU LỆNH' cho câu hỏi
+    'A đang hỏi chi tiết thông báo này' (screenshot 13/11) và yêu cầu sửa."""
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    store = ApprovalCardStore(ws / "data" / "governance.db", workspace=ws)
+    adapter = NetChatApprovalAdapter(governance_db=store.db_path)
+    _mk_card(store, "TASK-QQQ0001")
     reply = adapter.handle_owner_message("TASK-QQQ0001 là gì vậy anh?", sender_user_id=TEST_OWNER_UID, post=False)
-    assert "CHƯA HIỂU LỆNH" in reply
+    assert "CHƯA HIỂU LỆNH" not in reply
     assert "TASK-QQQ0001" in reply
+    assert "CHI TIẾT HỒ SƠ" in reply  # chỉ đọc, an toàn
 
 
 # ---------------------------------------------------------------------------

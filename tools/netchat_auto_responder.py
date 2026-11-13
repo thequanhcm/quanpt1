@@ -483,6 +483,37 @@ PENDING_FILES_TTL_MS = 30 * 60 * 1000  # ảnh chờ mô tả tối đa 30 phút
 DESC_BEFORE_WINDOW_MS = 2 * 60 * 1000  # mô tả gửi TRƯỚC ảnh: ghép trong 2 phút
 
 
+def _save_bot_broadcast(text: str) -> None:
+    """(13/11/2026) Lưu tin bot TỰ GỬI gần nhất (báo cáo, PR, alert...).
+
+    Bot gửi tin chủ động KHÔNG qua process_message_with_ai → không vào
+    conversation_state → owner hỏi lại ("PR là dự án mới ah") thì GLM mất
+    ngữ cảnh nội dung bot vừa báo. File data/last_bot_broadcast.txt giữ
+    (ts, text) để build query có ngữ cảnh.
+    """
+    try:
+        p = Path(_BRAIN_ROOT) / "data" / "last_bot_broadcast.txt"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"{time.time()}\n{text[:3000]}", encoding="utf-8")
+    except Exception:
+        pass  # fail-honest: mất file không giết responder
+
+
+def _load_bot_broadcast(max_age_sec: float = 3600.0) -> str:
+    """Trả text broadcast gần nhất nếu còn hạn (mặc định 60 phút), rỗng nếu không."""
+    try:
+        p = Path(_BRAIN_ROOT) / "data" / "last_bot_broadcast.txt"
+        if not p.exists():
+            return ""
+        raw = p.read_text(encoding="utf-8").split("\n", 1)
+        ts = float(raw[0] or 0)
+        if time.time() - ts > max_age_sec:
+            return ""
+        return (raw[1] if len(raw) > 1 else "").strip()
+    except Exception:
+        return ""
+
+
 def _load_pending_files() -> list[dict]:
     """Đọc danh sách ảnh đang chờ lời mô tả từ state JSON (sống sót qua restart)."""
     try:
@@ -1172,6 +1203,27 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
             print("   💬 M5-C: bọc ngữ cảnh lượt trước cho câu hỏi nối (anaphora).")
     except Exception as _e:
         print(f"   ⚠️ M5-C context wrap error (đi tiếp): {_e}")
+    # (13/11/2026) Bot-context: owner hỏi về nội dung bot TỰ GỬI ("PR là dự án
+    # mới ah" ngay sau khi bot báo PR #27) — conversation_state không có lượt
+    # đó (bot gửi chủ động ≠ trả lời). Nếu query nhắc từ khóa tham chiếu broadcast
+    # → bọc nội dung bot vừa gửi vào query cho GLM.
+    try:
+        _bc = _load_bot_broadcast()
+        if _bc:
+            import re as _re
+            _ref = _re.search(
+                r"\b(PR\s*#?\d*|pull request|thông báo|thong bao|báo cáo|bao cao|"
+                r"tin vừa|tin trên|tin này|cái vừa|notification|alert)\b",
+                message_text, _re.IGNORECASE)
+            if _ref and _bc[:300] not in _dm_query:
+                _dm_query = (f"[Ngữ cảnh: tin em TỰ GỬI cho anh gần nhất bên dưới. "
+                             f"Nếu câu hỏi nói về nó thì dựa vào đây trả lời; nếu không "
+                             f"liên quan thì trả lời bình thường.\n"
+                             f"--- TIN EM GỬI GẦN NHẤT ---\n{_bc[:2500]}\n"
+                             f"--- CÂU HỎI CỦA ANH ---\n{message_text}]")
+                print(f"   💬 Bot-context: bọc broadcast cho tham chiếu '{_ref.group(1)}'.")
+    except Exception as _e:
+        print(f"   ⚠️ Bot-context error (đi tiếp): {_e}")
 
     ai_reply = process_message_with_ai(_dm_query)
     autorun = _maybe_autorun_probe(ai_reply)
@@ -1386,6 +1438,10 @@ def main():
                     ).astimezone().strftime("%H:%M")
                     _prefixed = f"↩️ Trả lời tin \"{_quote}\" ({_when}):\n{response}"
                     result = send_message(_prefixed, target_channel=_target_channel_for(msg))
+                    # (13/11/2026) Ghi tin vừa gửi vào broadcast context (FIX mất
+                    # ngữ cảnh khi owner hỏi lại về nội dung bot báo).
+                    if isinstance(result, dict) and "error" not in result:
+                        _save_bot_broadcast(f"↩️ Trả lời tin \"{_quote}\": {response[:2000]}")
                     if "error" in result:
                         print(f"   ❌ Error: {result['error']}")
                     else:
