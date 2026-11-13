@@ -138,6 +138,24 @@ class DigitalHumanAvatar {
         browLift: 6.0, browTilt: 0.0, browInward: 0.0, browAsymmetric: 0.0,
         eyeSquint: -0.15, gazeX: 0.0, gazeY: 0.8, glintPulse: 1.6, smileBoost: 0.0,
       },
+
+      // ===== 4 TÔNG ĐỒNG BỘ TỪ PC DASHBOARD (14/11, sprint sync_1314) =====
+      APOLOGETIC: {
+        browLift: -1.8, browTilt: 2.6, browInward: 2.2, browAsymmetric: 1.6,
+        eyeSquint: 0.30, gazeX: 0.0, gazeY: 1.2, glintPulse: 0.90, smileBoost: -0.10,
+      },
+      CURIOUS: {
+        browLift: 4.8, browTilt: 3.6, browInward: 0.0, browAsymmetric: 3.4,
+        eyeSquint: 0.12, gazeX: 1.2, gazeY: 0.8, glintPulse: 1.45, smileBoost: 0.18,
+      },
+      PATIENT_WAITING: {
+        browLift: 1.2, browTilt: 1.0, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: 0.25, gazeX: 0.0, gazeY: 0.3, glintPulse: 1.10, smileBoost: 0.12,
+      },
+      PROUD: {
+        browLift: 3.0, browTilt: 0.8, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: 0.45, gazeX: 0.0, gazeY: -0.4, glintPulse: 1.55, smileBoost: 0.38,
+      },
     };
 
     // State configurations (Standard 12-State Digital Human Protocol)
@@ -160,6 +178,12 @@ class DigitalHumanAvatar {
       OFFLINE: { name: "OFFLINE (MẤT KẾT NỐI)", auraColor: "#64748b", haloSpeed: 0.0, eyes: "closed", smile: "closed", defaultTone: "NEUTRAL" },
       RECONNECTING: { name: "RECONNECTING (KẾT NỐI LẠI)", auraColor: "#0284c7", haloSpeed: 0.09, eyes: "open", smile: "natural", symbol: "🔄", defaultTone: "NEUTRAL" },
       SLEEPING: { name: "SLEEPING (TẠM NGHỈ)", auraColor: "#475569", haloSpeed: 0.008, eyes: "closed", smile: "closed", symbol: "💤", defaultTone: "NEUTRAL" },
+
+      // ===== 4 STATE ĐỒNG BỘ TỪ PC DASHBOARD 22-STATE (14/11, sprint sync_1314) =====
+      APOLOGETIC: { name: "APOLOGETIC (XIN LỖI)", auraColor: "#94a3b8", haloSpeed: 0.025, eyes: "open", smile: "closed", symbol: "🙏", defaultTone: "APOLOGETIC" },
+      CURIOUS: { name: "CURIOUS (TÒ MÒ)", auraColor: "#0ea5e9", haloSpeed: 0.055, eyes: "thinking", smile: "natural", symbol: "🤔", defaultTone: "CURIOUS" },
+      PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#f59e0b", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
+      SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#8b5cf6", haloSpeed: 0.10, eyes: "open", smile: "neutral", symbol: "😯", defaultTone: "SURPRISED" },
     };
 
     this._loadAssets();
@@ -299,6 +323,12 @@ class DigitalHumanAvatar {
       lower = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
     } catch (_) {}
 
+    // 0. (14/11 sync_1314) Apology rõ ràng → đồng cảm trước — khớp PC dashboard:
+    // "xin lỗi anh, em gặp sự cố" là lời xin lỗi, không phải cảnh báo
+    if (/xin loi|chia buon|rat tiec|dang tiec|gay phien/.test(lower)) {
+      return "APOLOGETIC";
+    }
+
     // 1. Alert / Warning / Safety Block / Prohibited
     if (/canh bao|chuy|luu y|nguy hiem|rui ro|khong duoc|chan|that bai|loi |bi loi|bat thuong|su co|dung |khan cap|nghiem cam/.test(lower)) {
       return "SERIOUS_ALERT";
@@ -327,6 +357,16 @@ class DigitalHumanAvatar {
     // 5. Warm Greeting / Politeness / Readiness
     if (/chao|xin chao|da |vang |rat vui|han hanh|san sang|chuc|em day|em nghe|tuyet voi|cam on/.test(lower)) {
       return "WARM_GREETING";
+    }
+
+    // 7. (14/11 sync_1314) Curiosity — khớp PC dashboard
+    if (/tai sao|nhu the nao|the nao|lam sao|giai thich|cho em hoi|thac mac|to mo|muon biet|hoi anh|cau hoi/.test(lower)) {
+      return "CURIOUS";
+    }
+
+    // 9. (14/11 sync_1314) Pride — khớp PC dashboard
+    if (/tu hao|cai thien|tien bo|toi uu|nang cap|hoan thien|phat trien|nhat quan|on dinh|hoc duoc|nam bat/.test(lower)) {
+      return "PROUD";
     }
 
     return "NEUTRAL";
@@ -611,20 +651,25 @@ class DigitalHumanAvatar {
       baseImg = this.assets.portrait_thinking;
       usedFullThinking = true;
       isSpecialExpression = true;
-    } else if ((this.state === "HAPPY" || this.state === "SUCCESS" || this.state === "LEARNING" || this.activeEmotionTone === "CONFIDENT_SUCCESS") && this.assets.portrait_happy && this.assets.portrait_happy.complete && this.assets.portrait_happy.naturalWidth > 0) {
+    } else if ((this.state === "HAPPY" || this.state === "SUCCESS" || this.state === "LEARNING" || this.state === "PROUD" || this.activeEmotionTone === "CONFIDENT_SUCCESS") && this.assets.portrait_happy && this.assets.portrait_happy.complete && this.assets.portrait_happy.naturalWidth > 0) {
       baseImg = this.assets.portrait_happy;
       isSpecialExpression = true;
     } else if (this.state === "EMPATHETIC" && this.assets.portrait_empathic && this.assets.portrait_empathic.complete && this.assets.portrait_empathic.naturalWidth > 0) {
       baseImg = this.assets.portrait_empathic;
       isSpecialExpression = true;
-    } else if ((this.state === "CONFUSED" || this.state === "WAITING_FOR_OWNER" || this.activeEmotionTone === "CONSULTATIVE_INQUIRING") && this.assets.portrait_confused && this.assets.portrait_confused.complete && this.assets.portrait_confused.naturalWidth > 0) {
+    } else if ((this.state === "APOLOGETIC" || this.activeEmotionTone === "APOLOGETIC") && this.assets.portrait_empathic && this.assets.portrait_empathic.complete && this.assets.portrait_empathic.naturalWidth > 0) {
+      // (14/11 sync_1314) APOLOGETIC: ánh mắt dịu của empathic + tông APOLOGETIC
+      baseImg = this.assets.portrait_empathic;
+      isSpecialExpression = true;
+    } else if ((this.state === "CONFUSED" || this.state === "WAITING_FOR_OWNER" || this.state === "CURIOUS" || this.activeEmotionTone === "CONSULTATIVE_INQUIRING") && this.assets.portrait_confused && this.assets.portrait_confused.complete && this.assets.portrait_confused.naturalWidth > 0) {
       baseImg = this.assets.portrait_confused;
       isSpecialExpression = true;
     } else if ((this.state === "WARNING" || this.state === "BLOCKED" || this.activeEmotionTone === "SERIOUS_ALERT") && this.assets.portrait_warning && this.assets.portrait_warning.complete && this.assets.portrait_warning.naturalWidth > 0) {
       baseImg = this.assets.portrait_warning;
       isSpecialExpression = true;
-    } else if (this.activeEmotionTone === "SURPRISED" && this.assets.portrait_surprised && this.assets.portrait_surprised.complete && this.assets.portrait_surprised.naturalWidth > 0) {
+    } else if ((this.state === "SURPRISED" || this.activeEmotionTone === "SURPRISED") && this.assets.portrait_surprised && this.assets.portrait_surprised.complete && this.assets.portrait_surprised.naturalWidth > 0) {
       // (06/11/2026) SURPRISED: dùng đúng asset portrait_surprised vốn bỏ không
+      // (14/11 sync_1314) + state SURPRISED (PC 22-state) cùng dùng asset này
       baseImg = this.assets.portrait_surprised;
       isSpecialExpression = true;
     } else if (this.state === "ERROR" && this.assets.portrait_error && this.assets.portrait_error.complete && this.assets.portrait_error.naturalWidth > 0) {
