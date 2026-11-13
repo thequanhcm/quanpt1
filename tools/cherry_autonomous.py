@@ -23,13 +23,25 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 STATE_PATH = WORKSPACE / "data" / "cherry_autonomous_state.json"
 LOG_PATH = WORKSPACE / "logs" / "cherry_autonomous.log"
 NETCHAT_PY = r"C:/Users/DELL/AppData/Local/netmind_desktop/skills/bot-netchat/netchat_bot.py"
 NETCHAT_VENV = r"E:/BRAIN/.venv/Scripts/python.exe"
-DM_CHANNEL = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+DM_CHANNEL = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 
 HEALTH_URL = "http://127.0.0.1:8765/api/health"
 EXEC_URL = "http://127.0.0.1:8766/"
@@ -281,6 +293,7 @@ def main() -> None:
         except Exception:
             _log("cycle CRASH:\n" + traceback.format_exc())
         time.sleep(300)
+
 
 
 if __name__ == "__main__":

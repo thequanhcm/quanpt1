@@ -1,0 +1,8 @@
+# Tất cả file trong folder này chứa secret — KHÔNG commit
+# NGOẠI TRỪ: loader.py, README.md, INVENTORY.md, .gitignore, load_env.bat
+*
+!loader.py
+!README.md
+!INVENTORY.md
+!.gitignore
+!load_env.bat

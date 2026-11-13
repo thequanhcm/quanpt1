@@ -23,6 +23,15 @@ from quan_ai_brain.cognition.information_gap_analyzer import (  # noqa: E402
 )
 from quan_ai_brain.governance import netchat_info_gap_adapter as adapter  # noqa: E402
 
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+from pathlib import Path
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+TEST_OWNER_UID = _get_secret('netchat_owner_user_id', '3b1ughs36i8e9p46im8opnms8w')
+
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
@@ -73,7 +82,7 @@ def test_has_waiting_task_false_after_resolved(isolated_db):
 def test_reply_updates_waiting_task(isolated_db):
     _seed_waiting(isolated_db)
     reply = adapter.handle_owner_info_reply(
-        "TASK-RT01 link là https://noibo.viettel.vn", sender_user_id="3b1ughs36i8e9p46im8opnms8w"
+        "TASK-RT01 link là https://noibo.viettel.vn", sender_user_id=TEST_OWNER_UID
     )
     assert reply is not None
     assert "KHÔNG PHẢI phê duyệt" in reply

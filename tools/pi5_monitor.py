@@ -25,6 +25,18 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 STATE_PATH = WORKSPACE / "data" / "pi5_monitor_state.json"
@@ -93,7 +105,7 @@ def notify_owner(msg: str) -> bool:
     """Gửi DM NetChat qua bot script (2 bước token). Best effort."""
     try:
         bot = r"C:/Users/DELL/AppData/Local/netmind_desktop/skills/bot-netchat/netchat_bot.py"
-        dm_id = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+        dm_id = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
         py = r"E:/BRAIN/.venv/Scripts/python.exe"
         base = [py, bot, "send", dm_id, msg]
         r1 = subprocess.run(base, capture_output=True, text=True, timeout=45)
@@ -110,6 +122,7 @@ def notify_owner(msg: str) -> bool:
     except Exception as exc:
         log(f"notify_owner error: {exc}")
         return False
+
 
 
 def should_dm(state: dict, new_state: str) -> bool:

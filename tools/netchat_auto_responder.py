@@ -16,6 +16,18 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 # (01/11/2026) FIX P0 ROOT-CAUSE — "Command router error: No module named
 # 'tools.netchat_command_center'": khi responder được spawn thừa hưởng
@@ -156,15 +168,15 @@ Anh muốn em giải thích chi tiết phần nào ạ?"""
 
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"  # kênh 'Trợ lý Tony Pham' (đã sửa typo c→x)
+CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader, fallback cũ
 # (31/10/2026) DM bot↔quanpt1: owner trả lời trong DM nhưng responder cũ chỉ
 # đọc kênh → tin DM bị bỏ qua (sự cố 01:42: 'Chào em' trong DM không được trả lời).
 # Giờ responder theo dõi CẢ HAI nguồn và trả lời đúng nơi owner nhắn.
-DM_CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+DM_CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 OWNER_USERNAME = "quanpt1"
 CHANNEL_NAME = "Trợ lý Tony Pham"  # (07/11) TÊN KÊNH API THẬT trên NetChat — CHỈ đổi khi owner đổi tên kênh phía NetChat; CHERRY = tên trợ lý, không phải tên kênh.
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
-BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
+BOT_USER_ID = _get_secret("netchat_bot_user_id", "66opztx9ut8rjxny555xhj84je")  # (12/11) loader
 CATCHUP_WINDOW_MIN = 720  # (01/11/2026, owner) sau restart/treo: quét lại TẤT CẢ
 # tin anh gửi trong 12 giờ qua chưa được trả lời — không bỏ lỡ tin nào.
 # (27/10/2026) Chống trả lời trùng sau restart: lưu các message_id ĐÃ trả lời
@@ -469,6 +481,37 @@ def extract_message_files(msg: dict) -> str:
 #   đang chờ — lệnh phải thực thi ngay, không kéo vào luồng AI.
 PENDING_FILES_TTL_MS = 30 * 60 * 1000  # ảnh chờ mô tả tối đa 30 phút
 DESC_BEFORE_WINDOW_MS = 2 * 60 * 1000  # mô tả gửi TRƯỚC ảnh: ghép trong 2 phút
+
+
+def _save_bot_broadcast(text: str) -> None:
+    """(13/11/2026) Lưu tin bot TỰ GỬI gần nhất (báo cáo, PR, alert...).
+
+    Bot gửi tin chủ động KHÔNG qua process_message_with_ai → không vào
+    conversation_state → owner hỏi lại ("PR là dự án mới ah") thì GLM mất
+    ngữ cảnh nội dung bot vừa báo. File data/last_bot_broadcast.txt giữ
+    (ts, text) để build query có ngữ cảnh.
+    """
+    try:
+        p = Path(_BRAIN_ROOT) / "data" / "last_bot_broadcast.txt"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"{time.time()}\n{text[:3000]}", encoding="utf-8")
+    except Exception:
+        pass  # fail-honest: mất file không giết responder
+
+
+def _load_bot_broadcast(max_age_sec: float = 3600.0) -> str:
+    """Trả text broadcast gần nhất nếu còn hạn (mặc định 60 phút), rỗng nếu không."""
+    try:
+        p = Path(_BRAIN_ROOT) / "data" / "last_bot_broadcast.txt"
+        if not p.exists():
+            return ""
+        raw = p.read_text(encoding="utf-8").split("\n", 1)
+        ts = float(raw[0] or 0)
+        if time.time() - ts > max_age_sec:
+            return ""
+        return (raw[1] if len(raw) > 1 else "").strip()
+    except Exception:
+        return ""
 
 
 def _load_pending_files() -> list[dict]:
@@ -1030,6 +1073,25 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
     
     28/10/2026: Fix prompt card parsing - extract actual question from card text.
     """
+    # TASK-AGENTIC-SEC-1 Slice (a): Input Injection Shield trên DM (EchoLeak surface).
+    # DM từ owner là bề mặt tấn công số 1 (slide 8: email = untrusted input).
+    # BLOCK → trả lời lịch sự, KHÔNG đưa vào LLM, KHÔNG chạy lệnh hệ thống.
+    try:
+        import sys as _sys
+        _brain_src = str(Path(__file__).resolve().parent.parent / "src")
+        if _brain_src not in _sys.path:
+            _sys.path.insert(0, _brain_src)
+        from quan_ai_brain.security.input_shield import BLOCKED_REPLY, scan_input
+        _shield = scan_input(message_text, source="netchat_dm")
+        if _shield.blocked:
+            print(f"   🛡️ Input Shield BLOCK (score={_shield.score}): {_shield.matched[:3]}")
+            return BLOCKED_REPLY
+        if _shield.verdict.value == "SANITIZE":
+            print(f"   🛡️ Input Shield SANITIZE (score={_shield.score}): {_shield.matched[:3]}")
+            message_text = _shield.sanitized_text
+    except Exception as _shield_err:
+        print(f"   ⚠️ Input Shield error (fail-open, đi tiếp): {_shield_err}")
+
     # (28/10/2026) Fix: Extract actual question from prompt card
     # NetChat prompt cards may send text like "Trả lời câu hỏi này" after the question
     # We need to extract the actual question before such phrases
@@ -1141,6 +1203,27 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
             print("   💬 M5-C: bọc ngữ cảnh lượt trước cho câu hỏi nối (anaphora).")
     except Exception as _e:
         print(f"   ⚠️ M5-C context wrap error (đi tiếp): {_e}")
+    # (13/11/2026) Bot-context: owner hỏi về nội dung bot TỰ GỬI ("PR là dự án
+    # mới ah" ngay sau khi bot báo PR #27) — conversation_state không có lượt
+    # đó (bot gửi chủ động ≠ trả lời). Nếu query nhắc từ khóa tham chiếu broadcast
+    # → bọc nội dung bot vừa gửi vào query cho GLM.
+    try:
+        _bc = _load_bot_broadcast()
+        if _bc:
+            import re as _re
+            _ref = _re.search(
+                r"\b(PR\s*#?\d*|pull request|thông báo|thong bao|báo cáo|bao cao|"
+                r"tin vừa|tin trên|tin này|cái vừa|notification|alert)\b",
+                message_text, _re.IGNORECASE)
+            if _ref and _bc[:300] not in _dm_query:
+                _dm_query = (f"[Ngữ cảnh: tin em TỰ GỬI cho anh gần nhất bên dưới. "
+                             f"Nếu câu hỏi nói về nó thì dựa vào đây trả lời; nếu không "
+                             f"liên quan thì trả lời bình thường.\n"
+                             f"--- TIN EM GỬI GẦN NHẤT ---\n{_bc[:2500]}\n"
+                             f"--- CÂU HỎI CỦA ANH ---\n{message_text}]")
+                print(f"   💬 Bot-context: bọc broadcast cho tham chiếu '{_ref.group(1)}'.")
+    except Exception as _e:
+        print(f"   ⚠️ Bot-context error (đi tiếp): {_e}")
 
     ai_reply = process_message_with_ai(_dm_query)
     autorun = _maybe_autorun_probe(ai_reply)
@@ -1355,6 +1438,10 @@ def main():
                     ).astimezone().strftime("%H:%M")
                     _prefixed = f"↩️ Trả lời tin \"{_quote}\" ({_when}):\n{response}"
                     result = send_message(_prefixed, target_channel=_target_channel_for(msg))
+                    # (13/11/2026) Ghi tin vừa gửi vào broadcast context (FIX mất
+                    # ngữ cảnh khi owner hỏi lại về nội dung bot báo).
+                    if isinstance(result, dict) and "error" not in result:
+                        _save_bot_broadcast(f"↩️ Trả lời tin \"{_quote}\": {response[:2000]}")
                     if "error" in result:
                         print(f"   ❌ Error: {result['error']}")
                     else:
@@ -1432,6 +1519,7 @@ def main():
                 if m2:
                     backoff = max(backoff, min(int(m2.group(1)) + 2, 3600))
             time.sleep(backoff)
+
 
 if __name__ == "__main__":
     try:

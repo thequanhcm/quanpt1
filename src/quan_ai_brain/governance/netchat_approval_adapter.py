@@ -27,12 +27,24 @@ if str(_SRC) not in sys.path:
     sys.path.insert(0, str(_SRC))
 
 from quan_ai_brain.governance.approval_cards import ApprovalCardStore  # noqa: E402
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
-OWNER_NETCHAT_USER_ID = "3b1ughs36i8e9p46im8opnms8w"  # quanpt1
+CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
+OWNER_NETCHAT_USER_ID = _get_secret("netchat_owner_user_id", "3b1ughs36i8e9p46im8opnms8w")  # (12/11) loader
 # (02/11/2026) Thay bot_quanpt1 thanh bot_tony
-BOT_USER_ID = "66opztx9ut8rjxny555xhj84je"
+BOT_USER_ID = _get_secret("netchat_bot_user_id", "66opztx9ut8rjxny555xhj84je")  # (12/11) loader
 
 _local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
 _script_cand = [
@@ -111,6 +123,19 @@ class NetChatApprovalAdapter:
     _PLAIN_APPROVE = re.compile(r"^\s*(duyệt|phe duyet|duyet|đồng ý|dong y|approved|ok anh|ok)\s*[.!]?\s*$", re.IGNORECASE)
     _PLAIN_REJECT = re.compile(r"^\s*(từ chối|tu choi|reject|ko duyệt|khong duyet|không duyệt)\s*[.!]?\s*$", re.IGNORECASE)
     _PLAIN_DETAIL = re.compile(r"^\s*(chi tiết|chi tiet|detail)\s*[.!]?\s*$", re.IGNORECASE)
+    # (13/11/2026) Câu hỏi tự nhiên về hồ sơ có mã TASK: "A đang hỏi chi tiết
+    # thông báo này", "thông báo này là gì", "card này nghĩa sao"... — trước đây
+    # parse() chỉ nhận tin BẮT ĐẦU bằng động từ → trả sai "CHƯA HIỂU LỆNH".
+    _QUESTION_HINT = re.compile(
+        r"(hỏi|chi tiết|chi tiet|nghĩa|là gì|la gi|gì|gi|kể|giải thích|thế nào|"
+        r"như thế nào|bao giờ|hạn|trạng thái|status|thông báo|nội dung|what|\?)",
+        re.IGNORECASE,
+    )
+    # Động từ HÀNH ĐỘNG phải ưu tiên trước (approve/reject/amend) — câu hỏi
+    # KHÔNG được ăn vào các intent thay đổi trạng thái.
+    _Q_APPROVE_HINT = re.compile(r"(\bduyệt\b|\bduyet\b|approve|đồng ý|dong y|ok duyệt)", re.IGNORECASE)
+    _Q_REJECT_HINT = re.compile(r"(từ chối|tu choi|reject)", re.IGNORECASE)
+    _Q_AMEND_HINT = re.compile(r"(sửa|sua|đổi phương án|doi phuong an|amend)", re.IGNORECASE)
 
     def parse(self, text: str) -> dict[str, Any]:
         """Trả về action: approve|reject|amend|detail|list|unknown + task_code."""
@@ -129,6 +154,20 @@ class NetChatApprovalAdapter:
                 guidance = t.split(":", 1)[1].strip() if ":" in t else ""
                 return {"action": "amend", "task_code": code, "guidance": guidance}
             if low.startswith(("chi tiết", "chi tiet", "detail")):
+                return {"action": "detail", "task_code": code}
+            # (13/11/2026) Tin có mã TASK nhưng KHÔNG bắt đầu bằng động từ:
+            # nếu là CÂU HỎI tự nhiên về hồ sơ ("A đang hỏi chi tiết thông báo
+            # này", "thông báo này là gì?") → coi như CHI TIẾT (chỉ đọc, an toàn).
+            # Nếu chứa động từ thay đổi trạng thái ở giữa câu → vẫn giữ intent đó.
+            if self._Q_REJECT_HINT.search(low):
+                reason = t.split(":", 1)[1].strip() if ":" in t else "Không nêu lý do"
+                return {"action": "reject", "task_code": code, "reason": reason}
+            if self._Q_AMEND_HINT.search(low):
+                guidance = t.split(":", 1)[1].strip() if ":" in t else ""
+                return {"action": "amend", "task_code": code, "guidance": guidance}
+            if self._Q_APPROVE_HINT.search(low):
+                return {"action": "approve", "task_code": code}
+            if self._QUESTION_HINT.search(low):
                 return {"action": "detail", "task_code": code}
             return {"action": "unknown", "task_code": code}
         # lệnh trần không có mã
@@ -158,6 +197,7 @@ class NetChatApprovalAdapter:
             task_code = parsed.get("task_code") or ""
             try:
                 from quan_ai_brain.governance.netchat_info_gap_adapter import has_waiting_task
+
 
                 if has_waiting_task(task_code):
                     return ""  # info-gap reply — caller tự xử lý

@@ -92,6 +92,24 @@ CREATE TABLE IF NOT EXISTS version_comparisons (
 CREATE INDEX IF NOT EXISTS idx_kpi_snapshots_run ON kpi_snapshots(run_id);
 CREATE INDEX IF NOT EXISTS idx_kpi_snapshots_kpi ON kpi_snapshots(kpi_id);
 CREATE INDEX IF NOT EXISTS idx_vcomp ON version_comparisons(baseline_run_id, candidate_run_id);
+
+-- (12/11/2026) Error DB cho KPI8 Self-Correction: ADD-ONLY, ghi lỗi thật
+-- (case ERROR/CHAT_FAIL trong CPSL, hoặc chat fail từ pipeline). Khi lỗi
+-- cùng source+ref_id xuất hiện lại với status OK → resolve event cũ.
+-- KPI8 = resolved / total trong error_events (0 events → NOT_EVALUATED).
+CREATE TABLE IF NOT EXISTS error_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts_utc TEXT NOT NULL,
+    source TEXT NOT NULL,                     -- 'cpsl_mini_30' | 'chat' | ...
+    ref_id TEXT NOT NULL,                     -- case_id hoặc session_id
+    error_type TEXT NOT NULL,                 -- 'CHAT_FAIL' | 'ERROR' | 'TIMEOUT' | ...
+    detail TEXT NOT NULL DEFAULT '',
+    resolved_utc TEXT,                        -- NULL = chưa sửa
+    resolution TEXT NOT NULL DEFAULT '',      -- 'self_corrected' | 'manual' | ...
+    created_at_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_err_src_ref ON error_events(source, ref_id);
+CREATE INDEX IF NOT EXISTS idx_err_resolved ON error_events(resolved_utc);
 """
 
 KPI_NAMES: dict[int, str] = {
@@ -337,3 +355,51 @@ class KpiStore:
                 row["verdict"] = "INCONCLUSIVE"
             out.append(row)
         return out
+
+
+    # --------------------------------------------------------- error_events (KPI8)
+    def record_error(self, source: str, ref_id: str, error_type: str,
+                     detail: str = "") -> int:
+        """Ghi 1 error_event mới (ADD-ONLY). Trả về id."""
+        con = self.connect()
+        try:
+            with con:
+                cur = con.execute(
+                    "INSERT INTO error_events (ts_utc, source, ref_id, error_type, "
+                    "detail, created_at_utc) VALUES (?, ?, ?, ?, ?, ?)",
+                    (_now_utc(), source, ref_id, error_type, detail[:500], _now_utc()),
+                )
+                return cur.lastrowid
+        finally:
+            con.close()
+
+    def resolve_error(self, source: str, ref_id: str, resolution: str = "self_corrected") -> int:
+        """Resolve TẤT CẢ error_events cùng source+ref_id chưa resolve. Trả số row."""
+        con = self.connect()
+        try:
+            with con:
+                cur = con.execute(
+                    "UPDATE error_events SET resolved_utc=?, resolution=? "
+                    "WHERE source=? AND ref_id=? AND resolved_utc IS NULL",
+                    (_now_utc(), resolution, source, ref_id),
+                )
+                return cur.rowcount
+        finally:
+            con.close()
+
+    def error_stats(self) -> dict:
+        """Tổng hợp error_events: total / resolved / unresolved. KPI8 = resolved/total."""
+        con = self.connect()
+        try:
+            row = con.execute(
+                "SELECT COUNT(*) AS total, "
+                "SUM(CASE WHEN resolved_utc IS NOT NULL THEN 1 ELSE 0 END) AS resolved "
+                "FROM error_events"
+            ).fetchone()
+            total = row["total"] or 0
+            resolved = row["resolved"] or 0
+            return {"total": total, "resolved": resolved,
+                    "unresolved": total - resolved,
+                    "rate": (resolved / total) if total else None}
+        finally:
+            con.close()

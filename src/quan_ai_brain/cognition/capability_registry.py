@@ -5,6 +5,14 @@ modules, tools, and satellite ecosystems to prevent LLM hallucinations.
 """
 from __future__ import annotations
 
+
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+from pathlib import Path
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -161,7 +169,7 @@ SYSTEM_CAPABILITIES: list[SystemCapability] = [
         domain="Owner Channel",
         status=CapabilityStatus.VERIFIED_ACTIVE,
         risk_level=1,
-        dependencies=("tools/netchat_auto_responder.py", "tools/netchat_command_center.py", "bot_tony mwp3nk3ciprjjr4hdmcoqgk6jr"),
+        dependencies=("tools/netchat_auto_responder.py", "tools/netchat_command_center.py", f"bot_tony {_get_secret('netchat_channel_owner', 'mwp3nk3ciprjjr4hdmcoqgk6jr')}"),  # (12/11) đọc từ loader
         evidence_notes=("(06/11) LIVE: 476 tin 0 pending; greeting 2 dòng 38/38; "
                         "media-only DM 5680fb7; audit log ghi nhận lệnh DM."),
     ),

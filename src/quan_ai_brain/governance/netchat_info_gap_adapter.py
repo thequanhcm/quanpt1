@@ -12,6 +12,7 @@ lệnh duyệt) → map về câu hỏi đang OPEN của task → record_owner_r
 """
 from __future__ import annotations
 
+
 import re
 import subprocess
 import sys
@@ -23,6 +24,13 @@ from quan_ai_brain.cognition.information_gap_analyzer import (
     ReadinessStatus,
 )
 
+# (12/11/2026) Loader secret tập trung
+import sys as _sys
+_SECRET_DIR = Path('E:/BRAIN/user, pass, token')
+if str(_SECRET_DIR) not in _sys.path:
+    _sys.path.insert(0, str(_SECRET_DIR))
+from loader import get_secret as _get_secret
+
 WORKSPACE = Path(__file__).resolve().parent.parent.parent.parent
 
 _NETCHAT_BOT = (
@@ -33,7 +41,7 @@ _AGENT_PY = (
 )
 
 # (31/10/2026) Thong nhat: chi con lai DM voi chu so huu — kenh 'Tro ly Tony Pham' da bi bo (owner yeu cau xoa cac kenh khac, chi giu DM)
-CHANNEL_ID = "mwp3nk3ciprjjr4hdmcoqgk6jr"
+CHANNEL_ID = _get_secret("netchat_channel_owner", "mwp3nk3ciprjjr4hdmcoqgk6jr")  # (12/11) đọc từ loader
 
 # Mã nhiệm vụ trong tin nhắn: TASK-xxxx (chữ/số)
 _TASK_RE = re.compile(r"TASK[-_]?([A-Za-z0-9]{3,12})", re.IGNORECASE)
@@ -137,6 +145,7 @@ def handle_owner_info_reply(
     # Tìm câu hỏi OPEN khớp nội dung tin nhắn (ưu tiên khớp question_id nếu
     # owner reply kèm mã câu hỏi; nếu không, map câu hỏi OPEN đầu tiên còn thiếu).
     import json as _json
+
 
     spec = _json.loads(spec_json)
     open_questions = [q for q in spec.get("questions", []) if q.get("status") == "OPEN"]

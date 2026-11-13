@@ -53,6 +53,24 @@ class PolicyEngine:
         if risk == RiskLevel.R4:
             return PolicyDecision(DecisionStatus.APPROVAL_REQUIRED, risk, "Explicit owner approval is required; no executor is provided.")
         if risk == RiskLevel.R3:
+            # TASK-AGENTIC-SEC-1 Slice (c): Lethal Trifecta check (slide 13).
+            # Mô tả action hội đủ 3 cờ (dữ liệu riêng tư + nội dung không tin cậy +
+            # egress ngoài) → bắt buộc phê duyệt kể cả R3.
+            try:
+                from quan_ai_brain.security.audit_sources import record_trifecta_event
+                from quan_ai_brain.security.trifecta_guard import evaluate_task
+                desc = request.action or ""
+                _tri = evaluate_task(desc, task_class="AUTO")
+                if _tri.flags.lethal:
+                    record_trifecta_event(desc, "R3", "APPROVAL_REQUIRED", _tri.flags.count)
+                    return PolicyDecision(
+                        DecisionStatus.APPROVAL_REQUIRED, risk,
+                        f"Lethal Trifecta ({_tri.flags.count}/3 cờ): action mô tả "
+                        f"private_data + untrusted_content + external_egress — "
+                        f"bắt buộc phê duyệt owner (slide 13).",
+                    )
+            except Exception:
+                pass  # trifecta fail-open: policy gate gốc vẫn hoạt động
             return PolicyDecision(DecisionStatus.ALLOW_WITH_NOTICE, risk, "Low-impact external action would require notice and a separately authorized executor.")
         if risk == RiskLevel.R2:
             if request.target_path is None:
