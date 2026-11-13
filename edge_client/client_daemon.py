@@ -415,6 +415,12 @@ def launch_hdmi_mirror() -> bool:
                 except Exception:
                     pass
             flags = [
+                # (13/11/2026, owner duyệt) PROFILE RIÊNG cho mirror — cũ: mirror
+                # dính shared-profile session của kiosk → chromium thứ 2 bị đẩy
+                # vào session thứ nhất ("Opening in existing browser session")
+                # và tự thoát → không chạy đồng thời 2 màn (kiosk + HDMI) được.
+                "--user-data-dir=/home/quanpt1/.config/chromium-hdmi-mirror",
+                "--no-first-run", "--no-default-browser-check",
                 "--kiosk", "--noerrdialogs", "--disable-infobars",
                 "--check-for-update-interval=31536000", "--touch-events=enabled",
                 "--disable-pinch", "--overscroll-history-navigation=0",

@@ -52,6 +52,30 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentAvatarState = "IDLE";
   let setAvatarState = function(state) {};
 
+ // ===== EXEC TOAST: phản hồi thao tác nút không bị chặn như alert() =====
+ window.showExecToast = function(message, type = "info", durationMs = 5000) {
+   try {
+     let container = document.getElementById("exec-toast-container");
+     if (!container) {
+       container = document.createElement("div");
+       container.id = "exec-toast-container";
+       document.body.appendChild(container);
+     }
+     const toast = document.createElement("div");
+     toast.className = `exec-toast ${type}`;
+     const icon = type === "success" ? "✅" : type === "error" ? "⛔" : "ℹ️";
+     toast.innerHTML = `<span>${icon}</span><span></span>`;
+     toast.lastElementChild.textContent = String(message);
+     container.appendChild(toast);
+     setTimeout(() => {
+       toast.classList.add("leaving");
+       setTimeout(() => toast.remove(), 320);
+     }, durationMs);
+     return toast;
+   } catch (err) { console.error("[Toast]", err); }
+ };
+ const execToast = (msg, type, ms) => window.showExecToast(msg, type, ms);
+
   // Initialize UI safely with error isolation
   const safeInit = (fn, name) => {
     try { fn(); } catch (err) { console.error(`[InitError] ${name}:`, err); }
@@ -337,10 +361,10 @@ document.addEventListener("DOMContentLoaded", () => {
         loadConsultations();
         loadTelemetry();
       } else {
-        alert("Không thể cập nhật phiếu tham vấn.");
+        execToast("Không thể cập nhật phiếu tham vấn.", "error");
       }
     } catch (err) {
-      alert("Lỗi kết nối khi gửi phản hồi: " + err);
+      execToast("Lỗi kết nối khi gửi phản hồi: " + err, "error");
     }
   };
 
@@ -348,7 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById(`guidance-input-${ticketId}`);
     const guidance = input ? input.value.trim() : "";
     if (!guidance) {
-      alert("Vui lòng nhập nội dung chỉ đạo của Anh trước khi gửi.");
+      execToast("Vui lòng nhập nội dung chỉ đạo của Anh trước khi gửi.", "error");
       return;
     }
     window.respondTicket(ticketId, "DIRECT", guidance);
@@ -456,14 +480,14 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       if (res.ok) {
         const data = await res.json();
-        alert(`Chu kỳ tự học #${data.report.cycle_number} đã hoàn tất thành công!`);
+        execToast(`Chu kỳ tự học #${data.report.cycle_number} đã hoàn tất thành công!`, "success");
         loadLearningReports();
         loadConsultations();
       } else {
-        alert("Lỗi khi kích hoạt chu kỳ tự học.");
+        execToast("Lỗi khi kích hoạt chu kỳ tự học.", "error");
       }
     } catch (err) {
-      alert("Lỗi kết nối: " + err);
+      execToast("Lỗi kết nối: " + err, "error");
     } finally {
       if (btn) {
         btn.disabled = false;
@@ -1277,6 +1301,71 @@ document.addEventListener("DOMContentLoaded", () => {
         browL: "M 65 68 L 115 68",
         browR: "M 165 68 L 215 68",
       },
+      // ===== Trạng thái cảm xúc mở rộng (13/11) =====
+      HAPPY: {
+        css: "state-happy",
+        name: "HAPPY (VUI VẺ)",
+        icon: "😊",
+        symbol: "😊",
+        browL: "M 65 62 Q 90 58 115 62",
+        browR: "M 165 62 Q 190 58 215 62",
+      },
+      SUCCESS: {
+        css: "state-success",
+        name: "SUCCESS (THÀNH CÔNG)",
+        icon: "✨",
+        symbol: "✨",
+        browL: "M 65 61 Q 90 57 115 61",
+        browR: "M 165 61 Q 190 57 215 61",
+      },
+      WARNING: {
+        css: "state-warning",
+        name: "WARNING (CẢNH BÁO)",
+        icon: "⚠️",
+        symbol: "⚠️",
+        browL: "M 65 70 L 115 64",
+        browR: "M 165 64 L 215 70",
+      },
+      CONFUSED: {
+        css: "state-confused",
+        name: "CONFUSED (CHƯA RÕ)",
+        icon: "❓",
+        symbol: "❓",
+        browL: "M 65 66 Q 90 62 115 66",
+        browR: "M 165 68 L 215 72",
+      },
+      EMPATHETIC: {
+        css: "state-empathetic",
+        name: "EMPATHETIC (ĐỒNG CẢM)",
+        icon: "💗",
+        symbol: "💗",
+        browL: "M 65 64 Q 90 62 115 64",
+        browR: "M 165 64 Q 190 62 215 64",
+      },
+      SURPRISED: {
+        css: "state-surprised",
+        name: "SURPRISED (NGẠC NHIÊN)",
+        icon: "😮",
+        symbol: "😮",
+        browL: "M 65 56 Q 90 52 115 56",
+        browR: "M 165 56 Q 190 52 215 56",
+      },
+      RECONNECTING: {
+        css: "state-reconnecting",
+        name: "RECONNECTING (KẾT NỐI LẠI)",
+        icon: "🔄",
+        symbol: "🔄",
+        browL: "M 65 65 Q 90 63 115 65",
+        browR: "M 165 65 Q 190 63 215 65",
+      },
+      SLEEPING: {
+        css: "state-sleeping",
+        name: "SLEEPING (TẠM NGHỈ)",
+        icon: "💤",
+        symbol: null,
+        browL: "M 65 68 L 115 68",
+        browR: "M 165 68 L 215 68",
+      },
     };
 
     setAvatarState = function(stateKey) {
@@ -1317,7 +1406,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // Eyelids
-      if (stateKey === "OFFLINE") {
+      if (stateKey === "OFFLINE" || stateKey === "SLEEPING" || stateKey === "SAFE_MODE") {
         if (lidTopL) lidTopL.setAttribute("height", "21");
         if (lidBotL) { lidBotL.setAttribute("height", "21"); lidBotL.setAttribute("y", "96"); }
         if (lidTopR) lidTopR.setAttribute("height", "21");
@@ -1346,6 +1435,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (targetState) setAvatarState(targetState);
       });
     });
+
+    // (13/11) expose cho E2E test + tab khác
+    window.setAvatarState = setAvatarState;
 
     // Natural eye blink animation loop
     function triggerBlink() {
@@ -1618,10 +1710,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.success) {
           await pollSupervisor();
         } else {
-          alert("Lỗi khẩn cấp: " + (data.error || "Không thể thực hiện"));
+          execToast("Lỗi khẩn cấp: " + (data.error || "Không thể thực hiện"), "error");
         }
       } catch (err) {
-        alert("Lỗi kết nối khẩn cấp: " + err.message);
+        execToast("Lỗi kết nối khẩn cấp: " + err.message, "error");
       }
     }
 
@@ -1834,13 +1926,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnShowGuide = document.getElementById("btn-show-launch-guide");
     if (btnShowGuide) {
       btnShowGuide.addEventListener("click", () => {
-        alert(
+        execToast(
           "HƯỚNG DẪN BẬT GƯƠNG MẶT MẪU A TOÀN MÀN HÌNH TRÊN RASPBERRY PI 5:\n\n" +
           "Cách 1 (Nhanh nhất): Mở Terminal trên Pi 5 và dán lệnh sau:\n" +
           "chromium-browser --kiosk --window-size=1280,720 --window-position=0,0 http://127.0.0.1:8768/ &\n\n" +
           "Cách 2: Nhấp đúp vào biểu tượng 'QUAN AI BRAIN Kiosk' trên Desktop của Pi 5.\n\n" +
           "Màn hình 7\" DSI sẽ hiển thị toàn màn hình gương mặt Cô Trợ Lý Mẫu A (Dịu Dàng, Thân Thiện) với đôi mắt chớp tự nhiên và đồng bộ 100% với máy tính này!"
-        );
+        , "info");
       });
     }
 
@@ -2080,12 +2172,12 @@ document.addEventListener("DOMContentLoaded", () => {
           });
           const data = await res.json();
           if (data.success) {
-            alert(`🎉 CHU TRÌNH HOÀN TẤT:\n\n1. Đã phát lời chào: "${data.greeting_text}"\n2. Micro: ${data.mic_ok ? "✅ TỐT" : "⚠️ CẦN KIỂM TRA"}\n3. Camera: ${data.camera_ok ? "✅ TỐT" : "⚠️ CHƯA NHẬN"}\n4. Báo cáo phát ra loa Pi: "${data.report_text}"`);
+            execToast(`🎉 CHU TRÌNH HOÀN TẤT:\n\n1. Đã phát lời chào: "${data.greeting_text}"\n2. Micro: ${data.mic_ok ? "✅ TỐT" : "⚠️ CẦN KIỂM TRA"}\n3. Camera: ${data.camera_ok ? "✅ TỐT" : "⚠️ CHƯA NHẬN"}\n4. Báo cáo phát ra loa Pi: "${data.report_text}"`, "success");
           } else {
-            alert(`⚠️ Thông báo: ${data.message || data.error || "Không thể thực hiện chu trình"}`);
+            execToast(`⚠️ Thông báo: ${data.message || data.error || "Không thể thực hiện chu trình"}`, "error");
           }
         } catch (err) {
-          alert(`❌ Lỗi kết nối: ${err}`);
+          execToast(`❌ Lỗi kết nối: ${err}`, "error");
         } finally {
           btnTabStartupSeq.innerHTML = origHtml;
           btnTabStartupSeq.disabled = false;
@@ -2252,6 +2344,13 @@ document.addEventListener("DOMContentLoaded", () => {
     if (type === "success") {
       setTimeout(() => el.classList.add("hidden"), 5000);
     }
+    // (13/11) Mọi kết quả thao tác cũng nổi toast góc phải — không bỏ lỡ phản hồi
+    // khi banner nằm ngoài vùng nhìn (đang ở tab khác / cuộn xuống).
+    if (type === "success" || type === "error") {
+      if (typeof execToast === "function") {
+        execToast(msg, type, type === "error" ? 6500 : 4200);
+      }
+    }
   }
 
   async function loadPiFiles() {
@@ -2317,18 +2416,24 @@ document.addEventListener("DOMContentLoaded", () => {
       tbody.querySelectorAll(".btn-file-sync").forEach(btn => {
         btn.addEventListener("click", async (e) => {
           const fn = e.currentTarget.getAttribute("data-filename");
+          btn.disabled = true;
           showFileAlert(`Đang gửi yêu cầu đồng bộ '${fn}' sang Pi 5...`, "loading");
           try {
             const syncRes = await fetch("/api/executive/edge/files/sync-all", { method: "POST" });
             const sData = await syncRes.json();
             if (sData.success) {
-              showFileAlert(`✅ Đã đồng bộ tài sản sang Pi 5!`, "success");
+              const n = (sData.files && Array.isArray(sData.files)) ? sData.files.length
+                      : (sData.synced_files && Array.isArray(sData.synced_files)) ? sData.synced_files.length
+                      : (sData.count != null ? sData.count : null);
+              showFileAlert(n != null ? `✅ Đã đồng bộ '${fn}' sang Pi 5 (đợt đồng bộ ${n} tệp)!` : `✅ Đã đồng bộ '${fn}' sang Pi 5!`, "success");
             } else {
-              showFileAlert(`⚠️ Đồng bộ: ${sData.message || sData.error}`, "error");
+              showFileAlert(`⚠️ Đồng bộ '${fn}': ${sData.message || sData.error}`, "error");
             }
             loadPiFiles();
           } catch (err) {
-            showFileAlert(`❌ Lỗi đồng bộ: ${err}`, "error");
+            showFileAlert(`❌ Lỗi đồng bộ '${fn}': ${err}`, "error");
+          } finally {
+            btn.disabled = false;
           }
         });
       });
@@ -3160,7 +3265,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (btnCamSaveCore) {
       btnCamSaveCore.addEventListener("click", async () => {
         if (!lastSnapshotData || !lastSnapshotData.image_b64) {
-          alert("Chưa có ảnh snapshot nào để lưu! Vui lòng bấm 'CHỤP SNAPSHOT' trước.");
+          execToast("Chưa có ảnh snapshot nào để lưu! Vui lòng bấm 'CHỤP SNAPSHOT' trước.", "error");
           return;
         }
         showCameraAlert("💾 Đang xác minh SHA-256 và lưu snapshot vào PC Core repository...", "loading");
@@ -3311,10 +3416,10 @@ document.addEventListener("DOMContentLoaded", () => {
               if (delData.success) {
                 loadCaptureLibrary();
               } else {
-                alert(`Lỗi khi xóa ảnh: ${delData.error}`);
+                execToast(`Lỗi khi xóa ảnh: ${delData.error}`, "error");
               }
             } catch (err) {
-              alert(`Lỗi kết nối khi xóa: ${err}`);
+              execToast(`Lỗi kết nối khi xóa: ${err}`, "error");
             }
           });
         });
@@ -3390,7 +3495,7 @@ document.addEventListener("DOMContentLoaded", () => {
       btnSubmitCreate.addEventListener("click", async () => {
         const goal = (inputGoal && inputGoal.value || "").trim();
         if (!goal) {
-          alert("Vui lòng nhập mục tiêu nhiệm vụ.");
+          execToast("Vui lòng nhập mục tiêu nhiệm vụ.", "error");
           return;
         }
         const autonomy = selectAutonomy ? selectAutonomy.value : "LEVEL_A";
@@ -3409,10 +3514,10 @@ document.addEventListener("DOMContentLoaded", () => {
             await loadTasksList();
             window.viewTaskDetail(data.task.task_id);
           } else {
-            alert("Lỗi tạo nhiệm vụ: " + (data.error || "Không thể phân rã"));
+            execToast("Lỗi tạo nhiệm vụ: " + (data.error || "Không thể phân rã"), "error");
           }
         } catch (err) {
-          alert("Lỗi kết nối: " + err.message);
+          execToast("Lỗi kết nối: " + err.message, "error");
         } finally {
           btnSubmitCreate.disabled = false;
           btnSubmitCreate.textContent = "🚀 Phân Rã & Đăng Ký Nhiệm Vụ";
@@ -3571,14 +3676,14 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Thực thi hoàn tất!\nTrạng thái: ${data.outcome && data.outcome.state || 'COMPLETED'}\nBằng chứng: ${data.outcome && data.outcome.evidence && data.outcome.evidence.length || 0} mục`);
+        execToast(`Thực thi hoàn tất!\nTrạng thái: ${data.outcome && data.outcome.state || 'COMPLETED'}\nBằng chứng: ${data.outcome && data.outcome.evidence && data.outcome.evidence.length || 0} mục`, "success");
         await loadTasksList();
         window.viewTaskDetail(taskId);
       } else {
-        alert("Lỗi thực thi: " + (data.error || "Không thể thực thi"));
+        execToast("Lỗi thực thi: " + (data.error || "Không thể thực thi"), "error");
       }
     } catch (e) {
-      alert("Lỗi kết nối: " + e.message);
+      execToast("Lỗi kết nối: " + e.message, "error");
     }
   };
 
@@ -3593,13 +3698,13 @@ document.addEventListener("DOMContentLoaded", () => {
       });
       const data = await res.json();
       if (data.success) {
-        alert(`Đã hủy nhiệm vụ '${taskId}'.`);
+        execToast(`Đã hủy nhiệm vụ '${taskId}'.`, "info");
         await loadTasksList();
       } else {
-        alert("Lỗi hủy nhiệm vụ: " + (data.error || "Không thể hủy"));
+        execToast("Lỗi hủy nhiệm vụ: " + (data.error || "Không thể hủy"), "error");
       }
     } catch (e) {
-      alert("Lỗi kết nối: " + e.message);
+      execToast("Lỗi kết nối: " + e.message, "error");
     }
   };
 
@@ -3778,7 +3883,7 @@ document.addEventListener("DOMContentLoaded", () => {
       setTimeout(() => netchatAvatar?.setState("IDLE"), 2500);
       await refreshNetChat(true);
     } catch (err) {
-      alert("Không gửi được: " + err.message);
+      execToast("Không gửi được: " + err.message, "error");
     } finally {
       if (btn) { btn.disabled = false; btn.textContent = "Gửi ➤"; }
     }
@@ -3788,7 +3893,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const input = document.getElementById("netchat-input");
     const out = document.getElementById("netchat-status-box");
     const text = (input?.value || "").trim();
-    if (!text) { alert("Nhập lệnh trước (ví dụ: trạng thái)"); return; }
+    if (!text) { execToast("Nhập lệnh trước (ví dụ: trạng thái)", "info"); return; }
     if (out) out.textContent = "⏳ Đang thực thi lệnh…";
     netchatAvatar?.setState("THINKING");
     try {
@@ -4529,7 +4634,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (!data.success) throw new Error(data.error || "answer fail");
       await Promise.all([loadDeepQuestions(), loadDeepStats(), loadDeepUnits(), loadDeepTimeline()]);
     } catch (err) {
-      alert("Không gửi được câu trả lời: " + err.message);
+      execToast("Không gửi được câu trả lời: " + err.message, "error");
     }
   };
 
@@ -4722,7 +4827,7 @@ document.addEventListener("DOMContentLoaded", () => {
             body: JSON.stringify({ session_id: currentSession, target_type: t.dataset.tt, target_id: t.dataset.tid, kind, text }),
           });
           const d = await res.json();
-          if (!d.success) alert(d.error || "Lỗi phản hồi");
+          if (!d.success) execToast(d.error || "Lỗi phản hồi", "error");
           await loadCurrent();
         } else if (cls.contains("review-preview-btn")) {
           const res = await fetch("/api/memory/review/confirm", {
@@ -4732,8 +4837,8 @@ document.addEventListener("DOMContentLoaded", () => {
           const d = await res.json();
           if (d.success && d.preview) {
             const p = d.preview;
-            alert(`TRƯỚC: ${p.before?.statement ?? "?"}\n\nSAU: ${p.after?.statement ?? "?"}\n\nPhạm vi: ${p.after?.scope ?? "?"}\nLý do: ${p.reason ?? "?"}\n\n→ Bấm "Xác nhận áp dụng" để ghi; "Hoàn tác" khả dụng sau khi áp dụng.`);
-          } else alert(d.error || "Lỗi preview");
+            execToast(`TRƯỚC: ${p.before?.statement ?? "?"}\n\nSAU: ${p.after?.statement ?? "?"}\n\nPhạm vi: ${p.after?.scope ?? "?"}\nLý do: ${p.reason ?? "?"}\n\n→ Bấm "Xác nhận áp dụng" để ghi; "Hoàn tác" khả dụng sau khi áp dụng.`, "info");
+          } else execToast(d.error || "Lỗi preview", "error");
         } else if (cls.contains("review-confirm-btn")) {
           if (!confirm("Xác nhận áp dụng thay đổi tri thức này? (đã xem trước, còn hoàn tác được)")) return;
           const res = await fetch("/api/memory/review/confirm", {
@@ -4741,7 +4846,7 @@ document.addEventListener("DOMContentLoaded", () => {
             body: JSON.stringify({ session_id: currentSession, change_id: t.dataset.cid, confirm: true }),
           });
           const d = await res.json();
-          if (!d.success) alert(d.error || "Lỗi xác nhận");
+          if (!d.success) execToast(d.error || "Lỗi xác nhận", "error");
           await loadCurrent();
         } else if (cls.contains("review-abandon-btn")) {
           await fetch("/api/memory/review/undo", {
@@ -4756,10 +4861,10 @@ document.addEventListener("DOMContentLoaded", () => {
             body: JSON.stringify({ session_id: currentSession, change_id: t.dataset.cid }),
           });
           const d = await res.json();
-          if (!d.success) alert(d.error || "Lỗi hoàn tác");
+          if (!d.success) execToast(d.error || "Lỗi hoàn tác", "error");
           await loadCurrent();
         }
-      } catch (err) { alert("Lỗi: " + err.message); }
+      } catch (err) { execToast("Lỗi: " + err.message, "error"); }
     });
   }
 

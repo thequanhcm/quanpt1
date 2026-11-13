@@ -33,7 +33,7 @@ import ssl
 import time
 import urllib.error
 import urllib.request
-from typing import Any, Iterator
+from typing import Any, Iterator, Sequence
 
 from quan_ai_brain.core.redaction import redact_text
 from quan_ai_brain.llm.models import LLMRequest, LLMResponse, ModelInfo
@@ -50,6 +50,28 @@ DEEP_REASONING_DEFAULT_MAX_TOKENS = 2500
 DEEP_REASONING_EFFORT_NONE = None  # param is ignored by this model; send nothing
 
 CHAT_MODELS = (NETMIND_CHAT_MODEL, NETMIND_DEEP_REASONING_MODEL)
+
+import re as _re  # (13/11/2026) cần TRƯỚC _CLOUD_PATTERN ở khối dynamic bên dưới
+
+# ----- (13/11/2026, yêu cầu owner) LINH ĐỘNG ĐIỀU CHUYỂN MODEL NETMIND -----
+# Catalog gateway ĐỔI THEO NGÀY (đo 25/10: có MiniMax-M2.7; đo 13/11: M2.7 biến
+# mất, Qwen3.6-35B xuất hiện). Cho phép MỌI model gateway đang serve: allow-list
+# động = /models (cache TTL) ∪ CHAT_MODELS verified; router chọn theo tốc độ ĐO
+# ĐƯỢC (probe latency nhẹ) thay vì hardcode.
+_CLOUD_PATTERN = _re.compile(
+    r"(?i)^(?:zai-org|qwen|minimax|deepseek|meta-llama|mistral|google|"
+    r"microsoft|anthropic|openai|viettel)/[\w\.\-]+$"
+)
+DYNAMIC_CATALOG_TTL_SECONDS = 300.0  # 5 phút — cân bằng tươi mới vs chi phí probe
+_DYNAMIC_CATALOG: dict[str, Any] = {"models": None, "expires": 0.0}
+# Thứ tự ưu tiên mặc định khi CHƯA có số đo (mạnh nhất, sẵn có, nhanh nhất đã
+# benchmark 13/11: GLM-5.3-Flash 0.34s < MiniMax-M3 0.61s < Qwen3.6 2.09s):
+_CLOUD_SPEED_PRIORITIES = (
+    "zai-org/GLM-5.3-Flash",
+    "MiniMax/MiniMax-M3",
+    "Qwen/Qwen3.6-35B-A3B-FP8",
+    NETMIND_DEEP_REASONING_MODEL,
+)
 
 # ----- (01/11/2026, yêu cầu owner) LỌC METADATA RÒ RỈ RA LỜI TRẢ LỜI -----
 # Ngữ cảnh prompt chứa metadata audit (Source: ..., Status: USER_PROVIDED).
@@ -238,6 +260,106 @@ class NetMindProvider:
                 infos.append(ModelInfo(name=str(item["id"]), tag=str(item["id"]), details={"provider": "netmind"}))
         return infos or list(_CATALOG_MODELS)
 
+    # ------------------------------------------------- (13/11/2026) DYNAMIC
+    def get_dynamic_catalog(self, timeout: float = 4.0, force_refresh: bool = False) -> list[str]:
+        """Danh sách model cloud ĐANG ĐƯỢC SERVE (cache TTL 5 phút).
+
+        Là nền của allow-list động: gateway thêm/bỏ model theo ngày nên
+        allow-list cứng (CHAT_MODELS) sẽ từ chối nhầm model hợp lệ.
+        Fail-soft: khi /models lỗi → trả cache cũ, hoặc rỗng (caller tự quyết).
+        """
+        now = time.time()
+        if not force_refresh:
+            cached = _DYNAMIC_CATALOG["models"]
+            if cached is not None and now < _DYNAMIC_CATALOG["expires"]:
+                return list(cached)
+        models: list[str] = []
+        try:
+            for m in self.list_models(timeout=timeout):
+                if _CLOUD_PATTERN.match(m.name):
+                    models.append(m.name)
+        except Exception:
+            cached = _DYNAMIC_CATALOG["models"]
+            return list(cached) if cached is not None else []
+        if models:
+            _DYNAMIC_CATALOG["models"] = list(models)
+            _DYNAMIC_CATALOG["expires"] = now + DYNAMIC_CATALOG_TTL_SECONDS
+        return models
+
+    def allowed_models(self, timeout: float = 4.0) -> tuple[str, ...]:
+        """Allow-list ĐỘNG: catalog live ∪ CHAT_MODELS verified (fail-open toward verified)."""
+        live = set(self.get_dynamic_catalog(timeout=timeout))
+        return tuple(dict.fromkeys(list(CHAT_MODELS) + sorted(live)))
+
+    def rank_cloud_models_by_speed(
+        self,
+        models: Sequence[str] | None = None,
+        probe_timeout: float = 6.0,
+        prompt: str = "Trả lời NGẮN: 1+1=?",
+    ) -> list[dict[str, Any]]:
+        """Đo latency thật từng model cloud (1 probe ngắn/model) → xếp nhanh→chậm.
+
+        Dùng để router chọn "mạnh nhất, sẵn có, nhanh nhất" theo SỐ ĐO thay vì
+        hardcode. Probe tốn 1 call ngắn/model (chỉ khi caller cần — KHÔNG tự
+        chạy trong request chat thường). Trả về [{model, seconds, ok, error}].
+        """
+        targets = list(models) if models is not None else list(
+            self.get_dynamic_catalog() or CHAT_MODELS)
+        results: list[dict[str, Any]] = []
+        for m in targets:
+            if m == NETMIND_DEEP_REASONING_MODEL:
+                # Deep model LUÔN reason (~22s) — không công bằng nếu probe nhanh,
+                # ghi nhận với nhãn luôn-chậm thay vì probe tốn kém.
+                results.append({"model": m, "seconds": None, "ok": True, "note": "always-reasons (~22s), xếp sau fast tier"})
+                continue
+            started = time.perf_counter()
+            try:
+                key = self._get_api_key()
+                body = json.dumps({
+                    "model": m, "stream": False,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.0,
+                    **({} if m in _MODELS_IGNORE_REASONING_EFFORT else {"reasoning_effort": "low"}),
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    self.base_url + "/chat/completions",
+                    data=body,
+                    headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=probe_timeout, context=self._ssl_context()) as resp:
+                    data = json.loads(resp.read().decode("utf-8", errors="replace"))
+                content = ""
+                choices = data.get("choices") or []
+                if choices and isinstance(choices[0], dict):
+                    content = ((choices[0].get("message") or {}).get("content")) or ""
+                results.append({
+                    "model": m,
+                    "seconds": round(time.perf_counter() - started, 3),
+                    "ok": bool(content),
+                    "error": None if content else "EMPTY_CONTENT",
+                })
+            except Exception as exc:  # noqa: BLE001 — probe không được làm chết router
+                results.append({
+                    "model": m,
+                    "seconds": round(time.perf_counter() - started, 3),
+                    "ok": False,
+                    "error": type(exc).__name__,
+                })
+        results.sort(key=lambda r: (not r.get("ok"), r.get("seconds") is None, r.get("seconds") or 9e9))
+        return results
+
+    def cloud_failover_order(self, exclude: str | None = None, timeout: float = 4.0) -> list[str]:
+        """Thứ tự failover cloud: ưu tiên đã benchmark (_CLOUD_SPEED_PRIORITIES)
+        ∩ catalog live, sau đó các model cloud live còn lại; bỏ `exclude`."""
+        live = self.get_dynamic_catalog(timeout=timeout)
+        live_set = set(live) | set(CHAT_MODELS)
+        order = [m for m in _CLOUD_SPEED_PRIORITIES if m in live_set and m != exclude]
+        for m in live:
+            if m not in order and m != exclude and m in live_set:
+                order.append(m)
+        return order
+
     # ------------------------------------------------------------------ chat
     def stream_chat(
         self,
@@ -279,14 +401,20 @@ class NetMindProvider:
             )}
             return
 
-        # 3. Model allow-list.
+        # 3. Model allow-list — (13/11/2026) ĐỘNG: catalog live ∪ verified.
+        # Fast-path: model thuộc CHAT_MODELS verified → không cần probe /models
+        # (tiết kiệm 1 round-trip cho đường nóng). Model lạ → kiểm catalog live
+        # (gateway thêm model mới theo ngày vẫn được phép); /models lỗi → từ chối
+        # model lạ (fail-closed như cũ) nhưng không ảnh hưởng model verified.
         model = (request.model or NETMIND_CHAT_MODEL).strip()
         if model not in CHAT_MODELS:
-            yield {"type": "error", "code": "MODEL_NOT_IN_NETMIND_CATALOG", "message": (
-                f"Model '{model}' is not in the verified NetMind catalog. "
-                f"Allowed: {', '.join(CHAT_MODELS)}."
-            )}
-            return
+            _allowed = tuple(CHAT_MODELS) + tuple(self.get_dynamic_catalog())
+            if model not in _allowed:
+                yield {"type": "error", "code": "MODEL_NOT_IN_NETMIND_CATALOG", "message": (
+                    f"Model '{model}' is not in the verified NetMind catalog. "
+                    f"Allowed: {', '.join(_allowed)}."
+                )}
+                return
 
         # 4. Minimal payload.
         messages: list[dict[str, str]] = []
@@ -377,13 +505,16 @@ class NetMindProvider:
                 "NETMIND_API_KEY (or HERMES_CUSTOM_NETMIND_API_KEY) is not set in the environment.",
             )
 
-        # 3. Model allow-list — exact catalog IDs only.
+        # 3. Model allow-list — (13/11/2026) ĐỘNG (fast-path verified, catalog
+        # live chỉ probe cho model ngoài allow-list cứng).
         model = (request.model or NETMIND_CHAT_MODEL).strip()
         if model not in CHAT_MODELS:
-            return self._error_response(
-                request, "MODEL_NOT_IN_NETMIND_CATALOG", started,
-                f"Model '{model}' is not in the verified NetMind catalog. Allowed: {', '.join(CHAT_MODELS)}.",
-            )
+            _allowed = tuple(CHAT_MODELS) + tuple(self.get_dynamic_catalog())
+            if model not in _allowed:
+                return self._error_response(
+                    request, "MODEL_NOT_IN_NETMIND_CATALOG", started,
+                    f"Model '{model}' is not in the verified NetMind catalog. Allowed: {', '.join(_allowed)}.",
+                )
 
         # 4. Build minimal payload (messages only — nothing else leaves the machine).
         messages: list[dict[str, str]] = []

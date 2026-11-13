@@ -131,6 +131,27 @@ class DigitalHumanAvatar {
         browLift: 2.2, browTilt: 2.8, browInward: 0.5, browAsymmetric: 2.8,
         eyeSquint: 0.22, gazeX: 0.0, gazeY: -0.6, glintPulse: 1.25, smileBoost: 0.22,
       },
+      // ===== Tông cảm xúc mở rộng (13/11) =====
+      CURIOUS: {
+        browLift: 4.8, browTilt: 3.6, browInward: 0.0, browAsymmetric: 3.4,
+        eyeSquint: 0.12, gazeX: 1.2, gazeY: 0.8, glintPulse: 1.45, smileBoost: 0.18,
+      },
+      APOLOGETIC: {
+        browLift: -1.8, browTilt: 2.6, browInward: 2.2, browAsymmetric: 1.6,
+        eyeSquint: 0.30, gazeX: 0.0, gazeY: 1.2, glintPulse: 0.90, smileBoost: -0.10,
+      },
+      PATIENT_WAITING: {
+        browLift: 1.2, browTilt: 1.0, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: 0.25, gazeX: 0.0, gazeY: 0.3, glintPulse: 1.10, smileBoost: 0.12,
+      },
+      PROUD: {
+        browLift: 3.0, browTilt: 0.8, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: 0.45, gazeX: 0.0, gazeY: -0.4, glintPulse: 1.55, smileBoost: 0.38,
+      },
+      SURPRISED: {
+        browLift: 7.5, browTilt: 0.0, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: 0.0, gazeX: 0.0, gazeY: 0.0, glintPulse: 1.70, smileBoost: 0.05,
+      },
     };
 
     // State configurations (Standard 12-State Digital Human Protocol)
@@ -153,6 +174,11 @@ class DigitalHumanAvatar {
       OFFLINE: { name: "OFFLINE (MẤT KẾT NỐI)", auraColor: "#64748b", haloSpeed: 0.0, eyes: "closed", smile: "closed", defaultTone: "NEUTRAL" },
       RECONNECTING: { name: "RECONNECTING (KẾT NỐI LẠI)", auraColor: "#0284c7", haloSpeed: 0.09, eyes: "open", smile: "natural", symbol: "🔄", defaultTone: "NEUTRAL" },
       SLEEPING: { name: "SLEEPING (TẠM NGHỈ)", auraColor: "#475569", haloSpeed: 0.008, eyes: "closed", smile: "closed", symbol: "💤", defaultTone: "NEUTRAL" },
+      // ===== Trạng thái cảm xúc mở rộng (13/11) =====
+      SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#38bdf8", haloSpeed: 0.09, eyes: "open", smile: "natural", symbol: "😮", defaultTone: "SURPRISED" },
+      CURIOUS: { name: "CURIOUS (TÒ MÒ)", auraColor: "#22d3ee", haloSpeed: 0.055, eyes: "thinking", smile: "natural", symbol: "🤔", defaultTone: "CURIOUS" },
+      APOLOGETIC: { name: "APOLOGETIC (XIN LỖI)", auraColor: "#f472b6", haloSpeed: 0.03, eyes: "open", smile: "closed", symbol: "🙏", defaultTone: "APOLOGETIC" },
+      PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#facc15", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
     };
 
     this._loadAssets();
@@ -264,6 +290,11 @@ class DigitalHumanAvatar {
     if (!text || typeof text !== "string") return "NEUTRAL";
     const lower = text.toLowerCase();
 
+    // 0. Apology rõ ràng → đồng cảm trước (13/11): "xin lỗi anh, em gặp sự cố" là lời xin lỗi
+    if (/xin lỗi|chia buồn|rất tiếc|đáng tiếc|gây phiền/.test(lower)) {
+      return "APOLOGETIC";
+    }
+
     // 1. Alert / Warning / Safety Block / Prohibited
     if (/cảnh báo|chú ý|lưu ý|nguy hiểm|rủi ro|không được|chặn|thất bại|lỗi|bất thường|sự cố|dừng|khẩn cấp|nghiêm cấm/.test(lower)) {
       return "SERIOUS_ALERT";
@@ -287,6 +318,27 @@ class DigitalHumanAvatar {
     // 5. Warm Greeting / Politeness / Readiness
     if (/chào|xin chào|dạ|vâng|rất vui|hân hạnh|sẵn sàng|chúc|em đây|vâng ạ|em nghe|tuyệt vời|cảm ơn/.test(lower)) {
       return "WARM_GREETING";
+    }
+
+    // ===== Tông cảm xúc mở rộng (13/11) =====
+    // 6. Surprise / Unexpected / New discovery
+    if (/bất ngờ|ngạc nhiên|ọe|trời ơi|ổn quá|wow|hoàn toàn mới|lần đầu tiên|khám phá/.test(lower)) {
+      return "SURPRISED";
+    }
+
+    // 7. Curiosity / Question / Want to learn more
+    if (/tại sao|như thế nào|thế nào|làm sao|giải thích|cho em hỏi|thắc mắc|tò mò|muốn biết|hỏi anh|câu hỏi/.test(lower)) {
+      return "CURIOUS";
+    }
+
+    // 8. Apology / Inconvenience / Regret
+    if (/xin lỗi|xem lỗi|thừa nhận|chia buồn|rất tiếc|đáng tiếc|mất thời gian|gây phiền|tạm biệt|không may/.test(lower)) {
+      return "APOLOGETIC";
+    }
+
+    // 9. Pride / Ongoing achievement / Self-improvement
+    if (/tự hào|cải thiện|tiến bộ|tối ưu|nâng cấp|hoàn thiện|phát triển|nhất quán|ổn định|học được|nắm bắt/.test(lower)) {
+      return "PROUD";
     }
 
     return "NEUTRAL";
@@ -541,6 +593,9 @@ class DigitalHumanAvatar {
       isSpecialExpression = true;
     } else if ((this.state === "WARNING" || this.state === "BLOCKED" || this.activeEmotionTone === "SERIOUS_ALERT") && this.assets.portrait_warning && this.assets.portrait_warning.complete && this.assets.portrait_warning.naturalWidth > 0) {
       baseImg = this.assets.portrait_warning;
+      isSpecialExpression = true;
+    } else if ((this.state === "SURPRISED" || this.activeEmotionTone === "SURPRISED") && this.assets.portrait_surprised && this.assets.portrait_surprised.complete && this.assets.portrait_surprised.naturalWidth > 0) {
+      baseImg = this.assets.portrait_surprised;
       isSpecialExpression = true;
     } else if (this.state === "ERROR" && this.assets.portrait_error && this.assets.portrait_error.complete && this.assets.portrait_error.naturalWidth > 0) {
       baseImg = this.assets.portrait_error;

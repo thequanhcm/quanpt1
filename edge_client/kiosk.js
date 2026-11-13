@@ -424,6 +424,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (data.audio_base64) {
           playKioskSpeech(data.audio_base64, data.mouth_timeline || data.timeline);
+        } else if (data.tts_mode === "background") {
+          // (13/11/2026) TỐI ƯU TỐC ĐỘ PHẢN HỒI: PC trả reply NGAY, TTS synth NỀN
+          // (~0.5-1.5s) rồi đẩy audio xuống qua poll pending_audio_base64 (1s).
+          // Giữ avatar THINKING — KHÔNG set IDLE vội, wake engine chưa kết thúc.
+          setAvatarState("THINKING");
         } else {
           setAvatarState("IDLE");
           if (wakeEngine) wakeEngine.notifySpeakingEnd();
