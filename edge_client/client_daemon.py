@@ -19,6 +19,7 @@ import json
 import math
 import mimetypes
 import os
+import re
 import shutil
 from pathlib import Path
 import socketserver
@@ -280,14 +281,223 @@ def is_kiosk_running() -> bool:
     return False
 
 
-def launch_kiosk_process() -> bool:
-    """Khởi động trình duyệt Chromium Kiosk toàn màn hình hiển thị hình thể trên Pi 5."""
+# ---- (13/11/2026, sprint-1314) CHỐNG CHU KỲ CHẾT KIOSK — đã audit 13/11 ----
+# Chu kỳ đã tái hiện: profile hỏng (SIGTRAP 133) → chromium chết sớm → daemon
+# không wait() con → zombie → SingletonLock chỉ về zombie → lần launch kế thấy
+# "instance đang chạy" → chromium mới tự thoát → thành zombie tiếp. Cả 4 mắt
+# xích được xử lý tại đây: dọn lock mồ côi, wait() chống zombie, cách ly
+# profile hỏng, verify sống cửa sổ 12s chạy nền (HTTP ACK ≤ 3s cho PC).
+_KIOSK_REAP_LOCK = threading.Lock()
+_KIOSK_VERIFY_SLEEP_SEC = 12.0     # cửa sổ kiểm tra "sống thật" sau spawn
+_KIOSK_EXIT_STABLE_SEC = 8.0       # "sống" = tồn tại liên tục >= giá trị này
+_KIOSK_LAUNCH_RETRIES = 2          # 1 lần cách ly profile + thử lại
+_CHROMIUM_PROFILE_DIR = "/home/quanpt1/.config/chromium"
+
+
+def _reap_kiosk_child() -> None:
+    """Chống zombie: wait() process con đã ghi nhận chết (WNOHANG, không chặn)."""
+    proc = _KIOSK_PROC
+    if proc is not None and proc.poll() is not None:
+        try:
+            proc.wait(timeout=0)  # WNOHANG-tương đương: chỉ reap nếu đã thoát
+        except Exception:
+            pass
+
+
+def _chromium_zombie_owner_pid() -> int | None:
+    """PID chủ SingletonLock nếu chủ đó là ZOMBIE (stat=Z) — None nếu không."""
+    try:
+        lock_path = Path(_CHROMIUM_PROFILE_DIR) / "SingletonLock"
+        target = lock_path.readlink() if lock_path.is_symlink() else None
+        if not target:
+            return None
+        # dạng "hostname-PID"
+        m = re.search(r"-(\d+)$", str(target))
+        if not m:
+            return None
+        pid = int(m.group(1))
+        with open(f"/proc/{pid}/stat", "rb") as fh:
+            stat_fields = fh.read().decode("utf-8", errors="replace").split()
+        # trường 3 = state (bỏ qua "comm" chứa space/quOptional ngoặc)
+        state = stat_fields[2] if len(stat_fields) > 2 else ""
+        if state == "Z":
+            return pid
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+    return None
+
+
+def _cleanup_stale_kiosk_lock() -> int:
+    """Dọn SingletonLock/SingletonSocket/SingletonCookie khi chủ là zombie/chết.
+
+    KHÔNG đụng lock còn chủ SỐNG (profile đang dùng thật) — tránh phá session.
+    Trả số file đã dọn.
+    """
+    cleaned = 0
+    try:
+        profile = Path(_CHROMIUM_PROFILE_DIR)
+        if not profile.is_dir():
+            return 0
+        # 1) symlink lock chỉ vào zombie → dọn ngay
+        if _chromium_zombie_owner_pid() is not None:
+            for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+                p = profile / name
+                try:
+                    if p.exists() or p.is_symlink():
+                        p.unlink()
+                        cleaned += 1
+                except OSError:
+                    pass
+            return cleaned
+        # 2) không symlink: nếu KHÔNG có chromium sống nào thì lock là rác còn
+        #    sót (chết máy lạnh) — dọn an toàn.
+        if not is_kiosk_running():
+            for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+                p = profile / name
+                try:
+                    if p.exists() or p.is_symlink():
+                        p.unlink()
+                        cleaned += 1
+                except OSError:
+                    pass
+    except Exception:
+        pass
+    return cleaned
+
+
+def _is_profile_broken_error(stderr_tail: str) -> bool:
+    """Nhận diện profile hỏng: SIGTRAP/SIGSEGV, crashpad — đã xác thực 13/11."""
+    if not stderr_tail:
+        return False
+    low = stderr_tail.lower()
+    signals = (
+        "sigtrap", "signal 5", "signal  5", "trace/breakpoint trap",
+        "sigsegv", "segmentation fault", "crashpad", "cannot create data directory",
+        "failed to create data directory",
+    )
+    return any(s in low for s in signals)
+
+
+def _quarantine_broken_profile() -> str | None:
+    """Cách ly profile hỏng sang chromium.bad_<tag> (KHÔNG xóa — policy owner)."""
+    try:
+        profile = Path(_CHROMIUM_PROFILE_DIR)
+        if not profile.is_dir():
+            return None
+        tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        bad = profile.parent / f"chromium.bad_{tag}"
+        profile.rename(bad)
+        return str(bad)
+    except Exception:
+        return None
+
+
+def _probe_profile_health() -> bool:
+    """Probe rẻ: chạy chromium headless ngắn với profile thật, đọc exit + stderr.
+
+    Exit != 0 kèm dấu hiệu crash → profile hỏng. Tiết kiệm: chỉ chạy khi dấu
+    hiệu nghi ngờ (launch vừa chết sớm), không chạy mỗi lần launch.
+    """
+    try:
+        import subprocess as _sp
+        chrome_bin = shutil.which("chromium-browser") or shutil.which("chromium")
+        if not chrome_bin:
+            return True
+        env = os.environ.copy()
+        env.setdefault("DISPLAY", ":0")
+        if os.path.exists("/run/user/1000/wayland-0"):
+            env.setdefault("WAYLAND_DISPLAY", "wayland-0")
+        env.setdefault("XDG_RUNTIME_DIR", "/run/user/1000")
+        res = _sp.run(
+            [chrome_bin, "--headless=new", "--no-sandbox", "--disable-gpu",
+             "--user-data-dir=" + _CHROMIUM_PROFILE_DIR,
+             "--virtual-time-budget=1500", "--dump-dom", "about:blank"],
+            env=env, capture_output=True, timeout=25, text=True,
+        )
+        if res.returncode == 0:
+            return True
+        return not _is_profile_broken_error(res.stderr or "")
+    except Exception:
+        return True  # không phân định được → coi như khỏe, để verify-sống quyết
+
+
+def _kiosk_launch_verify_thread(launched_epoch: float, generation: int) -> None:
+    """Verify kiosk SỐNG cửa sổ 12s (nền); chết sớm → dọn lock + retry có kiểm.
+
+    Chạy trong thread daemon — HTTP ACK cho PC đã trả trước đó, không chặn.
+    generation: launch bị đóng/launch mới sẽ bump generation → thread này
+    tự kết thúc, không spawn ngược ý owner.
+    """
+    global _KIOSK_PROC, _KIOSK_VERIFY_THREAD
+    try:
+        for attempt in range(1, _KIOSK_LAUNCH_RETRIES + 1):
+            time.sleep(_KIOSK_VERIFY_SLEEP_SEC)
+            # owner đã đóng kiosk (hoặc launch mới hơn) → bỏ ngay
+            if _kiosk_closed_by_owner():
+                return
+            with _KIOSK_REAP_LOCK:
+                if generation != _KIOSK_LAUNCH_GENERATION:
+                    return
+                proc = _KIOSK_PROC
+            alive = proc is not None and proc.poll() is None
+            if not alive:
+                _reap_kiosk_child()
+                with _KIOSK_REAP_LOCK:
+                    _KIOSK_PROC = None
+            else:
+                runtime = time.time() - launched_epoch
+                if runtime >= _KIOSK_EXIT_STABLE_SEC:
+                    return  # SỐNG ổn định — kết thúc verify thành công
+                alive = False
+            # đến đây = chết sớm (hoặc runtime ngắn đáng ngờ) → chuẩn bị retry
+            if _kiosk_closed_by_owner():
+                return
+            tail = ""
+            try:
+                log = Path("/tmp/cherry_kiosk_last_stderr.log")
+                if log.exists():
+                    tail = log.read_text(encoding="utf-8", errors="replace")[-2000:]
+            except Exception:
+                tail = ""
+            profile_bad = _is_profile_broken_error(tail) or not _probe_profile_health()
+            if profile_bad and attempt == 1:
+                bad_path = _quarantine_broken_profile()
+                if bad_path:
+                    print(f"[KIOSK] profile hỏng đã cách ly → {bad_path}", flush=True)
+            if _kiosk_closed_by_owner():
+                return
+            with _KIOSK_REAP_LOCK:
+                if generation != _KIOSK_LAUNCH_GENERATION:
+                    return
+                _cleanup_stale_kiosk_lock()
+                spawned = _spawn_kiosk_chromium()
+                if spawned is not None:
+                    launched_epoch = time.time()
+            if spawned is not None:
+                continue
+            print("[KIOSK] retry spawn thất bại — bỏ verify, giữ trạng thái hiện tại",
+                  flush=True)
+            return
+    except Exception as exc:
+        print(f"[KIOSK] verify thread lỗi (bỏ qua): {exc}", flush=True)
+    finally:
+        # dọn tham chiếu thread nếu chính nó là verify-thread hiện hành
+        with _KIOSK_REAP_LOCK:
+            if _KIOSK_VERIFY_THREAD is threading.current_thread():
+                _KIOSK_VERIFY_THREAD = None
+
+
+def _spawn_kiosk_chromium() -> "subprocess.Popen | None":
+    """Dọn lock mồ côi + spawn chromium kiosk (profile mặc định), return proc."""
     global _KIOSK_PROC
     try:
-        import subprocess, shutil, os
-        if is_kiosk_running():
-            return True
-
+        import subprocess as _sp
+        chrome_bin = shutil.which("chromium-browser") or shutil.which("chromium")
+        if not chrome_bin:
+            return None
+        _cleanup_stale_kiosk_lock()
         env = os.environ.copy()
         if "DISPLAY" not in env:
             env["DISPLAY"] = ":0"
@@ -297,48 +507,94 @@ def launch_kiosk_process() -> bool:
         if "XDG_RUNTIME_DIR" not in env:
             if os.path.exists("/run/user/1000"):
                 env["XDG_RUNTIME_DIR"] = "/run/user/1000"
+        chrome_flags = [
+            "--kiosk",
+            "--noerrdialogs",
+            "--disable-infobars",
+            "--check-for-update-interval=31536000",
+            "--touch-events=enabled",
+            "--disable-pinch",
+            "--overscroll-history-navigation=0",
+            # V40 (30/10): màn DSI Pi 5 = 800x480 — 1280,720 làm khung UI lệch/tràn
+            "--window-size=800,480",
+            "--window-position=0,0",
+            "--enable-features=OverlayScrollbar",
+            "--autoplay-policy=no-user-gesture-required",
+            "--use-fake-ui-for-media-stream",
+            "--password-store=basic",
+            # V40 (30/10): Wayland renderer bị treo trên Pi 5 (0 CPU) — X11 + SwiftShader ổn định
+            "--ozone-platform=x11",
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            # (31/10/2026) AUDIT: tắt GPU compositing SwiftShader 3D — 2D path nhẹ hơn cho HUD phẳng
+            "--disable-gpu-compositing",
+            "--force-prefers-reduced-motion",
+            "--disable-session-crashed-bubble",
+            # (31/10/2026) Chống Google Translate tự dịch giao diện kiosk
+            "--disable-features=Translate,TranslateUI",
+            "--lang=vi",
+            "http://127.0.0.1:8768/",
+        ]
+        proc = _sp.Popen([chrome_bin] + chrome_flags, env=env,
+                         stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, start_new_session=True)
+        with _KIOSK_REAP_LOCK:
+            _KIOSK_PROC = proc
+        return proc
+    except Exception:
+        return None
 
-        # Bật sáng màn hình và tắt chế độ nghỉ (DPMS on) nếu có xset
+
+def launch_kiosk_process() -> bool:
+    """Khởi động Chromium Kiosk toàn màn hình — sprint-1314: chống chu kỳ chết.
+
+    ACK nhanh cho PC (PC timeout 3s): dọn lock + spawn đồng bộ (≤2s), verify
+    sống cửa sổ 12s chạy ở thread nền; profile hỏng phát hiện + cách ly tự động.
+    Trả True CHỈ khi chromium đã spawn thật (trung thực — cũ: True vô điều kiện).
+    """
+    global _KIOSK_PROC, _KIOSK_VERIFY_THREAD
+    try:
+        import subprocess as _sp  # giữ tương thích import cục bộ cũ
+        if is_kiosk_running():
+            return True
+        # đợi verify-thread cũ kết thúc để không 2 thread spawn đua nhau
+        t = _KIOSK_VERIFY_THREAD
+        if t is not None and t.is_alive():
+            t.join(timeout=13.0)
+        chrome_bin = shutil.which("chromium-browser") or shutil.which("chromium")
+        if not chrome_bin:
+            return False  # KHÔNG còn hard-code True khi thiếu chromium
+        env_wake = os.environ.copy()
         if shutil.which("xset"):
-            subprocess.run(["xset", "dpms", "force", "on"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["xset", "s", "off"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["xset", "-dpms"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-        chrome_bin = shutil.which("chromium-browser") or shutil.which("chromium") or shutil.which("google-chrome") or shutil.which("chrome")
-        if chrome_bin:
-            chrome_flags = [
-                "--kiosk",
-                "--noerrdialogs",
-                "--disable-infobars",
-                "--check-for-update-interval=31536000",
-                "--touch-events=enabled",
-                "--disable-pinch",
-                "--overscroll-history-navigation=0",
-                # V40 (30/10): màn DSI Pi 5 = 800x480 — 1280,720 làm khung UI lệch/tràn
-                "--window-size=800,480",
-                "--window-position=0,0",
-                "--enable-features=OverlayScrollbar",
-                "--autoplay-policy=no-user-gesture-required",
-                "--use-fake-ui-for-media-stream",
-                "--password-store=basic",
-                # V40 (30/10): Wayland renderer bị treo trên Pi 5 (0 CPU) — X11 + SwiftShader ổn định
-                "--ozone-platform=x11",
-                "--use-gl=angle",
-                "--use-angle=swiftshader",
-                # (31/10/2026) AUDIT: tắt GPU compositing SwiftShader 3D — 2D path nhẹ hơn cho HUD phẳng
-                "--disable-gpu-compositing",
-                "--force-prefers-reduced-motion",
-                "--disable-session-crashed-bubble",
-                # (31/10/2026) Chống Google Translate tự dịch giao diện kiosk
-                "--disable-features=Translate,TranslateUI",
-                "--lang=vi",
-                "http://127.0.0.1:8768/"
-            ]
-            cmd = [chrome_bin] + chrome_flags
-            _KIOSK_PROC = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["xset", "dpms", "force", "on"], env=env_wake,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["xset", "s", "off"], env=env_wake,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["xset", "-dpms"], env=env_wake,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        proc = _spawn_kiosk_chromium()
+        if proc is None:
+            return False
+        gen = _bump_kiosk_generation()
+        _KIOSK_VERIFY_THREAD = threading.Thread(target=_kiosk_launch_verify_thread,
+                                                args=(time.time(), gen), daemon=True)
+        _KIOSK_VERIFY_THREAD.start()
         return True
     except Exception:
         return False
+
+
+# thread verify đang chạy (join khi launch mới để không đua spawn)
+_KIOSK_VERIFY_THREAD: "threading.Thread | None" = None
+_KIOSK_LAUNCH_GENERATION = 0
+
+
+def _bump_kiosk_generation() -> int:
+    """Tăng generation — vô hiệu mọi verify/retry spawn đang chờ (owner đóng/launch mới)."""
+    global _KIOSK_LAUNCH_GENERATION
+    with _KIOSK_REAP_LOCK:
+        _KIOSK_LAUNCH_GENERATION += 1
+        return _KIOSK_LAUNCH_GENERATION
 
 
 # ---- (31/10/2026) HDMI OUT: xuất kiosk ra cổng HDMI khi owner cắm màn ----
@@ -1997,15 +2253,20 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             # (01/11/2026) Bật hình thể thủ công = owner muốn lại → xoá cờ đóng
             _set_kiosk_closed_by_owner(False)
             ok = launch_kiosk_process()
+            # (13/11/2026, sprint-1314) launch = có hoạt động thật → reset idle
+            # (cũ: không reset → kiosk vừa bật đã bị AUTO-IDLE đóng ngay).
             with self.daemon_state.lock:
+                self.daemon_state.last_activity_epoch = time.time()
                 self.daemon_state.avatar_state = "IDLE"
                 self.daemon_state.transcript = "Hệ thống hình thể đã khởi động trên màn hình 7\" DSI."
             self._send_json({
                 "success": ok,
                 "action": action,
-                "kiosk_running": True,
-                "embodiment_mode": "ACTIVE",
-                "message": "Đã khởi chạy giao diện hình thể Kiosk trên màn hình 7\" Pi 5"
+                "kiosk_running": bool(ok),
+                "embodiment_mode": "ACTIVE" if ok else "STANDBY",
+                "message": ("Đã khởi chạy giao diện hình thể Kiosk trên màn hình 7\" Pi 5"
+                            if ok else
+                            "Không khởi chạy được Chromium Kiosk (thiếu chromium hoặc spawn lỗi) — xem log daemon")
             })
             return
 
@@ -2027,6 +2288,13 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                     if _KIOSK_PROC and _KIOSK_PROC.poll() is None:
                         _KIOSK_PROC.terminate()
                         _KIOSK_PROC = None
+                # (13/11/2026, sprint-1314) dọn state sau pkill: reap con + bump
+                # generation để verify-thread đang ngủ không spawn lại ngược ý
+                # owner (close phải là close thật).
+                _reap_kiosk_child()
+                _bump_kiosk_generation()
+                with _KIOSK_REAP_LOCK:
+                    _KIOSK_PROC = None
                 # KHÔNG xset dpms force off — owner chỉ muốn thoát giao diện,
                 # màn hình vẫn sáng bình thường.
                 self._send_json({
@@ -2054,6 +2322,33 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                     subprocess.run(["sudo", "poweroff"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                 threading.Thread(target=_do_poweroff, daemon=True).start()
                 self._send_json({"success": True, "message": "Đã phát lệnh tắt nguồn hệ thống Pi 5 an toàn"})
+                return
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)})
+                return
+
+        if action == "reboot_pi":
+            # (13/11/2026, sprint-1314) Khởi động lại Pi5 an toàn: sudo reboot
+            # sau 1.5s (đủ để ACK HTTP về PC). Daemon sẽ chết theo reboot →
+            # systemd (hoặc nohup wrapper) tự khởi động lại. PC phát hiện
+            # mất heartbeat ~5-10s, sau đó Pi5 lên lại → kiosk tự ACTIVE
+            # (chromium profile đã sạch sau reboot, không cần cách ly).
+            with self.daemon_state.lock:
+                self.daemon_state.avatar_state = "OFFLINE"
+                self.daemon_state.transcript = "Đang khởi động lại Raspberry Pi 5 an toàn — em sẽ quay lại sau ít giây..."
+            try:
+                import subprocess
+                def _do_reboot():
+                    import time
+                    time.sleep(1.5)
+                    subprocess.run(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                threading.Thread(target=_do_reboot, daemon=True).start()
+                self._send_json({
+                    "success": True,
+                    "action": action,
+                    "message": "Đã phát lệnh khởi động lại Pi 5 an toàn — daemon sẽ tự lên lại sau ~10-20s.",
+                    "expected_downtime_sec": 20,
+                })
                 return
             except Exception as e:
                 self._send_json({"success": False, "error": str(e)})
@@ -2968,6 +3263,14 @@ class EdgeClientDaemon:
                     heartbeat_timeout_sec=self.config.heartbeat_timeout_sec,
                 )
                 self._was_core_connected = now_connected
+            except Exception:
+                pass
+
+            # (13/11/2026, sprint-1314) chống zombie: reap kiosk/hdmi con đã
+            # chết mỗi vòng heartbeat — chromium chết không còn thành zombie
+            # chiếm SingletonLock (gốc chu kỳ chết kiosk 18:38).
+            try:
+                _reap_kiosk_child()
             except Exception:
                 pass
 
