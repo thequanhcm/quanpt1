@@ -2019,6 +2019,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const modalShutdown = document.getElementById("modal-pi-shutdown");
     const btnCloseModal = document.getElementById("btn-close-shutdown-modal");
     const btnCancelShutdown = document.getElementById("btn-cancel-shutdown");
+    const optRebootPi = document.getElementById("opt-reboot-pi");
     const optCloseKiosk = document.getElementById("opt-close-kiosk");
     const optPoweroffPi = document.getElementById("opt-poweroff-pi");
 
@@ -2036,6 +2037,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (modalShutdown) {
       modalShutdown.addEventListener("click", (e) => {
         if (e.target === modalShutdown) hideShutdownModal();
+      });
+    }
+
+    if (optRebootPi) {
+      optRebootPi.addEventListener("click", async () => {
+        hideShutdownModal();
+        if (!confirm("⚠️ Xác nhận: Anh muốn KHỞI ĐỘNG LẠI Raspberry Pi 5? Daemon sẽ tự lên lại sau ~10-20s.")) {
+          return;
+        }
+        try {
+          showFileAlert("🔄 Đang phát lệnh khởi động lại Pi 5 an toàn...", "loading");
+          const res = await fetch("/api/executive/edge/control", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "reboot_pi" })
+          });
+          const data = await res.json();
+          showFileAlert("✅ " + (data.message || "Đã gửi lệnh khởi động lại Pi 5."), "success");
+        } catch (err) {
+          showFileAlert("❌ Lỗi khởi động lại: " + err, "error");
+        }
       });
     }
 

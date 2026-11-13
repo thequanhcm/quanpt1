@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import http.server
 import json
 import mimetypes
@@ -4487,6 +4488,24 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đang thực hiện tắt nguồn an toàn Raspberry Pi 5..."})
                 return
 
+            if action == "reboot_pi":
+                # (13/11/2026, sprint-1314) Khởi động lại Pi5 — forward xuống
+                # daemon; PC timeout 3s có thể không đủ nếu Pi5 reboot nhanh
+                # → dùng timeout 5s cho action này (reboot ACK trước khi daemon
+                # chết theo sudo reboot).
+                _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = "OFFLINE"
+                _GLOBAL_EDGE_TELEMETRY["transcript"] = "Đang khởi động lại Raspberry Pi 5 an toàn — em sẽ quay lại sau ít giây..."
+                resp = _send_edge_request("/api/kiosk/control", method="POST",
+                                          data={"action": "reboot_pi"}, timeout=5.0)
+                self._send_json({
+                    "success": True,
+                    "action": action,
+                    "pi5_result": resp,
+                    "message": "Đã gửi lệnh khởi động lại Raspberry Pi 5 — daemon sẽ tự lên lại sau ~10-20s.",
+                    "expected_downtime_sec": 20,
+                })
+                return
+
             if action in ("auto_configure_audio", "setup_audio"):
                 resp = _send_edge_request("/api/kiosk/control", method="POST", data={"action": "auto_configure_audio"})
                 self._send_json({"success": True, "action": action, "pi5_result": resp, "message": "Đã gửi lệnh tự động định tuyến âm thanh USB trên Pi 5."})
@@ -5855,32 +5874,59 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
     def _handle_api_edge_transfer_initiate(self, body: dict) -> None:
         try:
-            device_id = str(body.get("device_id", "pi5_kiosk_01"))
-            direction_str = str(body.get("direction", "PC_TO_EDGE"))
-            direction = TransferDirection(direction_str)
-            relative_path = str(body.get("relative_path", "")).strip()
-            classification_str = str(body.get("classification", "INTERNAL_OPERATIONAL"))
+            # (13/11/2026, sprint-1314) FIX transfer >15MB: handler cũ gọi
+            # initiate_transfer(device_id=..., direction=..., relative_path=...,
+            # content_bytes=..., classification=...) — KHÔNG field nào tồn tại
+            # trong service thật (initiate_transfer(transfer_id, source_device_id,
+            # target_device_id, filename, total_size_bytes, content_hash, ...))
+            # → TypeError mọi lần → transfer >15MB chết từ bước đầu tiên.
+            # Enum thật: EDGE_TO_CORE / OPERATIONAL (cũ dùng tên không tồn tại
+            # PC_TO_EDGE / INTERNAL_OPERATIONAL → ValueError).
+            import base64 as _b64
+            transfer_id = str(body.get("transfer_id", "")).strip() or (
+                f"XFER-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')[:-3]}")
+            source_device_id = str(body.get("device_id", "pi5_kiosk_01"))
+            target_device_id = str(body.get("target_device_id", "CORE-PC-WINDOWS-01"))
+            direction_str = str(body.get("direction", "EDGE_TO_CORE"))
+            direction = TransferDirection(direction_str)  # ValueError → 400
+            filename = str(body.get("relative_path", "")).strip()
+            if not filename:
+                self._send_error_json("missing relative_path", 400)
+                return
+            classification_str = str(body.get("classification", "OPERATIONAL"))
             classification = DataClassification(classification_str)
+            # Luồng chunked: initiate chỉ KHAI BÁO total_size_bytes + content_hash
+            # (body không mang 16.5MB); luồng inline nhỏ: có thể gửi content ngay.
+            total_size_bytes = int(body.get("total_size_bytes", 0) or 0)
+            content_hash = str(body.get("content_hash", "")).strip()
             content_bytes_b64 = body.get("content_base64")
-
-            import base64
             if content_bytes_b64:
-                content_bytes = base64.b64decode(content_bytes_b64)
+                content_bytes = _b64.b64decode(content_bytes_b64)
             else:
                 content_str = str(body.get("content", ""))
                 content_bytes = content_str.encode("utf-8")
+            if not total_size_bytes:
+                total_size_bytes = len(content_bytes)
+            if not content_hash:
+                content_hash = hashlib.sha256(content_bytes).hexdigest()
 
-            manifest = _GLOBAL_TRANSFER_SERVICE.initiate_transfer(
-                device_id=device_id,
+            ok, msg, manifest = _GLOBAL_TRANSFER_SERVICE.initiate_transfer(
+                transfer_id=transfer_id,
+                source_device_id=source_device_id,
+                target_device_id=target_device_id,
+                filename=filename,
+                total_size_bytes=total_size_bytes,
+                content_hash=content_hash,
                 direction=direction,
-                relative_path=relative_path,
-                content_bytes=content_bytes,
                 classification=classification,
             )
             self._send_json({
-                "success": manifest.status == TransferStatus.IN_PROGRESS,
-                "manifest": manifest.to_dict(),
+                "success": bool(ok),
+                "message": msg,
+                "manifest": manifest.to_dict() if manifest else None,
             })
+        except ValueError as exc:
+            self._send_error_json(f"invalid enum value: {exc}", 400)
         except Exception as exc:
             self._send_error_json(str(exc), 400)
 
@@ -5893,15 +5939,30 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             chunk_hash = str(body.get("chunk_hash", ""))
 
             import base64
-            data_bytes = base64.b64decode(chunk_data_b64)
+            # (13/11/2026, sprint-1314) FIX transfer >15MB: handler cũ dựng
+            # TransferChunk(data_bytes=...) → TypeError MỌI lần (dataclass không
+            # có field data_bytes) → file lớn không bao giờ truyền nổi qua HTTP.
+            # Wire-format chuẩn: chunk_data_base64 + chunk_hash + size_bytes.
+            # Đồng thời receive_chunk trả 2-tuple (bool, str) — cũ unpack 3 →
+            # ValueError ngay cả khi chunk hợp lệ.
+            if not chunk_data_b64:
+                self._send_error_json("missing chunk_data_base64", 400)
+                return
+            try:
+                data_bytes = base64.b64decode(chunk_data_b64)
+            except Exception as exc:
+                self._send_error_json(f"chunk_data_base64 decode failed: {exc}", 400)
+                return
             chunk = TransferChunk(
                 transfer_id=transfer_id,
                 chunk_index=chunk_index,
                 total_chunks=total_chunks,
-                data_bytes=data_bytes,
+                size_bytes=len(data_bytes),
                 chunk_hash=chunk_hash,
+                data_b64=chunk_data_b64,
             )
-            success, msg, manifest = _GLOBAL_TRANSFER_SERVICE.receive_chunk(chunk)
+            success, msg = _GLOBAL_TRANSFER_SERVICE.receive_chunk(chunk)
+            manifest = _GLOBAL_TRANSFER_SERVICE.get_manifest(transfer_id)
             self._send_json({
                 "success": success,
                 "message": msg,
@@ -5911,15 +5972,18 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(str(exc), 400)
 
     def _handle_api_edge_transfer_ack(self, body: dict) -> None:
+        # (13/11/2026, sprint-1314) FIX: acknowledge_transfer(transfer_id) chỉ
+        # nhận 1 đối số — cũ truyền receiver_hash → TypeError mọi lần ACK.
         transfer_id = str(body.get("transfer_id", ""))
-        receiver_hash = str(body.get("receiver_hash", ""))
-        success, msg = _GLOBAL_TRANSFER_SERVICE.acknowledge_transfer(transfer_id, receiver_hash)
+        success, msg = _GLOBAL_TRANSFER_SERVICE.acknowledge_transfer(transfer_id)
         self._send_json({"success": success, "message": msg})
 
     def _handle_api_edge_transfer_status(self, query_str: str) -> None:
         params = urllib.parse.parse_qs(query_str)
         transfer_id = params.get("transfer_id", [""])[0]
-        status = _GLOBAL_TRANSFER_SERVICE.get_transfer_status(transfer_id)
+        # (13/11/2026, sprint-1314) FIX: get_transfer_status không tồn tại
+        # (AttributeError → 500) — method thật là get_manifest.
+        status = _GLOBAL_TRANSFER_SERVICE.get_manifest(transfer_id)
         if not status:
             self._send_error_json("Transfer not found", 404)
             return
