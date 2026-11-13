@@ -112,7 +112,9 @@ class TTSConfig:
     
     # Fallback
     fallback_enabled: bool = True
-    fallback_voice_id: str = "vi-VN-NamMinhNeural"
+    # (13/11/2026, owner) THỐNG NHẤT 1 GIỌNG: fallback mặc định = Hoài My
+    # (không còn NamMinh) — CHERRY chỉ nói bằng giọng nữ Hoài My.
+    fallback_voice_id: str = "vi-VN-HoaiMyNeural"
 
 
 @dataclass

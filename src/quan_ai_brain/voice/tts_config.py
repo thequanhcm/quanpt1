@@ -143,8 +143,12 @@ LANGUAGE_VOICE_MAP: dict[str, str] = {
 def get_voice_for_language(language: str, gender: str = "female") -> str:
     """Chọn voice phù hợp ngôn ngữ (owner 31/10: chuyển thể đa ngôn ngữ trơn chu).
 
-    Ưu tiên: map chuẩn → quét catalog đa ngôn ngữ → giọng nam nếu yêu cầu →
-    cuối cùng luôn rơi về giọng tiếng Việt chuẩn (không bao giờ trả rỗng).
+    (13/11/2026, owner) THỐNG NHẤT 1 GIỌNG: CHERRY chỉ dùng giọng nữ Hoài My
+    (vi-VN-HoaiMyNeural) cho tiếng Việt bất kể gender — ngôn ngữ khác vẫn map
+    theo bảng nhưng tiếng Việt không còn rẽ nhánh giọng nam.
+
+    Ưu tiên: map chuẩn → quét catalog đa ngôn ngữ → cuối cùng luôn rơi về
+    giọng tiếng Việt chuẩn (không bao giờ trả rỗng).
     """
     lang = (language or "vi").strip()
     candidates = [
@@ -153,19 +157,11 @@ def get_voice_for_language(language: str, gender: str = "female") -> str:
     ]
     for cand in candidates:
         if cand in LANGUAGE_VOICE_MAP:
-            voice_id = LANGUAGE_VOICE_MAP[cand]
-            # (31/10) tiếng Việt có giọng nam chuẩn riêng — tôn trọng gender:
-            if gender == "male" and lang.split("-")[0] == "vi":
-                return "vi-VN-NamMinhNeural"
-            return voice_id
+            return LANGUAGE_VOICE_MAP[cand]
     for v in MULTI_LANGUAGE_VOICES:
         if v.locale.split("-")[0] == lang.split("-")[0]:
-            if gender == "male" and v.gender == TTSGender.MALE.value:
-                return v.voice_id
             return v.voice_id
-    # Fallback tiếng Việt chuẩn
-    if gender == "male":
-        return "vi-VN-NamMinhNeural"
+    # (13/11/2026) Fallback tiếng Việt chuẩn — LUÔN Hoài My (thống nhất 1 giọng)
     return "vi-VN-HoaiMyNeural"
 
 

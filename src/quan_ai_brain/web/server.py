@@ -4212,16 +4212,54 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 audio_base64 = body.get("audio_base64")
                 timeline_dict = body.get("timeline")
 
-                # If no audio provided, synthesize via Core TTS engine
+                # (13/11/2026) FIX LATENCY DM→Pi5: KHÔNG synthesize đồng bộ trong
+                # HTTP handler nữa (đo sống 4.352ms chờ vì Edge-403 2 attempt +
+                # synth). Trả JSON NGAY, synth chạy background thread rồi tự
+                # forward xuống kiosk — cùng mẫu với /api/voice/interact
+                # (tts_mode=background). Kiosk giữ SPEAKING/nhận audio sau ~1s.
                 if not audio_base64 and text:
-                    try:
-                        import base64
-                        voice_id = str(body.get("voice_id", "vi-VN-HoaiMyNeural"))
-                        audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(text, voice_id=voice_id)
-                        if audio_bytes:
-                            audio_base64 = base64.b64encode(audio_bytes).decode("ascii")
-                    except Exception as exc:
-                        pass
+                    voice_id = str(body.get("voice_id", "vi-VN-HoaiMyNeural"))
+
+                    def _bg_synth_and_forward(_text: str = text, _voice: str = voice_id,
+                                              _state: str = state, _dur: int = duration_ms,
+                                              _timeline: dict | None = timeline_dict) -> None:
+                        try:
+                            import base64 as _b64
+                            audio_bytes, _ = GLOBAL_TTS_MANAGER.synthesize_audio(_text, voice_id=_voice)
+                            audio_b64 = _b64.b64encode(audio_bytes).decode("ascii") if audio_bytes else ""
+                        except Exception:
+                            audio_b64 = ""
+                        _timeline_dict = _timeline
+                        if not _timeline_dict:
+                            try:
+                                _timeline_dict = _GLOBAL_MOUTH_SYNC.generate_timeline(
+                                    utterance_id=f"utt_ctrl_bg_{int(time.time()*1000)}",
+                                    text=_text,
+                                    target_duration_ms=_dur,
+                                ).to_dict()
+                            except Exception:
+                                _timeline_dict = {"segments": [], "duration_ms": _dur}
+                        cmd_data = {
+                            "action": "speak",
+                            "text": _text,
+                            "state": _state,
+                            "timeline": _timeline_dict,
+                            "duration_ms": _dur,
+                        }
+                        if audio_b64:
+                            cmd_data["audio_base64"] = audio_b64
+                        _GLOBAL_EDGE_TELEMETRY["pending_commands"].append(cmd_data)
+                        _send_edge_request("/api/kiosk/control", method="POST", data=cmd_data, timeout=10.0)
+
+                    threading.Thread(target=_bg_synth_and_forward, daemon=True).start()
+                    self._send_json({
+                        "success": True,
+                        "action": action,
+                        "text": text,
+                        "tts_mode": "background",
+                        "has_audio": False,
+                    })
+                    return
 
                 if not timeline_dict:
                     timeline = _GLOBAL_MOUTH_SYNC.generate_timeline(

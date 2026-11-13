@@ -1,3 +1,4 @@
+
 # QUAN AI BRAIN — Project Status
 
 ## 14/11/2026 ~00:30 — LINH ĐỘNG ĐIỀU CHUYỂN MODEL NETMIND ✅ TRIỂN KHAI (owner: "cấu hình để core linh động điều chuyển các mô hình ngôn ngữ... luôn lựa chọn mạnh nhất, sẵn có và đáp ứng nhanh nhất")
@@ -5,6 +6,27 @@
 - **Benchmark probe thật 13/11** (1 câu ngắn/model, reasoning_effort=low): GLM-5.3-Flash **0.34s** < MiniMax-M3 **0.61s** < Qwen3.6-35B **2.09s**; Qwen3.5-122B luôn-reason ~22s (deep tier).
 - **`netmind_provider.py`**: +`get_dynamic_catalog()` (TTL 300s, fail-soft cache); +`allowed_models()`; +`rank_cloud_models_by_speed()` (probe thật xếp nhanh→chậm, deep model ghi nhãn always-reasons không probe); +`cloud_failover_order()`. Allow-list stream/generate: fast-path CHAT_MODELS verified (0 round-trip), model lạ kiểm catalog live (fail-closed khi /models lỗi).
 - **`provider.py`**: +`_is_netmind_model()` động; **FAILOVER CLOUD→CLOUD** cả `generate()` lẫn `stream()`: model được chọn chết (TIMEOUT/429/5xx/EMPTY...) → thử model cloud khác còn served theo thứ tự tốc độ benchmark TRƯỚC khi rớt Ollama local; warning provenance rõ ràng.
+
+## 13/11 ~23:15 — THỐNG NHẤT 1 GIỌNG CHERRY = HOÀI MY ✅ TRIỂN KHAI (owner: "chọn giọng này và thống nhất 1 giọng")
+- Owner chọn giọng **Hoài My (Nữ — Edge Online, vi-VN-HoaiMyNeural)** trên modal dashboard 8765 (đã là "Đang dùng") — chuẩn hóa triệt để mọi đường phát tiếng.
+- Preference đã lưu sẵn `vi-VN-HoaiMyNeural` (data/tts_preference.json, sống qua restart) — server active trùng khớp.
+- Sửa 2 điểm còn rẽ giọng nam: `get_voice_for_language()` (tts_config.py:143) bỏ nhánh gender=male → tiếng Việt luôn Hoài My (hàm không có caller nhưng chuẩn hóa chống phát lại); `tts_interface.py:115` fallback_voice_id NamMinh → Hoài My.
+- Giữ nguyên quyền owner chỉ định trực tiếp "giọng nam" trong lệnh verbatim ('phát... giọng nam: ...') — đó là lựa chọn tường minh từng lần, không phải giọng mặc định.
+- Verify: 46/46 pytest (vietnamese_tts + v36_tts + voice_api_endpoints); live synth qua server 8766 trả voice_id=vi-VN-HoaiMyNeural; restart watchdog PID 9884 → respawn, health 200.
+## 13/11 ~23:00 — ĐỒNG BỘ GIAO DIỆN ẢNH KIOSK PI5 + FIX PROFILE CHROMIUM HỎNG ✅ TRIỂN KHAI
+- **Triệu chứng (ảnh owner 21:22):** màn kiosk Pi5 chỉ có orb cyan, không có giao diện ảnh. Nguyên nhân hiển thị: khung hình ĐÓNG BĂNG từ chromium zombie 18:38 (đã fix trong audit) — trang sống render ảnh bình thường.
+- **Đồng bộ code:** kiosk.js PC `c1ac54ae` (có nhánh tts_mode=background giữ THINKING) + kiosk.html `68cbc008` + avatar_engine.js → Pi5 (backup `.bak_sync1311_2300` 3 file); verify md5 sau scp khớp; 23/23 assets engine (portrait/eyes/mouth/model_f) OK qua HTTP kiosk:8768.
+- **Crash lặp khi launch (tái hiện + fix):** chromium EXIT=133 SIGTRAP crashpad khi dùng profile mặc định `~/.config/chromium` — PROFILE HỎNG từ các lần pkill -9 trước (profile riêng /tmp thì chạy tốt). Fix: `mv ~/.config/chromium → chromium.bad_1311` (cách ly, không xóa) → launch → **kiosk ACTIVE ổn định T+100s**, core_connected True.
+- **Verify thị giác (browser PC cùng URL kiosk 8768):** engine `loaded:true`, screenshot xác nhận **ảnh chân dung người hiển thị đúng** (không phải orb), particles/glow/ellipse render bình thường — `reports/kiosk_portrait_check_1311.png`.
+- **2 khiếm khuyết daemon phát hiện thêm (chờ duyệt sprint sau):** (a) `start_kiosk` (client_daemon.py:1996) không reset `last_activity_epoch` + hard-code `kiosk_running:True` trong response dù launch có thể fail; (b) chromium profile hỏng không tự phát hiện — đề xuất launch_kiosk kiểm SIGTRAP/fallback profile sạch.
+- Lưu ý: profile mới = mất cache cũ (kiosk vẫn trỏ đúng http://127.0.0.1:8768 qua lệnh launch).
+
+## 13/11 ~23:00 — LATENCY DM→Pi5 (edge/control speak) ✅ TRIỂN KHAI + ĐO SỐNG
+- **Root cause:** `_handle_api_edge_control` action=speak (server.py:4208) synthesize ĐỒNG BỘ trong HTTP handler — giọng mặc định vi-VN-HoaiMyNeural đi qua Edge-TTS 403 (2 attempt ~6s) → lệnh DM "phát trên loa pi5" chờ 4.352s trước khi trả JSON; forward xuống Pi5 vốn đã background thread.
+- **Fix:** trùng mẫu voice/interact — trả JSON NGAY `{tts_mode:"background", has_audio:false}`, synth + generate_timeline + forward chạy background thread `_bg_synth_and_forward`. Đường audio-sẵn (audio_base64) giữ nguyên hành vi cũ.
+- **Đo trước→sau (tmp_bench_dm_pi5, server sống):** chặng A lệnh speak chữ: **4.352ms → 6ms**; chặng B audio-sẵn thẳng kiosk: 71–73ms; kiosk nhặt audio + SPEAKING trong ≤1s (kể cả màn idle-sleep — loa phát độc lập màn hình).
+- **pytest:** 46 passed (voice_api_endpoints + voice_first_pipeline + v36_tts). Restart watchdog: PID 21376 → 9884 @ ~22:55, health 200.
+- **Chuỗi DM→loa sau fix:** poll responder 2s + regex intent 0ms + edge/control 6ms + synth bg (piper warm ~0.1s) + forward ~0.1s + kiosk poll 1s ≈ **~3s** (trước ~7s).
 - **`router.py`**: +`CLOUD_SPEED_PRIORITY` (GLM-Flash → MiniMax-M3 → Qwen3.6, benchmark 13/11); explicit model chết → tự chuyển model cloud nhanh nhất còn served thay vì rớt local ngay.
 - **E2E SỐNG (server restart 00:2x, watchdog respawn)**: `/api/chat` GLM-Flash OK; **Qwen3.6-35B generate thành công qua /api/chat** (trước đây MODEL_NOT_IN_CATALOG); **MiniMax-M3 OK**; **explicit model đã rút M2.7 → tự chuyển GLM-5.3-Flash, trả lời đúng** (1.98s). pytest **71 passed** (llm+netmind+tts+voice).
 - **Trung thực**: model lạ (không trong catalog) vẫn rớt Ollama như hành vi cũ (OLLAMA_OFFLINE nếu Ollama tắt) — /api/chat không bao giờ chọn model rác vì router chỉ chọn trong available_models. Rank probe tốn 1 call/model — chỉ chạy khi caller yêu cầu, không tự chạy mỗi request.
