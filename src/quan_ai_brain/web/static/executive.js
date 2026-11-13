@@ -2293,6 +2293,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const syncBtn = `<button class="btn-file-sync" data-filename="${escapeHtml(f.name)}" title="Đồng bộ ngay tệp này sang Pi 5" style="background:rgba(0,229,255,0.12); color:var(--cyan-glow); border:1px solid rgba(0,229,255,0.3); border-radius:4px; padding:3px 8px; font-size:0.75rem; cursor:pointer; margin-right:4px;">📡 Đồng bộ</button>`;
 
+        // (13/11/2026, owner) Truyền tin 2 chiều: nút tải file VỀ máy (từ PC hoặc Pi 5)
+        const dlName = f.name.split("/").pop();  // (13/11) bo prefix ../../ voi file root
+        const dlBtn = `<button class="btn-file-dl" data-filename="${escapeHtml(dlName)}" title="Tải tệp này về máy tính" style="background:rgba(16,185,129,0.12); color:#10b981; border:1px solid rgba(16,185,129,0.3); border-radius:4px; padding:3px 8px; font-size:0.75rem; cursor:pointer; margin-right:4px;">⬇️ Tải Về</button>`;
+
         const delBtn = isProtected
           ? `<span class="note-sub" style="color:var(--text-dim); margin-left:4px;">Gốc</span>`
           : `<button class="btn-file-del" data-filename="${escapeHtml(f.name)}" style="background:rgba(239,68,68,0.12); color:#dc2626; border:1px solid rgba(239,68,68,0.3); border-radius:4px; padding:3px 8px; font-size:0.75rem; cursor:pointer;">🗑️ Xóa</button>`;
@@ -2304,7 +2308,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <td><span class="badge-ext">${escapeHtml(f.ext.replace(".", ""))}</span> ${statusBadge}</td>
             <td>${sizeKb}</td>
             <td><span class="note-sub">${dateStr}</span></td>
-            <td style="text-align: right; white-space: nowrap;">${syncBtn}${delBtn}</td>
+            <td style="text-align: right; white-space: nowrap;">${syncBtn}${dlBtn}${delBtn}</td>
           </tr>
         `;
       }).join("");
@@ -2325,6 +2329,37 @@ document.addEventListener("DOMContentLoaded", () => {
             loadPiFiles();
           } catch (err) {
             showFileAlert(`❌ Lỗi đồng bộ: ${err}`, "error");
+          }
+        });
+      });
+
+      // (13/11/2026, owner) Truyền tin 2 chiều: tải file VỀ máy từ Pi 5 qua PC Core
+      tbody.querySelectorAll(".btn-file-dl").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const fn = e.currentTarget.getAttribute("data-filename");
+          showFileAlert(`Đang tải tệp '${fn}' từ Pi 5 về máy...`, "loading");
+          try {
+            const dlRes = await fetch(`/api/executive/edge/files/download?name=${encodeURIComponent(fn)}`, { cache: "no-store" });
+            const dlData = await dlRes.json();
+            if (dlData.success && dlData.content_b64) {
+              // Giải mã base64 → binary → tải xuống qua thẻ <a download>
+              const binStr = atob(dlData.content_b64);
+              const bytes = new Uint8Array(binStr.length);
+              for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+              const blob = new Blob([bytes]);
+              const a = document.createElement("a");
+              a.href = URL.createObjectURL(blob);
+              a.download = dlData.filename || fn;
+              document.body.appendChild(a);
+              a.click();
+              a.remove();
+              URL.revokeObjectURL(a.href);
+              showFileAlert(`✅ Đã tải '${dlData.filename}' về máy (${(dlData.size_bytes / 1024).toFixed(1)} KB, nguồn: Pi 5 ${dlData.source || ""}).`, "success");
+            } else {
+              showFileAlert(`❌ Tải về thất bại: ${dlData.error || dlData.message || "không rõ"}`, "error");
+            }
+          } catch (err) {
+            showFileAlert(`❌ Lỗi tải về: ${err}`, "error");
           }
         });
       });

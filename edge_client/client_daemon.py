@@ -1210,6 +1210,11 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_kiosk_list_files()
             return
 
+        # (13/11/2026, owner) Truyền tin 2 chiều: PC tải file VỀ từ Pi 5.
+        if path == "/api/kiosk/files/download":
+            self._handle_api_kiosk_download_file(self.path)
+            return
+
         if path == "/api/kiosk/audio/status":
             self._handle_api_kiosk_audio_status()
             return
@@ -1677,6 +1682,61 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
                 self._send_error_json(f"Lỗi khi xóa: {e}", 500)
                 return
         self._send_error_json(f"Không tìm thấy tệp {clean_name}", 404)
+
+    # (13/11/2026, owner) Truyền tin 2 chiều PC ↔ Pi 5: tải file VỀ từ Pi 5
+    DOWNLOAD_ALLOWED_EXTS = {
+        ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".json", ".wav", ".mp3",
+        ".js", ".css", ".html", ".sh", ".py", ".txt", ".md", ".csv", ".log", ".mp4",
+    }
+
+    def _handle_api_kiosk_download_file(self, raw_path: str) -> None:
+        """GET /api/kiosk/files/download?name=... — trả nội dung file (base64) về PC.
+
+        Chỉ đọc trong assets/avatar + root edge_client (cùng phạm vi với upload/list).
+        Chặn traversal (Path.name) và file nhạy cảm (.env/.key/.db...) fail-closed.
+        """
+        import base64
+        from urllib.parse import parse_qs, urlparse
+        params = parse_qs(urlparse(raw_path).query)
+        name = (params.get("name") or [""])[0]
+        clean_name = Path(name).name
+        if not clean_name:
+            self._send_error_json("missing name", 400)
+            return
+        # Barrier nhạy cảm (cùng chính sách transfer_service): chạy TRƯỚC whitelist —
+        # không bao giờ tiết lộ lý do chi tiết hơn / đọc file secret dù ext lạ.
+        lowered = clean_name.lower()
+        sensitive = (".pem", ".key", ".db", ".sqlite", ".env", ".p12", ".pfx", ".crt")
+        if lowered.endswith(sensitive) or "password" in lowered \
+                or "token" in lowered or "secret" in lowered:
+            self._send_error_json("Blocked: sensitive file", 403)
+            return
+        if Path(clean_name).suffix.lower() not in self.DOWNLOAD_ALLOWED_EXTS:
+            self._send_error_json(f"File extension not permitted: {clean_name}", 400)
+            return
+
+        candidates = [
+            STATIC_DIR / "assets" / "avatar" / clean_name,
+            STATIC_DIR / clean_name,
+        ]
+        for target in candidates:
+            if target.exists() and target.is_file():
+                try:
+                    data = target.read_bytes()
+                    stat = target.stat()
+                    self._send_json({
+                        "success": True,
+                        "filename": clean_name,
+                        "size_bytes": stat.st_size,
+                        "mtime": int(stat.st_mtime),
+                        "content_b64": base64.b64encode(data).decode("ascii"),
+                        "source": str(target.relative_to(STATIC_DIR)),
+                    })
+                    return
+                except Exception as exc:
+                    self._send_error_json(f"Lỗi đọc tệp trên Pi 5: {exc}", 500)
+                    return
+        self._send_error_json(f"Không tìm thấy tệp {clean_name} trên Pi 5", 404)
 
     def _handle_api_kiosk_remote_control(self, body: dict[str, Any]) -> None:
         action = str(body.get("action", "")).strip().lower()
