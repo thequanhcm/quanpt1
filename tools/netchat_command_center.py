@@ -1449,6 +1449,22 @@ def handle_tony_websearch(text: str, payload: dict[str, Any] | None = None) -> s
     return f"⚠️ Không mở được tìm kiếm trên Pi 5: {info}\n(Kiểm tra: gõ 'hình thể')"
 
 
+def _fallback_play_on_pc(query: str) -> str | None:
+    """(13/11/2026) Fallback phát nhạc trên loa PC khi Pi5 lỗi: search YouTube →
+    mở tab browser mặc định. Trả câu thông báo hoặc None nếu search hỏng."""
+    try:
+        from quan_ai_brain.media.youtube_music import search_youtube_music
+        results = search_youtube_music(query, max_results=1)
+        if not results:
+            return None
+        top = results[0]
+        import webbrowser
+        webbrowser.open(top["url"])
+        return f"phát trên loa PC (browser): “{str(top['title'])[:80]}”"
+    except Exception:
+        return None
+
+
 def handle_tony_music_play(text: str, payload: dict[str, Any] | None = None) -> str:
     """'cherry phát nhạc <tên>' / 'bật nhạc <tên>' — dùng engine YouTube Music
     có sẵn (search + play trên loa Pi 5)."""
@@ -1467,8 +1483,17 @@ def handle_tony_music_play(text: str, payload: dict[str, Any] | None = None) -> 
         if data.get("success"):
             title = str(data.get("title", ""))[:80]
             return f"🎵 Đang phát trên loa Pi 5: “{title}” (LƯU Ý: loa BT phải đang bật nguồn)"
+        # (13/11/2026) Fallback loa PC: Pi5 lỗi/không phản hồi → phát YouTube trên PC
+        # (browser mặc định) — vẫn đảm bảo 'phát được bài được yêu cầu'.
+        pc = _fallback_play_on_pc(q)
+        if pc:
+            return f"⚠️ Pi 5 không phát được ({_vn_err(str(data.get('error', 'không rõ')), 80)}) → {pc}"
         return f"⚠️ Không phát được: {_vn_err(data.get('error', 'không rõ'), 120)}"
     except Exception as exc:
+        # (13/11/2026) Pi5 offline/timeout → fallback loa PC thay vì báo lỗi khô.
+        pc = _fallback_play_on_pc(q)
+        if pc:
+            return f"⚠️ Pi 5 không phản hồi ({type(exc).__name__}) → {pc}"
         return f"⚠️ Lỗi phát nhạc: {type(exc).__name__}: {exc}"
 
 
@@ -1897,12 +1922,19 @@ _ARG_KEYWORD_RES: list[tuple[str, re.Pattern[str]]] = [
     ("relay_off", re.compile(r"^\s*(?:tắt|tat)\s+(?:rơ\s*le|ro\s*le|relay)\b(.*)$", re.IGNORECASE)),
     ("tony_face", re.compile(r"^\s*(?:biểu\s+cảm|bieu\s+cam|đổi\s+biểu\s+cảm|doi\s+bieu\s+cam|set\s+expression)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     ("tony_volume", re.compile(r"^\s*(?:âm\s+lượng|am\s+luong|volume)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
+    # (13/11/2026) PHẢI đứng TRƯỚC pc_open: 'mở nhạc/mở bài hát/nghe bài' từng rơi vào
+    # pc_open (mở app PC sai). Phủ rộng mọi cách nói 'phát/bật/mở/nghe/play + nhạc/bài'
+    # — owner: 'phát nhạc thì có thể phát tất cả các bài nào được yêu cầu'.
+    ("tony_music_play", re.compile(
+        r"^\s*(?:(?:tony|cherry)\s+)?"
+        r"(?:phát|phat|bật|bat|mở|mo|nghe|play)\s+"
+        r"(?:nhạc|nhac|bài\s*hát|bai\s*hat|bài|bai|ca\s*khúc|ca\s*khuc|music|track|bảng\s*nhạc)"
+        r"\s*[:：]?\s*(.+)$", re.IGNORECASE)),
     ("pc_open", re.compile(r"^\s*(?:mở|mo|bật|bat|bật\s+lên|bat\s+len|khởi\s+động|khoi\s+dong|open)\s+(.+)$", re.IGNORECASE)),
     ("pc_close", re.compile(r"^\s*(?:đóng|dong|tắt|tat|tắt\s+đi|tat\s+di|close|kill)\s+(.+)$", re.IGNORECASE)),
     # (31/10/2026) Pi5: youtube/tìm kiếm/phát nhạc có đối số
     ("tony_youtube", re.compile(r"^\s*(?:tony|cherry)?\s*\s*(?:mở|mo|bật|bat|xem)\s+(?:youtube|video)\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     ("tony_websearch", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:tìm|tim|tra\s+cứu|tra\s+cuu|tìm\s+kiếm|tim\s+kiem)(?:\s+kiếm|\s+giúp\s+anh)?\s*[:：]?\s*(.+)$", re.IGNORECASE)),
-    ("tony_music_play", re.compile(r"^\s*(?:(?:tony|cherry)\s+)?(?:phát|phat|bật|bat|mở|mo|nghe)\s+(?:nhạc|nhac|bài|bai|bài\s+hát|bai\s+hat)\s*[:：]?\s*(.+)$", re.IGNORECASE)),
     # (31/10/2026) hiển thị ảnh lên Pi5 — 'N giây' là phần đối số
     ("tony_show_image", re.compile(r"^\s*(?:hiển\s+thị|hien\s+thi)\s+(?:lại\s+|lai\s+)?(?:ảnh|anh)\b.*?\bpi(?:\s*5)?\s*[:：]?\s*(.*)$", re.IGNORECASE)),
     # (31/10/2026) TAI: 'nghe từ pi [N giây]' — thu âm mic Pi5 gửi DM
@@ -2036,6 +2068,14 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
             return _pi_intent, HANDLERS[_pi_intent]()
         except Exception as exc:
             return _pi_intent, f"⚠️ Lỗi thực thi lệnh '{_pi_intent}': {type(exc).__name__}: {exc}"
+
+    # 2.5) (13/11/2026) Music stop TRƯỚC arg intents: 'tắt nhạc/dừng nhạc' từng bị
+    # pc_close nuốt ('tắt' + đối số 'nhạc' → đóng 'app nhạc' không tồn tại).
+    if not _is_question(t_for_args) and _is_music_stop(t_for_args):
+        try:
+            return "tony_music_stop", HANDLERS["tony_music_stop"]()
+        except Exception as exc:
+            return "tony_music_stop", f"⚠️ Lỗi dừng nhạc: {type(exc).__name__}: {exc}"
 
     # 3) Lệnh có đối số (tony nói/biểu cảm/âm lượng/mở-đóng app) — khớp regex trước intent thường
     for intent_arg, kw_re in _ARG_KEYWORD_RES:
