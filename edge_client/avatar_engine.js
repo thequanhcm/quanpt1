@@ -208,6 +208,17 @@ class DigitalHumanAvatar {
       this._lastGestureName = null;
     }
 
+    // Sprint 3 (14/11): Expressive Emotion Engine — emotion_engine.js là NGUỒN
+    // SỰ THẬT cho EmotionTransitionEngine + Intensity + Micro + Context-aware.
+    // Cả PC lẫn Pi5 dùng chung. setState() sẽ đi qua transitionTo() thay vì
+    // set trực tiếp → chuyển cảm xúc mượt (duration/easing/hold).
+    const _EMOTION = (typeof window !== "undefined" && window.CherryEmotionEngine) ||
+      (typeof globalThis !== "undefined" && globalThis.CherryEmotionEngine) || null;
+    if (_EMOTION) {
+      this._emotion = _EMOTION;
+      this._emotionEngine = new _EMOTION.EmotionTransitionEngine();
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -328,6 +339,12 @@ class DigitalHumanAvatar {
     // chạy đè lên state mới (interrupt by design §3.1).
     if (this._scheduler && oldState !== newState) {
       this._scheduler.clear();
+    }
+
+    // Sprint 3 (14/11): đi qua EmotionTransitionEngine — chuyển cảm xúc mượt
+    // (duration/easing/hold) thay vì set trực tiếp. Cùng state → adjust micro.
+    if (this._emotionEngine) {
+      this._emotionEngine.transitionTo(newState);
     }
 
     const conf = this.STATE_CONFIGS[this.state];
