@@ -171,12 +171,14 @@ def test_vietnamese_female_tts_default_configuration() -> None:
     assert "hoàn thành" in norm
 
 
-def test_pi5_kiosk_pure_embodiment_no_transcript() -> None:
+def test_pi5_kiosk_transcript_line_present() -> None:
+    """R5 (15/11): kiosk.html thêm <div id="transcript-line"> + CSS override để
+    chữ chat kiosk không bị cắt cuối câu. Pi5 kiosk.html sẽ được sync sau p6.
+    """
     workspace = Path(__file__).resolve().parent.parent
     kiosk_html = (workspace / "edge_client" / "kiosk.html").read_text(encoding="utf-8")
     kiosk_css = (workspace / "edge_client" / "kiosk.css").read_text(encoding="utf-8")
 
-    # Verify no transcript-line in kiosk.html
-    assert 'id="transcript-line"' not in kiosk_html, "Pi 5 Kiosk must not display transcript text"
-    # Verify .micro-transcript is hidden in css
-    assert "display: none !important;" in kiosk_css
+    # Verify transcript-line element + CSS override có mặt
+    assert 'id="transcript-line"' in kiosk_html, "kiosk.html phải có <div id='transcript-line'>"
+    assert "#transcript-line" in kiosk_css, "kiosk.css phải có rule #transcript-line"
