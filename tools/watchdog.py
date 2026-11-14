@@ -62,11 +62,18 @@ CONFIG = {
 log_dir = Path(CONFIG["log_dir"])
 log_dir.mkdir(parents=True, exist_ok=True)
 
+# (14/11/2026) RotatingFileHandler — trước đây FileHandler thường → file
+# watchdog.log phình vô hạn (62MB sau 2 tuần). Rotate 5MB × 3 bản = 15MB max.
+from logging.handlers import RotatingFileHandler
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(log_dir / "watchdog.log", encoding="utf-8"),
+        RotatingFileHandler(
+            log_dir / "watchdog.log", encoding="utf-8",
+            maxBytes=5 * 1024 * 1024, backupCount=3,
+        ),
         logging.StreamHandler(sys.stdout),
     ],
 )
@@ -284,6 +291,14 @@ def check_learning_daemon() -> bool:
     cycle (candidate_knowledge tăng liên tục). brain.db mtime mới (<900s)
     → daemon chắc chắn sống → không respawn nhầm (đã gây 3 instance song
     song chiều 07/11). Log stdout vẫn kiểm tra song song như trước.
+
+    14/11/2026 (lớp 0 — process tồn tại): brain.db chỉ đổi mtime khi có
+    dữ liệu để ingest — daemon IDLE (không có log/test/artifact mới) nhàn
+    rỗi hợp lệ vẫn bị coi là chết → watchdog spawn nhầm mỗi ~15-30 phút
+    (12-14/11: PID 11992→15452→16780, tất cả thoát ngay nhờ single-instance
+    lock). Check "process python chạy learning_daemon.py" TRƯỚC các lớp
+    mtime: psutil thấy process → sống chắc chắn, kết thúc sớm. Venv dự án
+    đã có psutil 7.2.2; thiếu psutil → bỏ qua lớp này (không fail).
     """
     candidates = [
         Path(CONFIG["learning_daemon_log"]),                      # logs/learning_daemon.log
@@ -291,6 +306,25 @@ def check_learning_daemon() -> bool:
         Path(BASE_DIR) / "logs" / "learning_daemon_crash.log",
         Path(BASE_DIR) / "data" / "brain.db",                     # (07/11) dữ liệu thật
     ]
+    # (14/11) Lớp 0: process tồn tại — daemon IDLE không ghi gì vẫn sống.
+    # Dùng biến module-level (set bởi test hoặc import thật) để monkeypatch được.
+    _psutil = globals().get("psutil")
+    if _psutil is None:
+        try:
+            import psutil as _psutil
+        except ImportError:
+            _psutil = None
+    if _psutil is not None:
+        try:
+            for _p in _psutil.process_iter(["pid", "cmdline"]):
+                try:
+                    _cl = _p.info.get("cmdline") or []
+                    if any("learning_daemon.py" in str(x) for x in _cl):
+                        return True  # process sống → không cần mtime
+                except (_psutil.NoSuchProcess, _psutil.AccessDenied):
+                    continue
+        except Exception:
+            pass  # psutil lỗi lạ → fallback mtime
     ages = [
         time.time() - p.stat().st_mtime
         for p in candidates

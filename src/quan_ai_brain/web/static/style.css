@@ -1277,7 +1277,7 @@ input:checked + .slider:before {
 }
 
 .cockpit-avatar-card::after {
-    content: "TONY · Mẫu A — biểu cảm + giọng nói qua Pi 5";
+    content: "CHERRY · Mẫu A — biểu cảm + giọng nói qua Pi 5";
     display: block;
     margin-top: auto;
     padding-top: 14px;
@@ -1289,6 +1289,58 @@ input:checked + .slider:before {
     text-overflow: ellipsis;
     border-top: 1px dashed var(--border-subtle);
 }
+
+/* (14/11) Pi5 realtime sync card — trạng thái LED theo heartbeat thật */
+.pi5-sync-led.offline {
+    background: #ef4444 !important;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+    animation: pi5LedBlink 1.2s ease-in-out infinite;
+}
+@keyframes pi5LedBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+.pi5-sync-led.online { animation: none; }
+.pi5-sync-rtt {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    margin-left: auto;
+}
+/* (14/11) Nút Dừng TTS — chỉ hiện khi đang phát */
+.btn-tts-stop {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.14);
+    color: #fca5a5;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.btn-tts-stop.visible { display: inline-flex; }
+.btn-tts-stop:hover { background: rgba(239, 68, 68, 0.26); }
+/* (14/11) Quick prompt chips */
+.quick-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 4px 10px;
+}
+.quick-chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(8, 145, 178, 0.35);
+    background: rgba(8, 145, 178, 0.07);
+    color: var(--accent-primary, #0891b2);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+.quick-chip:hover { background: rgba(8, 145, 178, 0.16); }
 
 /* ============================================================
    11/11/2026 — VOICE PICKER STYLES (nhiều giọng tiếng Việt chuẩn)

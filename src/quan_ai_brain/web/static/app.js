@@ -61,6 +61,19 @@ document.addEventListener('DOMContentLoaded', () => {
         WAITING_FOR_OWNER: { css: 'state-waiting', name: 'WAITING (CHỜ DUYỆT)', icon: '📬' },
         SAFE_MODE: { css: 'state-safemode', name: 'SAFE_MODE (AN TOÀN)', icon: '❄️' },
         BLOCKED: { css: 'state-blocked', name: 'BLOCKED (BỊ CHẶN)', icon: '🛡️' },
+        // ===== (14/11) Đồng bộ 22-state với engine PC/Pi5 =====
+        HAPPY: { css: 'state-happy', name: 'HAPPY (VUI VẺ)', icon: '😊' },
+        SUCCESS: { css: 'state-success', name: 'SUCCESS (THÀNH CÔNG)', icon: '✨' },
+        WARNING: { css: 'state-warning', name: 'WARNING (CẢNH BÁO)', icon: '⚠️' },
+        CONFUSED: { css: 'state-confused', name: 'CONFUSED (CHƯA RÕ)', icon: '❓' },
+        EMPATHETIC: { css: 'state-empathetic', name: 'EMPATHETIC (ĐỒNG CẢM)', icon: '💗' },
+        SURPRISED: { css: 'state-surprised', name: 'SURPRISED (NGẠC NHIÊN)', icon: '😮' },
+        RECONNECTING: { css: 'state-reconnecting', name: 'RECONNECTING (KẾT NỐI LẠI)', icon: '🔄' },
+        OFFLINE: { css: 'state-offline', name: 'OFFLINE (NGOẠI TUYẾN)', icon: '💤' },
+        SLEEPING: { css: 'state-sleeping', name: 'SLEEPING (TẠM NGHỈ)', icon: '💤' },
+        PROUD: { css: 'state-proud', name: 'PROUD (TỰ HÀO)', icon: '🌟' },
+        CURIOUS: { css: 'state-curious', name: 'CURIOUS (TÒ MÒ)', icon: '🤔' },
+        APOLOGETIC: { css: 'state-apologetic', name: 'APOLOGETIC (XIN LỖI)', icon: '🙏' },
     };
 
     function setAvatarState(stateKey, contextText = null) {
@@ -168,6 +181,55 @@ document.addEventListener('DOMContentLoaded', () => {
         drawWaveform();
     }
     initWaveform();
+
+    // (14/11) Pi5 REALTIME SYNC POLL — LED + RTT theo heartbeat thật mỗi 3s
+    async function pollPi5Sync() {
+        try {
+            const res = await fetch('/api/executive/edge/telemetry', { cache: 'no-store' });
+            const data = await res.json();
+            const online = data.edge_status && data.edge_status.state === 'READY';
+            if (pi5SyncLed) {
+                pi5SyncLed.className = 'pi5-sync-led ' + (online ? 'online' : 'offline');
+            }
+            if (online) {
+                const rttEl = document.getElementById('pi5-sync-rtt');
+                if (rttEl && typeof data.rtt_ms === 'number') {
+                    rttEl.textContent = data.rtt_ms.toFixed(0) + ' ms';
+                }
+                if (pi5SyncStatus && pi5SyncStatus.textContent === 'CHỜ KẾT NỐI WI-FI') {
+                    pi5SyncStatus.textContent = 'ĐỒNG BỘ PHÁT THOẠI';
+                }
+            } else {
+                if (pi5SyncStatus) pi5SyncStatus.textContent = 'PI 5 NGOẠI TUYẾN';
+                const rttEl = document.getElementById('pi5-sync-rtt');
+                if (rttEl) rttEl.textContent = '-- ms';
+            }
+        } catch (_) { /* giữ trạng thái cũ khi mạng chớp */ }
+    }
+    pollPi5Sync();
+    setInterval(pollPi5Sync, 3000);
+
+    // (14/11) Quick prompt chips — bấm là gửi luôn
+    document.querySelectorAll('.quick-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const q = chip.getAttribute('data-q');
+            if (q) { chatInput.value = q; handleSendMessage(); }
+        });
+    });
+
+    // (14/11) Nút Dừng đọc TTS + phím tắt Esc
+    const btnTtsStop = document.getElementById('btn-tts-stop');
+    function showTtsStop(show) {
+        if (btnTtsStop) btnTtsStop.classList.toggle('visible', !!show);
+    }
+    if (btnTtsStop) {
+        btnTtsStop.addEventListener('click', () => { stopAudio(); showTtsStop(false); });
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && currentAvatarState === 'SPEAKING') {
+            stopAudio(); showTtsStop(false);
+        }
+    });
 
     // Raspberry Pi 5 Audio Synchronization Function
     async function syncSpeechToPi5(cleanText, audioBase64, timeline, durationMs) {
@@ -313,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             setTTSStatus('DISABLED', 'Đã tắt');
         }
+        showTtsStop(false);  // (14/11) ẩn nút Dừng khi audio dừng
     }
 
     // Load Initial TTS Configuration from Core Backend
@@ -568,6 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setTTSStatus('SPEAKING', 'Đang đọc...');
         setAvatarState('SPEAKING');
+        showTtsStop(true);  // (14/11) hiện nút Dừng đọc khi bắt đầu phát
 
         // Step 1: Synthesize with Core Edge-TTS (Natural Vietnamese Female Voice)
         try {

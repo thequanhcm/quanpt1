@@ -565,7 +565,12 @@ class DigitalHumanAvatar {
     const pivotX = w * 0.5;
     const pivotY = h * 0.70; // Neck/chest pivot anchor
 
-    ctx.translate(pivotX + this.headSwayX, pivotY + this.headNodY + breathOffset);
+    // (14/11) Micro-nod tự tin khi PROUD — gật nhẹ theo nhịp, không đụng chuyển động khác
+    let proudNodY = 0;
+    if (this.state === "PROUD") {
+      proudNodY = Math.sin(now * 0.0025) * 2.2;
+    }
+    ctx.translate(pivotX + this.headSwayX, pivotY + this.headNodY + breathOffset + proudNodY);
     ctx.rotate(this.headTilt);
     ctx.translate(-pivotX, -pivotY);
 

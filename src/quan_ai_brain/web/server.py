@@ -2662,15 +2662,35 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             selected_model = decision.model
             self.wfile.write(_sse({"type": "meta", "model": selected_model, "tier": decision.tier}))
 
-            # 1.5 Owner teach detection (V8 parity)
-            teach_note = None
+            # 1.5 Owner teach detection (V8 parity) — đồng bộ pattern đường non-stream L2085:
+            # đúng module teach_pipeline, persist thật vào trí nhớ dài hạn + audit.
+            teach_note: str | None = None
             try:
-                from quan_ai_brain.cognition.owner_teach import detect_teaching
-                teach = detect_teaching(query)
-                if teach:
-                    teach_note = f"Đã ghi nhận kiến thức dạy từ Anh ({teach.content[:80]})."
-            except Exception:
-                pass
+                from quan_ai_brain.core.audit import AuditLogger
+                from quan_ai_brain.cognition.teach_pipeline import detect_teaching, persist_taught_memory
+
+                with MemoryStore(db_path, workspace=workspace) as teach_store:
+                    teach = detect_teaching(query)
+                    if teach.is_teaching:
+                        saved = persist_taught_memory(
+                            teach_store, teach.content, teach.memory_type, session_id=session_id,
+                        )
+                        teach_note = (
+                            f"✅ Em đã NHỚ vào trí nhớ dài hạn (ID {saved['id']}, loại {saved['memory_type']}, "
+                            f"nguồn: chủ sở hữu dạy trực tiếp). Nội dung: \"{teach.content[:200]}\""
+                        )
+                        try:
+                            AuditLogger(workspace).record("owner_teach.persisted", {
+                                "memory_id": saved["id"], "type": saved["memory_type"], "chars": len(teach.content),
+                            })
+                        except Exception:
+                            pass
+            except Exception as teach_exc:
+                try:
+                    from quan_ai_brain.core.audit import AuditLogger
+                    AuditLogger(workspace).record("owner_teach.error", {"error": str(teach_exc)[:200]})
+                except Exception:
+                    pass
 
             # 2. Memory retrieval & session history.
             with MemoryStore(db_path, workspace=workspace) as store:

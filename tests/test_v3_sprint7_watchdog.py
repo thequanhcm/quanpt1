@@ -13,6 +13,25 @@ import pytest
 WORKSPACE = Path(__file__).resolve().parents[1]
 
 
+# (14/11/2026) Fake psutil cho test check_learning_daemon — lớp 0 process tồn tại.
+class _FakePsutilEmpty:
+    """psutil giả trả về rỗng — không có process learning_daemon nào."""
+
+    def process_iter(self, attrs=None):
+        return iter(())
+
+
+class _FakePsutilWithProcess:
+    """psutil giả trả về 1 process learning_daemon.py đang chạy."""
+
+    class _FakeProc:
+        def __init__(self):
+            self.info = {"pid": 99999, "cmdline": ["python", "tools/learning_daemon.py"]}
+
+    def process_iter(self, attrs=None):
+        return iter([self._FakeProc()])
+
+
 @pytest.fixture()
 def wd():
     """Import tools/watchdog.py như module (không chạy main)."""
@@ -100,8 +119,11 @@ class TestCheckLearningDaemon:
     def test_missing_log_is_offline(self, wd, tmp_path, monkeypatch):
         # 28/10/2026: check tra cả 3 vị trí log — cách ly BASE_DIR về tmp_path
         # để các file log thật của workspace không can thiệp.
+        # 14/11/2026: lớp 0 (process tồn tại) — mock psutil trả về rỗng để test
+        # logic mtime thuần (fail-closed khi không có log + không có process).
         monkeypatch.setattr(wd, "BASE_DIR", str(tmp_path))
         wd.CONFIG["learning_daemon_log"] = str(tmp_path / "khongtontai.log")
+        monkeypatch.setattr(wd, "psutil", _FakePsutilEmpty(), raising=False)
         alive = wd.check_learning_daemon()
         assert alive is False
 
@@ -110,6 +132,7 @@ class TestCheckLearningDaemon:
         log = tmp_path / "learning_daemon.log"
         log.write_text("iteration 1", encoding="utf-8")  # mtime = bây giờ
         wd.CONFIG["learning_daemon_log"] = str(log)
+        monkeypatch.setattr(wd, "psutil", _FakePsutilEmpty(), raising=False)
         alive = wd.check_learning_daemon()
         assert alive is True
 
@@ -122,8 +145,26 @@ class TestCheckLearningDaemon:
         old_ts = __import__("time").time() - 2000  # 33 phút trước (>15 phút)
         os.utime(log, (old_ts, old_ts))
         wd.CONFIG["learning_daemon_log"] = str(log)
+        # 14/11/2026: mock psutil rỗng — test logic mtime thuần (stale = dead).
+        monkeypatch.setattr(wd, "psutil", _FakePsutilEmpty(), raising=False)
         alive = wd.check_learning_daemon()
         assert alive is False
+
+    def test_process_alive_overrides_stale_log(self, wd, tmp_path, monkeypatch):
+        """14/11/2026: lớp 0 — process tồn tại → sống dù log stale.
+        Đây là fix false-alarm watchdog spawn nhầm mỗi ~15-30 phút khi
+        daemon IDLE không ghi log nhưng vẫn chạy."""
+        import os
+        monkeypatch.setattr(wd, "BASE_DIR", str(tmp_path))
+        log = tmp_path / "learning_daemon.log"
+        log.write_text("iteration 1", encoding="utf-8")
+        old_ts = __import__("time").time() - 2000
+        os.utime(log, (old_ts, old_ts))
+        wd.CONFIG["learning_daemon_log"] = str(log)
+        # Mock psutil thấy process learning_daemon.py đang chạy
+        monkeypatch.setattr(wd, "psutil", _FakePsutilWithProcess(), raising=False)
+        alive = wd.check_learning_daemon()
+        assert alive is True
 
     def test_fresh_alt_log_is_alive(self, wd, tmp_path, monkeypatch):
         """28/10/2026: daemon ghi learning_daemon.py.log (watchdog redirect) →

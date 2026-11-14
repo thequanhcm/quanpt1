@@ -66,6 +66,12 @@
             <canvas id="kiosk-avatar-canvas" width="720" height="720" class="digital-human-canvas"></canvas>
             <!-- (13/11/2026) STATE CAPTION: caption dưới avatar đổi theo state -->
             <div class="state-caption" id="state-caption">SẴN SÀNG</div>
+            <!-- (14/11/2026) MICRO-TRANSCRIPT: hiện câu trả lời dài của Cherry
+                 (kiosk.js gán textContent vào #transcript-line 12 chỗ — null-safe
+                 nhưng element không tồn tại → chữ không hiện). Bật class
+                 micro-transcript (CSS L336) đồng thời ghi đè display:none !important
+                 ở L223 bằng selector cụ thể hơn. -->
+            <div class="micro-transcript" id="transcript-line" aria-live="polite"></div>
           </div>
         </div>
       </main>

@@ -1366,11 +1366,37 @@ document.addEventListener("DOMContentLoaded", () => {
         browL: "M 65 68 L 115 68",
         browR: "M 165 68 L 215 68",
       },
+      // ===== 3 state cảm xúc mới — đồng bộ 22-state PC/Pi5 (14/11) =====
+      PROUD: {
+        css: "state-proud",
+        name: "PROUD (TỰ HÀO)",
+        icon: "🌟",
+        symbol: "🌟",
+        browL: "M 65 61 Q 90 56 115 61",
+        browR: "M 165 61 Q 190 56 215 61",
+      },
+      CURIOUS: {
+        css: "state-curious",
+        name: "CURIOUS (TÒ MÒ)",
+        icon: "🤔",
+        symbol: "🤔",
+        browL: "M 65 66 Q 90 70 115 66",
+        browR: "M 165 64 L 215 70",
+      },
+      APOLOGETIC: {
+        css: "state-apologetic",
+        name: "APOLOGETIC (XIN LỖI)",
+        icon: "🙏",
+        symbol: "🙏",
+        browL: "M 65 68 Q 90 71 115 68",
+        browR: "M 165 68 Q 190 71 215 68",
+      },
     };
 
     setAvatarState = function(stateKey) {
       if (!STATE_CONFIG[stateKey]) stateKey = "IDLE";
       currentAvatarState = stateKey;
+      window.cherryHeroState = stateKey;  // (14/11) telemetry mirror đọc flag này, tránh đè state vừa set
       const conf = STATE_CONFIG[stateKey];
 
       if (window.digitalHuman) {
@@ -1683,12 +1709,13 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     }
 
-    // Live UTC Clock updater
+    // Live UTC Clock updater — (14/11) thêm giờ Việt Nam song song UTC
     function updateClock() {
       const clockEl = document.getElementById("telem-clock-utc");
       if (clockEl) {
         const now = new Date();
-        clockEl.textContent = now.toUTCString().slice(17, 25) + " UTC";
+        const vn = now.toLocaleTimeString("vi-VN", { hour12: false, timeZone: "Asia/Ho_Chi_Minh" });
+        clockEl.textContent = now.toUTCString().slice(17, 25) + " UTC · " + vn + " VN";
       }
     }
     setInterval(updateClock, 1000);
@@ -2716,6 +2743,11 @@ document.addEventListener("DOMContentLoaded", () => {
       // khi hết hold, đồng bộ lại nút active theo state thật từ kiosk.
       const nowMs = Date.now();
       if (data.target_avatar_state) {
+        // (14/11) MIRROR: đẩy state thật của Pi5 lên avatar hero (cột 1) — Cherry
+        // trên dashboard "sống" cùng kiosk. Bỏ qua khi owner vừa bấm state (<4s).
+        if (nowMs >= exprUiHoldUntil && window.cherryHeroState !== data.target_avatar_state) {
+          if (typeof setAvatarState === "function") setAvatarState(data.target_avatar_state);
+        }
         if (nowMs >= exprUiHoldUntil) {
           if (virtualExprTag) {
             virtualExprTag.textContent = data.target_avatar_state;
