@@ -224,6 +224,22 @@ body {
   display: none !important;
 }
 
+/* (14/11/2026) Bật micro-transcript cho #transcript-line — selector cụ thể
+   hơn thắng !important ở trên. Hiện câu trả lời dài của Cherry dưới avatar. */
+#transcript-line.micro-transcript {
+  display: block !important;
+  margin-top: 4px;
+  text-align: center;
+  max-width: 480px;
+  font-size: 0.95rem;
+  color: var(--text-main);
+  line-height: 1.4;
+  font-style: italic;
+  padding: 0 12px;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
 /* (31/10) contain: avatar hiển thị TRỌN VỆN (không crop đỉnh đầu/cằm) */
 .digital-human-canvas {
   width: 100%;

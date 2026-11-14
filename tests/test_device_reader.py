@@ -89,7 +89,8 @@ def test_watcher_detects_add_and_remove() -> None:
             {"bus": "usb", "dev_id": "1-1", "name": "Base", "vid_pid": "",
              "meta": {}}]}
         _patch_scan(w, lambda: snap3)
-        w.scan_once()
+        w.scan_once()  # (14/11) FLAP debounce: REMOVE cần 2 lần quét vắng liên tiếp
+        w.scan_once()  # lần 2 → REMOVE_DEBOUNCE_SCANS đạt ngưỡng → bắn event
         types = [e["type"] for e in buf.events]
         assert types == ["DEVICE_ADDED", "DEVICE_REMOVED"]
         cur = w.current_snapshot()

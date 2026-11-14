@@ -3,6 +3,11 @@
 Chu kỳ 60s: scan_all_devices() → so với bộ dấu vân tay lần trước → sinh event
 DEVICE_ADDED / DEVICE_REMOVED vào EdgeEventBuffer (kênh HMAC sẵn có gửi về Core
 qua /api/executive/edge/events). Read-only, fail-closed, không bao giờ raise.
+
+(07/11/2026) FIX FLAP LAN: 'LAN fe80::1' (router) hay rớt khỏi `ip neigh` 1 chu kỳ
+(NDP INCOMPLETE thoáng qua — router không trả Neighbor Solicitation ~1 phút) →
+REMOVE rồi ADD lại ngay → spam DM 'Mất kết nối'. Debounce: REMOVE phải VẮNG
+REMOVE_DEBOUNCE_SCANS lần quét LIÊN TIẾP; quay lại trước ngưỡng → không event.
 """
 from __future__ import annotations
 
@@ -20,6 +25,9 @@ except Exception:  # pragma: no cover — fallback import trực tiếp (tests/P
     )
 
 SCAN_INTERVAL_SEC = 60.0
+# Số lần quét liên tiếp device phải VẮNG trước khi báo REMOVE (debounce flap).
+# 2 × 60s = 120s grace — che pha NDP INCOMPLETE của router, không che rút thật.
+REMOVE_DEBOUNCE_SCANS = 2
 
 
 class DeviceWatcher:
@@ -34,6 +42,8 @@ class DeviceWatcher:
         self._last_snapshot: dict[str, Any] = {}
         self._last_devices: list[dict[str, Any]] = []
         self._first_scan_done = False
+        # (07/11) debounce REMOVE: đếm số lần quét liên tiếp device vắng mặt
+        self._missing_counts: dict[str, int] = {}
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         # thống kê
@@ -59,8 +69,28 @@ class DeviceWatcher:
                 self.scans_done += 1
             return {"first_scan": True, "known": len(current), "added": [],
                     "removed": []}
-        added = current - known
-        removed = known - current
+        # (07/11) Debounce REMOVE + FLAP-IMMUNE ADD — xem comment đầu file.
+        # _missing_counts[fp] = số chuột quét liên tiếp fp đang vắng mặt (độc lập
+        # với _known vốn cập nhật ∅ ngay chu kỳ đầu vắng mặt).
+        removed: set[str] = set()
+        flapped_back: set[str] = set()  # vắng <ngưỡng rồi quay lại → không ADD
+        with self._lock:
+            tracked = set(self._missing_counts)
+            # fp quay lại khi ĐANG bị đếm vắng (<ngưỡng) = flap — dù known đã ∅
+            for fp in tracked & current:
+                if self._missing_counts[fp] < REMOVE_DEBOUNCE_SCANS:
+                    flapped_back.add(fp)
+                self._missing_counts.pop(fp, None)
+            still_there = known & current
+            for fp in still_there:
+                self._missing_counts.pop(fp, None)
+            # device từng thấy gần nhất (known ∪ đang đếm) mà không còn trong current
+            for fp in (known | tracked) - current:
+                self._missing_counts[fp] = self._missing_counts.get(fp, 0) + 1
+                if self._missing_counts[fp] >= REMOVE_DEBOUNCE_SCANS:
+                    removed.add(fp)
+                    self._missing_counts.pop(fp, None)  # bắn 1 lần — không lặp
+        added = {fp for fp in (current - known) if fp not in flapped_back}
         events: list[dict[str, Any]] = []
         for fp in sorted(added):
             dev = next((d for d in flat if device_fingerprint(d) == fp), None)

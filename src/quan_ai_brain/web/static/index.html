@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QUAN AI BRAIN — Trợ Lý Điều Hành Số</title>
+    <title>Cherry Console :8765 — QUAN AI BRAIN</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=5.5-light">
+    <link rel="stylesheet" href="/static/style.css?v=cherry_1411">
     <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png">
 </head>
 <body class="dark-theme">
@@ -95,6 +95,9 @@
                             Giọng đọc TTS
                         </span>
                         <span id="tts-status-badge" class="tts-badge ready" title="Trạng thái giọng đọc tiếng Việt">vi-VN (Hoài My)</span>
+                        <button class="btn-tts-stop" id="btn-tts-stop" title="Dừng đọc ngay (hoặc bấm Esc)">
+                            ⏹ Dừng đọc
+                        </button>
                         <button class="btn-voice-picker" id="btn-open-voice-picker" title="Chọn giọng đọc — nhiều giọng tiếng Việt chuẩn (nữ/nam, online/offline)">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
                             Đổi giọng
@@ -134,6 +137,14 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
+
+                        <!-- Quick prompt chips (14/11) -->
+                        <div class="quick-chips" id="quick-chips">
+                            <button class="quick-chip" data-q="Báo cáo sức khỏe hệ thống trong 1 câu">🩺 Sức khỏe hệ thống</button>
+                            <button class="quick-chip" data-q="Kiểm tra kết nối Pi 5 và trạng thái kiosk">📡 Trạng thái Pi 5</button>
+                            <button class="quick-chip" data-q="Nhắc lại 3 việc quan trọng anh đang làm">🗂 Việc đang làm</button>
+                            <button class="quick-chip" data-q="Hôm nay có lịch họp hay nhắc nhở gì không">📅 Lịch hôm nay</button>
                         </div>
 
                         <!-- Voice Listening Pulse Overlay (When recording) -->
@@ -187,6 +198,7 @@
                                     <span class="pi5-sync-led online" id="pi5-sync-led"></span>
                                     <span class="pi5-sync-title">Loa Raspberry Pi 5:</span>
                                     <span class="pi5-sync-status" id="pi5-sync-status">ĐỒNG BỘ PHÁT THOẠI</span>
+                                    <span class="pi5-sync-rtt" id="pi5-sync-rtt">-- ms</span>
                                 </div>
                                 <div class="pi5-sync-controls">
                                     <button class="btn-pi5-action" id="btn-pi5-speak-test" title="Phát ngay lời thoại chào mừng lên Raspberry Pi 5">
@@ -289,7 +301,7 @@
         </div>
     </div>
 
-    <script src="/static/avatar_engine.js?v=5.5"></script>
-    <script src="/static/app.js?v=5.5"></script>
+    <script src="/static/avatar_engine.js?v=cherry_1411"></script>
+    <script src="/static/app.js?v=cherry_1411"></script>
 </body>
 </html>
