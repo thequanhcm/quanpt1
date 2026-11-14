@@ -157,9 +157,14 @@
     var breathOffset = Math.sin(breathPhase) * breath.amplitude;
 
     // 2. Sway oscillation (lerp toward target + sin wave)
-    var swayPhase = (now / 1000) * 1.2; // 1.2 Hz sway
-    var swayX = this._target.swayX * (0.7 + 0.3 * Math.sin(swayPhase));
-    var swayY = this._target.swayY * (0.7 + 0.3 * Math.cos(swayPhase * 0.8));
+    // (15/11/2026 v6cin) OWNER: tham chiếu video vi1/vi2 (cinematic female):
+    // chu kỳ chuyển động chính ~20.8s (optical flow FFT), đầu = 54-73% biên độ
+    // thân → sway CHẬM + MỀM (0.048Hz ~ 20.8s/vòng thay vì 1.2Hz giật cục),
+    // lớp sway phụ 0.16Hz tạo nhịp "thở cơ thể" hai tầng tự nhiên.
+    var swayPhase = (now / 1000) * 0.048; // ~20.8s/vòng — pacing cinematic
+    var swayPhase2 = (now / 1000) * 0.16; // tầng phụ ~6.2s — vi mô
+    var swayX = this._target.swayX * (0.7 + 0.3 * Math.sin(swayPhase)) + this._target.swayX * 0.12 * Math.sin(swayPhase2);
+    var swayY = this._target.swayY * (0.7 + 0.3 * Math.cos(swayPhase * 0.8)) + this._target.swayY * 0.12 * Math.cos(swayPhase2 * 0.7);
 
     // 3. Speaking boost: tăng sway + arm reach khi đang nói
     if (this._speaking) {

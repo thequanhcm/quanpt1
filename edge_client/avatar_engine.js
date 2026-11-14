@@ -701,6 +701,18 @@ class DigitalHumanAvatar {
     this.headSwayX = lerp(this.headSwayX, this.targetHeadSwayX, 0.038);
     this.headNodY = lerp(this.headNodY, this.targetHeadNodY, 0.075);
 
+    // (15/11/2026 v6cin) OWNER: tham chiếu video vi1/vi2 (cinematic female) —
+    // đầu nghiêng chậm theo nhịp 20.8s (optical flow FFT) + lớp vi mô 6.2s.
+    // Biên độ nhỏ (0.6° tilt, 1.2px sway) để KHÔNG đè lên micro-expression
+    // từ scheduler (priority 30+). Chỉ áp dụng khi scheduler không active.
+    if (!this._scheduler || !this._scheduler._activeGesture) {
+      const t = (now - this.startTime) * 0.001;
+      const cinematicTilt = Math.sin(t * 0.302) * 0.6 * (Math.PI / 180); // ~20.8s/vòng
+      const cinematicSway = Math.sin(t * 1.013) * 1.2; // ~6.2s/vòng
+      this.headTilt += cinematicTilt;
+      this.headSwayX += cinematicSway;
+    }
+
     // Sprint 2 (14/11): tick MotionScheduler — blend motion từ gesture/state.
     // Áp dụng blend lên headTilt/headSwayX/headNodY (override nếu priority cao hơn).
     if (this._scheduler) {
