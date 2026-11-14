@@ -219,6 +219,22 @@ class DigitalHumanAvatar {
       this._emotionEngine = new _EMOTION.EmotionTransitionEngine();
     }
 
+    // Sprint 4 (14/11): Natural Voice & Lip-Sync — audio_mouth_driver.js là
+    // NGUỒN SỰ THẬT cho AudioMouthDriver (audio-driven mouth + interrupt +
+    // barge-in). Cả PC lẫn Pi5 dùng chung. startSpeaking() sẽ dùng driver
+    // thay vì timer fallback 90ms → miệng theo audio thật (Gate 4).
+    const _AUDIO = (typeof window !== "undefined" && window.CherryAudioMouthDriver) ||
+      (typeof globalThis !== "undefined" && globalThis.CherryAudioMouthDriver) || null;
+    if (_AUDIO) {
+      this._audio = _AUDIO;
+      this._mouthDriver = new _AUDIO.AudioMouthDriver({
+        onViseme: (viseme, open) => {
+          this.activeViseme = viseme;
+          this.currentOpenRatio = open;
+        }
+      });
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -480,11 +496,40 @@ class DigitalHumanAvatar {
       clearInterval(this.speechFallbackInterval);
       this.speechFallbackInterval = null;
     }
+    // Sprint 4 (14/11): dừng mouth driver nếu đang chạy
+    if (this._mouthDriver && this._mouthDriver.isActive()) {
+      this._mouthDriver.stop("cancel");
+    }
+  }
+
+  /* Sprint 4 (14/11): setAudioSource — kiosk.js gọi để wire audio element
+     + analyser vào engine. Sau đó startSpeaking() sẽ dùng mouth driver. */
+  setAudioSource(audio, analyser) {
+    this._currentAudio = audio;
+    this._currentAnalyser = analyser;
+  }
+
+  /* Sprint 4 (14/11): bargeIn — người dùng ngắt lời. */
+  bargeIn() {
+    if (this._mouthDriver && this._mouthDriver.isActive()) {
+      this._mouthDriver.bargeIn();
+    }
+    this.cancelUtterance();
+    this.setState("IDLE");
   }
 
   startSpeaking(durationMs = 3000) {
     this.setState("SPEAKING");
     this.cancelUtterance();
+
+    // Sprint 4 (14/11): nếu có mouth driver + audio element → dùng driver
+    // (audio-driven). Nếu không → giữ timer fallback (backward compat).
+    if (this._mouthDriver && this._currentAudio) {
+      this._mouthDriver.start(this._currentAudio, {
+        existingAnalyser: this._currentAnalyser
+      });
+      return;
+    }
 
     const startTime = performance.now();
     const visemes = ["A", "O", "E", "I", "U", "REST"];
