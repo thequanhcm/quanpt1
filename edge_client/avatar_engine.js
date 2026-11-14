@@ -39,8 +39,15 @@ class DigitalHumanAvatar {
     this.height = this.canvas.height || 720;
 
     // Feature Bounding Boxes (calibrated to Digital Human Model A - Pi5/4.png 1024x1024 master)
-    this.EYES_BOX = { x: 320, y: 425, w: 365, h: 115 };
-    this.MOUTH_BOX = { x: 405, y: 650, w: 245, h: 105 };
+    // (14/11 v6emo) Tâm căn lại theo sheet avatar_v3: eyes tâm (496,438), mouth
+    // tâm (502,670) — lệch nhẹ so master v2 (eyes 502,482 / mouth 527,702).
+    this.EYES_BOX = { x: 316, y: 373, w: 360, h: 130 };
+    this.MOUTH_BOX = { x: 427, y: 630, w: 240, h: 100 };
+
+    // (14/11 v6emo) Crossfade portrait state
+    this._lastPortraitKey = null;
+    this._lastPortraitImg = null;
+    this._prevPortrait = null;
 
     // Eyebrows Anchor Geometry (Model A 1024x1024 coordinates)
     this.BROW_LEFT = { innerX: 475, innerY: 435, archX: 415, archY: 415, tailX: 350, tailY: 435 };
@@ -263,18 +270,22 @@ class DigitalHumanAvatar {
 
   _loadAssets() {
     const assetList = [
-      { key: "portrait", src: `${this.basePath}/avatar_v2_portrait.png`, fallback: `${this.basePath}/model_f_portrait.png` },
-      { key: "portrait_happy", src: `${this.basePath}/avatar_v2_happy.png`, fallback: `${this.basePath}/model_f_happy.png` },
-      { key: "portrait_thinking", src: `${this.basePath}/avatar_v2_thinking.png`, fallback: `${this.basePath}/model_f_thinking.png` },
-      // (31/10) avatar_v2_warning.png gốc là ảnh CƯỜI → dùng confused (trầm tư nghiêm túc)
-      { key: "portrait_warning", src: `${this.basePath}/avatar_v2_confused.png`, fallback: `${this.basePath}/avatar_v2_warning.png` },
-      { key: "portrait_empathic", src: `${this.basePath}/avatar_v2_empathic.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
-      { key: "portrait_confused", src: `${this.basePath}/avatar_v2_confused.png`, fallback: `${this.basePath}/avatar_v2_thinking.png` },
-      { key: "portrait_surprised", src: `${this.basePath}/avatar_v2_surprised.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
-      // (31/10) error dùng thinking (suy tư nghiêm) + aura đỏ phân biệt
-      { key: "portrait_error", src: `${this.basePath}/avatar_v2_thinking.png`, fallback: `${this.basePath}/avatar_v2_error.png` },
-      { key: "portrait_blink", src: `${this.basePath}/avatar_v2_blink.png`, fallback: `${this.basePath}/model_f_blink.png` },
-      { key: "portrait_speaking", src: `${this.basePath}/avatar_v2_portrait.png`, fallback: `${this.basePath}/model_f_speaking.png` },
+      // (14/11 v6emo) Portrait cảm xúc THẬT sheet anh Quân cung cấp (avatar_v3_*)
+      // làm primary; avatar_v2_* giữ làm fallback. 2 slot mới: listening + dreamy.
+      { key: "portrait", src: `${this.basePath}/avatar_v3_thu_thai.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      { key: "portrait_happy", src: `${this.basePath}/avatar_v3_vui_suong.png`, fallback: `${this.basePath}/avatar_v2_happy.png` },
+      { key: "portrait_thinking", src: `${this.basePath}/avatar_v3_tap_trung.png`, fallback: `${this.basePath}/avatar_v2_thinking.png` },
+      // (14/11 v6emo) tuc_gian = biểu cảm tức giận thật thay cho confused-trầm-tư cũ
+      { key: "portrait_warning", src: `${this.basePath}/avatar_v3_tuc_gian.png`, fallback: `${this.basePath}/avatar_v2_confused.png` },
+      { key: "portrait_empathic", src: `${this.basePath}/avatar_v3_buon_ba.png`, fallback: `${this.basePath}/avatar_v2_empathic.png` },
+      { key: "portrait_confused", src: `${this.basePath}/avatar_v3_nghieng_dau.png`, fallback: `${this.basePath}/avatar_v2_confused.png` },
+      { key: "portrait_surprised", src: `${this.basePath}/avatar_v3_ngac_nhien.png`, fallback: `${this.basePath}/avatar_v2_surprised.png` },
+      { key: "portrait_error", src: `${this.basePath}/avatar_v3_tap_trung.png`, fallback: `${this.basePath}/avatar_v2_error.png` },
+      { key: "portrait_blink", src: `${this.basePath}/avatar_v3_chop_mat.png`, fallback: `${this.basePath}/avatar_v2_blink.png` },
+      { key: "portrait_speaking", src: `${this.basePath}/avatar_v3_dang_noi.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      // (14/11 v6emo) 2 slot MỚI: lắng nghe + mơ mộng (chờ duyệt / kết nối lại)
+      { key: "portrait_listening", src: `${this.basePath}/avatar_v3_lang_nghe.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      { key: "portrait_dreamy", src: `${this.basePath}/avatar_v3_mo_mong.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
       { key: "eyes_blink", src: `${this.basePath}/eyes_closed.png`, fallback: null },
       { key: "eyes_thinking", src: `${this.basePath}/eyes_thinking.png`, fallback: null },
       { key: "mouth_speaking", src: `${this.basePath}/mouth_v2_speaking.png`, fallback: `${this.basePath}/mouth_speaking.png` },
@@ -823,6 +834,14 @@ class DigitalHumanAvatar {
     if ((this.isBlinking || this.state === "OFFLINE" || this.state === "SLEEPING" || this.state === "SAFE_MODE") && this.assets.portrait_blink && this.assets.portrait_blink.complete && this.assets.portrait_blink.naturalWidth > 0) {
       baseImg = this.assets.portrait_blink;
       usedFullBlink = true;
+    } else if ((this.state === "LISTENING") && this.assets.portrait_listening && this.assets.portrait_listening.complete && this.assets.portrait_listening.naturalWidth > 0) {
+      // (14/11 v6emo) LẮNG NGHE: portrait lắng nghe thật (ánh mắt hướng chủ nhân)
+      baseImg = this.assets.portrait_listening;
+      isSpecialExpression = true;
+    } else if ((this.state === "WAITING_FOR_OWNER" || this.state === "RECONNECTING") && this.assets.portrait_dreamy && this.assets.portrait_dreamy.complete && this.assets.portrait_dreamy.naturalWidth > 0) {
+      // (14/11 v6emo) CHỜ/KẾT NỐI LẠI: mơ mộng (ánh mắt xa xăm chờ đợi)
+      baseImg = this.assets.portrait_dreamy;
+      isSpecialExpression = true;
     } else if ((this.state === "THINKING" || this.state === "RESEARCHING" || this.activeEmotionTone === "ANALYTICAL_THINKING") && this.assets.portrait_thinking && this.assets.portrait_thinking.complete && this.assets.portrait_thinking.naturalWidth > 0) {
       baseImg = this.assets.portrait_thinking;
       usedFullThinking = true;
@@ -856,7 +875,41 @@ class DigitalHumanAvatar {
     }
 
     if (baseImg && baseImg.complete && baseImg.naturalWidth > 0) {
-      ctx.drawImage(baseImg, 0, 0, w, h);
+      // (14/11 v6emo) CROSSFADE 350ms giữa 2 portrait cảm xúc khác nhau:
+      // giữ ảnh cũ vẽ trước với alpha giảm dần, ảnh mới đè lên với alpha tăng dần
+      // → chuyển cảm xúc mượt, không nhấp nháy. Blink vẫn tức thì (fade ngắn).
+      const portraitKey = (baseImg === this.assets.portrait) ? "portrait"
+        : (baseImg === this.assets.portrait_blink) ? "blink"
+        : (baseImg === this.assets.portrait_speaking) ? "speaking"
+        : (baseImg === this.assets.portrait_listening) ? "listening"
+        : (baseImg === this.assets.portrait_dreamy) ? "dreamy"
+        : (baseImg === this.assets.portrait_happy) ? "happy"
+        : (baseImg === this.assets.portrait_thinking) ? "thinking"
+        : (baseImg === this.assets.portrait_warning) ? "warning"
+        : (baseImg === this.assets.portrait_empathic) ? "empathic"
+        : (baseImg === this.assets.portrait_confused) ? "confused"
+        : (baseImg === this.assets.portrait_surprised) ? "surprised"
+        : (baseImg === this.assets.portrait_error) ? "error" : "other";
+      if (portraitKey !== this._lastPortraitKey) {
+        this._prevPortrait = { img: this._lastPortraitImg, key: this._lastPortraitKey, t0: now };
+        this._lastPortraitKey = portraitKey;
+        this._lastPortraitImg = baseImg;
+      }
+      const FADE_MS = 350;
+      let fade = 1.0;
+      if (this._prevPortrait && this._prevPortrait.img && this._prevPortrait.img.complete && this._prevPortrait.img.naturalWidth > 0) {
+        fade = Math.min(1.0, (now - this._prevPortrait.t0) / FADE_MS);
+        if (fade >= 1.0) this._prevPortrait = null;
+      }
+      if (this._prevPortrait && this._prevPortrait.img && fade < 1.0) {
+        ctx.globalAlpha = 1.0;
+        ctx.drawImage(this._prevPortrait.img, 0, 0, w, h);
+        ctx.globalAlpha = fade;
+        ctx.drawImage(baseImg, 0, 0, w, h);
+        ctx.globalAlpha = 1.0;
+      } else {
+        ctx.drawImage(baseImg, 0, 0, w, h);
+      }
 
       // (14/11/2026, owner: "bỏ các đường trên hình thể, giữ hình nguyên gốc")
       // Tắt toàn bộ vẽ đè trang trí lên portrait: hair strands cyan + tendril

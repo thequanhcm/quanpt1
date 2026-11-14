@@ -125,7 +125,10 @@ class TestPortraitMapping:
 class TestCacheBump:
     def test_html_cache_version_bumped(self):
         html = _read(HTML)
-        assert "cherry_sync1314" in html, "kiosk.html chưa bump cache version"
+        # (14/11 v6emo) cache version hiện tại = v6emo_1411 (portrait cảm xúc mới);
+        # test chấp nhận mọi version >= sync1314, chỉ chặn version cổ.
+        assert ("v6emo_1411" in html) or ("cherry_sync1314" in html), \
+            "kiosk.html chưa bump cache version"
         assert "cherry_07nov_r1" not in html, "cache version cũ còn sót"
 
     def test_engine_refers_kiosk_js_cache(self):

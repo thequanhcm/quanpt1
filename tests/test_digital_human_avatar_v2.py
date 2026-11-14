@@ -110,8 +110,9 @@ def test_avatar_engine_12_states_configured() -> None:
         assert f"{st}:" in content, f"State {st} must be present in STATE_CONFIGS in avatar_engine.js"
 
     # Verify calibrated bounding boxes for Model A
-    assert "this.EYES_BOX = { x: 320, y: 425, w: 365, h: 115 };" in content
-    assert "this.MOUTH_BOX = { x: 405, y: 650, w: 245, h: 105 };" in content
+    # (14/11 v6emo) Căn lại theo sheet avatar_v3: eyes tâm (496,438), mouth tâm (502,670)
+    assert "this.EYES_BOX = { x: 316, y: 373, w: 360, h: 130 };" in content
+    assert "this.MOUTH_BOX = { x: 427, y: 630, w: 240, h: 100 };" in content
 
 
 def test_vietnamese_mouth_sync_timeline_and_visemes() -> None:
