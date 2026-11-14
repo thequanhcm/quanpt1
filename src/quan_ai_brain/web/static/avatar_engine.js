@@ -241,6 +241,17 @@ class DigitalHumanAvatar {
       this._presenceEngine = new _PRESENCE.PresenceEngine();
     }
 
+    // Sprint 6 (14/11): Body Motion Engine — body_motion_engine.js là NGUỒN
+    // SỰ THẬT cho BodyMotionEngine (shoulder sway + body lean + breathing +
+    // arm reach + speech sync). Cả PC lẫn Pi5 dùng chung. Render loop sẽ
+    // tick body motion mỗi frame → hình thể linh hoạt uyển chuyển (Gate 6).
+    const _BODY = (typeof window !== "undefined" && window.CherryBodyMotionEngine) ||
+      (typeof globalThis !== "undefined" && globalThis.CherryBodyMotionEngine) || null;
+    if (_BODY) {
+      this._body = _BODY;
+      this._bodyMotionEngine = new _BODY.BodyMotionEngine();
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -541,6 +552,20 @@ class DigitalHumanAvatar {
       // Apply gaze vào target micro (sẽ được lerp ở bước 1)
       this.targetMicro.gazeX = gaze.gazeX;
       this.targetMicro.gazeY = gaze.gazeY;
+    }
+
+    // Sprint 6 (14/11): tick body motion engine → shoulder sway + body lean
+    // + breathing + arm reach + speech sync. Apply vào targetBody để render
+    // loop vẽ body theo transform.
+    if (this._bodyMotionEngine) {
+      this._bodyMotionEngine.setState(this.state);
+      // Sync speaking + speech energy từ mouth driver (Sprint 4)
+      if (this._mouthDriver) {
+        this._bodyMotionEngine.setSpeaking(this._mouthDriver.isActive());
+        this._bodyMotionEngine.setSpeechEnergy(this._mouthDriver.getCurrentEnergy());
+      }
+      const bodyTransform = this._bodyMotionEngine.tick(now);
+      this.targetBody = bodyTransform;
     }
 
     // Smooth Interpolation (lerp) helper
