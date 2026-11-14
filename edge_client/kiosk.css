@@ -201,7 +201,9 @@ body {
 }
 
 .kiosk-avatar-viewport {
-  /* (31/10) MỞ RỘNG: fill tuyệt đối trong card — KHÔNG tràn xuống footer */
+  /* (14/11/2026 v6emo) OWNER: "bỏ các khung nền màu xanh, vòng tròn đang quay...
+     chỉ để nguyên bản giao diện hiển thị như ảnh số 2" → viewport trong suốt,
+     KHÔNG viền cyan, KHÔNG bóng phát sáng, KHÔNG nền gradient. */
   position: absolute;
   inset: 0;
   width: 100%;
@@ -211,12 +213,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  position: absolute;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
-  box-shadow: 0 0 36px rgba(0, 229, 255, 0.28);
-  border: 1px solid rgba(0, 229, 255, 0.45);
-  background: radial-gradient(circle at 50% 50%, rgba(14, 25, 52, 0.9) 0%, rgba(6, 12, 24, 0.98) 100%);
+  box-shadow: none;
+  border: none;
+  background: transparent;
   transition: all 0.4s ease;
 }
 
@@ -609,13 +610,22 @@ body {
 }
 
 /* ================= (13/11/2026) HOLOGRAM CYLINDER OVERLAY ================= */
+/* (14/11/2026 v6emo) OWNER: bỏ khung kính/đế/vòng LED — ẩn toàn bộ overlay
+   (giữ CSS bên dưới để rollback bằng git). Portrait thuần, không trang trí đè. */
+.hologram-cylinder,
+.cylinder-glass,
+.cylinder-led-ring,
+.cylinder-base {
+  display: none;
+}
+
 /* Trụ kính trong suốt bao quanh avatar (mẫu pi5 template.mp4) */
 .hologram-cylinder {
   position: absolute;
   inset: 0;
   pointer-events: none;
   z-index: 2;
-  display: flex;
+  display: none; /* (14/11 v6emo) was: flex */
   align-items: center;
   justify-content: center;
 }
@@ -684,7 +694,9 @@ body {
 }
 
 /* ================= (13/11/2026) PARTICLES CANVAS ================= */
+/* (14/11/2026 v6emo) OWNER: bỏ hạt sáng bay quanh avatar. */
 .particles-canvas {
+  display: none;
   position: absolute;
   inset: 0;
   width: 100%;
@@ -773,6 +785,11 @@ body {
 }
 
 /* ================= (13/11/2026) STATE CAPTION ================= */
+/* (14/11/2026 v6emo) OWNER: bỏ pill caption dưới avatar (TAM NGHỈ/SẴN SÀNG...). */
+.state-caption {
+  display: none;
+}
+
 .state-caption {
   position: absolute;
   bottom: 6%;

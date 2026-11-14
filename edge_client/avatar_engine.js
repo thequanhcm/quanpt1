@@ -942,6 +942,12 @@ class DigitalHumanAvatar {
   }
 
   _drawHolographicHalo(ctx, w, h, color) {
+    // (14/11/2026 v6emo) OWNER: "bỏ vòng tròn đang quay... chỉ để nguyên bản
+    // giao diện như ảnh số 2" → HALO TẮT HOÀN TOÀN (giữ hàm để rollback git).
+    return;
+  }
+
+  _drawHolographicHalo_disabled(ctx, w, h, color) {
     // (06/11/2026, owner: "mượt nhất") Halo tĩnh ít đổi → CACHE offscreen:
     // chỉ vẽ lại khi màu aura đổi hoặc vòng quay vượt 1 bậc cung nhỏ. Giảm
     // shadowBlur đắt mỗi frame → tăng FPS thực trên Pi5 đáng kể.
@@ -1282,6 +1288,11 @@ class DigitalHumanAvatar {
   // ================= LIGHTING & SYMBOLS =================
 
   _renderCyberLighting(ctx, w, h, color) {
+    // (14/11/2026 v6emo) OWNER: giữ ảnh portrait nguyên gốc, không phủ vignette tối.
+    return;
+  }
+
+  _renderCyberLighting_disabled(ctx, w, h, color) {
     ctx.save();
     const grad = ctx.createRadialGradient(w * 0.5, h * 0.5, w * 0.38, w * 0.5, h * 0.5, w * 0.54);
     grad.addColorStop(0, "transparent");
@@ -1294,6 +1305,11 @@ class DigitalHumanAvatar {
   }
 
   _renderSymbolOverlay(ctx, w, h, symbol, color) {
+    // (14/11/2026 v6emo) OWNER: bỏ huy hiệu tròn zZz/⚠️/✨ đè lên chân dung.
+    return;
+  }
+
+  _renderSymbolOverlay_disabled(ctx, w, h, symbol, color) {
     const cx = w * 0.5;
     const cy = h * 0.82;
     const r = w * 0.08;
