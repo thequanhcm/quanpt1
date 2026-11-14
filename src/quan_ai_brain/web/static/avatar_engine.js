@@ -789,8 +789,11 @@ class DigitalHumanAvatar {
     if (baseImg && baseImg.complete && baseImg.naturalWidth > 0) {
       ctx.drawImage(baseImg, 0, 0, w, h);
 
-      // 5. Natural Hair Sway & Dynamic Lilac Physics (Flowing strands, sheen, motes)
-      this._renderNaturalHairSway(ctx, scaleX, scaleY, now);
+      // (14/11/2026, owner: "bỏ các đường trên hình thể, giữ hình nguyên gốc")
+      // Tắt toàn bộ vẽ đè trang trí lên portrait: hair strands cyan + tendril
+      // xuyên mặt + sheen + motes. Portrait asset đã có tóc thật; giữ hàm
+      // _renderNaturalHairSway nguyên vẹn bên dưới để rollback bằng git.
+      // this._renderNaturalHairSway(ctx, scaleX, scaleY, now);
 
       // 6. Dynamic Eye Rendering (Blink fallback, saccades, gaze, Duchenne squint, iris glint)
       this._renderEyes(ctx, scaleX, scaleY, 0, usedFullBlink, usedFullThinking, isSpecialExpression);
