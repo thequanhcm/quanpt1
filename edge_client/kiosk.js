@@ -333,6 +333,12 @@ document.addEventListener("DOMContentLoaded", () => {
       // (06/11/2026) Gắn analyser để VU meter + avatar đọc energy THẬT
       const analyserOk = attachAnalyser(audio);
 
+      // Sprint 4 (14/11): wire audio element + analyser vào engine →
+      // startSpeaking() dùng AudioMouthDriver (audio-driven mouth, Gate 4).
+      if (window.digitalHuman && window.digitalHuman.setAudioSource) {
+        window.digitalHuman.setAudioSource(audio, analyserOk ? kioskAudioAnalyser : null);
+      }
+
       // (31/10) BIỂU CẢM THEO NỘI DUNG: micro-expression theo cảm xúc câu nói
       if (window.digitalHuman && spokenText) {
         window.digitalHuman.setContextFromText(spokenText);

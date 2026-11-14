@@ -235,6 +235,17 @@ class DigitalHumanAvatar {
       });
     }
 
+    // Sprint 5 (14/11): Human-Like Interaction — presence_engine.js là NGUỒN
+    // SỰ THẬT cho PresenceEngine (eye contact + listening + idle + continuity).
+    // Cả PC lẫn Pi5 dùng chung. Render loop sẽ tick presence mỗi frame →
+    // gaze + eye contact tự nhiên (Gate 5).
+    const _PRESENCE = (typeof window !== "undefined" && window.CherryPresenceEngine) ||
+      (typeof globalThis !== "undefined" && globalThis.CherryPresenceEngine) || null;
+    if (_PRESENCE) {
+      this._presence = _PRESENCE;
+      this._presenceEngine = new _PRESENCE.PresenceEngine();
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -554,6 +565,14 @@ class DigitalHumanAvatar {
 
   _update(now) {
     let config = this.STATE_CONFIGS[this.state] || this.STATE_CONFIGS.IDLE;
+
+    // Sprint 5 (14/11): tick presence engine → gaze + eye contact tự nhiên
+    if (this._presenceEngine) {
+      this._presenceEngine.setState(this.state);
+      const gaze = this._presenceEngine.tick(now);
+      this.targetMicro.gazeX = gaze.gazeX;
+      this.targetMicro.gazeY = gaze.gazeY;
+    }
 
     // (31/10) TONE AURA OVERRIDE: màu hào quang/viền theo CẢM XÚC CÂU NÓI
     // (khách quan nhìn thấy ngay cả khi portrait nền không đổi được):

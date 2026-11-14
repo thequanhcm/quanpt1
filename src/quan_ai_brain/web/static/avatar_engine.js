@@ -230,6 +230,17 @@ class DigitalHumanAvatar {
       });
     }
 
+    // Sprint 5 (14/11): Human-Like Interaction — presence_engine.js là NGUỒN
+    // SỰ THẬT cho PresenceEngine (eye contact + listening + idle + continuity).
+    // Cả PC lẫn Pi5 dùng chung. Render loop sẽ tick presence mỗi frame →
+    // gaze + eye contact tự nhiên (Gate 5).
+    const _PRESENCE = (typeof window !== "undefined" && window.CherryPresenceEngine) ||
+      (typeof globalThis !== "undefined" && globalThis.CherryPresenceEngine) || null;
+    if (_PRESENCE) {
+      this._presence = _PRESENCE;
+      this._presenceEngine = new _PRESENCE.PresenceEngine();
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -522,6 +533,15 @@ class DigitalHumanAvatar {
 
     // Halo rotation
     this.haloAngle += (config.haloSpeed || 0.025);
+
+    // Sprint 5 (14/11): tick presence engine → gaze + eye contact tự nhiên
+    if (this._presenceEngine) {
+      this._presenceEngine.setState(this.state);
+      const gaze = this._presenceEngine.tick(now);
+      // Apply gaze vào target micro (sẽ được lerp ở bước 1)
+      this.targetMicro.gazeX = gaze.gazeX;
+      this.targetMicro.gazeY = gaze.gazeY;
+    }
 
     // Smooth Interpolation (lerp) helper
     const lerp = (a, b, t) => a + (b - a) * t;
