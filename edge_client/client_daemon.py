@@ -533,6 +533,12 @@ def _spawn_kiosk_chromium() -> "subprocess.Popen | None":
             # (31/10/2026) Chống Google Translate tự dịch giao diện kiosk
             "--disable-features=Translate,TranslateUI",
             "--lang=vi",
+            # (14/11/2026 v6pure) OWNER: "Pi5 hoạt động liên tục, hình thể hiển thị liên tục"
+            # → tắt throttle khi tab nền/không user input để requestAnimationFrame
+            # chạy đều 12-24 FPS, avatar không bị đứng im khi không có tương tác.
+            "--disable-background-timer-throttling",
+            "--disable-renderer-backgrounding",
+            "--disable-backgrounding-occluded",
             "http://127.0.0.1:8768/",
         ]
         proc = _sp.Popen([chrome_bin] + chrome_flags, env=env,
@@ -690,6 +696,10 @@ def launch_hdmi_mirror() -> bool:
                 "--disable-gpu-compositing", "--force-prefers-reduced-motion",
                 "--disable-session-crashed-bubble",
                 "--disable-features=Translate,TranslateUI", "--lang=vi",
+                # (14/11/2026 v6pure) OWNER: "Pi5 hoạt động liên tục, hình thể hiển thị liên tục"
+                "--disable-background-timer-throttling",
+                "--disable-renderer-backgrounding",
+                "--disable-backgrounding-occluded",
                 "http://127.0.0.1:8768/?hdmi=1",
             ]
             _HDMI_MIRROR_PROC = subprocess.Popen([chrome_bin] + flags, env=env,

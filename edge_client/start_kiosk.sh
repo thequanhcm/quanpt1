@@ -16,7 +16,12 @@ if echo "$STATUS" | grep -q '"kiosk_running": *true'; then
         export DISPLAY=:0
         export WAYLAND_DISPLAY=wayland-0
         export XDG_RUNTIME_DIR=/run/user/1000
-        CHROME_FLAGS="--password-store=basic --kiosk --noerrdialogs --disable-infobars --check-for-update-interval=31536000 --touch-events=enabled --disable-pinch --overscroll-history-navigation=0 --window-size=800,480 --window-position=0,0 --ozone-platform=x11 --disable-features=Translate,TranslateUI --lang=vi --enable-features=OverlayScrollbar"
+        # (14/11/2026 v6pure) OWNER: "Pi5 hoạt động liên tục, hình thể hiển thị liên tục"
+        # → tắt screen blanking + DPMS để màn DSI không tự tắt khi không có user input.
+        xset s off 2>/dev/null || true
+        xset -dpms 2>/dev/null || true
+        xset s noblank 2>/dev/null || true
+        CHROME_FLAGS="--password-store=basic --kiosk --noerrdialogs --disable-infobars --check-for-update-interval=31536000 --touch-events=enabled --disable-pinch --overscroll-history-navigation=0 --window-size=800,480 --window-position=0,0 --ozone-platform=x11 --disable-features=Translate,TranslateUI --lang=vi --enable-features=OverlayScrollbar --disable-background-timer-throttling --disable-renderer-backgrounding --disable-backgrounding-occluded --autoplay-policy=no-user-gesture-required"
         if which chromium-browser > /dev/null 2>&1; then
             chromium-browser $CHROME_FLAGS http://127.0.0.1:8768/ &
         elif which chromium > /dev/null 2>&1; then
