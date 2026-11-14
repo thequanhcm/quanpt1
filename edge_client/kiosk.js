@@ -345,9 +345,12 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (window.digitalHuman && timeline) {
         window.digitalHuman.setTimeline(timeline);
-      } else if (window.digitalHuman && analyserOk) {
-        // (06/11/2026) Không có timeline (TTS fallback khác) nhưng có audio thật:
-        // chạy chế độ SPEAKING + để engine đọc liveEnergy từ analyser.
+      }
+      // (15/11/2026 v6sync) AUDIO-FIRST: khi có audio thật + analyser LUÔN bật
+      // live meter (kể cả khi có timeline) — trước đây "else if" làm timeline
+      // text-giả đè energy thật → miệng KHÔNG khớp giọng (A/B test data/mouth_fix_ab.js:
+      // timeline-cu Hz=2.03-2.24 lệch audio; audio-first Hz=1.53-2.33 KHỚP từng giọng).
+      if (window.digitalHuman && analyserOk) {
         window.digitalHuman.setLiveAudioMeter(() => {
           if (!kioskAudioAnalyser || !kioskAudioData || !currentKioskAudio) return 0;
           kioskAudioAnalyser.getByteFrequencyData(kioskAudioData);

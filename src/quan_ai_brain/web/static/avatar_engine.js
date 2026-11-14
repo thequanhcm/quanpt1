@@ -138,14 +138,22 @@ class DigitalHumanAvatar {
         browLift: 2.2, browTilt: 2.8, browInward: 0.5, browAsymmetric: 2.8,
         eyeSquint: 0.22, gazeX: 0.0, gazeY: -0.6, glintPulse: 1.25, smileBoost: 0.22,
       },
-      // ===== Tông cảm xúc mở rộng (13/11) =====
-      CURIOUS: {
-        browLift: 4.8, browTilt: 3.6, browInward: 0.0, browAsymmetric: 3.4,
-        eyeSquint: 0.12, gazeX: 1.2, gazeY: 0.8, glintPulse: 1.45, smileBoost: 0.18,
+      // (06/11/2026, owner: "đủ đa dạng cử chỉ, giác quan") Tone SURPRISED —
+      // kích hoạt portrait_surprised (asset đã có nhưng trước giờ chết code):
+      // tin bất ngờ, cảnh báo khẩn chưa xác nhận, sự kiện ngoài dự kiến.
+      SURPRISED: {
+        browLift: 6.0, browTilt: 0.0, browInward: 0.0, browAsymmetric: 0.0,
+        eyeSquint: -0.15, gazeX: 0.0, gazeY: 0.8, glintPulse: 1.6, smileBoost: 0.0,
       },
+
+      // ===== 4 TÔNG ĐỒNG BỘ TỪ PC DASHBOARD (14/11, sprint sync_1314) =====
       APOLOGETIC: {
         browLift: -1.8, browTilt: 2.6, browInward: 2.2, browAsymmetric: 1.6,
         eyeSquint: 0.30, gazeX: 0.0, gazeY: 1.2, glintPulse: 0.90, smileBoost: -0.10,
+      },
+      CURIOUS: {
+        browLift: 4.8, browTilt: 3.6, browInward: 0.0, browAsymmetric: 3.4,
+        eyeSquint: 0.12, gazeX: 1.2, gazeY: 0.8, glintPulse: 1.45, smileBoost: 0.18,
       },
       PATIENT_WAITING: {
         browLift: 1.2, browTilt: 1.0, browInward: 0.0, browAsymmetric: 0.0,
@@ -154,10 +162,6 @@ class DigitalHumanAvatar {
       PROUD: {
         browLift: 3.0, browTilt: 0.8, browInward: 0.0, browAsymmetric: 0.0,
         eyeSquint: 0.45, gazeX: 0.0, gazeY: -0.4, glintPulse: 1.55, smileBoost: 0.38,
-      },
-      SURPRISED: {
-        browLift: 7.5, browTilt: 0.0, browInward: 0.0, browAsymmetric: 0.0,
-        eyeSquint: 0.0, gazeX: 0.0, gazeY: 0.0, glintPulse: 1.70, smileBoost: 0.05,
       },
     };
 
@@ -181,11 +185,12 @@ class DigitalHumanAvatar {
       OFFLINE: { name: "OFFLINE (MẤT KẾT NỐI)", auraColor: "#64748b", haloSpeed: 0.0, eyes: "closed", smile: "closed", defaultTone: "NEUTRAL" },
       RECONNECTING: { name: "RECONNECTING (KẾT NỐI LẠI)", auraColor: "#0284c7", haloSpeed: 0.09, eyes: "open", smile: "natural", symbol: "🔄", defaultTone: "NEUTRAL" },
       SLEEPING: { name: "SLEEPING (TẠM NGHỈ)", auraColor: "#475569", haloSpeed: 0.008, eyes: "closed", smile: "closed", symbol: "💤", defaultTone: "NEUTRAL" },
-      // ===== Trạng thái cảm xúc mở rộng (13/11) =====
-      SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#38bdf8", haloSpeed: 0.09, eyes: "open", smile: "natural", symbol: "😮", defaultTone: "SURPRISED" },
-      CURIOUS: { name: "CURIOUS (TÒ MÒ)", auraColor: "#22d3ee", haloSpeed: 0.055, eyes: "thinking", smile: "natural", symbol: "🤔", defaultTone: "CURIOUS" },
-      APOLOGETIC: { name: "APOLOGETIC (XIN LỖI)", auraColor: "#f472b6", haloSpeed: 0.03, eyes: "open", smile: "closed", symbol: "🙏", defaultTone: "APOLOGETIC" },
-      PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#facc15", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
+
+      // ===== 4 STATE ĐỒNG BỘ TỪ PC DASHBOARD 22-STATE (14/11, sprint sync_1314) =====
+      APOLOGETIC: { name: "APOLOGETIC (XIN LỖI)", auraColor: "#94a3b8", haloSpeed: 0.025, eyes: "open", smile: "closed", symbol: "🙏", defaultTone: "APOLOGETIC" },
+      CURIOUS: { name: "CURIOUS (TÒ MÒ)", auraColor: "#0ea5e9", haloSpeed: 0.055, eyes: "thinking", smile: "natural", symbol: "🤔", defaultTone: "CURIOUS" },
+      PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#f59e0b", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
+      SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#8b5cf6", haloSpeed: 0.10, eyes: "open", smile: "neutral", symbol: "😯", defaultTone: "SURPRISED" },
     };
 
     // Sprint 1 (14/11): Unified Emotion Protocol — avatar_protocol.js là NGUỒN
@@ -270,8 +275,8 @@ class DigitalHumanAvatar {
       { key: "portrait", src: `${this.basePath}/avatar_v3_thu_thai.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
       { key: "portrait_happy", src: `${this.basePath}/avatar_v3_vui_suong.png`, fallback: `${this.basePath}/avatar_v2_happy.png` },
       { key: "portrait_thinking", src: `${this.basePath}/avatar_v3_tap_trung.png`, fallback: `${this.basePath}/avatar_v2_thinking.png` },
-      // (14/11 v6emo) tuc_gian = biểu cảm tức giận thật thay cho warning cũ
-      { key: "portrait_warning", src: `${this.basePath}/avatar_v3_tuc_gian.png`, fallback: `${this.basePath}/avatar_v2_warning.png` },
+      // (14/11 v6emo) tuc_gian = biểu cảm tức giận thật thay cho confused-trầm-tư cũ
+      { key: "portrait_warning", src: `${this.basePath}/avatar_v3_tuc_gian.png`, fallback: `${this.basePath}/avatar_v2_confused.png` },
       { key: "portrait_empathic", src: `${this.basePath}/avatar_v3_buon_ba.png`, fallback: `${this.basePath}/avatar_v2_empathic.png` },
       { key: "portrait_confused", src: `${this.basePath}/avatar_v3_nghieng_dau.png`, fallback: `${this.basePath}/avatar_v2_confused.png` },
       { key: "portrait_surprised", src: `${this.basePath}/avatar_v3_ngac_nhien.png`, fallback: `${this.basePath}/avatar_v2_surprised.png` },
@@ -337,12 +342,33 @@ class DigitalHumanAvatar {
   }
 
   _startRenderLoop() {
+    // (31/10/2026) AUDIT HIỆU NĂNG: 60 FPS trên SwiftShader (software GL) ngốn
+    // ~300% CPU → nhiệt 66°C, phản ứng chậm. Màn DSI 800x480 không cần 60 FPS:
+    // giới hạn 15 FPS (66ms/frame) — mắt thường vẫn mượt, CPU giảm ~4 lần.
+    // (06/11/2026, owner: "hình thể mượt nhất") IDLE/SLEEPING 12 FPS đủ (ít chuyển
+    // động), SPEAKING/LISTENING/THINKING 24 FPS cho lip-sync + đầu mượt theo giọng —
+    // thích ứng theo trạng thái thay vì cap cứng một mức.
+    this._lastFrameTs = 0;
     const loop = (timestamp) => {
-      this._update(timestamp);
-      this._render(timestamp);
+      const cap = this._frameIntervalMs();
+      if (timestamp - this._lastFrameTs >= cap) {
+        this._lastFrameTs = timestamp;
+        this._update(timestamp);
+        this._render(timestamp);
+      }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
+  }
+
+  _frameIntervalMs() {
+    switch (this.state) {
+      case "SPEAKING": return 42;  // ~24 FPS — miệng + đầu theo nhịp giọng
+      case "LISTENING":
+      case "THINKING":
+      case "RESEARCHING": return 56; // ~18 FPS
+      default: return 83;          // ~12 FPS — IDLE/SLEEPING tiết kiệm CPU
+    }
   }
 
   setState(newState) {
@@ -406,56 +432,56 @@ class DigitalHumanAvatar {
       return this._protocol.extractVietnameseEmotion(text);
     }
     if (!text || typeof text !== "string") return "NEUTRAL";
-    const lower = text.toLowerCase();
+    let lower = text.toLowerCase();
+    // (31/10) TTS/telemetry hay gửi text KHÔNG DẤU — chuẩn hóa: bỏ dấu để
+    // regex tiếng Việt có dấu khớp cả hai dạng.
+    try {
+      lower = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
+    } catch (_) {}
 
-    // 0. Apology rõ ràng → đồng cảm trước (13/11): "xin lỗi anh, em gặp sự cố" là lời xin lỗi
-    if (/xin lỗi|chia buồn|rất tiếc|đáng tiếc|gây phiền/.test(lower)) {
+    // 0. (14/11 sync_1314) Apology rõ ràng → đồng cảm trước — khớp PC dashboard:
+    // "xin lỗi anh, em gặp sự cố" là lời xin lỗi, không phải cảnh báo
+    if (/xin loi|chia buon|rat tiec|dang tiec|gay phien/.test(lower)) {
       return "APOLOGETIC";
     }
 
     // 1. Alert / Warning / Safety Block / Prohibited
-    if (/cảnh báo|chú ý|lưu ý|nguy hiểm|rủi ro|không được|chặn|thất bại|lỗi|bất thường|sự cố|dừng|khẩn cấp|nghiêm cấm/.test(lower)) {
+    if (/canh bao|chuy|luu y|nguy hiem|rui ro|khong duoc|chan|that bai|loi |bi loi|bat thuong|su co|dung |khan cap|nghiem cam/.test(lower)) {
       return "SERIOUS_ALERT";
     }
 
+    // 1b. (06/11/2026) Bất ngờ / khẩn cấp / đột xuất — tone SURPRISED mới
+    if (/bat ngo|ngac nhien|dang le|khong mong doi|khan|dot xuat|mau than|choang|bat thuong|on ao/.test(lower)) {
+      return "SURPRISED";
+    }
+
     // 2. Success / Accomplished / Certified / 100% / Excellent
-    if (/hoàn thành|thành công|chính xác|đạt chuẩn|vượt qua|tốt đẹp|100%|xuất sắc|hoàn hảo|thắng lợi/.test(lower)) {
+    if (/hoan thanh|thanh cong|chinh xac|dat chuan|vuot qua|tot dep|100%|xuat sac|hoan hao|thang loi/.test(lower)) {
       return "CONFIDENT_SUCCESS";
     }
 
     // 3. Analytical / Data / Metrics / Architecture / Reasoning
-    if (/phân tích|dữ liệu|kết quả|nghiên cứu|thuật toán|kiến trúc|thông số|đo lường|logic|thống kê|chi tiết|báo cáo|kiểm tra|xác nhận|chỉ số/.test(lower)) {
+    if (/phan tich|du lieu|ket qua|nghien cuu|thuat toan|kien truc|thong so|do luong|logic|thong ke|chi tiet|bao cao|kiem tra|xac nhan|chi so/.test(lower)) {
       return "ANALYTICAL_THINKING";
     }
 
     // 4. Consultation / Proposal / Inquiring Owner
-    if (/kính trình|đề xuất|chờ anh|xin ý kiến|phê duyệt|chỉ đạo|chờ xác nhận|tham vấn/.test(lower)) {
+    if (/inh trinh|de xuat|cho anh|xin kien|phe duyet|chi dao|cho xac nhan|tham van/.test(lower)) {
       return "CONSULTATIVE_INQUIRING";
     }
 
     // 5. Warm Greeting / Politeness / Readiness
-    if (/chào|xin chào|dạ|vâng|rất vui|hân hạnh|sẵn sàng|chúc|em đây|vâng ạ|em nghe|tuyệt vời|cảm ơn/.test(lower)) {
+    if (/chao|xin chao|da |vang |rat vui|han hanh|san sang|chuc|em day|em nghe|tuyet voi|cam on/.test(lower)) {
       return "WARM_GREETING";
     }
 
-    // ===== Tông cảm xúc mở rộng (13/11) =====
-    // 6. Surprise / Unexpected / New discovery
-    if (/bất ngờ|ngạc nhiên|ọe|trời ơi|ổn quá|wow|hoàn toàn mới|lần đầu tiên|khám phá/.test(lower)) {
-      return "SURPRISED";
-    }
-
-    // 7. Curiosity / Question / Want to learn more
-    if (/tại sao|như thế nào|thế nào|làm sao|giải thích|cho em hỏi|thắc mắc|tò mò|muốn biết|hỏi anh|câu hỏi/.test(lower)) {
+    // 7. (14/11 sync_1314) Curiosity — khớp PC dashboard
+    if (/tai sao|nhu the nao|the nao|lam sao|giai thich|cho em hoi|thac mac|to mo|muon biet|hoi anh|cau hoi/.test(lower)) {
       return "CURIOUS";
     }
 
-    // 8. Apology / Inconvenience / Regret
-    if (/xin lỗi|xem lỗi|thừa nhận|chia buồn|rất tiếc|đáng tiếc|mất thời gian|gây phiền|tạm biệt|không may/.test(lower)) {
-      return "APOLOGETIC";
-    }
-
-    // 9. Pride / Ongoing achievement / Self-improvement
-    if (/tự hào|cải thiện|tiến bộ|tối ưu|nâng cấp|hoàn thiện|phát triển|nhất quán|ổn định|học được|nắm bắt/.test(lower)) {
+    // 9. (14/11 sync_1314) Pride — khớp PC dashboard
+    if (/tu hao|cai thien|tien bo|toi uu|nang cap|hoan thien|phat trien|nhat quan|on dinh|hoc duoc|nam bat/.test(lower)) {
       return "PROUD";
     }
 
@@ -486,6 +512,13 @@ class DigitalHumanAvatar {
     this.currentTimeline = timeline;
     this.timelineStartTime = performance.now();
     this.setState("SPEAKING");
+  }
+
+  // (06/11/2026, owner: "hình chuyển động theo giọng nói") Nguồn năng lượng
+  // THẬT từ audio đang phát (WebAudio AnalyserNode do kiosk.js cấp). Khi có,
+  // miệng + gật đầu dẫn động theo amplitude thay vì chỉ timeline chữ.
+  setLiveAudioMeter(fn) {
+    this._liveAudioMeter = typeof fn === "function" ? fn : null;
   }
 
   cancelUtterance() {
@@ -553,16 +586,12 @@ class DigitalHumanAvatar {
   }
 
   _update(now) {
-    const config = this.STATE_CONFIGS[this.state] || this.STATE_CONFIGS.IDLE;
-
-    // Halo rotation
-    this.haloAngle += (config.haloSpeed || 0.025);
+    let config = this.STATE_CONFIGS[this.state] || this.STATE_CONFIGS.IDLE;
 
     // Sprint 5 (14/11): tick presence engine → gaze + eye contact tự nhiên
     if (this._presenceEngine) {
       this._presenceEngine.setState(this.state);
       const gaze = this._presenceEngine.tick(now);
-      // Apply gaze vào target micro (sẽ được lerp ở bước 1)
       this.targetMicro.gazeX = gaze.gazeX;
       this.targetMicro.gazeY = gaze.gazeY;
     }
@@ -585,6 +614,21 @@ class DigitalHumanAvatar {
       const bodyTransform = this._bodyMotionEngine.tick(now);
       this.targetBody = bodyTransform;
     }
+
+    // (31/10) TONE AURA OVERRIDE: màu hào quang/viền theo CẢM XÚC CÂU NÓI
+    // (khách quan nhìn thấy ngay cả khi portrait nền không đổi được):
+    if (this.activeEmotionTone === "SERIOUS_ALERT") {
+      config = { ...config, auraColor: "#ef4444", haloSpeed: 0.05, symbol: "⚠️" };
+    } else if (this.activeEmotionTone === "CONFIDENT_SUCCESS") {
+      config = { ...config, auraColor: "#10b981", haloSpeed: 0.07 };
+    } else if (this.activeEmotionTone === "ANALYTICAL_THINKING") {
+      config = { ...config, auraColor: "#a855f7" };
+    } else if (this.activeEmotionTone === "CONSULTATIVE_INQUIRING") {
+      config = { ...config, auraColor: "#eab308" };
+    }
+
+    // Halo rotation
+    this.haloAngle += (config.haloSpeed || 0.025);
 
     // Smooth Interpolation (lerp) helper
     const lerp = (a, b, t) => a + (b - a) * t;
@@ -625,14 +669,18 @@ class DigitalHumanAvatar {
         this.targetHeadSwayX = -2.2;
         this.nextHeadShiftTime = now + 3000 + Math.random() * 2500;
       } else if (this.state === "SPEAKING") {
-        // Dynamic roll aligned with natural speech cadence
-        // (15/11/2026 v6mou — REF: mẫu.mp4) cộng nhịp gật-theo-lời 0.64 Hz
-        // (chu kỳ 1.56s, viseme chính đo được) + sway nhẹ theo cadence — đầu
-        // "đi theo" câu nói như người thật trong video mẫu.
+        // (06/11/2026, owner: "hình chuyển động theo giọng nói") Đầu GẬT THEO
+        // NHỊP LỜI NÓI: dùng open_ratio hiện tại của lip-sync làm xung gật đầu —
+        // mỗi âm tiết mở miệng mạnh → gật nhẹ xuống, khép → nâng lên. Cộng thêm
+        // cadence sin chậm để không máy móc. Khi không có timeline vẫn có sway.
+        const speechPulse = this.currentOpenRatio; // 0..1 theo timeline/fallback
+        // (15/11/2026 v6mou — REF: mẫu.mp4) nhịp gật-theo-lời: viseme chính
+        // 0.64 Hz (chu kỳ 1.56s) → lớp cadence 4.03 rad/s rất nhẹ, cộng gật
+        // theo openRatio — đầu "đi theo" câu nói như ca sĩ trong mẫu.
         const speechCadence = Math.sin(now * 0.00403) * 0.9;
-        this.targetHeadNodY = this.currentOpenRatio * 3.2 + speechCadence;
-        this.targetHeadTilt = Math.sin(now * 0.003) * 0.018 + this.currentOpenRatio * 0.008;
-        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.5 + speechCadence * 0.4;
+        this.targetHeadNodY = speechPulse * 3.2 + speechCadence;
+        this.targetHeadTilt = Math.sin(now * 0.003) * 0.014 + speechPulse * 0.008;
+        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.2 + speechCadence * 0.4;
         this.nextHeadShiftTime = now + 1400;
       } else {
         this.targetHeadTilt = 0.0;
@@ -726,25 +774,52 @@ class DigitalHumanAvatar {
     }
 
     // 5. Lip-Sync Frame Lookup from timeline
-    if (this.state === "SPEAKING" && this.currentTimeline && this.currentTimeline.frames) {
-      const elapsedMs = now - this.timelineStartTime;
-      const frames = this.currentTimeline.frames;
-      let activeFrame = frames[0];
-
-      for (let i = 0; i < frames.length; i++) {
-        if (frames[i].offset_ms <= elapsedMs) {
-          activeFrame = frames[i];
+    if (this.state === "SPEAKING") {
+      // (06/11/2026) ƯU TIÊN NĂNG LƯỢNG THẬT: khi có live audio meter (WebAudio
+      // đo chính file mp3 đang phát), openRatio dẫn động theo amplitude — khớp
+      // nhịp tuyệt đối với tiếng loa; viseme suy từ mức mở (khép→REST).
+      // (15/11/2026 v6mou — REF: mẫu.mp4 4K, ca sĩ ballad) Dẫn động miệng theo
+      // dải độ mở + nhịp ĐO ĐƯỢC từ video mẫu (không còn hiểu "energy=max"):
+      //   • mouth open p10=0.421, p90=0.782 → dải mở tự nhiên khi nói 0.42..0.78
+      //   • nhịp viseme chính 0.64 Hz (chu kỳ 1.56s) → nghỉ không đậy nhanh hơn 1/1.56s
+      //   • EMA trong video chuẩn alpha≈0.35 @30fps → trên frame ~24fps dùng 0.35
+      // energy từ live audio meter được NỐI SÁT vào dải [floor, ceiling] thay vì
+      // nhân thẳng 0.95 (dải cũ 0→0.95 làm miệng chụp hẳn khi lời nhỏ, không
+      // giống chuyển động miệng người thật trong mẫu).
+      if (this._liveAudioMeter) {
+        let energy = 0;
+        try { energy = Math.max(0, Math.min(1, this._liveAudioMeter())); } catch (_) { energy = 0; }
+        const MAU_FLOOR = 0.42, MAU_CEIL = 0.78;          // p10/p90 mouth-open (mẫu.mp4)
+        const mauTarget = MAU_FLOOR + energy * (MAU_CEIL - MAU_FLOOR);
+        if (energy > 0.02) {
+          this.currentOpenRatio += (mauTarget - this.currentOpenRatio) * 0.35;
+          this.activeViseme = this.currentOpenRatio < 0.12 ? "REST"
+            : (this.currentOpenRatio > 0.68 ? "O" : (this.currentOpenRatio < 0.35 ? "I" : "A"));
         } else {
-          break;
+          // Nghỉ giữa câu: khép về REST theo nhịp tự nhiên (≤1/1.56s chu kỳ mẫu)
+          this.currentOpenRatio = this.currentOpenRatio * 0.72;
+          if (this.currentOpenRatio < 0.05) this.activeViseme = "REST";
         }
-      }
+      } else if (this.currentTimeline && this.currentTimeline.frames) {
+        const elapsedMs = now - this.timelineStartTime;
+        const frames = this.currentTimeline.frames;
+        let activeFrame = frames[0];
 
-      if (elapsedMs >= this.currentTimeline.total_duration_ms) {
-        this.cancelUtterance();
-        this.setState("IDLE");
-      } else if (activeFrame) {
-        this.activeViseme = activeFrame.viseme || "REST";
-        this.currentOpenRatio = activeFrame.open_ratio || 0.0;
+        for (let i = 0; i < frames.length; i++) {
+          if (frames[i].offset_ms <= elapsedMs) {
+            activeFrame = frames[i];
+          } else {
+            break;
+          }
+        }
+
+        if (elapsedMs >= this.currentTimeline.total_duration_ms) {
+          this.cancelUtterance();
+          this.setState("IDLE");
+        } else if (activeFrame) {
+          this.activeViseme = activeFrame.viseme || "REST";
+          this.currentOpenRatio = activeFrame.open_ratio || 0.0;
+        }
       }
     }
   }
@@ -772,12 +847,7 @@ class DigitalHumanAvatar {
     const pivotX = w * 0.5;
     const pivotY = h * 0.70; // Neck/chest pivot anchor
 
-    // (14/11) Micro-nod tự tin khi PROUD — gật nhẹ theo nhịp, không đụng chuyển động khác
-    let proudNodY = 0;
-    if (this.state === "PROUD") {
-      proudNodY = Math.sin(now * 0.0025) * 2.2;
-    }
-    ctx.translate(pivotX + this.headSwayX, pivotY + this.headNodY + breathOffset + proudNodY);
+    ctx.translate(pivotX + this.headSwayX, pivotY + this.headNodY + breathOffset);
     ctx.rotate(this.headTilt);
     ctx.translate(-pivotX, -pivotY);
 
@@ -802,19 +872,25 @@ class DigitalHumanAvatar {
       baseImg = this.assets.portrait_thinking;
       usedFullThinking = true;
       isSpecialExpression = true;
-    } else if ((this.state === "HAPPY" || this.state === "SUCCESS" || this.state === "LEARNING" || this.activeEmotionTone === "CONFIDENT_SUCCESS") && this.assets.portrait_happy && this.assets.portrait_happy.complete && this.assets.portrait_happy.naturalWidth > 0) {
+    } else if ((this.state === "HAPPY" || this.state === "SUCCESS" || this.state === "LEARNING" || this.state === "PROUD" || this.activeEmotionTone === "CONFIDENT_SUCCESS") && this.assets.portrait_happy && this.assets.portrait_happy.complete && this.assets.portrait_happy.naturalWidth > 0) {
       baseImg = this.assets.portrait_happy;
       isSpecialExpression = true;
     } else if (this.state === "EMPATHETIC" && this.assets.portrait_empathic && this.assets.portrait_empathic.complete && this.assets.portrait_empathic.naturalWidth > 0) {
       baseImg = this.assets.portrait_empathic;
       isSpecialExpression = true;
-    } else if ((this.state === "CONFUSED" || this.state === "WAITING_FOR_OWNER" || this.activeEmotionTone === "CONSULTATIVE_INQUIRING") && this.assets.portrait_confused && this.assets.portrait_confused.complete && this.assets.portrait_confused.naturalWidth > 0) {
+    } else if ((this.state === "APOLOGETIC" || this.activeEmotionTone === "APOLOGETIC") && this.assets.portrait_empathic && this.assets.portrait_empathic.complete && this.assets.portrait_empathic.naturalWidth > 0) {
+      // (14/11 sync_1314) APOLOGETIC: ánh mắt dịu của empathic + tông APOLOGETIC
+      baseImg = this.assets.portrait_empathic;
+      isSpecialExpression = true;
+    } else if ((this.state === "CONFUSED" || this.state === "WAITING_FOR_OWNER" || this.state === "CURIOUS" || this.activeEmotionTone === "CONSULTATIVE_INQUIRING") && this.assets.portrait_confused && this.assets.portrait_confused.complete && this.assets.portrait_confused.naturalWidth > 0) {
       baseImg = this.assets.portrait_confused;
       isSpecialExpression = true;
     } else if ((this.state === "WARNING" || this.state === "BLOCKED" || this.activeEmotionTone === "SERIOUS_ALERT") && this.assets.portrait_warning && this.assets.portrait_warning.complete && this.assets.portrait_warning.naturalWidth > 0) {
       baseImg = this.assets.portrait_warning;
       isSpecialExpression = true;
     } else if ((this.state === "SURPRISED" || this.activeEmotionTone === "SURPRISED") && this.assets.portrait_surprised && this.assets.portrait_surprised.complete && this.assets.portrait_surprised.naturalWidth > 0) {
+      // (06/11/2026) SURPRISED: dùng đúng asset portrait_surprised vốn bỏ không
+      // (14/11 sync_1314) + state SURPRISED (PC 22-state) cùng dùng asset này
       baseImg = this.assets.portrait_surprised;
       isSpecialExpression = true;
     } else if (this.state === "ERROR" && this.assets.portrait_error && this.assets.portrait_error.complete && this.assets.portrait_error.naturalWidth > 0) {
@@ -905,52 +981,68 @@ class DigitalHumanAvatar {
   }
 
   _drawHolographicHalo_disabled(ctx, w, h, color) {
+    // (06/11/2026, owner: "mượt nhất") Halo tĩnh ít đổi → CACHE offscreen:
+    // chỉ vẽ lại khi màu aura đổi hoặc vòng quay vượt 1 bậc cung nhỏ. Giảm
+    // shadowBlur đắt mỗi frame → tăng FPS thực trên Pi5 đáng kể.
     const cx = w * 0.5;
     const cy = h * 0.46;
     const radius = w * 0.42;
 
+    const cacheKey = `${color}|${Math.floor(this.haloAngle / 0.35)}`;
+    if (!this._haloCache || this._haloCacheKey !== cacheKey) {
+      if (!this._haloCache) {
+        this._haloCache = document.createElement("canvas");
+        this._haloCache.width = w;
+        this._haloCache.height = h;
+      }
+      const hctx = this._haloCache.getContext("2d");
+      hctx.clearRect(0, 0, w, h);
+      hctx.save();
+      hctx.translate(cx, cy);
+      hctx.rotate(this.haloAngle);
+
+      hctx.shadowBlur = 18;
+      hctx.shadowColor = color;
+      hctx.strokeStyle = color;
+      hctx.lineWidth = 2.0;
+      hctx.globalAlpha = 0.45;
+
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, 0, Math.PI * 2);
+      hctx.stroke();
+
+      hctx.lineWidth = 3.5;
+      hctx.globalAlpha = 0.75;
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, 0, Math.PI * 0.4);
+      hctx.stroke();
+
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, Math.PI * 0.9, Math.PI * 1.3);
+      hctx.stroke();
+
+      hctx.beginPath();
+      hctx.arc(0, 0, radius, Math.PI * 1.6, Math.PI * 1.9);
+      hctx.stroke();
+
+      hctx.restore();
+      this._haloCacheKey = cacheKey;
+    }
+
+    ctx.drawImage(this._haloCache, 0, 0);
+
+    // Telemetry node dots — nhẹ, vẽ trực tiếp (đủ mượt 24 FPS)
     ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(this.haloAngle);
-
-    // Outer glow ring
-    ctx.shadowBlur = 18;
-    ctx.shadowColor = color;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2.0;
-    ctx.globalAlpha = 0.45;
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Segmented tech arcs
-    ctx.lineWidth = 3.5;
-    ctx.globalAlpha = 0.75;
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, 0, Math.PI * 0.4);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, Math.PI * 0.9, Math.PI * 1.3);
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius, Math.PI * 1.6, Math.PI * 1.9);
-    ctx.stroke();
-
-    // Telemetry node dots
     const numDots = 8;
     ctx.fillStyle = "#ffffff";
     for (let i = 0; i < numDots; i++) {
-      const angle = (i * Math.PI * 2) / numDots;
-      const x = Math.cos(angle) * radius;
-      const y = Math.sin(angle) * radius;
+      const angle = this.haloAngle + (i * Math.PI * 2) / numDots;
+      const x = cx + Math.cos(angle) * radius;
+      const y = cy + Math.sin(angle) * radius;
       ctx.beginPath();
       ctx.arc(x, y, 2.5, 0, Math.PI * 2);
       ctx.fill();
     }
-
     ctx.restore();
   }
 
@@ -979,8 +1071,10 @@ class DigitalHumanAvatar {
 
     ctx.strokeStyle = gradL;
     ctx.lineWidth = Math.max(1.8, 2.6 * scaleX);
-    ctx.shadowBlur = 4;
-    ctx.shadowColor = "rgba(0, 229, 255, 0.25)";
+    // (06/11/2026) shadowBlur là operation đắt nhất canvas 2D — giảm 4→2 và
+    // chỉ giữ trên strand ngoài; hiệu ứng sheen giữ nguyên nhờ gradient.
+    ctx.shadowBlur = 2;
+    ctx.shadowColor = "rgba(0, 229, 255, 0.18)";
 
     // Outer Left Hair Strand
     ctx.beginPath();
@@ -1064,14 +1158,20 @@ class DigitalHumanAvatar {
     ];
 
     ctx.fillStyle = "rgba(215, 240, 255, 0.75)";
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = "#00e5ff";
+    // (06/11/2026) Motes: bỏ shadowBlur (đắt), glow giả bằng 2 lớp bán trong suốt
+    ctx.shadowBlur = 0;
 
     motes.forEach(m => {
       const my = ((m.by + Math.sin(now * 0.002 + m.phase) * 16) % 1024) * scaleY;
       const mx = (m.bx + Math.cos(now * 0.0018 + m.phase) * 10) * scaleX;
+      // Glow 2 lớp rẻ: vầng lớn mờ + lõi sáng (không dùng shadowBlur)
+      ctx.fillStyle = "rgba(0, 229, 255, 0.18)";
       ctx.beginPath();
-      ctx.arc(mx, my, 1.8 * scaleX, 0, Math.PI * 2);
+      ctx.arc(mx, my, 4.2 * scaleX, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(235, 250, 255, 0.9)";
+      ctx.beginPath();
+      ctx.arc(mx, my, 1.6 * scaleX, 0, Math.PI * 2);
       ctx.fill();
     });
 
