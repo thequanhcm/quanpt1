@@ -193,6 +193,16 @@ class DigitalHumanAvatar {
       this._protocol = _PROTO;
     }
 
+    // Sprint 2 (14/11): Natural Motion Engine — motion_scheduler.js là NGUỒN
+    // SỰ THẬT cho MotionScheduler + Gesture Library. Cả PC lẫn Pi5 dùng chung.
+    const _MOTION = (typeof window !== "undefined" && window.CHERRY_MOTION_SCHEDULER) ||
+      (typeof globalThis !== "undefined" && globalThis.CHERRY_MOTION_SCHEDULER) || null;
+    if (_MOTION) {
+      this._motion = _MOTION;
+      this._scheduler = new _MOTION.MotionScheduler();
+      this._lastGestureName = null;
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -286,6 +296,12 @@ class DigitalHumanAvatar {
       this.cancelUtterance();
     }
 
+    // Sprint 2 (14/11): clear scheduler khi đổi state — motion cũ không
+    // chạy đè lên state mới (interrupt by design §3.1).
+    if (this._scheduler && oldState !== newState) {
+      this._scheduler.clear();
+    }
+
     const conf = this.STATE_CONFIGS[this.state];
     if (conf && conf.defaultTone && this.activeEmotionTone !== conf.defaultTone) {
       this.setMicroExpression(conf.defaultTone);
@@ -294,6 +310,19 @@ class DigitalHumanAvatar {
     if (typeof this.onStateChange === "function") {
       this.onStateChange(this.state, this.STATE_CONFIGS[this.state]);
     }
+  }
+
+  // Sprint 2 (14/11): playGesture(context) — chọn gesture theo context, đẩy
+  // motions vào scheduler. Trả về tên gesture đã chọn (hoặc null).
+  playGesture(context) {
+    if (!this._motion || !this._scheduler) return null;
+    const pick = this._motion.selectGesture(context, this._lastGestureName);
+    if (!pick) return null;
+    this._lastGestureName = pick.name;
+    for (const m of pick.gesture.motions) {
+      this._scheduler.add(m);
+    }
+    return pick.name;
   }
 
   getState() {
@@ -497,6 +526,21 @@ class DigitalHumanAvatar {
     this.headTilt = lerp(this.headTilt, this.targetHeadTilt, 0.042);
     this.headSwayX = lerp(this.headSwayX, this.targetHeadSwayX, 0.038);
     this.headNodY = lerp(this.headNodY, this.targetHeadNodY, 0.075);
+
+    // Sprint 2 (14/11): tick MotionScheduler — blend motion từ gesture/state.
+    // Áp dụng blend lên headTilt/headSwayX/headNodY (override nếu priority cao hơn).
+    if (this._scheduler) {
+      const blend = this._scheduler.update(now);
+      if (blend["head.tilt"] && blend["head.tilt"].priority >= 30) {
+        this.headTilt = blend["head.tilt"].value * (Math.PI / 180); // deg → rad
+      }
+      if (blend["head.sway"] && blend["head.sway"].priority >= 30) {
+        this.headSwayX = blend["head.sway"].value;
+      }
+      if (blend["head.nod"] && blend["head.nod"].priority >= 30) {
+        this.headNodY = blend["head.nod"].value;
+      }
+    }
 
     // 3. Biological Eye Blinking with Double-Blink Variance
     if (this.state === "OFFLINE" || this.state === "SAFE_MODE" || this.state === "SLEEPING") {
