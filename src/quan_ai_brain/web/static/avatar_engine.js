@@ -626,8 +626,13 @@ class DigitalHumanAvatar {
         this.nextHeadShiftTime = now + 3000 + Math.random() * 2500;
       } else if (this.state === "SPEAKING") {
         // Dynamic roll aligned with natural speech cadence
-        this.targetHeadTilt = Math.sin(now * 0.003) * 0.018;
-        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.5;
+        // (15/11/2026 v6mou — REF: mẫu.mp4) cộng nhịp gật-theo-lời 0.64 Hz
+        // (chu kỳ 1.56s, viseme chính đo được) + sway nhẹ theo cadence — đầu
+        // "đi theo" câu nói như người thật trong video mẫu.
+        const speechCadence = Math.sin(now * 0.00403) * 0.9;
+        this.targetHeadNodY = this.currentOpenRatio * 3.2 + speechCadence;
+        this.targetHeadTilt = Math.sin(now * 0.003) * 0.018 + this.currentOpenRatio * 0.008;
+        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.5 + speechCadence * 0.4;
         this.nextHeadShiftTime = now + 1400;
       } else {
         this.targetHeadTilt = 0.0;
@@ -870,6 +875,13 @@ class DigitalHumanAvatar {
 
       // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER)
       this._renderMouth(ctx, scaleX, scaleY, 0);
+
+      // (15/11/2026 v6mou — REF: mẫu.mp4) BIỂU CẢM THEO LỜI NÓI: mẫu.mp4 đo được
+      // ~33% thời gian có smile (smile width/face ≈ 0.48) → khi tone lời nói là
+      // cảm xúc tích cực (WARM_GREETING / CONFIDENT_SUCCESS / PROUD / CURIOUS),
+      // đổi asset miệng sang mouth_happy (nụ cười nhẹ) + mở nhẹ theo openRatio,
+      // giữ alpha feathered như miệng nói. Tone trung tính/tiêu cực giữ miệng nói.
+      this._renderSmile(ctx, scaleX, scaleY, 0);
 
       // 9. Cyber Lighting & High-Tech Vignette
       this._renderCyberLighting(ctx, w, h, config.auraColor);
@@ -1203,6 +1215,61 @@ class DigitalHumanAvatar {
     ctx.save();
     ctx.globalAlpha = Math.min(1.0, 0.40 + openRatio * 0.60);
     ctx.drawImage(mCanvas, destX, destY, destW, destH);
+    ctx.restore();
+  }
+
+  // (15/11/2026 v6mou — REF: mẫu.mp4) NỤ CƯỜI THEO LỜI NÓI — smile 33% samples
+  // trong video mẫu: khi giọng nói mang tone cảm xúc tích cực, thay asset miệng
+  // "đang nói" bằng "happy" (môi cong nhẹ) để KHUÔN MẶT khớp cảm xúc câu nói.
+  _renderSmile(ctx, scaleX, scaleY, breathOffset) {
+    if (this.state !== "SPEAKING") return;
+    const SMILE_TONES = { WARM_GREETING: 1, CONFIDENT_SUCCESS: 1, PROUD: 1, CURIOUS: 1 };
+    if (!SMILE_TONES[this.activeEmotionTone]) return;
+    const smileAsset = this.assets.mouth_happy;
+    if (!smileAsset || !smileAsset.complete || smileAsset.naturalWidth === 0) return;
+
+    const openRatio = Math.max(0.0, Math.min(1.0, this.currentOpenRatio));
+    if (openRatio <= 0.08) return; // nghỉ giữa câu → để môi portrait nguyên
+
+    const mb = this.MOUTH_BOX;
+    const destX = mb.x * scaleX;
+    const destY = mb.y * scaleY + breathOffset;
+    const destW = mb.w * scaleX;
+    const destH = mb.h * scaleY;
+
+    // Feathered ellipse mask giống _renderMouth → viền 100% trong suốt
+    if (!this._featherSmileCanvas) {
+      this._featherSmileCanvas = document.createElement("canvas");
+    }
+    const sCanvas = this._featherSmileCanvas;
+    const targetW = Math.max(10, Math.round(destW));
+    const targetH = Math.max(10, Math.round(destH));
+    if (sCanvas.width !== targetW || sCanvas.height !== targetH) {
+      sCanvas.width = targetW;
+      sCanvas.height = targetH;
+    }
+    const sCtx = sCanvas.getContext("2d");
+    sCtx.clearRect(0, 0, targetW, targetH);
+    sCtx.drawImage(smileAsset, 0, 0, targetW, targetH);
+    sCtx.globalCompositeOperation = "destination-in";
+    const scx = targetW * 0.5;
+    const scy = targetH * 0.5;
+    const srx = targetW * 0.48;
+    const sry = targetH * 0.46;
+    const sGrad = sCtx.createRadialGradient(scx, scy, sry * 0.30, scx, scy, srx);
+    sGrad.addColorStop(0.0, "rgba(0,0,0,1.0)");
+    sGrad.addColorStop(0.68, "rgba(0,0,0,0.92)");
+    sGrad.addColorStop(0.88, "rgba(0,0,0,0.35)");
+    sGrad.addColorStop(1.0, "rgba(0,0,0,0.0)");
+    sCtx.fillStyle = sGrad;
+    sCtx.beginPath();
+    sCtx.ellipse(scx, scy, srx, sry, 0, 0, Math.PI * 2);
+    sCtx.fill();
+
+    ctx.save();
+    // Nụ cười giữ alpha nhẹ hơn miệng nói → chuyển mượt, không đè môi portrait
+    ctx.globalAlpha = Math.min(1.0, 0.30 + openRatio * 0.55);
+    ctx.drawImage(sCanvas, destX, destY, destW, destH);
     ctx.restore();
   }
 

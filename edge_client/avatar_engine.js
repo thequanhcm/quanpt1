@@ -674,9 +674,13 @@ class DigitalHumanAvatar {
         // mỗi âm tiết mở miệng mạnh → gật nhẹ xuống, khép → nâng lên. Cộng thêm
         // cadence sin chậm để không máy móc. Khi không có timeline vẫn có sway.
         const speechPulse = this.currentOpenRatio; // 0..1 theo timeline/fallback
-        this.targetHeadNodY = speechPulse * 3.2;
+        // (15/11/2026 v6mou — REF: mẫu.mp4) nhịp gật-theo-lời: viseme chính
+        // 0.64 Hz (chu kỳ 1.56s) → lớp cadence 4.03 rad/s rất nhẹ, cộng gật
+        // theo openRatio — đầu "đi theo" câu nói như ca sĩ trong mẫu.
+        const speechCadence = Math.sin(now * 0.00403) * 0.9;
+        this.targetHeadNodY = speechPulse * 3.2 + speechCadence;
         this.targetHeadTilt = Math.sin(now * 0.003) * 0.014 + speechPulse * 0.008;
-        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.2;
+        this.targetHeadSwayX = Math.cos(now * 0.002) * 1.2 + speechCadence * 0.4;
         this.nextHeadShiftTime = now + 1400;
       } else {
         this.targetHeadTilt = 0.0;
@@ -774,16 +778,26 @@ class DigitalHumanAvatar {
       // (06/11/2026) ƯU TIÊN NĂNG LƯỢNG THẬT: khi có live audio meter (WebAudio
       // đo chính file mp3 đang phát), openRatio dẫn động theo amplitude — khớp
       // nhịp tuyệt đối với tiếng loa; viseme suy từ mức mở (khép→REST).
+      // (15/11/2026 v6mou — REF: mẫu.mp4 4K, ca sĩ ballad) Dẫn động miệng theo
+      // dải độ mở + nhịp ĐO ĐƯỢC từ video mẫu (không còn hiểu "energy=max"):
+      //   • mouth open p10=0.421, p90=0.782 → dải mở tự nhiên khi nói 0.42..0.78
+      //   • nhịp viseme chính 0.64 Hz (chu kỳ 1.56s) → nghỉ không đậy nhanh hơn 1/1.56s
+      //   • EMA trong video chuẩn alpha≈0.35 @30fps → trên frame ~24fps dùng 0.35
+      // energy từ live audio meter được NỐI SÁT vào dải [floor, ceiling] thay vì
+      // nhân thẳng 0.95 (dải cũ 0→0.95 làm miệng chụp hẳn khi lời nhỏ, không
+      // giống chuyển động miệng người thật trong mẫu).
       if (this._liveAudioMeter) {
         let energy = 0;
         try { energy = Math.max(0, Math.min(1, this._liveAudioMeter())); } catch (_) { energy = 0; }
+        const MAU_FLOOR = 0.42, MAU_CEIL = 0.78;          // p10/p90 mouth-open (mẫu.mp4)
+        const mauTarget = MAU_FLOOR + energy * (MAU_CEIL - MAU_FLOOR);
         if (energy > 0.02) {
-          // Làm mượt: lerp về energy để tránh nhiễu từng sample
-          this.currentOpenRatio = this.currentOpenRatio + (energy * 0.95 - this.currentOpenRatio) * 0.45;
+          this.currentOpenRatio += (mauTarget - this.currentOpenRatio) * 0.35;
           this.activeViseme = this.currentOpenRatio < 0.12 ? "REST"
-            : (this.currentOpenRatio > 0.72 ? "O" : (this.currentOpenRatio < 0.35 ? "I" : "A"));
+            : (this.currentOpenRatio > 0.68 ? "O" : (this.currentOpenRatio < 0.35 ? "I" : "A"));
         } else {
-          this.currentOpenRatio = this.currentOpenRatio * 0.72; // khép dần tự nhiên
+          // Nghỉ giữa câu: khép về REST theo nhịp tự nhiên (≤1/1.56s chu kỳ mẫu)
+          this.currentOpenRatio = this.currentOpenRatio * 0.72;
           if (this.currentOpenRatio < 0.05) this.activeViseme = "REST";
         }
       } else if (this.currentTimeline && this.currentTimeline.frames) {
@@ -937,6 +951,13 @@ class DigitalHumanAvatar {
 
       // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER)
       this._renderMouth(ctx, scaleX, scaleY, 0);
+
+      // (15/11/2026 v6mou — REF: mẫu.mp4) BIỂU CẢM THEO LỜI NÓI: mẫu.mp4 đo được
+      // ~33% thời gian có smile (smile width/face ≈ 0.48) → khi tone lời nói là
+      // cảm xúc tích cực (WARM_GREETING / CONFIDENT_SUCCESS / PROUD / CURIOUS),
+      // đổi asset miệng sang mouth_happy (nụ cười nhẹ) + mở nhẹ theo openRatio,
+      // giữ alpha feathered như miệng nói. Tone trung tính/tiêu cực giữ miệng nói.
+      this._renderSmile(ctx, scaleX, scaleY, 0);
 
       // 9. Cyber Lighting & High-Tech Vignette
       this._renderCyberLighting(ctx, w, h, config.auraColor);
@@ -1294,6 +1315,61 @@ class DigitalHumanAvatar {
     ctx.save();
     ctx.globalAlpha = Math.min(1.0, 0.40 + openRatio * 0.60);
     ctx.drawImage(mCanvas, destX, destY, destW, destH);
+    ctx.restore();
+  }
+
+  // (15/11/2026 v6mou — REF: mẫu.mp4) NỤ CƯỜI THEO LỜI NÓI — smile 33% samples
+  // trong video mẫu: khi giọng nói mang tone cảm xúc tích cực, thay asset miệng
+  // "đang nói" bằng "happy" (môi cong nhẹ) để KHUÔN MẶT khớp cảm xúc câu nói.
+  _renderSmile(ctx, scaleX, scaleY, breathOffset) {
+    if (this.state !== "SPEAKING") return;
+    const SMILE_TONES = { WARM_GREETING: 1, CONFIDENT_SUCCESS: 1, PROUD: 1, CURIOUS: 1 };
+    if (!SMILE_TONES[this.activeEmotionTone]) return;
+    const smileAsset = this.assets.mouth_happy;
+    if (!smileAsset || !smileAsset.complete || smileAsset.naturalWidth === 0) return;
+
+    const openRatio = Math.max(0.0, Math.min(1.0, this.currentOpenRatio));
+    if (openRatio <= 0.08) return; // nghỉ giữa câu → để môi portrait nguyên
+
+    const mb = this.MOUTH_BOX;
+    const destX = mb.x * scaleX;
+    const destY = mb.y * scaleY + breathOffset;
+    const destW = mb.w * scaleX;
+    const destH = mb.h * scaleY;
+
+    // Feathered ellipse mask giống _renderMouth → viền 100% trong suốt
+    if (!this._featherSmileCanvas) {
+      this._featherSmileCanvas = document.createElement("canvas");
+    }
+    const sCanvas = this._featherSmileCanvas;
+    const targetW = Math.max(10, Math.round(destW));
+    const targetH = Math.max(10, Math.round(destH));
+    if (sCanvas.width !== targetW || sCanvas.height !== targetH) {
+      sCanvas.width = targetW;
+      sCanvas.height = targetH;
+    }
+    const sCtx = sCanvas.getContext("2d");
+    sCtx.clearRect(0, 0, targetW, targetH);
+    sCtx.drawImage(smileAsset, 0, 0, targetW, targetH);
+    sCtx.globalCompositeOperation = "destination-in";
+    const scx = targetW * 0.5;
+    const scy = targetH * 0.5;
+    const srx = targetW * 0.48;
+    const sry = targetH * 0.46;
+    const sGrad = sCtx.createRadialGradient(scx, scy, sry * 0.30, scx, scy, srx);
+    sGrad.addColorStop(0.0, "rgba(0,0,0,1.0)");
+    sGrad.addColorStop(0.68, "rgba(0,0,0,0.92)");
+    sGrad.addColorStop(0.88, "rgba(0,0,0,0.35)");
+    sGrad.addColorStop(1.0, "rgba(0,0,0,0.0)");
+    sCtx.fillStyle = sGrad;
+    sCtx.beginPath();
+    sCtx.ellipse(scx, scy, srx, sry, 0, 0, Math.PI * 2);
+    sCtx.fill();
+
+    ctx.save();
+    // Nụ cười giữ alpha nhẹ hơn miệng nói → chuyển mượt, không đè môi portrait
+    ctx.globalAlpha = Math.min(1.0, 0.30 + openRatio * 0.55);
+    ctx.drawImage(sCanvas, destX, destY, destW, destH);
     ctx.restore();
   }
 
