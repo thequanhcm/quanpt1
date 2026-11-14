@@ -559,10 +559,15 @@ class DigitalHumanAvatar {
     // loop vẽ body theo transform.
     if (this._bodyMotionEngine) {
       this._bodyMotionEngine.setState(this.state);
-      // Sync speaking + speech energy từ mouth driver (Sprint 4)
+      // Sync speaking + speech energy từ mouth driver (Sprint 4).
+      // (TASK001 audit 14/11) FIX: API thật của driver là getCurrent() →
+      // {viseme, open, envelope, active}. Bản trước gọi getCurrentEnergy()
+      // KHÔNG TỒN TẠI → TypeError mỗi frame → render loop crash → CPU 110%
+      // + avatar đứng yên trên Pi5. Dùng getCurrent().envelope (0..1).
       if (this._mouthDriver) {
+        const mouth = this._mouthDriver.getCurrent();
         this._bodyMotionEngine.setSpeaking(this._mouthDriver.isActive());
-        this._bodyMotionEngine.setSpeechEnergy(this._mouthDriver.getCurrentEnergy());
+        this._bodyMotionEngine.setSpeechEnergy(mouth ? (mouth.envelope || 0) : 0);
       }
       const bodyTransform = this._bodyMotionEngine.tick(now);
       this.targetBody = bodyTransform;
