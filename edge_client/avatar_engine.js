@@ -186,6 +186,18 @@ class DigitalHumanAvatar {
       SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#8b5cf6", haloSpeed: 0.10, eyes: "open", smile: "neutral", symbol: "😯", defaultTone: "SURPRISED" },
     };
 
+    // Sprint 1 (14/11): Unified Emotion Protocol — avatar_protocol.js là NGUỒN
+    // SỰ THẬT khi đã nạp (script tag đứng trước engine); khối literal trên chỉ
+    // là fallback khẩn cấp khi protocol file thiếu. Cả PC lẫn Pi5 dùng chung 1
+    // file protocol → cùng giá trị tuyệt đối.
+    const _PROTO = (typeof window !== "undefined" && window.CHERRY_AVATAR_PROTOCOL) ||
+      (typeof globalThis !== "undefined" && globalThis.CHERRY_AVATAR_PROTOCOL) || null;
+    if (_PROTO) {
+      this.EMOTION_PRESETS = _PROTO.EMOTION_PRESETS;
+      this.STATE_CONFIGS = _PROTO.STATE_CONFIGS;
+      this._protocol = _PROTO;
+    }
+
     this._loadAssets();
     this._startRenderLoop();
   }
@@ -290,6 +302,10 @@ class DigitalHumanAvatar {
   }
 
   setState(newState) {
+    // Sprint 1 (14/11): state lạ/cũ → state canonical qua protocol (aliases).
+    if (this._protocol && this._protocol.normalizeState) {
+      newState = this._protocol.normalizeState(newState);
+    }
     if (!this.STATE_CONFIGS[newState]) newState = "IDLE";
     const oldState = this.state;
     this.state = newState;
@@ -315,6 +331,11 @@ class DigitalHumanAvatar {
   // ================= CONTEXTUAL VIETNAMESE EMOTION EXTRACTOR =================
 
   extractVietnameseEmotion(text) {
+    // Sprint 1 (14/11): extractor hợp nhất sống trong avatar_protocol.js —
+    // hàm này chỉ còn là fallback khi protocol file chưa nạp.
+    if (this._protocol && this._protocol.extractVietnameseEmotion) {
+      return this._protocol.extractVietnameseEmotion(text);
+    }
     if (!text || typeof text !== "string") return "NEUTRAL";
     let lower = text.toLowerCase();
     // (31/10) TTS/telemetry hay gửi text KHÔNG DẤU — chuẩn hóa: bỏ dấu để

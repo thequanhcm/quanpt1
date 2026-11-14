@@ -301,6 +301,31 @@ _GLOBAL_EDGE_TELEMETRY: dict[str, Any] = {
     "transcript": "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.",
     "face_only_mode": False,
 }
+
+# Sprint 1 (14/11) — Unified Emotion Protocol: bọc mọi lệnh edge trong envelope
+# chuẩn (event_id/sequence/timestamp/platform...). Import fail-soft: thiếu module
+# (vd bản server cũ) → gửi như cũ, không chết luồng.
+try:
+    _WS_ROOT_S1 = next(
+        p for p in [Path(__file__).resolve().parents[3], Path.cwd()]
+        if (p / "edge_client" / "edge_envelope.py").exists()
+    )
+    sys.path.insert(0, str(_WS_ROOT_S1))
+    import edge_envelope as _edge_envelope  # noqa: E402
+except Exception:  # pragma: no cover - fail-soft
+    _edge_envelope = None
+
+_EDGE_SEQ: dict[str, int] = {"PC": 0}
+
+
+def _edge_command_envelope(action: str, **payload: Any) -> dict[str, Any]:
+    """Bọc lệnh edge vào envelope chuẩn + tăng sequence monotonic PC."""
+    if _edge_envelope is None:
+        return {"action": action, **payload}
+    _EDGE_SEQ["PC"] += 1
+    return _edge_envelope.build_envelope(
+        action, platform="PC", sequence=_EDGE_SEQ["PC"], **payload
+    )
 _GLOBAL_HDMI_STATE: dict = {"last_ask": 0.0, "awaiting_approval": False}
 # (07/11/2026) Địa chỉ dự phòng của Pi5 khi edge_ip telemetry stale:
 # mesh Tailscale tĩnh (ưu tiên — Pi5 luôn giữ IP này) + IP LAN đã biết.
@@ -4217,12 +4242,12 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 if transcript:
                     _GLOBAL_EDGE_TELEMETRY["transcript"] = transcript
                     _translate_to_english(transcript)  # làm nóng cache EN
-                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append({
-                    "action": "set_expression",
-                    "state": state,
-                    "transcript": transcript,
-                })
-                _send_edge_request("/api/kiosk/control", method="POST", data={"action": "set_expression", "state": state, "transcript": transcript})
+                # Sprint 1 (14/11): bọc envelope chuẩn trước khi đẩy lệnh xuống edge.
+                cmd_data = _edge_command_envelope(
+                    "set_expression", state=state, transcript=transcript
+                )
+                _GLOBAL_EDGE_TELEMETRY["pending_commands"].append(cmd_data)
+                _send_edge_request("/api/kiosk/control", method="POST", data=cmd_data)
                 self._send_json({"success": True, "action": action, "state": state, "transcript": transcript})
                 return
 
@@ -4260,13 +4285,13 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                                 ).to_dict()
                             except Exception:
                                 _timeline_dict = {"segments": [], "duration_ms": _dur}
-                        cmd_data = {
-                            "action": "speak",
-                            "text": _text,
-                            "state": _state,
-                            "timeline": _timeline_dict,
-                            "duration_ms": _dur,
-                        }
+                        cmd_data = _edge_command_envelope(
+                            "speak",
+                            text=_text,
+                            state=_state,
+                            timeline=_timeline_dict,
+                            duration_ms=_dur,
+                        )
                         if audio_b64:
                             cmd_data["audio_base64"] = audio_b64
                         _GLOBAL_EDGE_TELEMETRY["pending_commands"].append(cmd_data)
@@ -4292,13 +4317,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
                 _GLOBAL_EDGE_TELEMETRY["target_avatar_state"] = state
                 _GLOBAL_EDGE_TELEMETRY["transcript"] = text
-                cmd_data = {
-                    "action": "speak",
-                    "text": text,
-                    "state": state,
-                    "timeline": timeline_dict,
-                    "duration_ms": duration_ms,
-                }
+                # Sprint 1 (14/11): bọc envelope chuẩn cho speak đồng bộ (audio sẵn).
+                cmd_data = _edge_command_envelope(
+                    "speak",
+                    text=text,
+                    state=state,
+                    timeline=timeline_dict,
+                    duration_ms=duration_ms,
+                )
                 if audio_base64:
                     cmd_data["audio_base64"] = audio_base64
 

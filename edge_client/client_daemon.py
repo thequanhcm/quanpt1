@@ -1220,6 +1220,14 @@ class EdgeDaemonState:
         self.avatar_state: str = "IDLE"
         self.active_model: str = "qwen2.5:7b"
         self.emergency_state: str = "normal"
+        # Sprint 1 (14/11) — Unified Emotion Protocol: validator envelope chuẩn
+        # (DUPLICATE/STALE/EXPIRED/OUT_OF_ORDER). Import fail-soft: thiếu module
+        # → validator = None → handler bỏ qua, lệnh cũ vẫn chạy.
+        try:
+            from edge_envelope import EnvelopeValidator  # noqa: WPS433
+            self.edge_envelope_validator = EnvelopeValidator()
+        except Exception:  # pragma: no cover - fail-soft
+            self.edge_envelope_validator = None
         self.current_task: dict[str, Any] = {
             "task_id": "standby_supervision",
             "goal": "Sẵn sàng hỗ trợ Quanpt1",
@@ -2001,6 +2009,19 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
         self._send_error_json(f"Không tìm thấy tệp {clean_name} trên Pi 5", 404)
 
     def _handle_api_kiosk_remote_control(self, body: dict[str, Any]) -> None:
+        # Sprint 1 (14/11) — Unified Emotion Protocol: validate envelope chuẩn
+        # trước khi xử lý. Lệnh cũ (không có event_id) vẫn chạy — backward compat.
+        # Lệnh mới có event_id → check DUPLICATE/STALE/EXPIRED/OUT_OF_ORDER.
+        _validator = getattr(self.daemon_state, "edge_envelope_validator", None)
+        if _validator is not None and isinstance(body, dict) and body.get("event_id"):
+            verdict = _validator.validate(body)
+            if not verdict.get("ok"):
+                self._send_json({
+                    "success": False,
+                    "reason": f"envelope_rejected:{verdict.get('reason')}",
+                    "event_id": body.get("event_id"),
+                })
+                return
         action = str(body.get("action", "")).strip().lower()
         if action == "reload_ui":
             with self.daemon_state.lock:
