@@ -225,20 +225,19 @@ body {
   display: none !important;
 }
 
-/* (14/11/2026) Bật micro-transcript cho #transcript-line — selector cụ thể
-   hơn thắng !important ở trên. Hiện câu trả lời dài của Cherry dưới avatar. */
+/* (15/11/2026 v6ui_1511 — OWNER: "bỏ phần khung chữ... giao diện cân giữa")
+   KHUNG CHỮ BÊN PHẢI PORTRAIT = #transcript-line (câu "Chào Anh Quanpt1!...").
+   Trước đây là flex-child cạnh canvas 720px → đẩy avatar LỆCH TRÁI, chữ đỗ
+   bên phải. Giờ: position absolute + ẩn hoàn toàn — kiosk.js gán textContent
+   12 chỗ (null-safe) nên KHÔNG XÓA element, chỉ ẩn bằng CSS: 0 rủi ro JS. */
 #transcript-line.micro-transcript {
-  display: block !important;
-  margin-top: 4px;
-  text-align: center;
-  max-width: 480px;
-  font-size: 0.95rem;
-  color: var(--text-main);
-  line-height: 1.4;
-  font-style: italic;
-  padding: 0 12px;
-  word-wrap: break-word;
-  overflow-wrap: break-word;
+  display: none !important;
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  transform: translateX(-50%);
+  max-width: 60%;
+  visibility: hidden;
 }
 
 /* (31/10) contain: avatar hiển thị TRỌN VỆN (không crop đỉnh đầu/cằm) */

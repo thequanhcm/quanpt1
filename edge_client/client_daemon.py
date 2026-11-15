@@ -516,8 +516,10 @@ def _spawn_kiosk_chromium() -> "subprocess.Popen | None":
             "--disable-pinch",
             "--overscroll-history-navigation=0",
             # V40 (30/10): màn DSI Pi 5 = 800x480 — 1280,720 làm khung UI lệch/tràn
-            "--window-size=800,480",
-            "--window-position=0,0",
+            # (15/11/2026 v6ui — OWNER: "giao diện cân giữa" trên HDMI 4K)
+            # window-size cứng 800,480 chỉ đúng cho DSI; trên HDMI 3840x2160 kiosk
+            # --kiosk không tự fullscreen khi có window-size → thu nhỏ về góc.
+            # Bỏ window-size/position: --kiosk tự phủ toàn output hiện hành.
             "--enable-features=OverlayScrollbar",
             "--autoplay-policy=no-user-gesture-required",
             "--use-fake-ui-for-media-stream",
