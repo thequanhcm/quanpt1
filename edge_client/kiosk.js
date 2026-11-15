@@ -61,6 +61,12 @@ document.addEventListener("DOMContentLoaded", () => {
     SPEAKING: { css: "state-speaking", browL: "M 65 65 Q 90 63 115 65", browR: "M 165 65 Q 190 63 215 65", symbol: null },
     WARNING: { css: "state-warning", browL: "M 65 74 L 115 68", browR: "M 165 68 L 215 74", symbol: "⚠️" },
     HAPPY: { css: "state-happy", browL: "M 65 62 Q 90 58 115 62", browR: "M 165 62 Q 190 58 215 62", symbol: null },
+    // (15/11 v6sync_btn) BỔ SUNG 2 STATE THIẾU — dashboard executive có nút
+    // "Thành Công Xác Minh" (SUCCESS) + "Đang Kết Nối Lại" (RECONNECTING) nhưng
+    // kiosk.js chưa khai báo → setAvatarState fallback IDLE (nút bấm vô hiệu).
+    // avatar_engine.js đã có sẵn 2 state này (:185/:192) — đồng bộ wrapper.
+    SUCCESS: { css: "state-success", browL: "M 65 61 Q 90 56 115 61", browR: "M 165 61 Q 190 56 215 61", symbol: "✨" },
+    RECONNECTING: { css: "state-reconnecting", browL: "M 65 64 Q 90 60 115 64", browR: "M 165 64 Q 190 60 215 64", symbol: "🔄" },
     CONFUSED: { css: "state-confused", browL: "M 65 64 Q 90 60 115 66", browR: "M 165 62 Q 190 66 215 64", symbol: "❓" },
     EMPATHETIC: { css: "state-empathic", browL: "M 65 63 Q 90 60 115 64", browR: "M 165 64 Q 190 60 215 63", symbol: null },
     WAITING_FOR_OWNER: { css: "state-waiting", browL: "M 65 62 Q 90 60 115 62", browR: "M 165 62 Q 190 60 215 62", symbol: "📬" },

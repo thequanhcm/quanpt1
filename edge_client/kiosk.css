@@ -373,6 +373,9 @@ body {
 .state-blocked { --avatar-accent: #ef4444; --avatar-glow: rgba(239, 68, 68, 0.75); }
 .state-warning { --avatar-accent: #f97316; --avatar-glow: rgba(249, 115, 22, 0.8); }
 .state-happy { --avatar-accent: #10b981; --avatar-glow: rgba(16, 185, 129, 0.75); }
+/* (15/11 v6sync_btn) 2 state mới từ dashboard: SUCCESS ✨ + RECONNECTING 🔄 */
+.state-success { --avatar-accent: #10b981; --avatar-glow: rgba(16, 185, 129, 0.85); }
+.state-reconnecting { --avatar-accent: #0284c7; --avatar-glow: rgba(2, 132, 199, 0.7); }
 .state-confused { --avatar-accent: #eab308; --avatar-glow: rgba(234, 179, 8, 0.75); }
 .state-empathic { --avatar-accent: #ec4899; --avatar-glow: rgba(236, 72, 153, 0.75); }
 .state-error { --avatar-accent: #dc2626; --avatar-glow: rgba(220, 38, 38, 0.8); }
