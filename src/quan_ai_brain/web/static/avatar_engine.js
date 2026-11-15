@@ -722,10 +722,9 @@ class DigitalHumanAvatar {
     //      chỉ còn "thở". Khi nói → đầy đủ để chuyển động theo câu.
     if (!this._scheduler || !this._scheduler._activeGesture) {
       const t = (now - this.startTime) * 0.001;
-      const cinematicTilt = Math.sin(t * 0.302) * 0.6 * (Math.PI / 180); // ~20.8s/vòng
       const cinematicSway = Math.sin(t * 1.013) * 1.2; // ~6.2s/vòng
-      const lateralLean = Math.sin(t * 0.628) * 1.0 * (Math.PI / 180); // ~10s/vòng (FFT 9.1–12.5s)
       const lateralSway = Math.cos(t * 0.534) * 0.8; // ~11.8s — ngang, đè nhẹ
+      const phraseSway = Math.sin(t * 0.628) * 1.2; // ~10s (FFT 9.1–12.5s) — ngang
       // MICRO-REST (v6mot): energy 0..1 từ mouth driver; ≤0.08 → co còn 35%
       let restFactor = 1.0;
       if (this._mouthDriver) {
@@ -733,8 +732,9 @@ class DigitalHumanAvatar {
         const energy = m ? (m.envelope || 0) : 0;
         if (energy <= 0.08) restFactor = 0.35;
       }
-      this.headTilt += (cinematicTilt + lateralLean) * restFactor;
-      this.headSwayX += (cinematicSway + lateralSway) * restFactor;
+      // (15/11/2026 v6ges) OWNER: "không xoay khung ảnh" — headTilt KHÔNG còn
+      // được cộng vào render (root bỏ ctx.rotate); mọi lớp giờ là sway ngang.
+      this.headSwayX += (cinematicSway + lateralSway + phraseSway) * restFactor;
     }
 
     // Sprint 2 (14/11): tick MotionScheduler — blend motion từ gesture/state.
@@ -862,27 +862,37 @@ class DigitalHumanAvatar {
     const scaleX = w / 1024;
     const scaleY = h / 1024;
 
-    // 3. ROOT HEAD & BODY TRANSFORM (Head tilting, sway, nod, breathing)
-    // (15/11/2026 v6mot — Sprint 6 consume fix) targetBody TÍNH RA TỪ TRƯỚC
-    // nhưng KHÔNG BAO GIỜ được vẽ → shoulder sway/breath thân là dead code.
-    // Wire: thân (vai/ngực) sway riêng BIÊN NHỎ (0.8×) TRƯỚC ctx.save() —
-    // như người thật: thân lắc nhẹ hơn đầu. Portrait đầu–vai–ngực giữ nguyên,
-    // chỉ DỊCH nhẹ (±2px) — không vẽ thêm gì lên hình.
+    // 3. ROOT TRANSFORM — CHỈ DỊCH, TUYỆT ĐỐI KHÔNG XOAY
+    // (15/11/2026 v6ges — OWNER: "đang xoay cả khung ảnh") Portrait là 1 ảnh
+    // full-canvas: BẤT KỲ ctx.rotate nào ở root đều XOAY CẢ TẤM ẢNH như lắc
+    // khung hình → ĐÃ BỎ toàn bộ rotate (headTilt + bodyLean). Tilt/lean giờ
+    // chỉ còn là dữ liệu định hướng cho micro-expression, không xoay pixel.
+    // Giữ translate rất nhỏ (sway + nod + thở) = hiện diện, không phải xoay.
+    // (15/11/2026 v6mot — Sprint 6 consume fix) targetBody giờ được VẼ THẬT.
     const bodyT = this.targetBody || null;
-    const bodySwayX = bodyT ? (bodyT.swayX || 0) * 2.0 : 0; // preset -1..1 → ±2px
-    const bodySwayY = bodyT ? (bodyT.swayY || 0) * 1.2 : 0;
-    const bodyBreath = bodyT ? (bodyT.breathOffset || 0) * 2.4 : 0; // thở thân rõ hơn đầu
-    const bodyLean = bodyT ? (bodyT.leanX || 0) * 0.5 : 0; // nghiêng thân rất nhẹ (deg)
+    const bodySwayX = bodyT ? (bodyT.swayX || 0) * 1.4 : 0;
+    const bodySwayY = bodyT ? (bodyT.swayY || 0) * 0.8 : 0;
+    const bodyBreath = bodyT ? (bodyT.breathOffset || 0) * 2.0 : 0;
     ctx.save();
-    ctx.translate(bodySwayX, bodySwayY + bodyBreath);
-    ctx.rotate(bodyLean * (Math.PI / 180));
+    ctx.translate(bodySwayX + this.headSwayX * 0.5, bodySwayY + bodyBreath + this.headNodY * 0.5 + breathOffset * 0.5);
 
-    const pivotX = w * 0.5;
-    const pivotY = h * 0.70; // Neck/chest pivot anchor
-
-    ctx.translate(pivotX + this.headSwayX, pivotY + this.headNodY + breathOffset);
-    ctx.rotate(this.headTilt);
-    ctx.translate(-pivotX, -pivotY);
+    // (15/11/2026 v6ges — OWNER: "xây dựng avatar chuyển động cử chỉ") LỚP
+    // CỬ CHỈ = translate + scale quanh TÂM ĐÁY (ngực) — KHÔNG xoay:
+    //   1) TIẾN NGƯỜI THEO LỜI: scale 1.000→1.006 quanh đáy canvas theo
+    //      openRatio — như người thật "lệch người tới" khi nhấn âm tiết.
+    //   2) ĐỔI TRỌNG TÂM THEO CÂU (6.mp4 chu kỳ 1.4–4s): dịch ngang ±1.8px
+    //      theo beat pattern 2 sóng lệch nhau (~2.8s + ~3.9s), nói thì rõ,
+    //      nghỉ còn 40% — đúng micro-rest 87%.
+    //   3) NÂNG VAI THỞ: breathOffset đã nằm ở translate trên (±2px).
+    const speakingNow = this.state === "SPEAKING";
+    const speechLean = speakingNow ? Math.max(0, this.currentOpenRatio) : 0;
+    const chestScale = 1.0 + speechLean * 0.006 + Math.max(0, bodyBreath) * 0.0006;
+    const gestAmp = speakingNow ? 1.0 : 0.4;
+    const gestureX = Math.sin(now * 0.00224) * Math.sin(now * 0.00161) * 1.8 * gestAmp;
+    ctx.translate(w * 0.5, h);          // tâm đáy = trục ngực
+    ctx.scale(chestScale, chestScale);   // tiến người (gesture tới — không xoay)
+    ctx.translate(gestureX, 0);          // đổi trọng tâm ngang theo câu
+    ctx.translate(-w * 0.5, -h);
 
     // 4. Base Character Portrait Selection (Authentic Master Expressions from Pi5 Collection)
     let baseImg = this.assets.portrait;
