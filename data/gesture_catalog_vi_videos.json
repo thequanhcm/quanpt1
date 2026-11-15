@@ -1,0 +1,116 @@
+{
+ "vi1": {
+  "path": "E:\\BRAIN\\Pi5\\vi 1.mp4",
+  "duration_s": 297.0,
+  "frames": [
+   "vi1_f247.jpg",
+   "vi1_f742.jpg",
+   "vi1_f1237.jpg",
+   "vi1_f1732.jpg",
+   "vi1_f2227.jpg",
+   "vi1_f2722.jpg"
+  ],
+  "flow_samples": [
+   {
+    "ts": 44.6,
+    "flow_px": 1.22,
+    "head_v": 0.426,
+    "head_h": 0.361
+   },
+   {
+    "ts": 104.0,
+    "flow_px": 0.0,
+    "head_v": 0.0,
+    "head_h": 0.0
+   },
+   {
+    "ts": 163.4,
+    "flow_px": 0.0,
+    "head_v": 0.001,
+    "head_h": 0.0
+   },
+   {
+    "ts": 222.8,
+    "flow_px": 0.37,
+    "head_v": 0.106,
+    "head_h": 0.122
+   }
+  ]
+ },
+ "vi2": {
+  "path": "E:\\BRAIN\\Pi5\\vi 2.mp4",
+  "duration_s": 359.3,
+  "frames": [
+   "vi2_f299.jpg",
+   "vi2_f898.jpg",
+   "vi2_f1497.jpg",
+   "vi2_f2095.jpg",
+   "vi2_f2694.jpg",
+   "vi2_f3293.jpg"
+  ],
+  "flow_samples": [
+   {
+    "ts": 53.9,
+    "flow_px": 0.87,
+    "head_v": 0.243,
+    "head_h": 0.226
+   },
+   {
+    "ts": 125.8,
+    "flow_px": 0.3,
+    "head_v": 0.107,
+    "head_h": 0.12
+   },
+   {
+    "ts": 197.6,
+    "flow_px": 0.16,
+    "head_v": 0.092,
+    "head_h": 0.093
+   },
+   {
+    "ts": 269.5,
+    "flow_px": 0.78,
+    "head_v": 0.186,
+    "head_h": 0.214
+   }
+  ]
+ },
+ "v5": {
+  "path": "E:\\BRAIN\\Pi5\\5.mp4",
+  "duration_s": 303.0,
+  "frames": [
+   "v5_f252.jpg",
+   "v5_f757.jpg",
+   "v5_f1262.jpg",
+   "v5_f1767.jpg",
+   "v5_f2272.jpg",
+   "v5_f2777.jpg"
+  ],
+  "flow_samples": [
+   {
+    "ts": 45.5,
+    "flow_px": 0.94,
+    "head_v": 0.345,
+    "head_h": 0.847
+   },
+   {
+    "ts": 106.1,
+    "flow_px": 0.41,
+    "head_v": 0.161,
+    "head_h": 0.208
+   },
+   {
+    "ts": 166.7,
+    "flow_px": 1.19,
+    "head_v": 0.282,
+    "head_h": 0.343
+   },
+   {
+    "ts": 227.3,
+    "flow_px": 1.57,
+    "head_v": 1.147,
+    "head_h": 0.91
+   }
+  ]
+ }
+}
