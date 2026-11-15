@@ -245,7 +245,8 @@ class TestStateTransitions:
 # ===== 8. Regression guards =====
 class TestGuards:
     def test_version_tag(self):
-        assert bme.VERSION == "s6_1411"
+        # (15/11 v6mot) v6mot_1511 = sway 3 tầng 0.08/0.02/0.16Hz + micro-rest
+        assert bme.VERSION == "v6mot_1511"
 
     def test_js_file_syntax_valid(self):
         js = (REPO / "edge_client" / "body_motion_engine.js").read_text(encoding="utf-8")

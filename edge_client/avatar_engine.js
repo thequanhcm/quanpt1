@@ -678,7 +678,12 @@ class DigitalHumanAvatar {
         // 0.64 Hz (chu kỳ 1.56s) → lớp cadence 4.03 rad/s rất nhẹ, cộng gật
         // theo openRatio — đầu "đi theo" câu nói như ca sĩ trong mẫu.
         const speechCadence = Math.sin(now * 0.00403) * 0.9;
-        this.targetHeadNodY = speechPulse * 3.2 + speechCadence;
+        // (15/11/2026 v6mot — REF: 6.mp4) GẬT-THEO-CÂU: người nói camera gật
+        // nhè nhẹ theo CỤM TỪ (chu kỳ 1.4–4s, V/H 1.11–1.55 — gật dọc CHỦ ĐẠO,
+        // ngược ca sĩ 3/4/5). Lớp sin chậm 0.44 rad/s (~14.3s khớp FFT 4.mp4)
+        // cộng xung openRatio → đầu gật theo câu nói thật, không máy móc.
+        const phraseNod = Math.sin(now * 0.00044 + 1.1) * 1.1; // ~14.3s
+        this.targetHeadNodY = speechPulse * 3.2 + speechCadence * 0.8 + phraseNod;
         this.targetHeadTilt = Math.sin(now * 0.003) * 0.014 + speechPulse * 0.008;
         this.targetHeadSwayX = Math.cos(now * 0.002) * 1.2 + speechCadence * 0.4;
         this.nextHeadShiftTime = now + 1400;
@@ -709,12 +714,27 @@ class DigitalHumanAvatar {
     // đầu nghiêng chậm theo nhịp 20.8s (optical flow FFT) + lớp vi mô 6.2s.
     // Biên độ nhỏ (0.6° tilt, 1.2px sway) để KHÔNG đè lên micro-expression
     // từ scheduler (priority 30+). Chỉ áp dụng khi scheduler không active.
+    // (15/11/2026 v6mot — REF: 3/4/5.mp4 + 6.mp4) NÂNG CẤP 2 LỚP:
+    //   1) LATERAL LEAN ±1.0° chu kỳ ~10s (FFT head 9.1–12.5s cả 3 video ca sĩ)
+    //      + micro sway ngang 0.8px — nghiêng ngang mượt như "đổi trọng tâm".
+    //   2) MICRO-REST 87% (6.mp4 người nói camera still 87–98%): khi speechEnergy
+    //      ≈0 (không nói) → toàn bộ lớp cinematic co còn ~35%: gần như đứng im,
+    //      chỉ còn "thở". Khi nói → đầy đủ để chuyển động theo câu.
     if (!this._scheduler || !this._scheduler._activeGesture) {
       const t = (now - this.startTime) * 0.001;
       const cinematicTilt = Math.sin(t * 0.302) * 0.6 * (Math.PI / 180); // ~20.8s/vòng
       const cinematicSway = Math.sin(t * 1.013) * 1.2; // ~6.2s/vòng
-      this.headTilt += cinematicTilt;
-      this.headSwayX += cinematicSway;
+      const lateralLean = Math.sin(t * 0.628) * 1.0 * (Math.PI / 180); // ~10s/vòng (FFT 9.1–12.5s)
+      const lateralSway = Math.cos(t * 0.534) * 0.8; // ~11.8s — ngang, đè nhẹ
+      // MICRO-REST (v6mot): energy 0..1 từ mouth driver; ≤0.08 → co còn 35%
+      let restFactor = 1.0;
+      if (this._mouthDriver) {
+        const m = this._mouthDriver.getCurrent();
+        const energy = m ? (m.envelope || 0) : 0;
+        if (energy <= 0.08) restFactor = 0.35;
+      }
+      this.headTilt += (cinematicTilt + lateralLean) * restFactor;
+      this.headSwayX += (cinematicSway + lateralSway) * restFactor;
     }
 
     // Sprint 2 (14/11): tick MotionScheduler — blend motion từ gesture/state.
@@ -843,7 +863,20 @@ class DigitalHumanAvatar {
     const scaleY = h / 1024;
 
     // 3. ROOT HEAD & BODY TRANSFORM (Head tilting, sway, nod, breathing)
+    // (15/11/2026 v6mot — Sprint 6 consume fix) targetBody TÍNH RA TỪ TRƯỚC
+    // nhưng KHÔNG BAO GIỜ được vẽ → shoulder sway/breath thân là dead code.
+    // Wire: thân (vai/ngực) sway riêng BIÊN NHỎ (0.8×) TRƯỚC ctx.save() —
+    // như người thật: thân lắc nhẹ hơn đầu. Portrait đầu–vai–ngực giữ nguyên,
+    // chỉ DỊCH nhẹ (±2px) — không vẽ thêm gì lên hình.
+    const bodyT = this.targetBody || null;
+    const bodySwayX = bodyT ? (bodyT.swayX || 0) * 2.0 : 0; // preset -1..1 → ±2px
+    const bodySwayY = bodyT ? (bodyT.swayY || 0) * 1.2 : 0;
+    const bodyBreath = bodyT ? (bodyT.breathOffset || 0) * 2.4 : 0; // thở thân rõ hơn đầu
+    const bodyLean = bodyT ? (bodyT.leanX || 0) * 0.5 : 0; // nghiêng thân rất nhẹ (deg)
     ctx.save();
+    ctx.translate(bodySwayX, bodySwayY + bodyBreath);
+    ctx.rotate(bodyLean * (Math.PI / 180));
+
     const pivotX = w * 0.5;
     const pivotY = h * 0.70; // Neck/chest pivot anchor
 

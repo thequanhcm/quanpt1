@@ -15,7 +15,7 @@
 (function (global) {
   "use strict";
 
-  var VERSION = "s6_1411";
+  var VERSION = "v6mot_1511";
 
   /* ================================================================
    * 1. BODY_PRESETS — body lean + sway theo state (degrees)
@@ -103,6 +103,21 @@
       leftArm: 0, rightArm: 0, leftReach: 0.3, rightReach: 0.3
     };
     this._target = Object.assign({}, this._current);
+    // (15/11/2026 v6mot) Đồng bộ mirror Python: seed _target từ IDLE preset
+    // để oscillation có biên độ NGAY từ tick đầu. Trước đây: setState("IDLE")
+    // early-return (this._state đã là "IDLE") → _target.swayX = 0 mãi → sway=0
+    // ở IDLE dù preset IDLE có swayX=0.3. Production luôn chạy IDLE khi rảnh
+    // → thân đứng im vô lý; mirror Python đã seed đúng, JS bị lệch.
+    var _idleBody = BODY_PRESETS["IDLE"];
+    var _idleArm = ARM_REACH_PRESETS["IDLE"];
+    this._target.leanX = _idleBody.leanX;
+    this._target.leanY = _idleBody.leanY;
+    this._target.swayX = _idleBody.swayX;
+    this._target.swayY = _idleBody.swayY;
+    this._target.leftArm = _idleArm.leftArm;
+    this._target.rightArm = _idleArm.rightArm;
+    this._target.leftReach = _idleArm.leftReach;
+    this._target.rightReach = _idleArm.rightReach;
     this._lastTick = 0;
     this._log = [];
     this._maxLog = 16;
@@ -157,16 +172,37 @@
     var breathOffset = Math.sin(breathPhase) * breath.amplitude;
 
     // 2. Sway oscillation (lerp toward target + sin wave)
-    // (15/11/2026 v6cin) OWNER: tham chiếu video vi1/vi2 (cinematic female):
-    // chu kỳ chuyển động chính ~20.8s (optical flow FFT), đầu = 54-73% biên độ
-    // thân → sway CHẬM + MỀM (0.048Hz ~ 20.8s/vòng thay vì 1.2Hz giật cục),
-    // lớp sway phụ 0.16Hz tạo nhịp "thở cơ thể" hai tầng tự nhiên.
-    var swayPhase = (now / 1000) * 0.048; // ~20.8s/vòng — pacing cinematic
-    var swayPhase2 = (now / 1000) * 0.16; // tầng phụ ~6.2s — vi mô
-    var swayX = this._target.swayX * (0.7 + 0.3 * Math.sin(swayPhase)) + this._target.swayX * 0.12 * Math.sin(swayPhase2);
-    var swayY = this._target.swayY * (0.7 + 0.3 * Math.cos(swayPhase * 0.8)) + this._target.swayY * 0.12 * Math.cos(swayPhase2 * 0.7);
+    // (15/11/2026 v6mot — REF: 6.mp4 "English with CTM" + 3/4/5.mp4 tổng hợp).
+    // 6.mp4 (người nói camera): flow thân rất nhỏ 0.3–2.3px, đứng gần im 87–98%,
+    // chuyển động theo CÂU NÓI (chu kỳ đầu 1.4–4s) chứ không lắc đều. Ca sĩ
+    // 3/4/5.mp4 bổ sung 2 tầng chậm 12.5s (0.08Hz) + 50s (0.02Hz). → Sway 3 tầng:
+    //   slow  0.08Hz (12.5s — đổi tư thế theo câu, từ 3.mp4/4.mp4)
+    //   ultra 0.02Hz (50s — sway tổng thể rất chậm, từ 5.mp4)
+    //   micro 0.16Hz (6.2s — vi mô giữ lại từ v6cin, biên nhỏ)
+    var slowX = this._target.swayX * (0.7 + 0.3 * Math.sin((now / 1000) * 0.08));
+    var slowY = this._target.swayY * (0.7 + 0.3 * Math.cos((now / 1000) * 0.064));
+    var microX = this._target.swayX * 0.12 * Math.sin((now / 1000) * 0.16);
+    var microY = this._target.swayY * 0.12 * Math.cos((now / 1000) * 0.112);
+    var ultraX = this._target.swayX * 0.2 * Math.sin((now / 1000) * 0.02);
+    var ultraY = this._target.swayY * 0.2 * Math.cos((now / 1000) * 0.012);
+
+    // (15/11/2026 v6mot — REF: 6.mp4) MICRO-REST: người nói camera 87–98% thời
+    // gian đứng gần im (<3px), chỉ chuyển động theo câu nói. Khi speechEnergy≈0
+    // (giữa 2 câu) → tắt hẳn tầng vi mô + co sway chậm còn 50%: chỉ còn thở +
+    // sway rất chậm như "đậu" giữa câu. Khi nói → đủ 3 tầng + boost ở dưới.
+    if (this._speechEnergy <= 0.08) {
+      microX = 0; microY = 0;
+      slowX *= 0.5; slowY *= 0.5;
+    }
+
+    var swayX = slowX + microX + ultraX;
+    var swayY = slowY + microY + ultraY;
 
     // 3. Speaking boost: tăng sway + arm reach khi đang nói
+    // (15/11/2026 v6mot — REF: 3.mp4 vui = torso-dominant 0.74, 4.mp4 buồn =
+    // head-dominant 1.23) Tone-driven amplitude: preset đã mang "tính cách"
+    // theo state (WARM_GREETING/HAPPY sway cao; SERIOUS_ALERT/APOLOGETIC thấp
+    // — gần như đứng yên, đúng 4.mp4 "đầu gục, thân gần đứng").
     if (this._speaking) {
       var speechBoost = 1 + this._speechEnergy * 0.5;
       swayX *= speechBoost;
@@ -206,3 +242,10 @@
   };
 
 })(typeof window !== "undefined" ? window : this);
+/*
+ * (15/11/2026 v6mot — LỊCH SỬ NHỊP SWAY)
+ *   s6_1411:    1.2Hz (giật cục — đã bị thay)
+ *   v6cin_1411: 0.048Hz (20.8s vi1/vi2) + 0.16Hz vi mô
+ *   v6mot_1511: 0.08Hz (12.5s, 3/4.mp4) + 0.02Hz (50s, 5.mp4) + 0.16Hz vi mô
+ *               + micro-rest (energy≈0 → tắt vi mô, sway ×0.5 — 6.mp4 still 87–98%)
+ */

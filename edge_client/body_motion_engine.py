@@ -18,7 +18,7 @@ __all__ = [
     "BodyMotionEngine",
 ]
 
-VERSION = "s6_1411"
+VERSION = "v6mot_1511"
 
 
 # ===== 1. BODY_PRESETS =====
@@ -150,9 +150,30 @@ class BodyMotionEngine:
         breath_offset = math.sin(breath_phase) * breath["amplitude"]
 
         # 2. Sway oscillation
-        sway_phase = (now / 1000.0) * 1.2
-        sway_x = self._target["swayX"] * (0.7 + 0.3 * math.sin(sway_phase))
-        sway_y = self._target["swayY"] * (0.7 + 0.3 * math.cos(sway_phase * 0.8))
+        # (15/11/2026 v6mot — REF: 6.mp4 "English with CTM" + 3/4/5.mp4 tổng hợp).
+        # Sway 3 tầng đồng bộ với body_motion_engine.js:
+        #   slow  0.08Hz (12.5s — đổi tư thế theo câu, từ 3.mp4/4.mp4)
+        #   ultra 0.02Hz (50s — sway tổng thể rất chậm, từ 5.mp4)
+        #   micro 0.16Hz (6.2s — vi mô giữ lại từ v6cin, biên nhỏ)
+        t_s = now / 1000.0
+        slow_x = self._target["swayX"] * (0.7 + 0.3 * math.sin(t_s * 0.08))
+        slow_y = self._target["swayY"] * (0.7 + 0.3 * math.cos(t_s * 0.064))
+        micro_x = self._target["swayX"] * 0.12 * math.sin(t_s * 0.16)
+        micro_y = self._target["swayY"] * 0.12 * math.cos(t_s * 0.112)
+        ultra_x = self._target["swayX"] * 0.2 * math.sin(t_s * 0.02)
+        ultra_y = self._target["swayY"] * 0.2 * math.cos(t_s * 0.012)
+
+        # (15/11/2026 v6mot — REF: 6.mp4) MICRO-REST: người nói camera 87–98%
+        # thời gian đứng gần im; giữa 2 câu (energy≈0) → tắt tầng vi mô + co
+        # sway chậm còn 50%: chỉ còn thở + sway rất chậm như "đậu" giữa câu.
+        if self._speech_energy <= 0.08:
+            micro_x = 0.0
+            micro_y = 0.0
+            slow_x *= 0.5
+            slow_y *= 0.5
+
+        sway_x = slow_x + micro_x + ultra_x
+        sway_y = slow_y + micro_y + ultra_y
 
         # 3. Speaking boost
         if self._speaking:
