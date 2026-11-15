@@ -7,7 +7,9 @@
   <meta http-equiv="Content-Language" content="vi">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>QUAN AI BRAIN — Raspberry Pi 5 Edge Kiosk</title>
-  <link rel="stylesheet" href="/kiosk.css?v=v6btn_1511">
+  <!-- (16/11/2026 v6full_1511) Buffer 1080×1080: portrait full-height trên màn
+       4K sắc nét hơn (buffer vuông = box vuông, không méo); bump cache CSS -->
+  <link rel="stylesheet" href="/kiosk.css?v=v6full3_1511">
 </head>
 <body>
   <div class="kiosk-app">
@@ -63,7 +65,9 @@
               <div class="bolt bolt-3"></div>
               <div class="bolt bolt-4"></div>
             </div>
-            <canvas id="kiosk-avatar-canvas" width="720" height="720" class="digital-human-canvas"></canvas>
+            <!-- (16/11/2026 v6full_1511) Buffer 1080×1080 (vuông): full-height
+                 portrait sắc nét 4K; engine map từ 1024-space nên không đổi logic -->
+            <canvas id="kiosk-avatar-canvas" width="1080" height="1080" class="digital-human-canvas"></canvas>
             <!-- (13/11/2026) STATE CAPTION: caption dưới avatar đổi theo state -->
             <div class="state-caption" id="state-caption">SẴN SÀNG</div>
             <!-- (14/11/2026) MICRO-TRANSCRIPT: hiện câu trả lời dài của Cherry
@@ -113,7 +117,7 @@
   <script src="/audio_mouth_driver.js?v=task001_1411"></script>
   <script src="/presence_engine.js?v=task001_1411"></script>
   <script src="/body_motion_engine.js?v=v6mot_1511"></script>
-  <script src="/avatar_engine.js?v=v6ges_1511"></script>
+  <script src="/avatar_engine.js?v=v6full2_1511"></script>
   <!-- (15/11) CONFLICT RESOLVED: giữ upstream v6ges; bỏ stash body_sync_1311 -->
   <!-- (31/10/2026) mic-only: engine nạp LƯỚI khi bấm nút mic (kiosk.js) —
        trình duyệt không giữ mic stream nền 24/7 -->

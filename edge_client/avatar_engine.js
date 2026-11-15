@@ -278,20 +278,20 @@ class DigitalHumanAvatar {
     const assetList = [
       // (14/11 v6emo) Portrait cảm xúc THẬT sheet anh Quân cung cấp (avatar_v3_*)
       // làm primary; avatar_v2_* giữ làm fallback. 2 slot mới: listening + dreamy.
-      { key: "portrait", src: `${this.basePath}/avatar_v3_thu_thai.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
-      { key: "portrait_happy", src: `${this.basePath}/avatar_v3_vui_suong.png`, fallback: `${this.basePath}/avatar_v2_happy.png` },
-      { key: "portrait_thinking", src: `${this.basePath}/avatar_v3_tap_trung.png`, fallback: `${this.basePath}/avatar_v2_thinking.png` },
+      { key: "portrait", src: `${this.basePath}/avatar_v3_thu_thai.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      { key: "portrait_happy", src: `${this.basePath}/avatar_v3_vui_suong.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_happy.png` },
+      { key: "portrait_thinking", src: `${this.basePath}/avatar_v3_tap_trung.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_thinking.png` },
       // (14/11 v6emo) tuc_gian = biểu cảm tức giận thật thay cho confused-trầm-tư cũ
-      { key: "portrait_warning", src: `${this.basePath}/avatar_v3_tuc_gian.png`, fallback: `${this.basePath}/avatar_v2_confused.png` },
-      { key: "portrait_empathic", src: `${this.basePath}/avatar_v3_buon_ba.png`, fallback: `${this.basePath}/avatar_v2_empathic.png` },
-      { key: "portrait_confused", src: `${this.basePath}/avatar_v3_nghieng_dau.png`, fallback: `${this.basePath}/avatar_v2_confused.png` },
-      { key: "portrait_surprised", src: `${this.basePath}/avatar_v3_ngac_nhien.png`, fallback: `${this.basePath}/avatar_v2_surprised.png` },
-      { key: "portrait_error", src: `${this.basePath}/avatar_v3_tap_trung.png`, fallback: `${this.basePath}/avatar_v2_error.png` },
-      { key: "portrait_blink", src: `${this.basePath}/avatar_v3_chop_mat.png`, fallback: `${this.basePath}/avatar_v2_blink.png` },
-      { key: "portrait_speaking", src: `${this.basePath}/avatar_v3_dang_noi.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      { key: "portrait_warning", src: `${this.basePath}/avatar_v3_tuc_gian.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_confused.png` },
+      { key: "portrait_empathic", src: `${this.basePath}/avatar_v3_buon_ba.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_empathic.png` },
+      { key: "portrait_confused", src: `${this.basePath}/avatar_v3_nghieng_dau.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_confused.png` },
+      { key: "portrait_surprised", src: `${this.basePath}/avatar_v3_ngac_nhien.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_surprised.png` },
+      { key: "portrait_error", src: `${this.basePath}/avatar_v3_tap_trung.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_error.png` },
+      { key: "portrait_blink", src: `${this.basePath}/avatar_v3_chop_mat.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_blink.png` },
+      { key: "portrait_speaking", src: `${this.basePath}/avatar_v3_dang_noi.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
       // (14/11 v6emo) 2 slot MỚI: lắng nghe + mơ mộng (chờ duyệt / kết nối lại)
-      { key: "portrait_listening", src: `${this.basePath}/avatar_v3_lang_nghe.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
-      { key: "portrait_dreamy", src: `${this.basePath}/avatar_v3_mo_mong.png`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      { key: "portrait_listening", src: `${this.basePath}/avatar_v3_lang_nghe.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
+      { key: "portrait_dreamy", src: `${this.basePath}/avatar_v3_mo_mong.png?v=v6full2_1511`, fallback: `${this.basePath}/avatar_v2_portrait.png` },
       { key: "eyes_blink", src: `${this.basePath}/eyes_closed.png`, fallback: null },
       { key: "eyes_thinking", src: `${this.basePath}/eyes_thinking.png`, fallback: null },
       { key: "mouth_speaking", src: `${this.basePath}/mouth_v2_speaking.png`, fallback: `${this.basePath}/mouth_speaking.png` },

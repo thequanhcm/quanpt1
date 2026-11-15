@@ -28,16 +28,17 @@ body {
   height: 100vh;
 }
 
-/* (31/10/2026) LAYOUT 3 VÙNG: header | body (sidebar trái + avatar + VU phải) | footer */
+/* (31/10/2026) LAYOUT 3 VÙNG: header | body (sidebar trái + avatar + VU phải) | footer
+   (16/11/2026 v6full_1511) Bỏ padding/gap: stage tràn FULL màn hình như 6.mp4
+   — header/footer giờ là lớp overlay nổi, không chiếm layout. */
 .kiosk-app {
   display: flex;
   flex-direction: column;
   width: 100%;
   height: 100%;
-  /* (31/10) MỞ RỘNG TỐI ĐA: padding/gap tối thiểu */
-  padding: 3px 5px;
+  padding: 0;
   position: relative;
-  gap: 3px;
+  gap: 0;
 }
 
 .kiosk-body {
@@ -50,7 +51,14 @@ body {
 
 /* ================= HEADER BAR ================= */
 .kiosk-header {
-  /* (31/10) SÁT GÓC: bỏ khung card — badge/clock nằm sát 2 góc trên */
+  /* (31/10) SÁT GÓC: bỏ khung card — badge/clock nằm sát 2 góc trên
+     (16/11/2026 v6full_1511) Nổi overlay: giải phóng chiều cao cho portrait
+     tràn gần tới đỉnh màn như 6.mp4; text 2 góc vẫn nổi trên nền tối. */
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  right: 8px;
+  z-index: 6;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -60,7 +68,6 @@ body {
   border-radius: 0;
   height: 26px;
   flex-shrink: 0;
-  position: relative;
 }
 
 .header-left {
@@ -176,6 +183,7 @@ body {
 }
 
 /* ================= MAIN AVATAR STAGE (GIỮA — RỘNG NHẤT) ================= */
+/* (16/11/2026 v6full_1511) relative = mốc neo canvas absolute (đáy giữa) */
 .kiosk-stage {
   flex: 1;
   display: flex;
@@ -184,18 +192,21 @@ body {
   padding: 0;
   min-height: 0;
   min-width: 0;
+  position: relative;
+  overflow: hidden;
 }
 
 .avatar-card {
-  /* (31/10 ~19:55) NHÌN TỔNG THỂ (theo mẫu 19:05): khung nhỏ lại vừa phải,
-     căn chính giữa stage — không tràn viền */
-  width: auto;
+  /* (16/11/2026 v6full_1511 — OWNER: "giao diện full giống 6.mp4") BỎ khung
+     aspect-ratio 3/2 + max-width 92% → card tràn FULL toàn stage. Người trong
+     6.mp4 lấp đầy khung chữ nhật, thân neo đáy màn — không phải bust nổi giữa
+     card nhỏ. */
+  width: 100%;
   height: 100%;
-  aspect-ratio: 3 / 2;
-  max-width: 92%;
-  flex: 0 1 auto;
-  margin: 0 auto;
-  min-height: 160px;
+  max-width: none;
+  flex: 1 1 auto;
+  margin: 0;
+  min-height: 0;
   position: relative;
   overflow: hidden;
 }
@@ -240,20 +251,39 @@ body {
   visibility: hidden;
 }
 
-/* (31/10) contain: avatar hiển thị TRỌN VỆN (không crop đỉnh đầu/cằm) */
+/* (16/11/2026 v6full_1511 — OWNER: "giao diện full giống 6.mp4") Canvas VUÔNG
+   neo ĐÁY GIỮA, cạnh = 105% chiều cao stage → portrait tràn nhẹ qua đỉnh + đáy
+   (đúng kiểu người 6.mp4 lấp khung). 105% đè trùm VIỀN CYAN + BO GÓC in sẵn
+   trong asset (bake trong file 896×896) ra ngoài khung stage — không sửa
+   toạ độ mắt/miệng của engine (EYES/MOUTH_BOX map theo w/h tự thích nghi).
+   Buffer 720×720 là VUÔNG nên box vuông = KHÔNG méo mặt. */
 .digital-human-canvas {
-  width: 100%;
-  height: 100%;
-  /* (31/10 ~19:55) TỔNG THỂ (theo mẫu 19:05): contain — trọn vẹn từ đầu đến
-     vai, không cắt trán/cằm, căn chính giữa khung, còn viền nền 2 bên */
-  object-fit: contain;
-  object-position: center center;
-  border-radius: 18px;
+  width: auto;
+  height: 105%;
+  aspect-ratio: 1 / 1;
+  position: absolute;
+  left: 50%;
+  bottom: -2.5%;
+  transform: translateX(-50%);
   display: block;
+  border-radius: 0;
   /* (13/11/2026) z-index 1: canvas avatar NẰM DƯỚI overlay effects
      (cylinder z2, particles z3, laser/bolts z4, caption z5) */
-  position: relative;
   z-index: 1;
+}
+
+/* Backdrop studio tối surround 2 bên canvas — như phông nền 6.mp4
+   (16/11 v6full2_1511) Khớp màu NỀN MÉP portrait đo thực (13,38,61) quanh
+   vùng canvas để biên canvas biến mất (trước: nền #070d1a → mép portrait
+   nổi thành "viền ảo" sáng hơn do blue +36). */
+.kiosk-stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 42% at 50% 38%, rgba(23, 37, 64, 0.9) 0%, rgba(10, 17, 34, 0.55) 55%, transparent 100%),
+    linear-gradient(180deg, #0d1a2c 0%, #0c192b 62%, #0a1626 100%);
+  z-index: 0;
 }
 
 .tony-kiosk-svg {
@@ -455,13 +485,23 @@ body {
 }
 
 .kiosk-footer {
-  /* (31/10 ~19:30) 3 vùng: TONY ƠI trái | marquee giữa | STOP phải */
+  /* (31/10 ~19:30) 3 vùng: TONY ƠI trái | marquee giữa | STOP phải
+     (16/11/2026 v6full_1511) Nổi trên chân portrait: portrait tràn tới đáy màn
+     như 6.mp4 → footer absolute + nền tối mờ, không đẩy canvas lên. */
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   height: 42px;
   flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(3, 6, 15, 0) 0%, rgba(3, 6, 15, 0.78) 45%, rgba(3, 6, 15, 0.92) 100%);
+  border-radius: 12px;
+  pointer-events: auto;
 }
 
 .footer-status {
