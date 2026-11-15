@@ -95,6 +95,12 @@ class DigitalHumanAvatar {
     // Offscreen helper canvases for seamless feathered blending
     this._featherMouthCanvas = null;
     this._featherEyeCanvas = null;
+    // (13/11/2026) Body+arms offscreen cache (vẽ thân + tay + đàn keyboard)
+    this._bodyCanvas = null;
+    this._bodyCacheKey = null;
+    // (13/11/2026) Portrait masked offscreen (chỉ giữ đầu + vai, ngực fade dần)
+    this._portraitMaskedCanvas = null;
+    this._portraitMaskedKey = null;
 
     // ================= MICRO-EXPRESSION ENGINE =================
     this.currentMicro = {
@@ -947,6 +953,8 @@ class DigitalHumanAvatar {
       // (14/11 v6emo) CROSSFADE 350ms giữa 2 portrait cảm xúc khác nhau:
       // giữ ảnh cũ vẽ trước với alpha giảm dần, ảnh mới đè lên với alpha tăng dần
       // → chuyển cảm xúc mượt, không nhấp nháy. Blink vẫn tức thì (fade ngắn).
+      // (15/11) CONFLICT RESOLVED: giữ upstream crossfade v6emo; bỏ stash cũ
+      // body_sync_1311 (_renderBodyAndArms/_drawMaskedPortrait — hướng đã chôn).
       const portraitKey = (baseImg === this.assets.portrait) ? "portrait"
         : (baseImg === this.assets.portrait_blink) ? "blink"
         : (baseImg === this.assets.portrait_speaking) ? "speaking"
@@ -979,8 +987,11 @@ class DigitalHumanAvatar {
       } else {
         ctx.drawImage(baseImg, 0, 0, w, h);
       }
+      // (15/11) CONFLICT RESOLVED: bỏ stash cũ body_sync_1311
+      // (_renderBodyAndArms/_drawMaskedPortrait — hướng procedural đã chôn,
+      // thay bằng v6ges gesture layer ở root transform).
 
-      // (14/11/2026, owner: "bỏ các đường trên hình thể, giữ hình nguyên gốc")
+      // (14/11, owner: "bỏ các đường trên hình thể, giữ hình nguyên gốc")
       // Tắt toàn bộ vẽ đè trang trí lên portrait: hair strands cyan + tendril
       // xuyên mặt + sheen + motes. Portrait asset đã có tóc thật; giữ hàm
       // _renderNaturalHairSway nguyên vẹn bên dưới để rollback bằng git.
@@ -1004,6 +1015,9 @@ class DigitalHumanAvatar {
 
       // 9. Cyber Lighting & High-Tech Vignette
       this._renderCyberLighting(ctx, w, h, config.auraColor);
+
+      // (13/11/2026) Tay SAU portrait (đè lên vai + đàn) — vẽ cuối để luôn thấy
+      this._renderArmsOverPortrait(ctx, w, h, now, config);
     } else {
       // Clean cyber loading backdrop; no ghost silhouette or watermark
       this._renderProceduralAssistant(ctx, w, h, 0, config.auraColor);
@@ -1481,6 +1495,277 @@ class DigitalHumanAvatar {
     bgGrad.addColorStop(1, "rgba(4, 8, 20, 1.0)");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+
+  // (13/11/2026) Vẽ thân + đàn keyboard TRƯỚC portrait (sẽ bị portrait che 1 phần).
+  // Mẫu: nữ nghệ sĩ chơi keyboard, váy tím lavender, tươi cười hiền dịu.
+  _renderBodyAndArms(ctx, w, h, now, config) {
+    // (13/11 đêm) BỎ sway riêng: body nằm TRONG head transform — mọi lớp
+    // (portrait/body/arms) dịch CÙNG headSwayX + breathOffset → hết seam ngang.
+    ctx.save();
+
+    // 1. VÁY / THÂN — gradient tím lavender (mẫu ảnh image_955013)
+    // (13/11 đêm) HẠ SÂU: portrait mặt cận chiếm tới 0.84h → thân chỉ còn
+    // dải hẹp dưới cùng (0.88→0.99h), như vai/váy lộ sau bệ đàn.
+    const bodyTop = h * 0.88;   // bắt đầu dưới portrait
+    const bodyBot = h * 0.99;
+    const bodyGrad = ctx.createLinearGradient(0, bodyTop, 0, bodyBot);
+    bodyGrad.addColorStop(0, "rgba(180, 140, 220, 0.95)");   // lavender sáng
+    bodyGrad.addColorStop(0.5, "rgba(150, 110, 200, 0.95)"); // tím giữa
+    bodyGrad.addColorStop(1, "rgba(120, 80, 180, 0.95)");    // tím đậm dưới
+    ctx.fillStyle = bodyGrad;
+
+    // Váy hình thang rộng dần xuống dưới (mẫu váy xòe)
+    ctx.beginPath();
+    ctx.moveTo(w * 0.32, bodyTop);
+    ctx.bezierCurveTo(
+      w * 0.28, h * 0.75,
+      w * 0.22, h * 0.85,
+      w * 0.18, bodyBot
+    );
+    ctx.lineTo(w * 0.82, bodyBot);
+    ctx.bezierCurveTo(
+      w * 0.78, h * 0.85,
+      w * 0.72, h * 0.75,
+      w * 0.68, bodyTop
+    );
+    ctx.closePath();
+    ctx.fill();
+
+    // (13/11 tối) Bèo nhún MỀM: sóng sin nhiều khúc, alpha thấp — vải mềm
+    ctx.strokeStyle = "rgba(205, 175, 235, 0.35)";
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 3; i++) {
+      const y0 = bodyTop + (bodyBot - bodyTop) * (0.3 + i * 0.2);
+      const amp = 3 + i * 1.2;
+      ctx.beginPath();
+      for (let s = 0; s <= 8; s++) {
+        const t = s / 8;
+        const x = w * (0.25 + t * 0.5);
+        const y = y0 + Math.sin(t * Math.PI * 3 + i) * amp;
+        if (s === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // (13/11 đêm) Bóng mềm nơi cạnh dưới portrait gặp váy — che đường nối
+    const collar = ctx.createLinearGradient(0, h * 0.855, 0, h * 0.895);
+    collar.addColorStop(0, "rgba(10, 8, 18, 0)");
+    collar.addColorStop(1, "rgba(10, 8, 18, 0.55)");
+    ctx.fillStyle = collar;
+    ctx.fillRect(w * 0.10, h * 0.855, w * 0.80, h * 0.04);
+
+    // Hoa hồng vải ở ngực trái (mẫu ảnh)
+    const flowerX = w * 0.30;
+    const flowerY = h * 0.905;
+    const flowerR = w * 0.018;
+    // (13/11 tối) Hoa MỀM: 2 lớp cánh ellip + tâm gradient (không phải chấm tròn cứng)
+    ctx.fillStyle = "rgba(225, 160, 190, 0.35)";
+    ctx.beginPath();
+    ctx.arc(flowerX, flowerY, flowerR * 1.25, 0, Math.PI * 2);
+    ctx.fill();
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + 0.3;
+      const px = flowerX + Math.cos(angle) * flowerR * 0.62;
+      const py = flowerY + Math.sin(angle) * flowerR * 0.62;
+      ctx.fillStyle = "rgba(228, 158, 188, 0.9)";
+      ctx.beginPath();
+      ctx.ellipse(px, py, flowerR * 0.52, flowerR * 0.38, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (let i = 0; i < 5; i++) {
+      const angle = (i / 5) * Math.PI * 2 + 0.9;
+      const px = flowerX + Math.cos(angle) * flowerR * 0.3;
+      const py = flowerY + Math.sin(angle) * flowerR * 0.3;
+      ctx.fillStyle = "rgba(245, 190, 210, 0.95)";
+      ctx.beginPath();
+      ctx.ellipse(px, py, flowerR * 0.4, flowerR * 0.3, angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const heart = ctx.createRadialGradient(flowerX, flowerY, 1, flowerX, flowerY, flowerR * 0.42);
+    heart.addColorStop(0, "rgba(255, 236, 214, 0.98)");
+    heart.addColorStop(1, "rgba(250, 200, 170, 0.9)");
+    ctx.fillStyle = heart;
+    ctx.beginPath();
+    ctx.arc(flowerX, flowerY, flowerR * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. ĐÀN KEYBOARD — dải ngang phía dưới
+    const kbTop = h * 0.935;
+    const kbBot = h * 0.995;
+    const kbLeft = w * 0.08;
+    const kbRight = w * 0.92;
+
+    // (13/11 tối) Thân đàn MỀM: bo góc (roundRect) — không còn khối vuông sắc
+    const kbGrad = ctx.createLinearGradient(0, kbTop, 0, kbBot);
+    kbGrad.addColorStop(0, "rgba(24, 24, 36, 0.92)");
+    kbGrad.addColorStop(1, "rgba(6, 6, 16, 0.96)");
+    ctx.fillStyle = kbGrad;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(kbLeft, kbTop, kbRight - kbLeft, kbBot - kbTop, 8);
+    } else {
+      ctx.rect(kbLeft, kbTop, kbRight - kbLeft, kbBot - kbTop);
+    }
+    ctx.fill();
+
+    // Phím trắng
+    const whiteKeyCount = 14;
+    const whiteKeyW = (kbRight - kbLeft) / whiteKeyCount;
+    const whiteKeyH = (kbBot - kbTop) * 0.85;
+    const whiteKeyTop = kbTop + (kbBot - kbTop) * 0.05;
+    for (let i = 0; i < whiteKeyCount; i++) {
+      const kx = kbLeft + i * whiteKeyW;
+      ctx.fillStyle = "rgba(240, 240, 250, 0.92)";
+      ctx.fillRect(kx + 1, whiteKeyTop, whiteKeyW - 2, whiteKeyH);
+      // Viền phím
+      ctx.strokeStyle = "rgba(60, 60, 80, 0.4)";
+      ctx.lineWidth = 0.5;
+      ctx.strokeRect(kx + 1, whiteKeyTop, whiteKeyW - 2, whiteKeyH);
+    }
+
+    // Phím đen (mỗi nhóm 2 phím đen giữa 3 phím trắng)
+    const blackKeyW = whiteKeyW * 0.6;
+    const blackKeyH = whiteKeyH * 0.6;
+    const blackKeyTop = whiteKeyTop;
+    for (let i = 0; i < whiteKeyCount - 1; i++) {
+      // Pattern phím đen: sau phím trắng 1 và 2 (không phải sau 3, 6, 8, 10, 13)
+      const blackPattern = [1, 2, 4, 5, 6, 8, 9, 11, 12, 13];
+      if (blackPattern.includes(i)) {
+        const kx = kbLeft + (i + 1) * whiteKeyW - blackKeyW / 2;
+        ctx.fillStyle = "rgba(10, 10, 20, 0.95)";
+        ctx.fillRect(kx, blackKeyTop, blackKeyW, blackKeyH);
+      }
+    }
+
+    // (13/11 tối) Viền đàn MỀM: bo góc alpha thấp + dải sáng phản chiếu trên phím
+    ctx.strokeStyle = "rgba(0, 229, 255, 0.22)";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    if (ctx.roundRect) {
+      ctx.roundRect(kbLeft, kbTop, kbRight - kbLeft, kbBot - kbTop, 8);
+    } else {
+      ctx.rect(kbLeft, kbTop, kbRight - kbLeft, kbBot - kbTop);
+    }
+    ctx.stroke();
+    const kbSheen = ctx.createLinearGradient(0, kbTop, 0, kbTop + 6);
+    kbSheen.addColorStop(0, "rgba(120, 225, 255, 0.28)");
+    kbSheen.addColorStop(1, "rgba(120, 225, 255, 0)");
+    ctx.fillStyle = kbSheen;
+    ctx.fillRect(kbLeft + 4, kbTop + 1, kbRight - kbLeft - 8, 5);
+
+    ctx.restore();
+  }
+
+  // (13/11/2026) Vẽ portrait với MASK gradient: chỉ giữ đầu + vai (y < 0.62*h),
+  // ngực fade dần → lộ thân procedural phía sau.
+  _drawMaskedPortrait(ctx, baseImg, w, h) {
+    const cacheKey = `${baseImg.src}|${w}|${h}`;
+    if (!this._portraitMaskedCanvas || this._portraitMaskedKey !== cacheKey) {
+      if (!this._portraitMaskedCanvas) {
+        this._portraitMaskedCanvas = document.createElement("canvas");
+      }
+      this._portraitMaskedCanvas.width = w;
+      this._portraitMaskedCanvas.height = h;
+      const mctx = this._portraitMaskedCanvas.getContext("2d");
+      mctx.clearRect(0, 0, w, h);
+      mctx.drawImage(baseImg, 0, 0, w, h);
+
+      // (13/11 đêm) Mask HẠ SÂU: portrait MẶT CẬN chiếm tới ~0.84h (da/tóc/
+      // môi hồng kéo dài) — fade 0.86→0.97 chỉ lộ phần dưới cùng, KHÔNG cắt mặt.
+      const maskY1 = h * 0.84;
+      const maskY2 = h * 0.99;
+      const maskGrad = mctx.createLinearGradient(0, maskY1, 0, maskY2);
+      maskGrad.addColorStop(0, "rgba(0,0,0,1)");
+      maskGrad.addColorStop(1, "rgba(0,0,0,0)");
+      mctx.globalCompositeOperation = "destination-out";
+      mctx.fillStyle = maskGrad;
+      mctx.fillRect(0, maskY1, w, maskY2 - maskY1);
+      mctx.globalCompositeOperation = "source-over";
+
+      this._portraitMaskedKey = cacheKey;
+    }
+    ctx.drawImage(this._portraitMaskedCanvas, 0, 0);
+  }
+
+  // (13/11/2026) Tay SAU portrait (đè lên vai + đàn) — vẽ cuối để luôn thấy.
+  // 2 tay đánh đàn: rotate theo nhịp, ngón tay chạm phím.
+  _renderArmsOverPortrait(ctx, w, h, now, config) {
+    // (13/11 đêm) BỎ sway riêng — cùng head transform với portrait → hết seam.
+
+    // Nhịp đánh đàn: nhanh hơn khi SPEAKING, chậm hơn khi IDLE
+    const beatSpeed = this.state === "SPEAKING" ? 0.008 : 0.004;
+    const beatPhase = (now - this.startTime) * beatSpeed;
+
+    ctx.save();
+
+    // (13/11 đêm) Anchor MỚI: vai thật của portrait mặt cận nằm ở cạnh dưới
+    // (0.88h, x 0.24/0.76) — tay vươn XUỐNG vào đàn dưới đáy, không đè mặt.
+    const shoulderL = { x: w * 0.26, y: h * 0.88 };
+    const shoulderR = { x: w * 0.74, y: h * 0.88 };
+
+    // reach ngắn (0.10): bàn tay rơi ~0.93-0.97h — NGAY TRÊN PHÍM (kbTop 0.935h)
+    const leftHandAngle = Math.sin(beatPhase) * 0.10 + 0.42;
+    const leftHandReach = 0.105 + Math.sin(beatPhase * 1.3) * 0.008;
+    this._drawArm(ctx, shoulderL, leftHandAngle, leftHandReach, w, h, "left");
+
+    const rightHandAngle = Math.sin(beatPhase + Math.PI * 0.55) * 0.08 - 0.42;
+    const rightHandReach = 0.100 + Math.sin(beatPhase * 1.7 + 1.0) * 0.007;
+    this._drawArm(ctx, shoulderR, rightHandAngle, rightHandReach, w, h, "right");
+
+    ctx.restore();
+  }
+
+  // (13/11 tối) Cánh tay MỀM: cong vai→khuỷu→cổ tay (quadratic), nét thon dần,
+  // bàn tay ellipse da có gradient + highlight — hết cảm giác que cắm hoa.
+  _drawArm(ctx, shoulder, angle, reach, w, h, side) {
+    const armLen = w * reach;
+    const handX = shoulder.x + Math.sin(angle) * armLen;
+    const handY = shoulder.y + Math.cos(angle) * armLen;
+    // Khuỷu: lệch nhẹ ra ngoài + xuống dưới → cánh tay cong tự nhiên
+    const elbowX = shoulder.x + Math.sin(angle * 0.55) * armLen * 0.52
+      + (side === "left" ? -w * 0.014 : w * 0.014);
+    const elbowY = shoulder.y + Math.cos(angle * 0.55) * armLen * 0.52 + w * 0.010;
+
+    ctx.save();
+    ctx.lineCap = "round";
+    // Tay áo: 2 nét cong lồng (đậm dưới, nhạt trên) — cảm giác vải mềm
+    ctx.beginPath();
+    ctx.moveTo(shoulder.x, shoulder.y);
+    ctx.quadraticCurveTo(elbowX, elbowY, handX, handY);
+    ctx.strokeStyle = "rgba(150, 110, 200, 0.55)";
+    ctx.lineWidth = w * 0.055;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(shoulder.x, shoulder.y);
+    ctx.quadraticCurveTo(elbowX, elbowY, handX, handY);
+    ctx.strokeStyle = "rgba(195, 160, 235, 0.60)";
+    ctx.lineWidth = w * 0.040;
+    ctx.stroke();
+
+    // Bàn tay: ellipse da gradient + highlight mềm
+    const handR = w * 0.026;
+    const handGrad = ctx.createRadialGradient(
+      handX - handR * 0.3, handY - handR * 0.3, handR * 0.2,
+      handX, handY, handR * 1.2
+    );
+    handGrad.addColorStop(0, "rgba(255, 228, 208, 0.98)");
+    handGrad.addColorStop(1, "rgba(238, 192, 168, 0.95)");
+    ctx.fillStyle = handGrad;
+    ctx.beginPath();
+    ctx.ellipse(handX, handY, handR * 1.18, handR * 0.88, angle * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Lắc tay bạc (mẫu ảnh) — nét mảnh nhẹ nhàng
+    if (side === "right") {
+      ctx.strokeStyle = "rgba(225, 225, 245, 0.75)";
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(handX - w * 0.014, handY - w * 0.004, w * 0.011, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 }

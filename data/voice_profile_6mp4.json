@@ -1,0 +1,51 @@
+{
+  "source": "6.mp4 (English with CTM) — người nói camera 5924s",
+  "segments": {
+    "intro": {
+      "duration_s": 90.0,
+      "speech_ratio": 0.483,
+      "pause_ratio": 0.517,
+      "burst_rate_est_words_per_min": 73.2,
+      "f0_mean_hz": 202.2,
+      "f0_std_hz": 43.9,
+      "f0_p10": 150.9,
+      "f0_p90": 258.1,
+      "env_p10": 0.003,
+      "env_p90": 0.858,
+      "f0_frames": 4074
+    },
+    "middle": {
+      "duration_s": 2960.0,
+      "speech_ratio": 0.501,
+      "pause_ratio": 0.499,
+      "burst_rate_est_words_per_min": 63.1,
+      "f0_mean_hz": 184.0,
+      "f0_std_hz": 37.6,
+      "f0_p10": 139.1,
+      "f0_p90": 235.3,
+      "env_p10": 0.004,
+      "env_p90": 0.897,
+      "f0_frames": 144553
+    },
+    "late": {
+      "duration_s": 223.7,
+      "speech_ratio": 0.557,
+      "pause_ratio": 0.443,
+      "burst_rate_est_words_per_min": 71.8,
+      "f0_mean_hz": 183.5,
+      "f0_std_hz": 35.1,
+      "f0_p10": 142.9,
+      "f0_p90": 231.9,
+      "env_p10": 0.01,
+      "env_p90": 0.905,
+      "f0_frames": 12218
+    }
+  },
+  "aggregate": {
+    "f0_mean_hz": 189.9,
+    "f0_std_hz": 38.9,
+    "est_words_per_min": 69.4,
+    "speech_ratio": 0.514
+  },
+  "measured": "2026-11-15 23:45 ICT, ffmpeg via imageio_ffmpeg, autocorr pitch 70-400Hz"
+}

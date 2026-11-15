@@ -1,0 +1,57 @@
+{
+  "hoaimy_variants": {
+    "baseline": {
+      "duration_s": 13.61,
+      "speech_ratio": 0.544,
+      "burst_rate_est_words_per_min": 87.5,
+      "f0_mean_hz": 230.8,
+      "f0_std_hz": 40.4,
+      "f0_p10": 177.8,
+      "f0_p90": 271.2,
+      "f0_frames": 701,
+      "rate": "+0%",
+      "pitch": "+0Hz"
+    },
+    "cham8": {
+      "error": "No audio was received. Please verify that your parameters are correct."
+    },
+    "cham8_thap4": {
+      "error": "No audio was received. Please verify that your parameters are correct."
+    },
+    "cham12_thap2": {
+      "duration_s": 15.46,
+      "speech_ratio": 0.535,
+      "burst_rate_est_words_per_min": 79.4,
+      "f0_mean_hz": 227.0,
+      "f0_std_hz": 39.4,
+      "f0_p10": 175.8,
+      "f0_p90": 269.4,
+      "f0_frames": 785,
+      "rate": "-12%",
+      "pitch": "-2Hz"
+    },
+    "cham10_thap6": {
+      "f0_mean_hz": 221.0,
+      "f0_std_hz": 38.6,
+      "burst_rate_est_words_per_min": 81.3,
+      "speech_ratio": 0.54,
+      "rate": "-10%",
+      "pitch": "-6Hz"
+    },
+    "cham12_thap8": {
+      "f0_mean_hz": 217.9,
+      "f0_std_hz": 38.4,
+      "burst_rate_est_words_per_min": 77.0,
+      "speech_ratio": 0.538,
+      "rate": "-12%",
+      "pitch": "-8Hz"
+    }
+  },
+  "sample_6mp4_aggregate": {
+    "f0_mean_hz": 189.9,
+    "f0_std_hz": 38.9,
+    "est_words_per_min": 69.4,
+    "speech_ratio": 0.514
+  },
+  "note": "same analyzer, same 25ms/10ms frame, autocorr pitch 70-400Hz"
+}
