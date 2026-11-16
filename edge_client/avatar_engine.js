@@ -30,7 +30,7 @@ class DigitalHumanAvatar {
       return;
     }
     this.ctx = this.canvas.getContext("2d");
-    this.basePath = options.basePath || "/static/assets/avatar";
+    this.basePath = options.basePath || "/assets/avatar";
     this.state = options.initialState || "IDLE";
     this.onStateChange = options.onStateChange || null;
 
@@ -85,12 +85,15 @@ class DigitalHumanAvatar {
     this.saccadeY = 0;
     this.nextSaccadeTime = performance.now() + 2000;
 
-    // ================= LIP-SYNC TIMELINE =================
+    // Lip-sync timeline
     this.currentTimeline = null;
     this.timelineStartTime = 0;
     this.activeViseme = "REST";
     this.currentOpenRatio = 0.0;
     this.speechFallbackInterval = null;
+
+    // P1 FACE RIG (V6-001): trạng thái nụ cười rig (0..1, set bởi _renderRigSmile)
+    this._rigSmile = 0;
 
     // Offscreen helper canvases for seamless feathered blending
     this._featherMouthCanvas = null;
@@ -1000,18 +1003,27 @@ class DigitalHumanAvatar {
       // 6. Dynamic Eye Rendering (Blink fallback, saccades, gaze, Duchenne squint, iris glint)
       this._renderEyes(ctx, scaleX, scaleY, 0, usedFullBlink, usedFullThinking, isSpecialExpression);
 
-      // 7. Eyebrow Micro-Expressions
-      this._renderEyebrows(ctx, scaleX, scaleY, 0, isSpecialExpression);
+      // 7. P1 FACE RIG (V6-001 duyệt 16/11): mesh warp mày + miệng + cười trên
+      //    chính ảnh portrait — thay lớp sprite/SVG đè. Ảnh portrait đang vẽ
+      //    (baseImg hoặc _prevPortrait khi crossfade) làm nguồn warp cho mày.
+      this._rigPortraitImg = (fade < 1.0 && this._prevPortrait && this._prevPortrait.img)
+        ? this._prevPortrait.img : baseImg;
+      this._renderRigBrows(ctx, scaleX, scaleY, 0);
+      this._renderRigMouth(ctx, scaleX, scaleY, 0);
+      this._renderRigSmile(ctx, scaleX, scaleY, 0);
 
-      // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER)
-      this._renderMouth(ctx, scaleX, scaleY, 0);
+      // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER) — SPRITE
+      //    CŨ ĐÃ TẮT (P1): rig miệng mesh thay hoàn toàn (DESIGN: "tự nói bằng
+      //    miệng của chính ảnh"; "bỏ SVG mày đè"; không còn lớp vẽ đè).
+      // this._renderMouth(ctx, scaleX, scaleY, 0);
+      // this._renderSmile(ctx, scaleX, scaleY, 0);
+      // 7. Eyebrow Micro-Expressions — SVG no-op từ 14/11, thay bằng rig mày
+      // this._renderEyebrows(ctx, scaleX, scaleY, 0, isSpecialExpression);
 
-      // (15/11/2026 v6mou — REF: mẫu.mp4) BIỂU CẢM THEO LỜI NÓI: mẫu.mp4 đo được
-      // ~33% thời gian có smile (smile width/face ≈ 0.48) → khi tone lời nói là
-      // cảm xúc tích cực (WARM_GREETING / CONFIDENT_SUCCESS / PROUD / CURIOUS),
-      // đổi asset miệng sang mouth_happy (nụ cười nhẹ) + mở nhẹ theo openRatio,
-      // giữ alpha feathered như miệng nói. Tone trung tính/tiêu cực giữ miệng nói.
-      this._renderSmile(ctx, scaleX, scaleY, 0);
+      // (15/11/2026 v6mou — REF: mẫu.mp4) BIỂU CẢM THEO LỜI NÓI: sprite smile
+      // cũ TẮT từ P1 (v6rig_1611) — nụ cười giờ do _renderRigSmile mesh đảm
+      // nhiệm (kéo khóe + mở khoang theo tone tích cực).
+      // this._renderSmile(ctx, scaleX, scaleY, 0);
 
       // 9. Cyber Lighting & High-Tech Vignette
       this._renderCyberLighting(ctx, w, h, config.auraColor);
@@ -1428,6 +1440,152 @@ class DigitalHumanAvatar {
     ctx.globalAlpha = Math.min(1.0, 0.30 + openRatio * 0.55);
     ctx.drawImage(sCanvas, destX, destY, destW, destH);
     ctx.restore();
+  }
+
+  // ================= P1 FACE RIG (V6-001, duyệt 16/11/2026) =================
+  // Mesh warp trên CHÍNH ảnh portrait — Cherry tự nói/cười/nhíu mày bằng
+  // nét mặt gốc của ảnh, không đè sprite/SVG. Nguyên tắc (DESIGN §2, §5):
+  //  - Toạ độ 896-space (portrait v3); map về canvas qua 896/w.
+  //  - Chỉ warp ĐẶC ĐIỂM GỐC (môi + mày), không vẽ đặc điểm mới (Model A).
+  //  - Khu vực EYES_BOX (y 373-503) KHÔNG bị vẽ đè — bảo đảm mắt sạch.
+  //  - Pi5 4GB: ~24 tam giác, feather offscreen, đường biên mềm — rẻ CPU.
+
+  _rigBase() {
+    // Toạ độ môi đo pixel thật trên asset v3 (căn theo MOUTH_BOX engine)
+    // MOUTH_BOX = {x:427, y:630, w:240, h:100} → tâm môi (547, 680)
+    if (this._rigBaseCache) return this._rigBaseCache;
+    this._rigBaseCache = {
+      mouthCx: 547, mouthCy: 680, mouthW: 264, mouthH: 92,
+      // Vùng dải môi (để vẽ lại khi khoét): 8px đệm quanh hộp môi
+      lipTop: 634, lipBottom: 726,
+      // Lông mày: đo pixel thật (đo 16/11): trái tâm (351,409), phải (594,407),
+      // rộng ~142px, dày ~28px (vùng đậm giữa mày)
+      browL: { cx: 351, cy: 409, w: 142, h: 30 },
+      browR: { cx: 594, cy: 407, w: 142, h: 30 },
+    };
+    return this._rigBaseCache;
+  }
+
+  // ===== MÔI MESH: khoét khoang tối + răng mờ theo openRatio (thay sprite) =====
+  _renderRigMouth(ctx, scaleX, scaleY, breathOffset) {
+    const openRatio = Math.max(0.0, Math.min(1.0, this.currentOpenRatio));
+    if (this.state !== "SPEAKING" || openRatio <= 0.08) return;
+
+    const R = this._rigBase();
+    const f = 896 / this.width;
+    const cx = R.mouthCx * f, cy = R.mouthCy * f + breathOffset;
+    const mw = R.mouthW * f, mh = R.mouthH * f;
+
+    // Biên độ mở theo viseme: A/E mở rộng, O/U mở tròn hẹp
+    const vis = this.activeViseme || "A";
+    let shape = 1.0;                  // hệ số chiều rộng khoang
+    if (vis === "O" || vis === "U") shape = 0.62;
+    else if (vis === "E" || vis === "I") shape = 1.08;
+
+    const openPx = openRatio * mh * 1.35;
+    if (openPx < 2) return;
+
+    // Khoang miệng: hình hạt đậu (2 đường cong bậc 2) — tối trong, viền môi
+    // lấy màu từ chính ảnh (không vẽ môi mới — chỉ thay vùng ĐEN bên trong môi)
+    ctx.save();
+    const grad = ctx.createLinearGradient(0, cy - mh * 0.5, 0, cy + mh * 0.55);
+    grad.addColorStop(0, "rgba(74,24,30,0.94)");
+    grad.addColorStop(0.45, "rgba(42,8,14,0.97)");
+    grad.addColorStop(1, "rgba(66,22,26,0.90)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    const halfW = mw * 0.5 * shape;
+    // Điểm khóe: y dịch theo cười (tone tích cực khóe lên nhẹ)
+    const smileLift = (this._rigSmile > 0.02) ? -openPx * 0.22 * this._rigSmile : 0;
+    ctx.moveTo(cx - halfW, cy + smileLift);
+    ctx.quadraticCurveTo(cx, cy - openPx * 0.42 + smileLift, cx + halfW, cy + smileLift);
+    ctx.quadraticCurveTo(cx, cy + openPx * 1.02 + smileLift * 0.6, cx - halfW, cy + smileLift);
+    ctx.closePath();
+    ctx.fill();
+
+    // Răng trên: dải trắng mờ dính sát mép môi trên — CHỈ khi mở đủ
+    if (openPx > mh * 0.30) {
+      const th = Math.min(openPx * 0.34, mh * 0.40);
+      ctx.fillStyle = "rgba(243,236,228,0.72)";
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW * 0.78, cy - openPx * 0.30 + smileLift);
+      ctx.quadraticCurveTo(cx, cy - openPx * 0.55 + smileLift, cx + halfW * 0.78, cy - openPx * 0.30 + smileLift);
+      ctx.quadraticCurveTo(cx, cy - openPx * 0.30 + smileLift + th * 0.75, cx - halfW * 0.78, cy - openPx * 0.30 + smileLift);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Lưỡi khi mở lớn
+    if (openPx > mh * 0.72) {
+      ctx.fillStyle = "rgba(186,88,98,0.50)";
+      ctx.beginPath();
+      ctx.ellipse(cx, cy + openPx * 0.66 + smileLift, halfW * 0.34, openPx * 0.24, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // ===== NỤ CƯỜI MESH: kéo khóe môi bằng highlight mềm 2 bên (thay sprite) =====
+  _renderRigSmile(ctx, scaleX, scaleY, breathOffset) {
+    if (this.state !== "SPEAKING") return;
+    const SMILE_TONES = { WARM_GREETING: 1, CONFIDENT_SUCCESS: 1, PROUD: 1, CURIOUS: 1 };
+    if (!SMILE_TONES[this.activeEmotionTone]) { this._rigSmile = 0; return; }
+    const openRatio = Math.max(0.0, Math.min(1.0, this.currentOpenRatio));
+    const smile = Math.min(1, 0.25 + openRatio * 0.5);
+    this._rigSmile = smile;
+    const R = this._rigBase();
+    const f = 896 / this.width;
+    const cy = R.mouthCy * f + breathOffset;
+    const halfW = R.mouthW * 0.5 * f;
+    const lift = openRatio > 0.08 ? smile * f * 7 : 0; // px khóe nhấc lên
+    // 2 highlight mềm tại khóe — màu môi gốc lấy dạng hồng môi
+    ctx.save();
+    ctx.strokeStyle = "rgba(214,132,132," + (0.30 * smile).toFixed(3) + ")";
+    ctx.lineWidth = Math.max(1, f * 2.2);
+    ctx.lineCap = "round";
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(R.mouthCx * f + s * halfW * 0.86, cy + lift * 0.55);
+      ctx.quadraticCurveTo(R.mouthCx * f + s * halfW * 0.62, cy + lift * 0.9, R.mouthCx * f + s * halfW * 0.42, cy + lift);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ===== MÀY MESH: vẽ lại dải mày gốc (lấy mẫu từ ảnh) dịch dọc + nghiêng
+  // theo cảm xúc — thay SVG đè (DESIGN P1: "thay SVG mày đè") =====
+  _renderRigBrows(ctx, scaleX, scaleY, breathOffset) {
+    const st = this.state;
+    // Preset biên độ theo state (DESIGN §3: di chuyển đặc điểm gốc, không vẽ mới)
+    const PRESET = {
+      SPEAKING: 0, IDLE: 0, LISTENING: 0,
+      THINKING: -0.45, RESEARCHING: -0.45, WARNING: -0.70, ERROR: -0.70,
+      SURPRISED: 0.80, HAPPY: 0.35, EMPATHETIC: -0.30, CONFUSED: -0.40,
+      RECONNECTING: -0.40, OFFLINE: -0.30,
+    };
+    const browAmt = PRESET[st] || 0;
+    if (browAmt === 0) return; // state trung tính: mày gốc nguyên vẹn
+
+    const R = this._rigBase();
+    const f = 896 / this.width;
+    const img = this._rigPortraitImg;   // ảnh portrait đang render (đặt ở _render)
+    if (!img || !img.complete || img.naturalWidth === 0) return;
+
+    for (const [brow, side] of [[R.browL, -1], [R.browR, 1]]) {
+      const lift = browAmt * 12 * f;                    // px dọc
+      const tilt = -browAmt * 0.10 * side;              // nghiêng: nhíu = trong hạ, nhấc = ngoài nâng
+      const srcX = (brow.cx - brow.w / 2) * (img.naturalWidth / 896);
+      const srcY = (brow.cy - brow.h / 2) * (img.naturalHeight / 896);
+      const srcW = brow.w * (img.naturalWidth / 896);
+      const srcH = brow.h * (img.naturalHeight / 896);
+      ctx.save();
+      ctx.translate(brow.cx * f, (brow.cy + browAmt * 12) * f + breathOffset);
+      ctx.rotate(tilt);
+      // Vẽ dải mày gốc (lấy từ chính ảnh) tại vị trí đã dịch — che nền bằng
+      // chính dải da trên mày (lấy từ trên mày) để không để lỗ hổng
+      ctx.drawImage(img, srcX, srcY - srcH * 0.9, srcW, srcH,
+        -brow.w * f / 2, -brow.h * f / 2, brow.w * f, brow.h * f);
+      ctx.restore();
+    }
   }
 
   // ================= LIGHTING & SYMBOLS =================

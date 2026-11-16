@@ -1,121 +1,585 @@
 Exit code: 1
 Command: E:\BRAIN\.venv\Scripts\python.exe -m pytest -q tests
-Timestamp UTC: 2026-11-07T04:27:18.315613+00:00
+Timestamp UTC: 2026-11-15T23:47:13.909649+00:00
 
 ........................................................................ [  1%]
 ........................................................................ [  3%]
 ........................................................................ [  5%]
-............F..................................s......................F. [  7%]
-........................................................................ [  9%]
-........................................................................ [ 11%]
+........................................................................ [  6%]
+.....................................F.................................. [  8%]
+.........s.............................................................. [ 10%]
+.....................................................FF................. [ 12%]
 ........................................................................ [ 13%]
-........................................................................ [ 15%]
+...F.................................................................... [ 15%]
 ........................................................................ [ 17%]
 ........................................................................ [ 19%]
-........................................................................ [ 21%]
-.....................................................F.................. [ 23%]
-........................................................................ [ 25%]
+......................F........................F........................ [ 20%]
+........................................................................ [ 22%]
+........................................................................ [ 24%]
+........................................................................ [ 26%]
 ........................................................................ [ 27%]
-........................................................................ [ 29%]
+...................F.................................................... [ 29%]
 ........................................................................ [ 31%]
-..............................................................s.s....... [ 33%]
-........................................................................ [ 35%]
-........................................................................ [ 37%]
-........................................................................ [ 39%]
-.................................................................sss.... [ 41%]
-......................s................................................. [ 43%]
+........................................................................ [ 33%]
+........................................................................ [ 34%]
+........................................................................ [ 36%]
+........................................................................ [ 38%]
+................................s.s..................................... [ 40%]
+........................................................................ [ 41%]
+........................................................................ [ 43%]
 ........................................................................ [ 45%]
-.ssss.s.....ss.......................................................... [ 46%]
+...................................sss..........................s....... [ 47%]
 ........................................................................ [ 48%]
-........................................................................ [ 50%]
-.................................................................s...... [ 52%]
-..s........s.s....s.s................................................... [ 54%]
-........................................................................ [ 56%]
-........................................................................ [ 58%]
-........................................................................ [ 60%]
+...........................................ssss.s.....ss................ [ 50%]
+........................................................................ [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+...................................s........s........s.s....s.s......... [ 57%]
+........................................................................ [ 59%]
+........................................................................ [ 61%]
 ........................................................................ [ 62%]
 ........................................................................ [ 64%]
 ........................................................................ [ 66%]
 ........................................................................ [ 68%]
-........................................................................ [ 70%]
-........................................................................ [ 72%]
-.................................................s...................... [ 74%]
-........................................................................ [ 76%]
-......................................................s..............s.. [ 78%]
-.........................ss..........s...s.............................. [ 80%]
-........................................................................ [ 82%]
-........................................................................ [ 84%]
-........................................................................ [ 86%]
-........................................................................ [ 88%]
+........................................................................ [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 73%]
+........................................................................ [ 75%]
+...................s.................................................... [ 76%]
+........................................................................ [ 78%]
+........................s..............s...........................ss... [ 80%]
+.......s...s............................................................ [ 82%]
+........................................................................ [ 83%]
+........................................................................ [ 85%]
+........................................................................ [ 87%]
+........................................................................ [ 89%]
 ........................................................................ [ 90%]
-........................................................................ [ 91%]
-........................................................................ [ 93%]
-........................................................................ [ 95%]
-............................................................s........... [ 97%]
-.........................................................F.............. [ 99%]
-........                                                                 [100%]
+........................................................................ [ 92%]
+........................................................................ [ 94%]
+........................................................................ [ 96%]
+................................s....................................... [ 97%]
+.........................................FFF.................F.......... [ 99%]
+.................                                                        [100%]
 ================================== FAILURES ===================================
-___________ test_04_raspberry_pi_disconnect_and_reconnect_detection ___________
+________________ TestCacheBump.test_html_cache_version_bumped _________________
 
-    def test_04_raspberry_pi_disconnect_and_reconnect_detection():
-        """Edge connection monitor detects missing heartbeat, emits alert, and auto-recovers."""
-        monitor = EdgeConnectionMonitor(heartbeat_timeout_sec=0.1)
+self = <tests.test_avatar_emotion_sync_1314.TestCacheBump object at 0x0000016DB00A6550>
+
+    def test_html_cache_version_bumped(self):
+        html = _read(HTML)
+        # (14/11 v6emo) cache version hiện tại = v6emo_1411 (portrait cảm xúc mới);
+        # test chấp nhận mọi version >= sync1314, chỉ chặn version cổ.
+>       assert ("v6pure_1411" in html) or ("v6emo_1411" in html) or ("cherry_sync1314" in html), \
+            "kiosk.html chưa bump cache version"
+E       AssertionError: kiosk.html chưa bump cache version
+E       assert ('v6pure_1411' in '<!DOCTYPE html>\n<html lang="vi">\n<head>\n  <meta charset="UTF-8">\n  <!-- (31/10/2026) Chặn Google Translate tự dịc...window.__WAKE_ENGINE_DEFERRED__ = true;</script>\n  <script src="/kiosk.js?v=v6btn_1511"></script>\n</body>\n</html>\n' or 'v6emo_1411' in '<!DOCTYPE html>\n<html lang="vi">\n<head>\n  <meta charset="UTF-8">\n  <!-- (31/10/2026) Chặn Google Translate tự dịc...window.__WAKE_ENGINE_DEFERRED__ = true;</script>\n  <script src="/kiosk.js?v=v6btn_1511"></script>\n</body>\n</html>\n' or 'cherry_sync1314' in '<!DOCTYPE html>\n<html lang="vi">\n<head>\n  <meta charset="UTF-8">\n  <!-- (31/10/2026) Chặn Google Translate tự dịc...window.__WAKE_ENGINE_DEFERRED__ = true;</script>\n  <script src="/kiosk.js?v=v6btn_1511"></script>\n</body>\n</html>\n')
+
+tests\test_avatar_emotion_sync_1314.py:130: AssertionError
+______________ test_api_health_returns_evidence_based_components ______________
+
+health_server_url = 'http://127.0.0.1:52421'
+
+    def test_api_health_returns_evidence_based_components(health_server_url):
+        req = urllib.request.Request(f"{health_server_url}/api/health")
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            assert resp.status == 200
+            data = json.loads(resp.read().decode("utf-8"))
+        assert data["success"] is True
+        assert data["overall_status"] in ("HEALTHY", "DEGRADED")
+        ids = {c["component_id"] for c in data["components"]}
+        assert {"core_server", "ollama_daemon", "brain_db", "task_registry"} <= ids
+        for comp in data["components"]:
+            # Master Prompt Part 2 field contract
+            assert {"component_id", "observed_value", "status", "observed_at",
+                    "source", "evidence_ref", "verification_status",
+                    "last_verified_at"} <= set(comp.keys())
+>           assert comp["status"] in ("HEALTHY", "DEGRADED", "OFFLINE", "UNKNOWN", "UNVERIFIED")
+E           AssertionError: assert 'DISABLED' in ('HEALTHY', 'DEGRADED', 'OFFLINE', 'UNKNOWN', 'UNVERIFIED')
+
+tests\test_cognitive_loop.py:334: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[06:35:42] 127.0.0.1 - "GET /api/health HTTP/1.1" 200 -
+__________________ test_api_health_ollama_offline_is_honest ___________________
+
+health_server_url = 'http://127.0.0.1:52421'
+
+    def test_api_health_ollama_offline_is_honest(health_server_url):
+        """On this machine Ollama is currently OFFLINE — the endpoint must say so
+        instead of claiming HEALTHY (the 'silently dead' anti-pattern)."""
+        req = urllib.request.Request(f"{health_server_url}/api/health")
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        ollama = next(c for c in data["components"] if c["component_id"] == "ollama_daemon")
+        # Honesty contract: OFFLINE when probe fails, regardless of config
+>       assert ollama["status"] in ("HEALTHY", "OFFLINE")
+E       AssertionError: assert 'DISABLED' in ('HEALTHY', 'OFFLINE')
+
+tests\test_cognitive_loop.py:345: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[06:35:42] 127.0.0.1 - "GET /api/health HTTP/1.1" 200 -
+______________________________ test_run_e2e_mock ______________________________
+
+tmp_path = WindowsPath('C:/Users/DELL/AppData/Local/Temp/pytest-of-DELL/pytest-182/test_run_e2e_mock0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x0000016DCDB76010>
+
+    def test_run_e2e_mock(tmp_path, monkeypatch):
+        """run() với ask_chat mock — ghi JSON/MD vào tmp RUNS_DIR + KpiStore tmp DB."""
+        fake = {"success": True, "answer":
+                "Nguyên nhân: wifi mất nguồn, ARP/L2 chết. Nếu không phải wifi thì có thể do driver; "
+                "hoặc router DHCP. Em không tự kết luận thêm khi thiếu data.",
+                "used_memories": [{"id": "m1"}], "external_lookup": {"attempted": False},
+                "model": "mock", "elapsed_ms": 5}
     
-        # 1. Connect and Heartbeat
-        monitor.record_pairing("pi5-edge-01", "Raspberry Pi 5 Avatar")
-        monitor.record_heartbeat("pi5-edge-01", rtt_ms=12.0, subsystems_ready=True)
-        assert monitor.state == EdgeConnectionState.READY
+        monkeypatch.setattr(run_cpsl, "ask_chat", lambda q, sid, timeout=150.0: dict(fake))
+        monkeypatch.setattr(run_cpsl, "DATASET_PATH", run_cpsl.DATASET_PATH)  # giữ dataset thật (chỉ đọc)
+        monkeypatch.setattr(run_cpsl, "RUNS_DIR", tmp_path)
+        monkeypatch.setattr(run_cpsl, "CHAT_URL", "http://127.0.0.1:1/api/chat")  # không gọi thật
+        # KpiStore trỏ tmp DB — run() import trực tiếp trong hàm → patch module nguồn
+        from quan_ai_brain.intelligence.kpi_store import KpiStore as _RealKpiStore
+        import quan_ai_brain.intelligence.kpi_store as ks_mod
     
-        # 2. Wait for timeout
-        time.sleep(0.15)
-        monitor.check_deadline()
-        assert monitor.state in (EdgeConnectionState.DISCONNECTED, EdgeConnectionState.DEGRADED)
-        status = monitor.get_status()
->       assert status["active_alert_count"] >= 1
-E       assert 0 >= 1
-
-tests\test_autonomous_operations_readiness.py:181: AssertionError
-___________________________ test_format_for_prompt ____________________________
-
-    def test_format_for_prompt():
-        registry = CapabilityRegistry()
-        prompt_text = registry.format_for_prompt()
-        assert "[VERIFIED CAPABILITIES & ARCHITECTURE REALITY]" in prompt_text
-        assert "Trí Nhớ Dài Hạn" in prompt_text
->       assert "Suy Luận AI Cục Bộ" in prompt_text
-E       AssertionError: assert 'Suy Luận AI Cục Bộ' in '[VERIFIED CAPABILITIES & ARCHITECTURE REALITY]\n- [Trí Nhớ Dài Hạn (Long-Term Memory)] (Status: VERIFIED_ACTIVE, Doma...w), INERT_STAGING (safely inert), and EXTERNAL_PLANNED (sibling systems like DC-COMMAND/Battery AI not yet connected).'
-
-tests\test_capability_registry.py:59: AssertionError
-___________ TestSelfQAAnswersGrounded.test_identity_answer_truthful ___________
-
-self = <tests.test_m5_conversation.TestSelfQAAnswersGrounded object at 0x000001B62A605290>
-
-    def test_identity_answer_truthful(self):
-        out = self.qa.answer("Em là ai vậy?")
->       assert out and "TONY" in out
-E       assert ('Em là CHERRY, trợ lý điều hành số của anh Quanpt1. Em chạy trên PC Windows PC DESKTOP-SNMI929 và Raspberry Pi 5 quanpt1@100.100.83.59. Em có 10 năng lực đã kiểm chứng — anh hỏi "em làm được gì" để nghe chi tiết nhé.' and 'TONY' in 'Em là CHERRY, trợ lý điều hành số của anh Quanpt1. Em chạy trên PC Windows PC DESKTOP-SNMI929 và Raspberry Pi 5 quanpt1@100.100.83.59. Em có 10 năng lực đã kiểm chứng — anh hỏi "em làm được gì" để nghe chi tiết nhé.')
-
-tests\test_m5_conversation.py:134: AssertionError
-_________________ test_w03_wifi_loss_heartbeat_timeout_alert __________________
-
-monitor = <quan_ai_brain.web.edge_monitor.EdgeConnectionMonitor object at 0x000001B649138E50>
-
-    def test_w03_wifi_loss_heartbeat_timeout_alert(monitor):
-        """W03: Detect heartbeat timeout and transition state to DISCONNECTED with alert."""
-        # Initial heartbeat
-        monitor.record_heartbeat(device_id="PI5-ARM64-EDGE-01", rtt_ms=10.0)
-        assert monitor.state in (EdgeConnectionState.READY, EdgeConnectionState.CONNECTED)
+        class TmpStore(_RealKpiStore):
+            def __init__(self):
+                super().__init__(db_path=tmp_path / "brain.db")
     
-        # Fast forward time beyond timeout (2.0s)
-        monitor.last_heartbeat_epoch = time.time() - 5.0
-        monitor.check_deadline()
+        monkeypatch.setattr(ks_mod, "KpiStore", TmpStore)
     
-        assert monitor.state == EdgeConnectionState.DISCONNECTED
-        status = monitor.get_status()
->       assert status["active_alert_count"] > 0
-E       assert 0 > 0
+        out = run_cpsl.run(dry=False)  # đủ 30 case nhưng mock trả ngay → nhanh
+        assert out["n_cases"] == 30
+        assert (tmp_path / f"{out['run_id']}.json").exists()
+        assert (tmp_path / f"{out['run_id']}.md").exists()
+        assert all(r["status"] == "OK" for r in out["results"])
+        # KpiStore tmp DB nhận snapshots
+        import sqlite3
+        con = sqlite3.connect(tmp_path / "brain.db")
+        n = con.execute("SELECT COUNT(*) FROM kpi_snapshots").fetchone()[0]
+        runs = con.execute("SELECT COUNT(*) FROM benchmark_runs WHERE status='COMPLETED'").fetchone()[0]
+        con.close()
+        assert runs == 1
+>       assert n == 12
+E       assert 13 == 12
 
-tests\test_wifi_protocol.py:69: AssertionError
+tests\test_cpsl_runner.py:175: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[1/30] CPSL-MIN-N1-001: OK total=3/5
+[2/30] CPSL-MIN-N1-002: OK total=2/5
+[3/30] CPSL-MIN-N1-003: OK total=2/5
+[4/30] CPSL-MIN-N1-004: OK total=1/5
+[5/30] CPSL-MIN-N1-005: OK total=1/5
+[6/30] CPSL-MIN-N1-006: OK total=1/5
+[7/30] CPSL-MIN-N1-007: OK total=1/5
+[8/30] CPSL-MIN-N1-008: OK total=1/5
+[9/30] CPSL-MIN-N1-009: OK total=1/5
+[10/30] CPSL-MIN-N1-010: OK total=2/5
+[11/30] CPSL-MIN-N1-011: OK total=2/5
+[12/30] CPSL-MIN-N1-012: OK total=2/5
+[13/30] CPSL-MIN-N2-001: OK total=3/5
+[14/30] CPSL-MIN-N2-002: OK total=2/5
+[15/30] CPSL-MIN-N2-003: OK total=1/5
+[16/30] CPSL-MIN-N2-004: OK total=1/5
+[17/30] CPSL-MIN-N2-005: OK total=1/5
+[18/30] CPSL-MIN-N2-006: OK total=1/5
+[19/30] CPSL-MIN-N3-001: OK total=1/5
+[20/30] CPSL-MIN-N3-002: OK total=2/5
+[21/30] CPSL-MIN-N3-003: OK total=1/5
+[22/30] CPSL-MIN-N3-004: OK total=1/5
+[23/30] CPSL-MIN-N3-005: OK total=1/5
+[24/30] CPSL-MIN-N3-006: OK total=1/5
+[25/30] CPSL-MIN-N4-001: OK total=1/5
+[26/30] CPSL-MIN-N4-002: OK total=1/5
+[27/30] CPSL-MIN-N4-003: OK total=1/5
+[28/30] CPSL-MIN-N5-001: OK total=1/5
+[29/30] CPSL-MIN-N5-002: OK total=1/5
+[30/30] CPSL-MIN-N5-003: OK total=1/5
+
+JSON: C:\Users\DELL\AppData\Local\Temp\pytest-of-DELL\pytest-182\test_run_e2e_mock0\cpsl_mini_20261115_233544.json
+KpiStore: run run_20261115_233544_60489c — 12 KPI snapshots written
+KPI8 Self-Correction: 0/0 resolved
+MD:   C:\Users\DELL\AppData\Local\Temp\pytest-of-DELL\pytest-182\test_run_e2e_mock0\cpsl_mini_20261115_233544.md
+________ test_voice_pipeline_spoken_sanitization_preserves_self_intro _________
+
+voice_pipeline = <quan_ai_brain.voice.voice_pipeline.XiaoZhiVoicePipeline object at 0x0000016DCC0D1510>
+
+    def test_voice_pipeline_spoken_sanitization_preserves_self_intro(voice_pipeline: XiaoZhiVoicePipeline):
+        """Verify voice pipeline sanitizes and articulates natural Vietnamese without clipping."""
+        res = voice_pipeline.handle_voice_input("Giới thiệu về em.", is_push_to_talk=True)
+        assert "CHERRY" in res.spoken_text
+>       assert "Anh Quân" in res.spoken_text
+E       AssertionError: assert 'Anh Quân' in 'Em là CHERRY — trợ lý điều hành công việc số do anh Quân, Quanpt1, xây dựng và sở hữu. Em được thiết kế để hỗ trợ anh...nhiệm vụ chủ động tìm hiểu, kiểm chứng thông tin, đánh giá năng lực của chính mình và đề xuất những việc cần cải tiến.'
+E        +  where 'Em là CHERRY — trợ lý điều hành công việc số do anh Quân, Quanpt1, xây dựng và sở hữu. Em được thiết kế để hỗ trợ anh...nhiệm vụ chủ động tìm hiểu, kiểm chứng thông tin, đánh giá năng lực của chính mình và đề xuất những việc cần cải tiến.' = VoiceInteractionResult(query='Giới thiệu về em.', response_text='Em là CHERRY — trợ lý điều hành công việc số do anh Q...'REST', 'audio_energy': 0.0}]}, barge_in_occurred=False, clarification_needed=False, context_turns=2, duration_ms=3.42).spoken_text
+
+tests\test_digital_identity_persona.py:284: AssertionError
+________________ test_edge_client_daemon_local_kiosk_endpoints ________________
+
+    def test_edge_client_daemon_local_kiosk_endpoints() -> None:
+        # Use ephemeral port for kiosk server
+        config = EdgeConfig(
+            device_id="EDGE-PI5-TEST-DAEMON",
+            kiosk_host="127.0.0.1",
+            kiosk_port=0,
+            core_host="127.0.0.1",
+            core_port=9999,  # Intentionally offline core
+        )
+        daemon = EdgeClientDaemon(config)
+        daemon.start()
+    
+        # Get bound port
+        assert daemon._server is not None
+        _, actual_port = daemon._server.server_address
+        base_url = f"http://127.0.0.1:{actual_port}"
+    
+        try:
+            # 1. Test Kiosk HTML served
+            req_html = urllib.request.Request(f"{base_url}/kiosk.html")
+            with urllib.request.urlopen(req_html, timeout=3.0) as resp:
+                assert resp.status == 200
+                content = resp.read().decode("utf-8")
+                assert "kiosk-avatar-canvas" in content
+                assert "btn-touch-stop" in content
+                assert "offline-overlay" in content
+    
+            # 2. Test Kiosk CSS served
+            req_css = urllib.request.Request(f"{base_url}/kiosk.css")
+            with urllib.request.urlopen(req_css, timeout=3.0) as resp:
+                assert resp.status == 200
+                assert "kiosk-avatar-viewport" in resp.read().decode("utf-8")
+    
+            # 3. Test Kiosk JS served
+            req_js = urllib.request.Request(f"{base_url}/kiosk.js")
+            with urllib.request.urlopen(req_js, timeout=3.0) as resp:
+                assert resp.status == 200
+                assert "pollDaemonStatus" in resp.read().decode("utf-8")
+    
+            # 3b. Test Avatar Engine JS served
+            req_engine = urllib.request.Request(f"{base_url}/avatar_engine.js")
+            with urllib.request.urlopen(req_engine, timeout=3.0) as resp:
+                assert resp.status == 200
+                assert "DigitalHumanAvatar" in resp.read().decode("utf-8")
+    
+            # 4. Test Kiosk Status API
+            req_status = urllib.request.Request(f"{base_url}/api/kiosk/status")
+            with urllib.request.urlopen(req_status, timeout=3.0) as resp:
+                assert resp.status == 200
+                data = json.loads(resp.read().decode("utf-8"))
+                assert data["device_id"] == "EDGE-PI5-TEST-DAEMON"
+                assert "core_connected" in data
+                assert "avatar_state" in data
+                assert "kiosk_running" in data
+                assert "embodiment_mode" in data
+    
+            # 5. Test Start Kiosk Remote Control API
+            req_start = urllib.request.Request(
+                f"{base_url}/api/kiosk/control",
+                data=json.dumps({"action": "start_kiosk"}).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req_start, timeout=3.0) as resp:
+                assert resp.status == 200
+                start_data = json.loads(resp.read().decode("utf-8"))
+>               assert start_data["success"] is True
+E               assert False is True
+
+tests\test_edge_client.py:164: AssertionError
+______________ test_photo_success_returns_empty_text_only_image _______________
+
+patched = (<tests.test_media_only_dm._FakeCapture object at 0x0000016DCE2B2310>, [('C:\\Users\\DELL\\AppData\\Local\\Temp\\pytest-of-DELL\\pytest-182\\test_photo_success_returns_emp0\\photo.jpg', '📷 Em gửi ảnh vừa chụp ạ!')])
+
+    def test_photo_success_returns_empty_text_only_image(patched):
+        fake, dm_calls = patched
+        out = cc.handle_tony_pi_photo("chụp hình")
+        assert out == ""  # không tin text — chỉ tin ảnh
+        assert len(dm_calls) == 1
+        path, caption = dm_calls[0]
+        assert path == fake.pc_path
+        # metadata gộp vào caption — không mất thông tin tên file + dung lượng
+>       assert fake.fname in caption
+E       AssertionError: assert 'photo_20261106_205438.jpg' in '📷 Em gửi ảnh vừa chụp ạ!'
+E        +  where 'photo_20261106_205438.jpg' = <tests.test_media_only_dm._FakeCapture object at 0x0000016DCE2B2310>.fname
+
+tests\test_media_only_dm.py:66: AssertionError
+__________________ test_executive_edge_telemetry_and_control __________________
+
+executive_server_instance = 'http://127.0.0.1:54523'
+
+    def test_executive_edge_telemetry_and_control(executive_server_instance: str) -> None:
+        # 1. Edge Telemetry GET
+        req_telem = urllib.request.Request(f"{executive_server_instance}/api/executive/edge/telemetry")
+        with urllib.request.urlopen(req_telem, timeout=5.0) as resp:
+            assert resp.status == 200
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data["success"] is True
+            assert "packets_in" in data
+            assert "packets_out" in data
+            assert "rtt_history" in data
+    
+        # 2. Edge Control POST (Set Expression)
+        ctrl_expr = json.dumps({"action": "set_expression", "state": "HAPPY", "transcript": "Mỉm cười chào Anh!"}).encode("utf-8")
+        req_ctrl = urllib.request.Request(
+            f"{executive_server_instance}/api/executive/edge/control",
+            data=ctrl_expr,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req_ctrl, timeout=5.0) as resp:
+            assert resp.status == 200
+            cdata = json.loads(resp.read().decode("utf-8"))
+            assert cdata["success"] is True
+            assert cdata["state"] == "HAPPY"
+    
+        # 2.5 Edge Control POST (Speak & Mouth-Sync)
+        ctrl_speak = json.dumps({"action": "speak", "text": "Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.", "duration_ms": 2500}).encode("utf-8")
+        req_sp = urllib.request.Request(
+            f"{executive_server_instance}/api/executive/edge/control",
+            data=ctrl_speak,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req_sp, timeout=5.0) as resp:
+            assert resp.status == 200
+            sdata = json.loads(resp.read().decode("utf-8"))
+            assert sdata["success"] is True
+>           assert "timeline" in sdata
+E           AssertionError: assert 'timeline' in {'success': True, 'action': 'speak', 'text': 'Chào Anh Quanpt1! Em đang sẵn sàng hỗ trợ.', 'tts_mode': 'background', ...}
+
+tests\test_web_executive_endpoints.py:397: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[06:46:51] 127.0.0.1 - "GET /api/executive/edge/telemetry HTTP/1.1" 200 -
+[06:46:54] 127.0.0.1 - "POST /api/executive/edge/control HTTP/1.1" 200 -
+[06:46:54] 127.0.0.1 - "POST /api/executive/edge/control HTTP/1.1" 200 -
+____________________ test_executive_edge_files_and_actions ____________________
+
+executive_server_instance = 'http://127.0.0.1:54523'
+
+    def test_executive_edge_files_and_actions(executive_server_instance: str) -> None:
+        # 1. Edge Files GET
+        req_f = urllib.request.Request(f"{executive_server_instance}/api/executive/edge/files")
+        with urllib.request.urlopen(req_f, timeout=5.0) as resp:
+            assert resp.status == 200
+            fdata = json.loads(resp.read().decode("utf-8"))
+            assert fdata["success"] is True
+            assert "local_files" in fdata
+            assert "remote_files" in fdata
+    
+        # 2. Edge File Upload POST
+        import base64
+        sample_b64 = base64.b64encode(b'{"test": true}').decode("ascii")
+        up_payload = json.dumps({"filename": "test_asset.json", "content_b64": sample_b64}).encode("utf-8")
+        req_up = urllib.request.Request(
+            f"{executive_server_instance}/api/executive/edge/files/upload",
+            data=up_payload,
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(req_up, timeout=5.0) as resp:
+            assert resp.status == 200
+            up_data = json.loads(resp.read().decode("utf-8"))
+            assert up_data["success"] is True
+            assert up_data["filename"] == "test_asset.json"
+            assert up_data["local_saved"] is True
+    
+        # 3. Edge Files Sync-All POST
+        req_sync = urllib.request.Request(
+            f"{executive_server_instance}/api/executive/edge/files/sync-all",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+>       with urllib.request.urlopen(req_sync, timeout=5.0) as resp:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_web_executive_endpoints.py:537: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:216: in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:519: in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:536: in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:496: in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:1377: in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:1352: in do_open
+    r = h.getresponse()
+        ^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\client.py:1395: in getresponse
+    response.begin()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\client.py:286: in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <socket.SocketIO object at 0x0000016DCEDF5FC0>
+b = <memory at 0x0000016DB1F16680>
+
+    def readinto(self, b):
+        """Read up to len(b) bytes into the writable buffer *b* and return
+        the number of bytes read.  If the socket is non-blocking and no bytes
+        are available, None is returned.
+    
+        If *b* is non-empty, a 0 return value indicates that the connection
+        was shutdown at the other end.
+        """
+        self._checkClosed()
+        self._checkReadable()
+        if self._timeout_occurred:
+            raise OSError("cannot read from timed out object")
+        while True:
+            try:
+>               return self._sock.recv_into(b)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+E               TimeoutError: timed out
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socket.py:706: TimeoutError
+---------------------------- Captured stdout call -----------------------------
+[06:46:54] 127.0.0.1 - "GET /api/executive/edge/files HTTP/1.1" 200 -
+[06:46:54] 127.0.0.1 - "POST /api/executive/edge/files/upload HTTP/1.1" 200 -
+____________________ test_executive_edge_startup_sequence _____________________
+
+executive_server_instance = 'http://127.0.0.1:54523'
+
+    def test_executive_edge_startup_sequence(executive_server_instance: str) -> None:
+        req = urllib.request.Request(
+            f"{executive_server_instance}/api/executive/edge/startup-sequence",
+            data=b"{}",
+            headers={"Content-Type": "application/json"},
+        )
+>       with urllib.request.urlopen(req, timeout=5.0) as resp:
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests\test_web_executive_endpoints.py:560: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:216: in urlopen
+    return opener.open(url, data, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:519: in open
+    response = self._open(req, data)
+               ^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:536: in _open
+    result = self._call_chain(self.handle_open, protocol, protocol +
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:496: in _call_chain
+    result = func(*args)
+             ^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:1377: in http_open
+    return self.do_open(http.client.HTTPConnection, req)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\urllib\request.py:1352: in do_open
+    r = h.getresponse()
+        ^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\client.py:1395: in getresponse
+    response.begin()
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\client.py:325: in begin
+    version, status, reason = self._read_status()
+                              ^^^^^^^^^^^^^^^^^^^
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\client.py:286: in _read_status
+    line = str(self.fp.readline(_MAXLINE + 1), "iso-8859-1")
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <socket.SocketIO object at 0x0000016DCEF60340>
+b = <memory at 0x0000016DB1F15B40>
+
+    def readinto(self, b):
+        """Read up to len(b) bytes into the writable buffer *b* and return
+        the number of bytes read.  If the socket is non-blocking and no bytes
+        are available, None is returned.
+    
+        If *b* is non-empty, a 0 return value indicates that the connection
+        was shutdown at the other end.
+        """
+        self._checkClosed()
+        self._checkReadable()
+        if self._timeout_occurred:
+            raise OSError("cannot read from timed out object")
+        while True:
+            try:
+>               return self._sock.recv_into(b)
+                       ^^^^^^^^^^^^^^^^^^^^^^^
+E               TimeoutError: timed out
+
+C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socket.py:706: TimeoutError
+---------------------------- Captured stdout call -----------------------------
+[06:47:00] 127.0.0.1 - "POST /api/executive/edge/files/sync-all HTTP/1.1" 200 -
+---------------------------- Captured stderr call -----------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54571)
+Traceback (most recent call last):
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 691, in process_request_thread
+    self.finish_request(request, client_address)
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 361, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 755, in __init__
+    self.handle()
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 424, in handle_one_request
+    method()
+  File "E:\BRAIN\src\quan_ai_brain\web\server.py", line 1336, in do_POST
+    self._handle_api_edge_sync_all_assets()
+  File "E:\BRAIN\src\quan_ai_brain\web\server.py", line 5130, in _handle_api_edge_sync_all_assets
+    self._send_json({
+  File "E:\BRAIN\src\quan_ai_brain\web\server.py", line 662, in _send_json
+    self.wfile.write(payload)
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 834, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] An established connection was aborted by the software in your host machine
+----------------------------------------
+-------------------------- Captured stdout teardown ---------------------------
+[06:47:05] 127.0.0.1 - "POST /api/executive/edge/startup-sequence HTTP/1.1" 200 -
+-------------------------- Captured stderr teardown ---------------------------
+----------------------------------------
+Exception occurred during processing of request from ('127.0.0.1', 54664)
+Traceback (most recent call last):
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 691, in process_request_thread
+    self.finish_request(request, client_address)
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 361, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 755, in __init__
+    self.handle()
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 436, in handle
+    self.handle_one_request()
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\http\server.py", line 424, in handle_one_request
+    method()
+  File "E:\BRAIN\src\quan_ai_brain\web\server.py", line 1328, in do_POST
+    self._handle_api_edge_startup_sequence(body)
+  File "E:\BRAIN\src\quan_ai_brain\web\server.py", line 5787, in _handle_api_edge_startup_sequence
+    self._send_json({
+  File "E:\BRAIN\src\quan_ai_brain\web\server.py", line 662, in _send_json
+    self.wfile.write(payload)
+  File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\socketserver.py", line 834, in write
+    self._sock.sendall(b)
+ConnectionAbortedError: [WinError 10053] An established connection was aborted by the software in your host machine
+----------------------------------------
+__________________ test_edge_control_speak_audio_forwarding ___________________
+
+web_server_instance = 'http://127.0.0.1:54725'
+
+    def test_edge_control_speak_audio_forwarding(web_server_instance: str) -> None:
+        payload = json.dumps({
+            "action": "speak",
+            "text": "Xin chào Anh Quanpt1, em đang nói trên loa Pi 5!",
+            "state": "SPEAKING",
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"{web_server_instance}/api/executive/edge/control",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10.0) as resp:
+            assert resp.status == 200
+            data = json.loads(resp.read().decode("utf-8"))
+            assert data.get("success") is True
+            assert data.get("action") == "speak"
+>           assert "timeline" in data
+E           AssertionError: assert 'timeline' in {'success': True, 'action': 'speak', 'text': 'Xin chào Anh Quanpt1, em đang nói trên loa Pi 5!', 'tts_mode': 'background', ...}
+
+tests\test_web_server.py:126: AssertionError
+---------------------------- Captured stdout call -----------------------------
+[06:47:07] 127.0.0.1 - "POST /api/executive/edge/control HTTP/1.1" 200 -
 ============================== warnings summary ===============================
 tests\advanced\registry.py:58
   E:\BRAIN\tests\advanced\registry.py:58: PytestCollectionWarning: cannot collect test class 'TestGovernanceError' because it has a __init__ constructor (from: tests/advanced/test_registry.py)
@@ -128,6 +592,90 @@ tests\advanced\registry.py:62
 src\quan_ai_brain\analytics\statistical_engine.py:20
   E:\BRAIN\src\quan_ai_brain\analytics\statistical_engine.py:20: PytestCollectionWarning: cannot collect test class 'TestType' because it has a __init__ constructor (from: tests/test_v39_analytics_engine.py)
     class TestType(Enum):
+
+tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_message
+  E:\BRAIN\.venv\Lib\site-packages\_pytest\threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-913 (_do_reboot)
+  
+  Traceback (most recent call last):
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "E:\BRAIN\edge_client\client_daemon.py", line 2387, in _do_reboot
+      subprocess.run(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 94, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    [Previous line repeated 2 more times]
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 94, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 548, in run
+      with Popen(*popenargs, **kwargs) as process:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\.venv\Lib\site-packages\sitecustomize.py", line 34, in __init__
+      super().__init__(*args, **kwargs)
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1026, in __init__
+      self._execute_child(args, executable, preexec_fn, close_fds,
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
+      hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  FileNotFoundError: [WinError 2] The system cannot find the file specified
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_message
+  E:\BRAIN\.venv\Lib\site-packages\_pytest\threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-912 (_do_reboot)
+  
+  Traceback (most recent call last):
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "E:\BRAIN\edge_client\client_daemon.py", line 2387, in _do_reboot
+      subprocess.run(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 94, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    [Previous line repeated 2 more times]
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 94, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 548, in run
+      with Popen(*popenargs, **kwargs) as process:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\.venv\Lib\site-packages\sitecustomize.py", line 34, in __init__
+      super().__init__(*args, **kwargs)
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1026, in __init__
+      self._execute_child(args, executable, preexec_fn, close_fds,
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
+      hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  FileNotFoundError: [WinError 2] The system cannot find the file specified
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
 tests/test_tony_vision.py::test_analyze_image_ocr_and_facts
 tests/test_tony_vision.py::test_analyze_image_no_text_is_honest
@@ -172,9 +720,16 @@ SKIPPED [1] tests\test_v39_decision_engine.py:258: Solution generation tested in
 SKIPPED [1] tests\test_v39_decision_engine.py:263: Troubleshooting workflow tested in integration tests
 SKIPPED [1] tests\test_v39_decision_engine.py:459: Problem solving pipeline tested in unit tests
 SKIPPED [1] tests\test_v39_decision_engine.py:516: Zero cost edge case handled separately
-SKIPPED [1] tests\test_vietnamese_tts.py:288: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
-FAILED tests/test_autonomous_operations_readiness.py::test_04_raspberry_pi_disconnect_and_reconnect_detection
-FAILED tests/test_capability_registry.py::test_format_for_prompt - AssertionE...
-FAILED tests/test_m5_conversation.py::TestSelfQAAnswersGrounded::test_identity_answer_truthful
-FAILED tests/test_wifi_protocol.py::test_w03_wifi_loss_heartbeat_timeout_alert
-4 failed, 3648 passed, 28 skipped, 11 warnings in 459.81s (0:07:39)
+SKIPPED [1] tests\test_vietnamese_tts.py:336: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+FAILED tests/test_avatar_emotion_sync_1314.py::TestCacheBump::test_html_cache_version_bumped
+FAILED tests/test_cognitive_loop.py::test_api_health_returns_evidence_based_components
+FAILED tests/test_cognitive_loop.py::test_api_health_ollama_offline_is_honest
+FAILED tests/test_cpsl_runner.py::test_run_e2e_mock - assert 13 == 12
+FAILED tests/test_digital_identity_persona.py::test_voice_pipeline_spoken_sanitization_preserves_self_intro
+FAILED tests/test_edge_client.py::test_edge_client_daemon_local_kiosk_endpoints
+FAILED tests/test_media_only_dm.py::test_photo_success_returns_empty_text_only_image
+FAILED tests/test_web_executive_endpoints.py::test_executive_edge_telemetry_and_control
+FAILED tests/test_web_executive_endpoints.py::test_executive_edge_files_and_actions
+FAILED tests/test_web_executive_endpoints.py::test_executive_edge_startup_sequence
+FAILED tests/test_web_server.py::test_edge_control_speak_audio_forwarding - A...
+11 failed, 4082 passed, 28 skipped, 13 warnings in 755.57s (0:12:35)
