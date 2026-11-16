@@ -83,6 +83,10 @@ class DigitalHumanAvatar {
     // Saccades (gaze micro-shift)
     this.saccadeX = 0;
     this.saccadeY = 0;
+    // P2 HEAD POSE (V6-001, duyệt 16/11): yaw/pitch/roll quanh trục cổ (độ)
+    this.headYaw = 0;      // ±6 — quay trái/phải (lắc đầu)
+    this.headPitch = 0;    // ±4 — gật xuống(+)/ngửa(-)
+    this.headRoll = 0;     // ±2 — nghiêng đầu qua vai
     this.nextSaccadeTime = performance.now() + 2000;
 
     // Lip-sync timeline
@@ -787,7 +791,7 @@ class DigitalHumanAvatar {
       }
     }
 
-    // 4. Saccades (gaze wander)
+    // 4. Saccades (gaze wander) — P2: mở rộng theo state (mắt sống khi nói/cười)
     if (now >= this.nextSaccadeTime) {
       if (this.state === "IDLE" || this.state === "LISTENING") {
         this.saccadeX = (Math.random() - 0.5) * 2.4;
@@ -795,12 +799,61 @@ class DigitalHumanAvatar {
       } else if (this.state === "THINKING") {
         this.saccadeX = 1.6;
         this.saccadeY = -1.2;
+      } else if (this.state === "SPEAKING" || this.state === "HAPPY" || this.state === "PROUD" || this.state === "SUCCESS") {
+        // P2: khi nói/nơi vui — mắt quét khán giả/chủ nhân tự nhiên (±1.6px, hiếm khi đứng yên)
+        this.saccadeX = (Math.random() - 0.5) * 3.2;
+        this.saccadeY = (Math.random() - 0.5) * 1.6;
+        // Micro-fixation: 30% saccade gần như đứng yên (đang nhìn thẳng chủ nhân)
+        if (Math.random() < 0.30) { this.saccadeX *= 0.15; this.saccadeY *= 0.15; }
       } else {
         this.saccadeX = 0;
         this.saccadeY = 0;
       }
       this.nextSaccadeTime = now + 2200 + Math.random() * 3000;
     }
+
+    // 4b. P2 HEAD POSE (V6-001): đầu chuyển động quanh trục cổ như người thật.
+    //     Thành phần: (a) nghỉ sinh học — drift chậm ±1.5° yaw + thở pitch nhẹ,
+    //     (b) state — SPEAKING gật/nghiêng theo nhịp lời, LISTENING nghiêng lắng nghe,
+    //     (c) dẫn gaze — đầu quay về hướng mắt (mắt liếc trước, đầu theo sau ~40%).
+    const poseT = now - this.startTime;
+    const driftYaw = Math.sin(poseT * 0.00031) * 1.5 + Math.sin(poseT * 0.00073 + 1.7) * 0.5;
+    const driftPitch = Math.sin(poseT * 0.00042 + 0.9) * 0.8;
+    const driftRoll = Math.sin(poseT * 0.00023 + 2.4) * 0.8;
+    let stateYaw = 0, statePitch = 0, stateRoll = 0;
+    if (this.state === "SPEAKING") {
+      // Gật/nghiêng theo nhịp viseme chính 0.64Hz + trọng âm câu (~2.8s) — đo từ 6.mp4
+      const beat = Math.sin(poseT * 0.00402);
+      const phrase = Math.sin(poseT * 0.00224);
+      stateYaw = phrase * 2.2 + Math.sin(poseT * 0.00335 + 0.6) * 0.8;
+      statePitch = Math.max(0, beat) * 1.1;          // gật nhẹ theo nhịp nói
+      stateRoll = Math.sin(poseT * 0.00161) * 1.2;   // đổi trọng tâm đầu theo câu
+    } else if (this.state === "LISTENING") {
+      stateYaw = -2.2;                                // hướng vào chủ nhân
+      stateRoll = -1.4;                               // nghiêng đầu lắng nghe
+      statePitch = -0.5;
+    } else if (this.state === "THINKING" || this.state === "RESEARCHING") {
+      stateYaw = 2.6;                                 // hướng mắt lên-trái như đang suy nghĩ
+      statePitch = -1.2;
+      stateRoll = 1.0;
+    } else if (this.state === "SLEEPING" || this.state === "OFFLINE") {
+      statePitch = 2.6;                               // đầu gục nhẹ
+      stateRoll = 1.6;
+    } else if (this.state === "SURPRISED") {
+      statePitch = -1.6;                              // ngửa nhẹ khi giật mình
+    } else if (this.state === "APOLOGETIC" || this.state === "ERROR") {
+      statePitch = 1.8;                               // cúi đầu nhẹ
+    }
+    // Gaze-lead: đầu theo hướng mắt sau (mắt đã có saccade riêng ±1.2px scale)
+    const gazeYaw = this.saccadeX * 0.35 + (this.currentMicro.gazeX || 0) * 0.5;
+    const gazePitch = -this.saccadeY * 0.25 + (this.currentMicro.gazeY || 0) * 0.3;
+    const targetYaw = this._clamp(driftYaw + stateYaw + gazeYaw, -6, 6);
+    const targetPitch = this._clamp(driftPitch + statePitch + gazePitch, -4, 4);
+    const targetRoll = this._clamp(driftRoll + stateRoll, -2, 2);
+    // Lerp chậm (một chút quán tính cổ) — nhanh hơn là chóng mặt, chậm là ì
+    this.headYaw = this.headYaw + (targetYaw - this.headYaw) * 0.045;
+    this.headPitch = this.headPitch + (targetPitch - this.headPitch) * 0.05;
+    this.headRoll = this.headRoll + (targetRoll - this.headRoll) * 0.035;
 
     // 5. Lip-Sync Frame Lookup from timeline
     if (this.state === "SPEAKING") {
@@ -983,12 +1036,12 @@ class DigitalHumanAvatar {
       }
       if (this._prevPortrait && this._prevPortrait.img && fade < 1.0) {
         ctx.globalAlpha = 1.0;
-        ctx.drawImage(this._prevPortrait.img, 0, 0, w, h);
+        this._renderHeadPose(ctx, this._prevPortrait.img, w, h);
         ctx.globalAlpha = fade;
-        ctx.drawImage(baseImg, 0, 0, w, h);
+        this._renderHeadPose(ctx, baseImg, w, h);
         ctx.globalAlpha = 1.0;
       } else {
-        ctx.drawImage(baseImg, 0, 0, w, h);
+        this._renderHeadPose(ctx, baseImg, w, h);
       }
       // (15/11) CONFLICT RESOLVED: bỏ stash cũ body_sync_1311
       // (_renderBodyAndArms/_drawMaskedPortrait — hướng procedural đã chôn,
@@ -1001,16 +1054,26 @@ class DigitalHumanAvatar {
       // this._renderNaturalHairSway(ctx, scaleX, scaleY, now);
 
       // 6. Dynamic Eye Rendering (Blink fallback, saccades, gaze, Duchenne squint, iris glint)
-      this._renderEyes(ctx, scaleX, scaleY, 0, usedFullBlink, usedFullThinking, isSpecialExpression);
+      //    P2: mắt overlay đi CÙNG đầu đã warp (offset _poseAt.eye) — không trôi.
+      {
+        const p = this._poseAt || { eye: { dx: 0, dy: 0 } };
+        this._renderEyes(ctx, scaleX, scaleY, 0, usedFullBlink, usedFullThinking, isSpecialExpression, p.eye);
+      }
 
       // 7. P1 FACE RIG (V6-001 duyệt 16/11): mesh warp mày + miệng + cười trên
       //    chính ảnh portrait — thay lớp sprite/SVG đè. Ảnh portrait đang vẽ
       //    (baseImg hoặc _prevPortrait khi crossfade) làm nguồn warp cho mày.
       this._rigPortraitImg = (fade < 1.0 && this._prevPortrait && this._prevPortrait.img)
         ? this._prevPortrait.img : baseImg;
-      this._renderRigBrows(ctx, scaleX, scaleY, 0);
-      this._renderRigMouth(ctx, scaleX, scaleY, 0);
-      this._renderRigSmile(ctx, scaleX, scaleY, 0);
+      // P2: rig mày/miệng/cười đi CÙNG đầu đã warp — truyền breathOffset = dy pose
+      // (dịch dọc của dải tại chiều cao đó) + dx qua _poseOffsetX cho rig vẽ lệch ngang.
+      {
+        const p = this._poseAt || { brow: { dx: 0, dy: 0 }, mouth: { dx: 0, dy: 0 } };
+        this._rigBrowDx = p.brow.dx; this._rigMouthDx = p.mouth.dx;
+        this._renderRigBrows(ctx, scaleX, scaleY, p.brow.dy);
+        this._renderRigMouth(ctx, scaleX, scaleY, p.mouth.dy);
+        this._renderRigSmile(ctx, scaleX, scaleY, p.mouth.dy);
+      }
 
       // 8. 100% Seamless Feathered Mouth Lip-Sync (NO RECTANGLE EVER) — SPRITE
       //    CŨ ĐÃ TẮT (P1): rig miệng mesh thay hoàn toàn (DESIGN: "tự nói bằng
@@ -1029,7 +1092,8 @@ class DigitalHumanAvatar {
       this._renderCyberLighting(ctx, w, h, config.auraColor);
 
       // (13/11/2026) Tay SAU portrait (đè lên vai + đàn) — vẽ cuối để luôn thấy
-      this._renderArmsOverPortrait(ctx, w, h, now, config);
+      // (13/11/2026) TẮT render arms (2 cánh tay tím đang quay) — owner yêu cầu xoá.
+      // this._renderArmsOverPortrait(ctx, w, h, now, config);
     } else {
       // Clean cyber loading backdrop; no ghost silhouette or watermark
       this._renderProceduralAssistant(ctx, w, h, 0, config.auraColor);
@@ -1249,12 +1313,12 @@ class DigitalHumanAvatar {
 
   // ================= EYES & MICRO-GAZE =================
 
-  _renderEyes(ctx, scaleX, scaleY, breathOffset, usedFullBlink, usedFullThinking, isSpecialExpression = false) {
+  _renderEyes(ctx, scaleX, scaleY, breathOffset, usedFullBlink, usedFullThinking, isSpecialExpression = false, poseOff = null) {
     if (isSpecialExpression && !this.isBlinking) return;
 
     const eb = this.EYES_BOX;
-    const totalGazeX = this.saccadeX + this.currentMicro.gazeX * scaleX * 2.0;
-    const totalGazeY = this.saccadeY + this.currentMicro.gazeY * scaleY * 2.0;
+    const totalGazeX = this.saccadeX + this.currentMicro.gazeX * scaleX * 2.0 + (poseOff ? poseOff.dx : 0);
+    const totalGazeY = this.saccadeY + this.currentMicro.gazeY * scaleY * 2.0 + (poseOff ? poseOff.dy : 0);
 
     const destX = eb.x * scaleX + totalGazeX;
     const destY = eb.y * scaleY + breathOffset + totalGazeY;
@@ -1442,6 +1506,70 @@ class DigitalHumanAvatar {
     ctx.restore();
   }
 
+  // ================= P2 HEAD POSE (V6-001, duyệt 16/11) =================
+  // Clamp helper (dùng cho head pose + gaze)
+  _clamp(v, lo, hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
+
+  // ===== HEAD POSE MESH: warp dải ngang quanh trục cổ — lắc/nghiêng là chuyển
+  // động của ĐẦU, thân giữ nguyên (DESIGN P2: hết "lắc cả tấm ảnh"). =====
+  // Cơ chế: chia dải đầu (yHeadTop → yNeck) thành 16 dải ngang; dải tại cổ có
+  // biên độ 0 (liền mạch với thân), càng lên đỉnh biên độ tăng theo ease
+  // (pow 1.25) → xoay tương đương quay quanh trục cổ nhưng KHÔNG xoay tấm ảnh:
+  // thân/vai/cổ áo vẫn nguyên vẹn, không lật nền, không xoay viền.
+  // Mỗi dải = drawImage bản sao canvas đầu (render 1 lần/_render, reuse) dịch
+  // xoay quanh trục cổ. Chi phí ~16 drawImage 896-dải — Pi5 chịu được (đo P1
+  // mesh 24 tam giác ~2ms; dải ngang rẻ hơn vì không cần tính tam giác).
+  _renderHeadPose(ctx, baseImg, w, h) {
+    const yaw = this.headYaw, pitch = this.headPitch, roll = this.headRoll;
+    if (Math.abs(yaw) < 0.05 && Math.abs(pitch) < 0.05 && Math.abs(roll) < 0.05) return;
+
+    const fY = 896 / h;                      // canvas-y → 896-space
+    const neckY = h * (802 / 896);           // trục cổ (896-space 802 → canvas)
+    const headTopY = h * (76 / 896);         // đỉnh tóc (đo asset v3: tóc ~76px)
+    const span = neckY - headTopY;
+    if (span <= 0) return;
+
+    // Ease theo khoảng cách tới cổ: 0 tại cổ → 1 tại đỉnh (pow 1.25)
+    const easeAt = (yCanvas) => Math.pow(Math.max(0, (neckY - yCanvas) / span), 1.25);
+    const kx = w / 896, ky = h / 896;        // scale biên độ theo buffer
+
+    ctx.save();
+    // Roll quanh trục cổ (2D): xoay nhẹ cả khối đầu quanh điểm cổ — vẽ TRONG
+    // crop dải đầu nên thân không bị kéo theo.
+    ctx.translate(w * 0.5, neckY);
+    ctx.rotate(roll * Math.PI / 180);
+    ctx.translate(-w * 0.5, -neckY);
+
+    // Yaw = dịch ngang mỗi dải theo ease → mép dưới (cổ) đứng yên.
+    // Pitch = dịch dọc theo ease (đầu gục: xuống; ngửa: lên).
+    const bands = 16;
+    for (let i = 0; i < bands; i++) {
+      const t0 = i / bands, t1 = (i + 1) / bands;
+      const y0 = headTopY + span * t0, y1 = headTopY + span * t1;
+      const yMid = (y0 + y1) * 0.5;
+      const ease = easeAt(yMid);
+      const dx = yaw * 0.95 * kx * ease;     // 6° → ~6.8px đỉnh đầu @1080 buffer
+      const dy = pitch * 0.95 * ky * ease;   // 4° → ~4.5px
+      const bandH = (y1 - y0) + 0.7;         // chồng 0.7px tránh khe sáng
+      ctx.drawImage(baseImg, 0, y0 * fY, baseImg.naturalWidth, (bandH) * fY,
+        dx - 0.35, y0 + dy - 0.35, w, bandH);
+    }
+    ctx.restore();
+
+    // Offset cho lớp đè (mắt blink/thinking overlay + rig P1) — same ease để
+    // chúng dính chặt vào mặt đã warp, không trôi khi đầu quay.
+    const offAt = (y896) => {
+      const e = easeAt(y896 * ky);
+      return { dx: yaw * 0.95 * kx * e, dy: pitch * 0.95 * ky * e };
+    };
+    const eyeOff = offAt(438);   // tâm mắt (đo: y≈438)
+    const browOff = offAt(408);  // chân mày (rig base)
+    const mouthOff = offAt(680); // tâm môi (rig base)
+    this._poseAt = { eye: eyeOff, brow: browOff, mouth: mouthOff };
+  }
+
   // ================= P1 FACE RIG (V6-001, duyệt 16/11/2026) =================
   // Mesh warp trên CHÍNH ảnh portrait — Cherry tự nói/cười/nhíu mày bằng
   // nét mặt gốc của ảnh, không đè sprite/SVG. Nguyên tắc (DESIGN §2, §5):
@@ -1495,11 +1623,13 @@ class DigitalHumanAvatar {
     ctx.fillStyle = grad;
     ctx.beginPath();
     const halfW = mw * 0.5 * shape;
+    // P2: khoang miệng đi CÙNG đầu đã warp (dx từ _poseAt)
+    const poseDx = this._rigMouthDx || 0;
     // Điểm khóe: y dịch theo cười (tone tích cực khóe lên nhẹ)
     const smileLift = (this._rigSmile > 0.02) ? -openPx * 0.22 * this._rigSmile : 0;
-    ctx.moveTo(cx - halfW, cy + smileLift);
-    ctx.quadraticCurveTo(cx, cy - openPx * 0.42 + smileLift, cx + halfW, cy + smileLift);
-    ctx.quadraticCurveTo(cx, cy + openPx * 1.02 + smileLift * 0.6, cx - halfW, cy + smileLift);
+    ctx.moveTo(cx - halfW + poseDx, cy + smileLift);
+    ctx.quadraticCurveTo(cx + poseDx, cy - openPx * 0.42 + smileLift, cx + halfW + poseDx, cy + smileLift);
+    ctx.quadraticCurveTo(cx + poseDx, cy + openPx * 1.02 + smileLift * 0.6, cx - halfW + poseDx, cy + smileLift);
     ctx.closePath();
     ctx.fill();
 
@@ -1534,6 +1664,8 @@ class DigitalHumanAvatar {
     this._rigSmile = smile;
     const R = this._rigBase();
     const f = 896 / this.width;
+    // P2: nụ cười đi CÙNG đầu đã warp
+    const poseDx = this._rigMouthDx || 0;
     const cy = R.mouthCy * f + breathOffset;
     const halfW = R.mouthW * 0.5 * f;
     const lift = openRatio > 0.08 ? smile * f * 7 : 0; // px khóe nhấc lên
@@ -1544,8 +1676,8 @@ class DigitalHumanAvatar {
     ctx.lineCap = "round";
     for (const s of [-1, 1]) {
       ctx.beginPath();
-      ctx.moveTo(R.mouthCx * f + s * halfW * 0.86, cy + lift * 0.55);
-      ctx.quadraticCurveTo(R.mouthCx * f + s * halfW * 0.62, cy + lift * 0.9, R.mouthCx * f + s * halfW * 0.42, cy + lift);
+      ctx.moveTo(R.mouthCx * f + poseDx + s * halfW * 0.86, cy + lift * 0.55);
+      ctx.quadraticCurveTo(R.mouthCx * f + poseDx + s * halfW * 0.62, cy + lift * 0.9, R.mouthCx * f + poseDx + s * halfW * 0.42, cy + lift);
       ctx.stroke();
     }
     ctx.restore();
@@ -1577,8 +1709,10 @@ class DigitalHumanAvatar {
       const srcY = (brow.cy - brow.h / 2) * (img.naturalHeight / 896);
       const srcW = brow.w * (img.naturalWidth / 896);
       const srcH = brow.h * (img.naturalHeight / 896);
+      // P2: dải mày đi CÙNG đầu đã warp (dx từ _poseAt)
+      const poseDx = this._rigBrowDx || 0;
       ctx.save();
-      ctx.translate(brow.cx * f, (brow.cy + browAmt * 12) * f + breathOffset);
+      ctx.translate(brow.cx * f + poseDx, (brow.cy + browAmt * 12) * f + breathOffset);
       ctx.rotate(tilt);
       // Vẽ dải mày gốc (lấy từ chính ảnh) tại vị trí đã dịch — che nền bằng
       // chính dải da trên mày (lấy từ trên mày) để không để lỗ hổng
