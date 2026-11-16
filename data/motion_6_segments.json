@@ -1,0 +1,80 @@
+{
+ "dau_5pct": {
+  "flow_mean": 2.3,
+  "flow_p95": 5.61,
+  "head_mean": 0.89,
+  "torso_mean": 1.62,
+  "head_to_torso": 0.55,
+  "head_v_over_h": 1.11,
+  "micro_still": 0.87,
+  "head_cycles": [
+   {
+    "hz": 0.2667,
+    "period_s": 3.75,
+    "power": 25.7
+   },
+   {
+    "hz": 0.3833,
+    "period_s": 2.61,
+    "power": 23.5
+   },
+   {
+    "hz": 0.4667,
+    "period_s": 2.14,
+    "power": 23.1
+   }
+  ]
+ },
+ "giua_60pct": {
+  "flow_mean": 0.34,
+  "flow_p95": 2.0,
+  "head_mean": 0.68,
+  "torso_mean": 0.4,
+  "head_to_torso": 1.71,
+  "head_v_over_h": 1.55,
+  "micro_still": 0.98,
+  "head_cycles": [
+   {
+    "hz": 0.7333,
+    "period_s": 1.36,
+    "power": 39.7
+   },
+   {
+    "hz": 0.9667,
+    "period_s": 1.03,
+    "power": 38.0
+   },
+   {
+    "hz": 0.6,
+    "period_s": 1.67,
+    "power": 33.9
+   }
+  ]
+ },
+ "cuoi_92pct": {
+  "flow_mean": 0.3,
+  "flow_p95": 1.93,
+  "head_mean": 0.65,
+  "torso_mean": 0.24,
+  "head_to_torso": 2.7,
+  "head_v_over_h": 1.48,
+  "micro_still": 0.98,
+  "head_cycles": [
+   {
+    "hz": 0.25,
+    "period_s": 4.0,
+    "power": 45.2
+   },
+   {
+    "hz": 0.65,
+    "period_s": 1.54,
+    "power": 37.8
+   },
+   {
+    "hz": 0.9,
+    "period_s": 1.11,
+    "power": 36.5
+   }
+  ]
+ }
+}

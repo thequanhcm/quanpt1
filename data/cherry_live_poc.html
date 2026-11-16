@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<title>CHERRY LIVE PORTRAIT — PoC mesh warp</title>
+<style>
+  body { background: #0b1020; color: #e2e8f0; font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .sub { color: #7dd3fc; font-size: 12px; margin-bottom: 12px; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .panel { background: #111a33; border: 1px solid #233; border-radius: 12px; padding: 12px; }
+  canvas { border-radius: 12px; display: block; }
+  .controls { width: 320px; }
+  label { display: block; font-size: 12px; margin: 10px 0 2px; color: #94a3b8; }
+  input[type=range] { width: 100%; }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+  button { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px; padding: 6px 10px; cursor: pointer; font-size: 12px; }
+  button.on { background: #0e7490; border-color: #22d3ee; }
+  .stat { font-size: 11px; color: #64748b; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>🎭 CHERRY LIVE PORTRAIT — PoC 3 lớp</h1>
+<div class="sub">Mesh warp trên CHÍNH ảnh v3 của Cherry — mày/miệng/mắt/đầu chuyển động theo cảm xúc. Kéo slider hoặc bấm cảm xúc.</div>
+<div class="row">
+  <div class="panel"><canvas id="cv" width="448" height="448"></canvas></div>
+  <div class="panel controls">
+    <label>Miệng mở (openRatio): <span id="vOr">0.00</span></label>
+    <input type="range" id="rOr" min="0" max="100" value="0">
+    <label>Cười / khóe miệng: <span id="vSm">0.30</span></label>
+    <input type="range" id="rSm" min="-50" max="100" value="30">
+    <label>Lông mày (nhíu ⇄Raise): <span id="vBr">0.00</span></label>
+    <input type="range" id="rBr" min="-100" max="100" value="0">
+    <label>Đầu quay (yaw): <span id="vYw">0°</span></label>
+    <input type="range" id="rYw" min="-60" max="60" value="0">
+    <label>Đầu gật (pitch): <span id="vPt">0°</span></label>
+    <input type="range" id="rPt" min="-40" max="40" value="0">
+    <label>Chớp mắt (0=thả, 100=nhắm): <span id="vBl">0</span></label>
+    <input type="range" id="rBl" min="0" max="100" value="0">
+    <div class="btns">
+      <button data-e="IDLE">Sẵn sàng</button>
+      <button data-e="HAPPY">Vui</button>
+      <button data-e="EMPATHETIC">Đồng cảm</button>
+      <button data-e="THINKING">Suy nghĩ</button>
+      <button data-e="WARNING">Cảnh báo</button>
+      <button data-e="SURPRISED">Ngạc nhiên</button>
+      <button id="bTalk">🗣 Nói thử (auto mouth)</button>
+      <button id="bBlink">👁 Chớp mắt</button>
+    </div>
+    <div class="stat" id="stat">đang load portrait v3…</div>
+  </div>
+</div>
+<script>
+// ===== Landmark khai báo theo asset v3 896x896 (vision_analyze đo) =====
+const LM = {
+  eyeL: { cx: 385, cy: 470, w: 105, h: 46 },   // mắt trái (người xem)
+  eyeR: { cx: 575, cy: 432, w: 105, h: 46 },
+  browL: { cx: 385, cy: 415, w: 130 },
+  browR: { cx: 575, cy: 378, w: 130 },
+  mouth: { cx: 505, cy: 628, w: 150, h: 64 },
+  cheekL: { cx: 300, cy: 585 }, cheekR: { cx: 710, cy: 585 },
+  chin: { cx: 515, cy: 742 },
+  neck: { cx: 515, cy: 800 },
+};
+const img = new Image();
+img.src = "data/poc_assets/avatar_v3_thu_thai.png";
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+const $ = id => document.getElementById(id);
+const S = { or: 0, sm: 0.3, br: 0, yaw: 0, pit: 0, bl: 0, emo: "IDLE", talk: false };
+let last = performance.now(), blinkTimer = 3, blinkAnim = 0, fps = 0, t = 0;
+
+img.onload = () => { $("stat").textContent = "portrait 896×896 loaded ✓ — kéo slider để thấy mesh warp"; };
+
+// Preset cảm xúc: [smile, brow(-nhíu/+nhấc), mouthBase, headTiltBias]
+const EMO = {
+  IDLE:       { sm: 0.30, br: 0.00, mb: 0.00 },
+  HAPPY:      { sm: 0.85, br: 0.35, mb: 0.10 },
+  EMPATHETIC: { sm: 0.15, br: -0.30, mb: 0.05 },
+  THINKING:   { sm: -0.15, br: -0.45, mb: 0.00 },
+  WARNING:    { sm: -0.55, br: -0.70, mb: 0.00 },
+  SURPRISED:  { sm: 0.05, br: 0.80, mb: 0.45 },
+};
+document.querySelectorAll("button[data-e]").forEach(b => b.onclick = () => {
+  document.querySelectorAll("button[data-e]").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); S.emo = b.dataset.e;
+  const e = EMO[S.emo];
+  S.sm = e.sm; S.br = e.br; S.or = Math.max(S.or, e.mb);
+  $("rSm").value = S.sm * 100; $("rBr").value = S.br * 100;
+});
+$("rOr").oninput = e => { S.or = e.target.value / 100; $("vOr").textContent = S.or.toFixed(2); };
+$("rSm").oninput = e => { S.sm = e.target.value / 100; $("vSm").textContent = S.sm.toFixed(2); };
+$("rBr").oninput = e => { S.br = e.target.value / 100; $("vBr").textContent = S.br.toFixed(2); };
+$("rYw").oninput = e => { S.yaw = +e.target.value; $("vYw").textContent = S.yaw + "°"; };
+$("rPt").oninput = e => { S.pit = +e.target.value; $("vPt").textContent = S.pit + "°"; };
+$("rBl").oninput = e => { S.bl = e.target.value / 100; $("vBl").textContent = e.target.value; };
+$("bTalk").onclick = () => { S.talk = !S.talk; $("bTalk").classList.toggle("on", S.talk); };
+$("bBlink").onclick = () => { blinkAnim = 1; };
+
+function drawMeshDeform() {
+  const W = cv.width, H = cv.height, k = W / 896;
+  ctx.clearRect(0, 0, W, H);
+  // Head pose: pivot tại cổ; yaw co giãn ngang + dịch; pitch co giãn dọc + dịch
+  const yw = S.yaw * Math.PI / 180, pt = S.pit * Math.PI / 180;
+  const headCx = LM.chin.cx + (LM.neck.cx - LM.chin.cx) * 0.4, headCy = 420;
+  const yawShift = Math.sin(yw) * 60 * k, yawSqueeze = 1 - 0.18 * Math.abs(Math.sin(yw));
+  const pitShift = Math.sin(pt) * 26 * k, pitSqueeze = 1 - 0.10 * Math.abs(Math.sin(pt));
+
+  // ===== MÁY ĐA TAM GIÁC: vẽ ảnh theo vùng (drawImage có transform) =====
+  // 1) Nền + tóc (tĩnh theo đầu nhẹ)
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+  ctx.drawImage(img, yawShift * 0.25, pitShift * 0.2 + Math.sin(t * 0.9) * 1.2 * k, W, H);
+  ctx.restore();
+
+  // 2) ĐẦU: vẽ lại vùng mặt với warp (yaw/pitch) — che vùng tóc-viền bằng gradient mask mềm
+  ctx.save();
+  const facePath = new Path2D();
+  facePath.ellipse((headCx + yawShift) * k, (headCy + pitShift) * k, 300 * k * yawSqueeze, 340 * k * pitSqueeze, yw * 0.5, 0, Math.PI * 2);
+  ctx.clip(facePath);
+  ctx.translate((headCx + yawShift) * k, (headCy + pitShift) * k);
+  ctx.rotate(yw * 0.35);
+  ctx.scale(yawSqueeze, pitSqueeze);
+  ctx.drawImage(img, -headCx * k, -headCy * k, W, H);
+  ctx.restore();
+
+  // 3) MẮT — blink warp: kéo mí trên xuống (vẽ dải mí = phần ảnh dưới mí eye dịch lên + tối dần)
+  for (const eye of [LM.eyeL, LM.eyeR]) {
+    const ex = (eye.cx + yawShift * 1.15) * k, ey = (eye.cy + pitShift * 1.15) * k;
+    const blink = Math.max(S.bl, blinkAnim);
+    if (blink > 0.02) {
+      const lidH = eye.h * k * blink;
+      // mí trên: dải da trượt xuống che mắt
+      ctx.save();
+      ctx.beginPath(); ctx.ellipse(ex, ey, eye.w * k * 0.62, eye.h * k * 0.75, 0, 0, Math.PI * 2); ctx.clip();
+      // vẽ làn da màu lấy từ trán (sample dải trên mắt) trượt xuống
+      ctx.drawImage(img, (eye.cx - eye.w / 2) * k, (eye.cy - eye.h * 1.4) * k, eye.w * k, eye.h * 0.8 * k,
+        ex - eye.w * k / 2, ey - eye.h * k * 0.9, eye.w * k, eye.h * 0.8 * k + lidH);
+      // đường mí tối nhẹ
+      ctx.strokeStyle = "rgba(60,30,30," + (0.35 * blink) + ")"; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(ex - eye.w * k * 0.5, ey - 1); ctx.quadraticCurveTo(ex, ey + 3, ex + eye.w * k * 0.5, ey - 1); ctx.stroke();
+      ctx.restore();
+    }
+    // saccade: đồng tử sample từ ảnh dịch nhẹ theo yaw/t (thân nhiên)
+  }
+
+  // 4) LÔNG MÀY — warp dọc theo S.br (vẽ dải mày lấy từ ảnh, dịch + xoay nhẹ)
+  for (const [brow, side] of [[LM.browL, -1], [LM.browR, 1]]) {
+    const bx = (brow.cx + yawShift * 1.2) * k, by = (brow.cy + pitShift * 1.2) * k;
+    const lift = S.br * 14 * k * k * 8; // px
+    const tilt = S.br * 0.10 * side;
+    ctx.save();
+    ctx.translate(bx, by + lift); ctx.rotate(tilt);
+    // vẽ dải vùng lông mày gốc từ ảnh (lấy mẫu vùng trên trán, dán lại dịch dọc)
+    ctx.drawImage(img, (brow.cx - brow.w / 2) * k, (brow.cy - 14) * k, brow.w * k, 26 * k,
+      -brow.w * k / 2, -13 * k, brow.w * k, 26 * k);
+    ctx.restore();
+  }
+
+  // 5) MIỆNG — openRatio: khoét khoang tối + kéo môi trên/xuống + răng
+  const mx = (LM.mouth.cx + yawShift * 1.3) * k, my = (LM.mouth.cy + pitShift * 1.3) * k;
+  const mw = LM.mouth.w * k, mh = LM.mouth.h * k;
+  const open = Math.min(1, S.or) * (0.55 + 0.45 * Math.abs(Math.sin(t * 2.1)));
+  const openPx = open * mh * 1.5;
+  // smile: kéo khóe lên (+) / xuống (-)
+  const cornerY = -S.sm * 10 * k + openPx * 0.15;
+  ctx.save();
+  // khoang miệng tối (thân miệng)
+  if (openPx > 1) {
+    const grad = ctx.createLinearGradient(0, my - mh / 2, 0, my + mh);
+    grad.addColorStop(0, "rgba(70,20,25,0.92)"); grad.addColorStop(0.5, "rgba(40,8,12,0.95)"); grad.addColorStop(1, "rgba(70,25,28,0.85)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(mx - mw / 2, my + cornerY * 0.4);
+    ctx.quadraticCurveTo(mx, my - openPx * 0.35 + cornerY, mx + mw / 2, my + cornerY * 0.4);
+    ctx.quadraticCurveTo(mx, my + openPx + cornerY, mx - mw / 2, my + cornerY * 0.4);
+    ctx.closePath(); ctx.fill();
+    // răng trên mờ
+    ctx.fillStyle = "rgba(245,240,235,0.75)";
+    ctx.fillRect(mx - mw * 0.36, my - openPx * 0.28 + cornerY, mw * 0.72, Math.min(openPx * 0.30, mh * 0.42));
+    // lưỡi mờ khi mở lớn
+    if (open > 0.55) { ctx.fillStyle = "rgba(190,90,100,0.55)"; ctx.beginPath(); ctx.ellipse(mx, my + openPx * 0.75, mw * 0.30, openPx * 0.22, 0, 0, Math.PI * 2); ctx.fill(); }
+    // môi trên: kéo phần da trên môi xuống tạo mép môi
+    ctx.drawImage(img, (LM.mouth.cx - mw / 2 - 10) * k, (LM.mouth.cy - 46) * k, (mw + 20) * k, 40 * k,
+      mx - (mw + 20) * k / 2 + yawShift * 0, my - mh * 0.62, (mw + 20) * k, 40 * k);
+  }
+  // khóe cười: highlight 2 bên
+  ctx.strokeStyle = "rgba(150,60,60," + (0.25 * Math.abs(S.sm)) + ")"; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(mx - mw * 0.62, my + cornerY * 0.2); ctx.quadraticCurveTo(mx - mw * 0.45, my + cornerY, mx - mw * 0.30, my + cornerY * 0.8); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(mx + mw * 0.62, my + cornerY * 0.2); ctx.quadraticCurveTo(mx + mw * 0.45, my + cornerY, mx + mw * 0.30, my + cornerY * 0.8); ctx.stroke();
+  ctx.restore();
+
+  // 6) THỞ + vi-gật (6.mp4): nhúng chuyển động nền đã có ở (1)
+}
+
+function frame(now) {
+  const dt = (now - last) / 1000; last = now; t += dt; fps = fps * 0.9 + (1 / Math.max(dt, 0.001)) * 0.1;
+  // blink tự động 4-7s
+  blinkTimer -= dt;
+  if (blinkTimer < 0) { blinkAnim = 1; blinkTimer = 4 + Math.random() * 3; }
+  if (blinkAnim > 0) { blinkAnim = Math.max(0, blinkAnim - dt * 7); }
+  // auto-talk
+  if (S.talk) { const a = (Math.sin(t * 8.2) + Math.sin(t * 13.7)) * 0.25 + 0.5; S.or = 0.25 + a * 0.55; $("rOr").value = S.or * 100; $("vOr").textContent = S.or.toFixed(2); }
+  // vi-gật + thở theo 6.mp4 (nhịp 1.4-4s)
+  if (!S._drag) { S.pit = EMO[S.emo] ? EMO[S.emo].sm * 2 : 0; }
+  drawMeshDeform();
+  $("stat").textContent = `FPS ${fps.toFixed(0)} · emo=${S.emo} · mesh layers: head/eyes/brow/mouth`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
