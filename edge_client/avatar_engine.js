@@ -22,6 +22,16 @@
  *   - 60 FPS requestAnimationFrame with hardware acceleration
  */
 
+// M3 EASING (P3 duyệt 16/11): easing chuẩn cho emotion blend — key khớp
+// TRANSITION_PRESETS.easing trong emotion_engine.js (s3_1411). Module-level
+// (ngoài class) để cả _render lẫn harness đọc được; không đụng global khác.
+const M3_EASING = {
+  "ease-in-out": (t) => t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2,
+  "ease-out": (t) => 1 - Math.pow(1 - t, 3),
+  "ease-in": (t) => t * t * t,
+  "linear": (t) => t,
+};
+
 class DigitalHumanAvatar {
   constructor(canvasId, options = {}) {
     this.canvas = typeof canvasId === "string" ? document.getElementById(canvasId) : canvasId;
@@ -646,8 +656,23 @@ class DigitalHumanAvatar {
     // Smooth Interpolation (lerp) helper
     const lerp = (a, b, t) => a + (b - a) * t;
 
+    // M3b (P3 duyệt 16/11): MICRO LERP THEO EASING + INTENSITY — thay factor
+    // cứng 0.08. Progress transition (easing theo preset) × intensity (clamp
+    // 0.1..1) → chuyển nhanh khi SERIOUS_ALERT (120ms), chậm khi SLEEPING
+    // (900ms); intensity thấp → biểu cảm dịu. Không transition → base 0.08
+    // (hành vi cũ, không hồi quy micro khi idle).
+    let factor = 0.08;
+    if (this._emotionEngine) {
+      const snapNow = this._emotionEngine.getCurrent();
+      const prog = this._emotionEngine.getProgress(now);
+      if (prog !== null) {
+        const eased = this._m3Ease && this._m3Ease.fn ? this._m3Ease.fn(prog) : prog;
+        const inten = Math.max(0.1, Math.min(1, snapNow.intensity || 0.5));
+        factor = Math.max(0.02, Math.min(0.6, eased * (0.12 + inten * 0.5)));
+      }
+    }
+
     // 1. Muscle Transitions for Micro-Expressions
-    const factor = 0.08;
     this.currentMicro.browLift = lerp(this.currentMicro.browLift, this.targetMicro.browLift, factor);
     this.currentMicro.browTilt = lerp(this.currentMicro.browTilt, this.targetMicro.browTilt, factor);
     this.currentMicro.browInward = lerp(this.currentMicro.browInward, this.targetMicro.browInward, factor);
@@ -1101,10 +1126,31 @@ class DigitalHumanAvatar {
         this._lastPortraitKey = portraitKey;
         this._lastPortraitImg = baseImg;
       }
-      const FADE_MS = 350;
+      // M3a (P3, duyệt 16/11): FADE THEO EMOTION ENGINE — duration lấy từ
+      // transition preset đang chạy (SERIOUS_ALERT 120ms → nhanh, SLEEPING
+      // 900ms → chậm), easing ease-in-out thay linear. Engine chưa transition
+      // (hoặc chưa load) → fallback 350ms như v6emo (không hồi quy).
+      const emoSnap = this._emotionEngine ? this._emotionEngine.update(now) : null;
+      let FADE_MS = 350;
+      let easeFn = null;
+      if (emoSnap && emoSnap.transitioning && this._emotionEngine._transition) {
+        const tr = this._emotionEngine._transition;
+        const el = now - tr.startMs;
+        if (el < tr.durationMs + (tr.holdUntilMs ? tr.holdUntilMs - tr.startMs - tr.durationMs : 0)) {
+          FADE_MS = tr.durationMs + Math.max(0, tr.holdUntilMs - tr.startMs - tr.durationMs) || FADE_MS;
+          // hold chỉ kéo dài thời điểm blend hoàn tất, không kéo thời gian blend:
+          FADE_MS = tr.durationMs + (tr.holdUntilMs - tr.startMs - tr.durationMs > 0
+            ? Math.min(150, tr.holdUntilMs - tr.startMs - tr.durationMs) : 0);
+        }
+        easeFn = M3_EASING[tr.easing] || M3_EASING["ease-in-out"];
+        this._m3Ease = { fn: easeFn, dur: FADE_MS };
+      } else if (this._m3Ease && (now - (this._prevPortrait ? this._prevPortrait.t0 : now)) < this._m3Ease.dur) {
+        easeFn = this._m3Ease.fn;  // transition kết thúc giữa chừng — giữ easing của nó
+      }
       let fade = 1.0;
       if (this._prevPortrait && this._prevPortrait.img && this._prevPortrait.img.complete && this._prevPortrait.img.naturalWidth > 0) {
-        fade = Math.min(1.0, (now - this._prevPortrait.t0) / FADE_MS);
+        const rawT = Math.min(1.0, (now - this._prevPortrait.t0) / FADE_MS);
+        fade = easeFn ? easeFn(rawT) : rawT;   // M3a: easing, không còn linear cứng
         if (fade >= 1.0) this._prevPortrait = null;
       }
       if (this._prevPortrait && this._prevPortrait.img && fade < 1.0) {
@@ -1784,6 +1830,10 @@ class DigitalHumanAvatar {
     ctx.restore();
   }
 
+  // M3c helper: lerp Duchenne — method trong class (harness trích class riêng
+  // vẫn chạy được; module-level function không nằm theo class)
+  _lerpDuchenne(a, b, t) { return a + (b - a) * t; }
+
   // ===== NỤ CƯỜI MESH: kéo khóe môi bằng highlight mềm 2 bên (thay sprite) =====
   _renderRigSmile(ctx, scaleX, scaleY, breathOffset) {
     // M1d: IDLE mỉm cười thi thoảng — highlight khóe khi _idleSmile đang active
@@ -1809,12 +1859,52 @@ class DigitalHumanAvatar {
       ctx.restore();
       return;
     }
+    // M3c: state VUI không nói (HAPPY/PROUD/SUCCESS + tone CONFIDENT_SUCCESS)
+    // vẫn Duchenne — mắt cong + má nâng theo intensity + highlight khóe nhẹ.
+    // (PHẢI đứng TRƯỚC guard SPEAKING — state HAPPY không phải SPEAKING.)
+    if (this.state === "HAPPY" || this.state === "PROUD" || this.state === "SUCCESS" ||
+        this.activeEmotionTone === "CONFIDENT_SUCCESS") {
+      const emo = this._emotionEngine ? this._emotionEngine.getCurrent() : null;
+      const inten = emo ? Math.max(0.2, Math.min(1, emo.intensity || 0.8)) : 0.8;
+      const s = 0.45 * inten;
+      this._rigSmile = s;
+      this.currentMicro.eyeSquint = this._lerpDuchenne(this.currentMicro.eyeSquint, 0.26 * inten, 0.16);
+      this.currentMicro.smileBoost = this._lerpDuchenne(this.currentMicro.smileBoost, 0.40 * inten, 0.16);
+      // highlight khóe 2 nét (như nhánh SPEAKING nhưng lift cố định theo s)
+      const R = this._rigBase();
+      const f = 896 / this.width;
+      const poseDx = this._rigMouthDx || 0;
+      const cy = R.mouthCy * f + breathOffset;
+      const halfW = R.mouthW * 0.5 * f;
+      ctx.save();
+      ctx.strokeStyle = "rgba(214,132,132," + (0.30 * s).toFixed(3) + ")";
+      ctx.lineWidth = Math.max(1, f * 2.2);
+      ctx.lineCap = "round";
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(R.mouthCx * f + poseDx + side * halfW * 0.86, cy - s * f * 3.0);
+        ctx.quadraticCurveTo(R.mouthCx * f + poseDx + side * halfW * 0.62, cy - s * f * 4.2, R.mouthCx * f + poseDx + side * halfW * 0.42, cy - s * f * 4.8);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
     if (this.state !== "SPEAKING") return;
     const SMILE_TONES = { WARM_GREETING: 1, CONFIDENT_SUCCESS: 1, PROUD: 1, CURIOUS: 1 };
     if (!SMILE_TONES[this.activeEmotionTone]) { this._rigSmile = 0; return; }
     const openRatio = Math.max(0.0, Math.min(1.0, this.currentOpenRatio));
     const smile = Math.min(1, 0.25 + openRatio * 0.5);
     this._rigSmile = smile;
+    // M3c HAPPY DUCHENNE (§4F brief "Mắt hơi cong khi cười", không cường điệu):
+    // squint sync theo smile đang hiển thị — max 0.30 (nhẹ), giới hạn bởi
+    // intensity engine (tone mạnh → rõ hơn). currentMicro.eyeSquint là nguồn
+    // lerp; ghi đè mục tiêu Duchenne để mắt CONG ĐI CÙNG khóe (1 nguồn sync).
+    {
+      const emo = this._emotionEngine ? this._emotionEngine.getCurrent() : null;
+      const inten = emo ? Math.max(0.2, Math.min(1, emo.intensity || 0.6)) : 0.6;
+      this.currentMicro.eyeSquint = this._lerpDuchenne(this.currentMicro.eyeSquint, 0.30 * smile * inten, 0.18);
+      this.currentMicro.smileBoost = this._lerpDuchenne(this.currentMicro.smileBoost, 0.45 * smile * inten, 0.18);
+    }
     const R = this._rigBase();
     const f = 896 / this.width;
     // P2: nụ cười đi CÙNG đầu đã warp
