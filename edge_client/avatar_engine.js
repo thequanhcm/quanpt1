@@ -847,13 +847,86 @@ class DigitalHumanAvatar {
     // Gaze-lead: đầu theo hướng mắt sau (mắt đã có saccade riêng ±1.2px scale)
     const gazeYaw = this.saccadeX * 0.35 + (this.currentMicro.gazeX || 0) * 0.5;
     const gazePitch = -this.saccadeY * 0.25 + (this.currentMicro.gazeY || 0) * 0.3;
-    const targetYaw = this._clamp(driftYaw + stateYaw + gazeYaw, -6, 6);
-    const targetPitch = this._clamp(driftPitch + statePitch + gazePitch, -4, 4);
-    const targetRoll = this._clamp(driftRoll + stateRoll, -2, 2);
+    // M2a "ĐẦU VỮNG KHI MỞ MIỆNG LỚN" (đo video mẫu: mở 50-60% = đầu frontal,
+    // yaw chỉ 5-10° — người hát giữ đầu để khẩu hình rõ). Steady factor 1→0.45
+    // theo openRatio: state pitch/roll giảm mạnh khi nói to, drift giữ lại 100%
+    // (thở không phụ thuộc nói).
+    const openNow = Math.max(0, Math.min(1, this.currentOpenRatio || 0));
+    const steady = 1 - openNow * 0.55;
+    const targetYaw = this._clamp(driftYaw + stateYaw * steady + gazeYaw, -6, 6);
+    const targetPitch = this._clamp(driftPitch + statePitch * steady + gazePitch, -4, 4);
+    const targetRoll = this._clamp(driftRoll + stateRoll * steady, -2, 2);
     // Lerp chậm (một chút quán tính cổ) — nhanh hơn là chóng mặt, chậm là ì
     this.headYaw = this.headYaw + (targetYaw - this.headYaw) * 0.045;
     this.headPitch = this.headPitch + (targetPitch - this.headPitch) * 0.05;
     this.headRoll = this.headRoll + (targetRoll - this.headRoll) * 0.035;
+
+    // 4c. M1b LISTENING GẬT NHẸ XÁC NHẬN (§4B brief): thi thoảng gật 1-2 nhịp nhẹ
+    //     khi nghe — khoảng 6-14s/lần, biên độ pitch 1.2°, đúng "gật đầu nhẹ".
+    if (this.state === "LISTENING") {
+      if (this._nodNextT === undefined) this._nodNextT = now + 5000 + Math.random() * 6000;
+      if (!this._nodActive && now >= this._nodNextT) {
+        this._nodActive = true;
+        this._nodT0 = now;
+        this._nodCount = Math.random() < 0.4 ? 2 : 1;   // 40% gật đôi
+      }
+      if (this._nodActive) {
+        const el = now - this._nodT0;
+        const nodDur = 620 * this._nodCount;             // 1 gật 620ms
+        if (el >= nodDur) {
+          this._nodActive = false;
+          this._nodNextT = now + 6000 + Math.random() * 8000;
+        } else {
+          // cộng thêm vào pitch đã có (không đè) — 1.5 chu kỳ sin cho 2 gật
+          const cycles = this._nodCount === 2 ? 1.5 : 0.75;
+          this._nodExtra = Math.sin((el / nodDur) * Math.PI * 2 * cycles) * 1.2;
+        }
+      } else this._nodExtra = 0;
+    } else { this._nodExtra = 0; this._nodActive = false; this._nodNextT = now + 6000; }
+    if (this._nodExtra) this.headPitch += this._nodExtra;
+
+    // 4d. M1c THINKING CHỚP CHẬM (§4C brief): nhắm mắt chậm ~500ms thay vì blink
+    //     120-150ms — "chìm vào suy nghĩ", kèm thời gian blink dài hơn.
+    if (this.state === "THINKING" || this.state === "RESEARCHING") {
+      if (this._slowBlinkNextT === undefined) this._slowBlinkNextT = now + 2500 + Math.random() * 2500;
+      if (!this._slowBlinkActive && now >= this._slowBlinkNextT) {
+        this._slowBlinkActive = true;
+        this._slowBlinkT0 = now;
+      }
+      if (this._slowBlinkActive) {
+        const el = now - this._slowBlinkT0;
+        if (el >= 900) {                                  // 450ms nhắm + 450ms mở
+          this._slowBlinkActive = false;
+          this._slowBlinkNextT = now + 3500 + Math.random() * 3500;
+        } else if (el >= 450) {
+          this.isBlinking = true;                          // đang mở dần — vẫn dùng blink asset
+        } else {
+          this.isBlinking = true;
+        }
+      }
+    } else { this._slowBlinkActive = false; this._slowBlinkNextT = now + 3000; }
+
+    // 4e. M1d IDLE MỈM CƯỜI THI THOẢNG (§4A brief): "thỉnh thoảng mỉm cười nhẹ"
+    //     12-20s/lần, giữ ~2.5-4s rồi tạnh — rig smile đọc _idleSmile khi IDLE.
+    if (this.state === "IDLE" || this.state === "NEUTRAL") {
+      if (this._idleSmileNextT === undefined) this._idleSmileNextT = now + 6000 + Math.random() * 6000;
+      if (!this._idleSmileActive && now >= this._idleSmileNextT) {
+        this._idleSmileActive = true;
+        this._idleSmileT0 = now;
+        this._idleSmileDur = 2500 + Math.random() * 1500;
+      }
+      if (this._idleSmileActive) {
+        const el = now - this._idleSmileT0;
+        if (el >= this._idleSmileDur) {
+          this._idleSmileActive = false;
+          this._idleSmileNextT = now + 12000 + Math.random() * 8000;
+          this._idleSmile = 0;
+        } else {
+          // ease in/out (sin nửa chu kỳ) — không bật/tắt đột ngột (§5 brief)
+          this._idleSmile = Math.sin((el / this._idleSmileDur) * Math.PI) * 0.55;
+        }
+      }
+    } else { this._idleSmileActive = false; this._idleSmile = 0; this._idleSmileNextT = now + 8000; }
 
     // 5. Lip-Sync Frame Lookup from timeline
     if (this.state === "SPEAKING") {
@@ -1506,6 +1579,49 @@ class DigitalHumanAvatar {
     ctx.restore();
   }
 
+  // ================= M1 FACIAL ENGINE 12-PARAM (V6, duyệt 16/11/2026) =================
+  // Chuẩn hoá §5 brief CHERRY_V6_NATURAL_MOTION_AVATAR_PLAN: bảng tham số biểu cảm
+  // DUY NHẤT — accessor ĐỌC state có sẵn của engine (không tạo engine thứ 2, không
+  // phá render P1/P2). Dùng cho: debug/tune, mở rộng tương lai, introspection.
+  // Trả về giá trị 0..1 (hoặc px cho gaze) trong khung hiện tại.
+  _facialParams() {
+    const eb = this.EYES_BOX;
+    return {
+      // Mắt
+      eyeBlinkLeft: this.isBlinking ? 1 : 0,          // nhắm=1 (engine dùng ảnh blink cả 2 mắt)
+      eyeBlinkRight: this.isBlinking ? 1 : 0,
+      eyeLookX: this._clamp(this.saccadeX + this.currentMicro.gazeX * 2.0, -3, 3),  // px 1024-space
+      eyeLookY: this._clamp(this.saccadeY + this.currentMicro.gazeY * 2.0, -3, 3),
+      // Mày (P1: browAmt -0.70..+0.80 → chuẩn hoá raise dương/lower âm)
+      browRaise: Math.max(0, this._browAmtFor(this.state)),
+      browLower: Math.max(0, -this._browAmtFor(this.state)),
+      // Miệng (P1 rig)
+      smile: this._rigSmile || 0,
+      mouthOpen: Math.max(0, Math.min(1, this.currentOpenRatio || 0)),
+      jawOpen: Math.max(0, Math.min(1, (this.currentOpenRatio || 0) * 0.85)),  // hàm = ~85% mở
+      lipPucker: (this.activeViseme === "O" || this.activeViseme === "U") ? 1 : 0,
+      cheekRaise: (this._rigSmile || 0) * 0.6,        // má nâng theo cười (Duchenne cơ sở)
+      // Đầu/cổ (P2 — đơn vị độ)
+      headTilt: this.headRoll || 0,                   // roll ±2°
+      headYaw: this.headYaw || 0,                     // ±6°
+      headPitch: this.headPitch || 0,                 // ±4° (neck = pivot cổ 896:802)
+      // meta
+      _box: { eyes: eb, mouth: { x: 427, y: 630, w: 240, h: 100 }, neckY896: 802 },
+    };
+  }
+
+  // Helper: biên độ mày theo state (tách khỏi _renderRigBrows để 12-param đọc được;
+  // _renderRigBrows gọi hàm này — 1 nguồn sự thật)
+  _browAmtFor(st) {
+    const PRESET = {
+      SPEAKING: 0, IDLE: 0, LISTENING: 0,
+      THINKING: -0.45, RESEARCHING: -0.45, WARNING: -0.70, ERROR: -0.70,
+      SURPRISED: 0.80, HAPPY: 0.35, EMPATHETIC: -0.30, CONFUSED: -0.40,
+      RECONNECTING: -0.40, OFFLINE: -0.30,
+    };
+    return PRESET[st] || 0;
+  }
+
   // ================= P2 HEAD POSE (V6-001, duyệt 16/11) =================
   // Clamp helper (dùng cho head pose + gaze)
   _clamp(v, lo, hi) {
@@ -1644,6 +1760,20 @@ class DigitalHumanAvatar {
       ctx.closePath();
       ctx.fill();
     }
+    // M2b: RĂNG DƯỚI khi mở RẤT LỚN (>0.8 openRatio) — đo video mẫu (frame mở
+    // tối đa "hình thể.mp4"): hàm hạ lộ răng dưới mờ sát mép môi dưới, hẹp hơn
+    // và mờ hơn răng trên. Ngưỡng 0.8 tránh răng dưới hiện ở khẩu hình vừa.
+    if (openRatio > 0.8) {
+      const lowerT = (openRatio - 0.8) / 0.2;      // fade in 0.8→1.0
+      const th2 = Math.min(openPx * 0.22, mh * 0.26);
+      ctx.fillStyle = "rgba(238,230,222," + (0.5 * lowerT).toFixed(3) + ")";
+      ctx.beginPath();
+      ctx.moveTo(cx - halfW * 0.62, cy + openPx * 0.72 + smileLift * 0.6);
+      ctx.quadraticCurveTo(cx, cy + openPx * 0.88 + smileLift * 0.6, cx + halfW * 0.62, cy + openPx * 0.72 + smileLift * 0.6);
+      ctx.quadraticCurveTo(cx, cy + openPx * 0.72 + smileLift * 0.6 - th2 * 0.7, cx - halfW * 0.62, cy + openPx * 0.72 + smileLift * 0.6);
+      ctx.closePath();
+      ctx.fill();
+    }
     // Lưỡi khi mở lớn
     if (openPx > mh * 0.72) {
       ctx.fillStyle = "rgba(186,88,98,0.50)";
@@ -1656,6 +1786,29 @@ class DigitalHumanAvatar {
 
   // ===== NỤ CƯỜI MESH: kéo khóe môi bằng highlight mềm 2 bên (thay sprite) =====
   _renderRigSmile(ctx, scaleX, scaleY, breathOffset) {
+    // M1d: IDLE mỉm cười thi thoảng — highlight khóe khi _idleSmile đang active
+    if ((this.state === "IDLE" || this.state === "NEUTRAL")) {
+      const s = this._idleSmile || 0;
+      if (s < 0.02) { this._rigSmile = 0; return; }
+      this._rigSmile = s;
+      const R = this._rigBase();
+      const f = 896 / this.width;
+      const poseDx = this._rigMouthDx || 0;
+      const cy = R.mouthCy * f + breathOffset;
+      const halfW = R.mouthW * 0.5 * f;
+      ctx.save();
+      ctx.strokeStyle = "rgba(214,132,132," + (0.26 * s).toFixed(3) + ")";
+      ctx.lineWidth = Math.max(1, f * 2.2);
+      ctx.lineCap = "round";
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(R.mouthCx * f + poseDx + side * halfW * 0.86, cy - s * f * 2.2);
+        ctx.quadraticCurveTo(R.mouthCx * f + poseDx + side * halfW * 0.62, cy - s * f * 3.4, R.mouthCx * f + poseDx + side * halfW * 0.42, cy - s * f * 4.2);
+        ctx.stroke();
+      }
+      ctx.restore();
+      return;
+    }
     if (this.state !== "SPEAKING") return;
     const SMILE_TONES = { WARM_GREETING: 1, CONFIDENT_SUCCESS: 1, PROUD: 1, CURIOUS: 1 };
     if (!SMILE_TONES[this.activeEmotionTone]) { this._rigSmile = 0; return; }
@@ -1687,14 +1840,8 @@ class DigitalHumanAvatar {
   // theo cảm xúc — thay SVG đè (DESIGN P1: "thay SVG mày đè") =====
   _renderRigBrows(ctx, scaleX, scaleY, breathOffset) {
     const st = this.state;
-    // Preset biên độ theo state (DESIGN §3: di chuyển đặc điểm gốc, không vẽ mới)
-    const PRESET = {
-      SPEAKING: 0, IDLE: 0, LISTENING: 0,
-      THINKING: -0.45, RESEARCHING: -0.45, WARNING: -0.70, ERROR: -0.70,
-      SURPRISED: 0.80, HAPPY: 0.35, EMPATHETIC: -0.30, CONFUSED: -0.40,
-      RECONNECTING: -0.40, OFFLINE: -0.30,
-    };
-    const browAmt = PRESET[st] || 0;
+    // M1: preset tách vào _browAmtFor (1 nguồn sự thật cho render + 12-param)
+    const browAmt = this._browAmtFor(st);
     if (browAmt === 0) return; // state trung tính: mày gốc nguyên vẹn
 
     const R = this._rigBase();

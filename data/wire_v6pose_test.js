@@ -114,7 +114,7 @@ T("T5 source có khối 4b HEAD POSE", src.includes("4b. P2 HEAD POSE"));
 T("T5 SPEAKING có statePitch gật", /SPEAKING[\s\S]{0,600}statePitch = Math\.max\(0, beat\)/.test(src));
 T("T5 LISTENING nghiêng đầu", /LISTENING[\s\S]{0,200}stateRoll = -1\.4/.test(src));
 T("T5 SLEEPING đầu gục", /SLEEPING[\s\S]{0,200}statePitch = 2\.6/.test(src));
-T("T5 clamp ±6/±4/±2", /_clamp\(driftYaw \+ stateYaw \+ gazeYaw, -6, 6\)/.test(src));
+T("T5 clamp ±6/±4/±2", /_clamp\(driftYaw \+ stateYaw \* steady \+ gazeYaw, -6, 6\)/.test(src));
 
 // T6: _renderEyes nhận poseOff (đi cùng đầu). destX = eb.x*scaleX + poseOff.dx
 draws.length = 0;

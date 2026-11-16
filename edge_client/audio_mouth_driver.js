@@ -44,7 +44,29 @@
    * 3. visemeFromRMS — chọn viseme theo RMS envelope.
    *    REST (0..0.05) → A (0.05..0.15) → O (0.15..0.30) → E (0.30..0.50)
    *    → I (0.50..0.70) → U (0.70..1.0).
+   *
+   *    M2b (V6 M12, duyệt 16/11/2026): CHUẨN HOÁ VISEME TIẾNG VIỆT —
+   *    bảng ánh xạ 11 nguyên âm VN → 5 shape engine (A/O/E/I/U) theo độ mở
+   *    + độ tròn môi. Engine VẪN chạy theo ngưỡng RMS ở trên (đồng bộ tiếng
+   *    loa); bảng dưới là CHUẨN THAM CHIẾU (tài liệu hoá + dùng cho tune/debug),
+   *    KHÔNG thay đường wire runtime.
+   *    a/ă/â → A (mở rộng); o/ô/ơ/u/ư → O (tròn hẹp); ê → E; i/y → I;
+   *    e → E mở vừa; ơ/ư ngắn → U. Phụ âm môi b/m/p → REST-chuyển-A ngắn.
    * ================================================================ */
+  var VISEME_VI = {
+    a: { shape: "A", open: 0.75, round: 0.0 },
+    "ă": { shape: "A", open: 0.70, round: 0.0 },
+    "â": { shape: "A", open: 0.55, round: 0.0 },
+    e: { shape: "E", open: 0.55, round: 0.0 },
+    "ê": { shape: "E", open: 0.45, round: 0.0 },
+    i: { shape: "I", open: 0.25, round: 0.0 },
+    y: { shape: "I", open: 0.25, round: 0.0 },
+    o: { shape: "O", open: 0.60, round: 0.8 },
+    "ô": { shape: "O", open: 0.50, round: 1.0 },
+    "ơ": { shape: "O", open: 0.45, round: 0.7 },
+    u: { shape: "U", open: 0.30, round: 1.0 },
+    "ư": { shape: "U", open: 0.28, round: 0.9 },
+  };
   var VISEME_THRESHOLDS = [
     { max: 0.05, viseme: "REST", open: 0.0 },
     { max: 0.15, viseme: "A", open: 0.25 },
@@ -221,6 +243,7 @@
     smoothEnvelope: smoothEnvelope,
     visemeFromRMS: visemeFromRMS,
     VISEME_THRESHOLDS: VISEME_THRESHOLDS,
+    VISEME_VI: VISEME_VI,
     AudioMouthDriver: AudioMouthDriver
   };
 
