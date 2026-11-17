@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const particlesCanvas = document.getElementById("particles-canvas");
 
   let currentAvatarState = "IDLE";
+  let lastPerfProfile = "NORMAL"; // M5b: chỉ log khi profile đổi (tránh spam console)
   let isCoreConnected = true;
   let latestCoreHost = "192.168.1.11:8766";
   let currentKioskAudio = null;
@@ -368,12 +369,21 @@ document.addEventListener("DOMContentLoaded", () => {
 
       audio.onended = () => {
         currentKioskAudio = null;
-        setAvatarState("IDLE");
+        // M4a (duyệt 16/11): kết thúc phát thoại tone TÍCH CỰC → GOODBYE (gật chào
+        // 2 nhịp + lean-back + tự về IDLE 2.5s); tone khác → IDLE như cũ.
+        const lastTone = window.digitalHuman ? window.digitalHuman.activeEmotionTone : "NEUTRAL";
+        const isPositiveTone = lastTone === "WARM_GREETING" || lastTone === "CONFIDENT_SUCCESS" ||
+          lastTone === "PROUD" || lastTone === "HAPPY";
+        setAvatarState(isPositiveTone ? "GOODBYE" : "IDLE");
         if (window.digitalHuman) {
           window.digitalHuman.cancelUtterance();
-          window.digitalHuman.setState("IDLE");
           window.digitalHuman.resetMicroExpression();
           window.digitalHuman.setLiveAudioMeter(null); // (06/11/2026) ngắt meter
+          if (isPositiveTone) {
+            window.digitalHuman.playGoodbye();
+          } else {
+            window.digitalHuman.setState("IDLE");
+          }
         }
         if (wakeEngine) {
           wakeEngine.notifySpeakingEnd();
@@ -652,6 +662,20 @@ document.addEventListener("DOMContentLoaded", () => {
           document.body.classList.remove("face-only-mode");
         }
 
+        // M5b (duyệt 16/11): PROFILE A — daemon đẩy perf_profile theo CPU/nhiệt
+        // Pi5 (LOW khi CPU>=70% kéo dài hoặc nhiệt>=70°C). Engine tự clamp FPS +
+        // tắt hiệu ứng phụ. Chỉ log khi ĐỔI để không spam console kiosk.
+        if (data.perf_profile && window.digitalHuman
+            && typeof window.digitalHuman.setPerfProfile === "function") {
+          const applied = window.digitalHuman.setPerfProfile(data.perf_profile);
+          if (applied !== lastPerfProfile) {
+            lastPerfProfile = applied;
+            const stats = window.digitalHuman.getPerfStats ? window.digitalHuman.getPerfStats() : null;
+            console.log("PERF_PROFILE -> " + applied
+              + " (FPS target " + (stats ? stats.fps_target : "?") + ")");
+          }
+        }
+
         if (data.pending_audio_base64) {
           playKioskSpeech(data.pending_audio_base64, data.pending_timeline, data.transcript);
         } else if (data.avatar_state && currentAvatarState !== "SPEAKING") {
@@ -808,6 +832,27 @@ document.addEventListener("DOMContentLoaded", () => {
   // Poll daemon every 1 second
   pollDaemonStatus();
   setInterval(pollDaemonStatus, 1000);
+
+  // M5c (duyệt 16/11): đẩy FPS THẬT (browser đo, cửa sổ 10s trong engine) về
+  // daemon mỗi 10s — benchmark tool đọc /api/kiosk/agent/status. Fire-and-forget:
+  // lỗi mạng không ảnh hưởng render; daemon fail-honest (epoch cũ = stale).
+  setInterval(() => {
+    if (!window.digitalHuman || !window.digitalHuman.getPerfStats) return;
+    const s = window.digitalHuman.getPerfStats();
+    if (s.fps_measured == null) return; // cửa sổ 10s đầu chưa có số — bỏ lượt
+    try {
+      fetch("/api/kiosk/perf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fps_measured: s.fps_measured,
+          render_ms_avg: s.render_ms_avg,
+          perf_profile: s.perf_profile,
+        }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch (_) {}
+  }, 10000);
 
   // (13/11/2026) PARTICLES ANIMATION: 30-50 hạt ánh sáng bay quanh avatar
   // (mẫu pi5 template.mp4). Tối ưu cho Pi5: cap 12 FPS, alpha thấp, không shadowBlur.

@@ -37,6 +37,8 @@
     CURIOUS: { name: "CURIOUS (TÒ MÒ)", auraColor: "#22d3ee", haloSpeed: 0.055, eyes: "thinking", smile: "natural", symbol: "🤔", defaultTone: "CURIOUS" },
     APOLOGETIC: { name: "APOLOGETIC (XIN LỖI)", auraColor: "#f472b6", haloSpeed: 0.03, eyes: "open", smile: "closed", symbol: "🙏", defaultTone: "APOLOGETIC" },
     PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#facc15", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
+    // M4a (duyệt 16/11): GOODBYE — gật chào tạm biệt + lean-back + tự về IDLE
+    GOODBYE: { name: "GOODBYE (TẠM BIỆT)", auraColor: "#00e5ff", haloSpeed: 0.05, eyes: "open", smile: "happy", symbol: "👋", defaultTone: "WARM_GREETING" },
   };
 
   // ===== 11 EMOTION_PRESETS (canonical — khớp PC dashboard 13/11) =====

@@ -214,6 +214,8 @@ class DigitalHumanAvatar {
       CURIOUS: { name: "CURIOUS (TÒ MÒ)", auraColor: "#0ea5e9", haloSpeed: 0.055, eyes: "thinking", smile: "natural", symbol: "🤔", defaultTone: "CURIOUS" },
       PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#f59e0b", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
       SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#8b5cf6", haloSpeed: 0.10, eyes: "open", smile: "neutral", symbol: "😯", defaultTone: "SURPRISED" },
+      // M4a fallback (protocol là nguồn sự thật — bản này chỉ khi protocol thiếu)
+      GOODBYE: { name: "GOODBYE (TẠM BIỆT)", auraColor: "#00e5ff", haloSpeed: 0.05, eyes: "open", smile: "happy", symbol: "👋", defaultTone: "WARM_GREETING" },
     };
 
     // Sprint 1 (14/11): Unified Emotion Protocol — avatar_protocol.js là NGUỒN
@@ -372,19 +374,66 @@ class DigitalHumanAvatar {
     // động), SPEAKING/LISTENING/THINKING 24 FPS cho lip-sync + đầu mượt theo giọng —
     // thích ứng theo trạng thái thay vì cap cứng một mức.
     this._lastFrameTs = 0;
+    // M5a (duyệt 16/11): FPS meter THẬT — đo tần suất frame render + thời gian
+    // render mỗi frame; window.__cherryPerf để kiosk.js/benchmark đọc.
+    this._fpsWindowStart = performance.now();
+    this._fpsWindowFrames = 0;
+    this._fpsWindowRenderMs = 0;
     const loop = (timestamp) => {
       const cap = this._frameIntervalMs();
       if (timestamp - this._lastFrameTs >= cap) {
         this._lastFrameTs = timestamp;
+        const rStart = performance.now();
         this._update(timestamp);
         this._render(timestamp);
+        const rMs = performance.now() - rStart;
+        this._fpsWindowFrames++;
+        this._fpsWindowRenderMs += rMs;
+        const wEl = timestamp - this._fpsWindowStart;
+        if (wEl >= 10000) {  // cửa sổ 10s → fps trung bình thật
+          this._lastMeasuredFps = Math.round(this._fpsWindowFrames / (wEl / 1000) * 10) / 10;
+          this._lastAvgRenderMs = Math.round(this._fpsWindowRenderMs / this._fpsWindowFrames * 100) / 100;
+          this._fpsWindowStart = timestamp;
+          this._fpsWindowFrames = 0;
+          this._fpsWindowRenderMs = 0;
+        }
       }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
   }
 
+  /* M5a: chỉ số hiệu năng thật (đọc từ ngoài — kiosk.js đẩy lên daemon). */
+  getPerfStats() {
+    return {
+      fps_target: Math.round(1000 / this._frameIntervalMs()),
+      fps_measured: this._lastMeasuredFps || null,
+      render_ms_avg: this._lastAvgRenderMs || null,
+      perf_profile: this._perfProfile || "NORMAL",
+    };
+  }
+
+  /* M5b: PROFILE A — giảm chi phí khi CPU cao (Edge Agent phát hiện, daemon
+     đẩy xuống qua to_kiosk_dict → kiosk.js gọi hàm này).
+     LOW  : IDLE/SLEEPING 8 FPS, SPEAKING 15 FPS, tắt micro-saccade, particles nửa.
+     NORMAL: bảng FPS thích ứng theo state như cũ (12/18/24). */
+  setPerfProfile(profile) {
+    const p = profile === "LOW" ? "LOW" : "NORMAL";
+    if (this._perfProfile === p) return p;
+    this._perfProfile = p;
+    return p;
+  }
+
   _frameIntervalMs() {
+    // M5b: PROFILE LOW — cap cứng thấp hơn mọi state (CPU quá tải → ưu tiên hạ nhiệt)
+    if (this._perfProfile === "LOW") {
+      switch (this.state) {
+        case "SPEAKING": return 66;   // ~15 FPS — vẫn đủ lip-sync nhìn được
+        case "LISTENING":
+        case "THINKING": return 100;  // ~10 FPS
+        default: return 125;          // ~8 FPS — IDLE/SLEEPING tiết kiệm tối đa
+      }
+    }
     switch (this.state) {
       case "SPEAKING": return 42;  // ~24 FPS — miệng + đầu theo nhịp giọng
       case "LISTENING":
@@ -572,6 +621,15 @@ class DigitalHumanAvatar {
     }
     this.cancelUtterance();
     this.setState("IDLE");
+  }
+
+  /* M4a (duyệt 16/11): playGoodbye — phun state GOODBYE (gật chào 2 nhịp +
+     lean-back + tự về IDLE sau 2.5s). Gọi khi KẾT THÚC phát thoại có tone tích
+     cực (tạm biệt lịch sự) hoặc kiosk yêu cầu tường minh. */
+  playGoodbye() {
+    this.cancelUtterance();
+    this.setState("GOODBYE");
+    return "GOODBYE";
   }
 
   startSpeaking(durationMs = 3000) {
@@ -931,7 +989,7 @@ class DigitalHumanAvatar {
       }
     } else { this._slowBlinkActive = false; this._slowBlinkNextT = now + 3000; }
 
-    // 4e. M1d IDLE MỈM CƯỜI THI THOẢNG (§4A brief): "thỉnh thoảng mỉm cười nhẹ"
+    // 4d. M1d IDLE MỈM CƯỜI THI THOẢNG (§4A brief): "thỉnh thoảng mỉm cười nhẹ"
     //     12-20s/lần, giữ ~2.5-4s rồi tạnh — rig smile đọc _idleSmile khi IDLE.
     if (this.state === "IDLE" || this.state === "NEUTRAL") {
       if (this._idleSmileNextT === undefined) this._idleSmileNextT = now + 6000 + Math.random() * 6000;
@@ -952,6 +1010,34 @@ class DigitalHumanAvatar {
         }
       }
     } else { this._idleSmileActive = false; this._idleSmile = 0; this._idleSmileNextT = now + 8000; }
+
+    // 4e. M4a GOODBYE (duyệt 16/11, nhóm H brief): gật chào 2 nhịp (pitch sin 2
+    //     chu kỳ 0.64Hz — nhịp gật chuẩn đã đo) + lean-back nhẹ (scale chest giảm
+    //     ~1.5% + sway ngược) trong 2.5s rồi TỰ VỀ IDLE. Không tay (M4b PoC riêng).
+    if (this.state === "GOODBYE") {
+      if (this._goodbyeT0 === undefined || this._goodbyeT0 === null) {
+        this._goodbyeT0 = now;
+        this._goodbyeNodSeed = Math.random();
+      }
+      const gel = now - this._goodbyeT0;
+      if (gel >= 2500) {
+        // hết phim: dọn state về IDLE (setState qua transition engine — mượt)
+        this._goodbyeT0 = null;
+        this._goodbyeNodExtra = 0;
+        this.setState("IDLE");
+      } else {
+        // 2 gật chào: 2 chu kỳ sin đầy đủ trong 1.6s đầu, biên độ 2.2° (rõ hơn
+        // gật-listen 1.2° — chào phải thấy); sau đó nghỉ, lean-back ease-out.
+        const nodPhase = Math.min(1, gel / 1600);
+        this._goodbyeNodExtra = Math.sin(nodPhase * Math.PI * 2) * 2.2 * (1 - nodPhase * 0.35);
+        this._goodbyeLean = M3_EASING["ease-out"](Math.min(1, gel / 900)) * (1 - Math.min(1, Math.max(0, (gel - 1900) / 600)));
+      }
+    } else {
+      if (this._goodbyeT0 !== undefined && this._goodbyeT0 !== null) {
+        this._goodbyeT0 = null; this._goodbyeNodExtra = 0; this._goodbyeLean = 0;
+      }
+    }
+    if (this._goodbyeNodExtra) this.headPitch += this._goodbyeNodExtra;
 
     // 5. Lip-Sync Frame Lookup from timeline
     if (this.state === "SPEAKING") {
@@ -1046,7 +1132,9 @@ class DigitalHumanAvatar {
     //   3) NÂNG VAI THỞ: breathOffset đã nằm ở translate trên (±2px).
     const speakingNow = this.state === "SPEAKING";
     const speechLean = speakingNow ? Math.max(0, this.currentOpenRatio) : 0;
-    const chestScale = 1.0 + speechLean * 0.006 + Math.max(0, bodyBreath) * 0.0006;
+    // M4a: lean-back khi GOODBYE — lùi người nhẹ (scale < 1), ease-out vào, ease về
+    const goodbyeLean = (this.state === "GOODBYE" && this._goodbyeLean) ? this._goodbyeLean : 0;
+    const chestScale = 1.0 + speechLean * 0.006 + Math.max(0, bodyBreath) * 0.0006 - goodbyeLean * 0.015;
     const gestAmp = speakingNow ? 1.0 : 0.4;
     const gestureX = Math.sin(now * 0.00224) * Math.sin(now * 0.00161) * 1.8 * gestAmp;
     ctx.translate(w * 0.5, h);          // tâm đáy = trục ngực
