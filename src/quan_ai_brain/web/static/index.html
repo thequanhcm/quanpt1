@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=cherry_1411">
+    <link rel="stylesheet" href="/static/style.css?v=studio_1711">
     <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png">
 </head>
 <body class="dark-theme">
@@ -207,6 +207,58 @@
                                 </div>
                             </div>
 
+                            <!-- (17/11) CHERRY STUDIO — khối điều khiển collapsible (mặc định thu gọn,
+                                 tôn trọng "tinh gọn và tích hợp" 06/11). 4 khối A/B/C/D owner duyệt. -->
+                            <div class="studio-root" id="studio-root">
+                                <div class="studio-head" id="studio-head" title="Bấm để mở/đóng khối điều khiển Cherry">
+                                    <span class="studio-head-title">⚙️ CHERRY STUDIO</span>
+                                    <span class="studio-head-hint">điều khiển trạng thái · lip-sync · perf · Pi 5</span>
+                                    <span class="studio-head-arrow" id="studio-head-arrow">▸</span>
+                                </div>
+                                <div class="studio-body" id="studio-body">
+                                    <!-- A. Chọn trạng thái -->
+                                    <div class="studio-section">
+                                        <div class="studio-section-title">A · Trạng thái (23 state engine)</div>
+                                        <div class="studio-chips" id="studio-state-chips"></div>
+                                    </div>
+                                    <!-- B. Test lip-sync -->
+                                    <div class="studio-section">
+                                        <div class="studio-section-title">B · Lip-sync tiếng Việt</div>
+                                        <div class="studio-chips" id="studio-viseme-chips"></div>
+                                        <div class="studio-speak-row">
+                                            <input type="text" id="studio-speak-text" class="studio-input"
+                                                   placeholder="Câu test TTS — Enter để phát trên PC + đồng bộ Pi 5…"
+                                                   value="Xin chào Anh ạ! Em là Cherry đây.">
+                                            <button type="button" class="studio-btn" id="studio-btn-speak">🗣️ Phát</button>
+                                        </div>
+                                    </div>
+                                    <!-- C. Perf profile (M5) -->
+                                    <div class="studio-section">
+                                        <div class="studio-section-title">C · Hiệu năng (M5)</div>
+                                        <div class="studio-perf-row">
+                                            <span class="studio-perf-item">FPS <strong id="studio-perf-fps">--</strong></span>
+                                            <span class="studio-perf-item">Render <strong id="studio-perf-render">--</strong></span>
+                                            <span class="studio-perf-profile normal" id="studio-perf-profile">NORMAL</span>
+                                        </div>
+                                        <div class="studio-btn-row">
+                                            <button type="button" class="studio-btn active" id="studio-btn-normal">NORMAL (12/18/24)</button>
+                                            <button type="button" class="studio-btn" id="studio-btn-low">LOW (8/10/15)</button>
+                                        </div>
+                                    </div>
+                                    <!-- D. Điều khiển Pi5 -->
+                                    <div class="studio-section">
+                                        <div class="studio-section-title">D · Pi 5 (qua core :8766)</div>
+                                        <div class="studio-pi5-row">
+                                            <select id="studio-pi5-state" class="studio-input studio-select"></select>
+                                            <button type="button" class="studio-btn" id="studio-btn-pi5-apply" title="Gửi set_expression xuống Pi 5 kiosk">Gửi</button>
+                                            <button type="button" class="studio-btn" id="studio-btn-pi5-reload" title="reload_ui kiosk Pi 5">↻ UI</button>
+                                        </div>
+                                        <div class="studio-pi5-result" id="studio-pi5-result">— chưa gửi lệnh nào —</div>
+                                    </div>
+                                    <div class="studio-log" id="studio-log"></div>
+                                </div>
+                            </div>
+
                             <!-- (06/11/2026, owner: "tinh gọn và tích hợp") Bỏ 8 nút biểu cảm
                                  — trạng thái CHERRY là của hệ thống, hiển thị ở pill trên. -->
                         </div>
@@ -308,6 +360,7 @@
     <script src="/static/presence_engine.js?v=task001_1411"></script>
     <script src="/static/body_motion_engine.js?v=v6mot_1511"></script>
     <script src="/static/avatar_engine.js?v=v6m5_1611"></script>
-    <script src="/static/app.js?v=cherry_1411"></script>
+    <script src="/static/cherry_studio.js?v=studio_1711"></script>
+    <script src="/static/app.js?v=studio_1711"></script>
 </body>
 </html>

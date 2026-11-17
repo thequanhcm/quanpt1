@@ -74,6 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
         PROUD: { css: 'state-proud', name: 'PROUD (TỰ HÀO)', icon: '🌟' },
         CURIOUS: { css: 'state-curious', name: 'CURIOUS (TÒ MÒ)', icon: '🤔' },
         APOLOGETIC: { css: 'state-apologetic', name: 'APOLOGETIC (XIN LỖI)', icon: '🙏' },
+        // (17/11) Cherry Studio: đủ 23 state engine — chip GOODBYE/ERROR đồng bộ pill
+        GOODBYE: { css: 'state-goodbye', name: 'GOODBYE (TẠM BIỆT)', icon: '👋' },
+        ERROR: { css: 'state-error', name: 'ERROR (LỖI)', icon: '❌' },
     };
 
     function setAvatarState(stateKey, contextText = null) {
@@ -273,6 +276,14 @@ document.addEventListener('DOMContentLoaded', () => {
             await speakText(greeting);
         });
     }
+
+    // ===== (17/11) CHERRY STUDIO — hooks cho khối điều khiển (cherry_studio.js) =====
+    // Expose các hàm có sẵn của app.js để studio tái sử dụng — KHÔNG nhân bản logic.
+    window.cherryStudioHooks = {
+        setAvatarState,
+        speakText,
+        stopAudio,
+    };
 
     // 1. Tab Navigation
     const navItems = document.querySelectorAll('.nav-item');
