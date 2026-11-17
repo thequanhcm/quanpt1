@@ -393,6 +393,27 @@ class EdgeAgent:
         with self._lock:
             return dict(self._last_metrics)
 
+    def suggest_perf_profile(self) -> str:
+        """M5b (duyệt 16/11): PROFILE A — đề xuất profile render cho avatar.
+
+        Đọc metrics_history (mỗi mẫu ~30s): CPU cao kéo dài → LOW để hạ nhiệt;
+        phục hồi ổn định → NORMAL. Trả "LOW" | "NORMAL". Fail-honest: thiếu dữ
+        liệu → "NORMAL" (không suy đoán)."""
+        with self._lock:
+            hist = list(self._metrics_history)[-6:]  # ~3 phút gần nhất
+        if len(hist) < 4:
+            return "NORMAL"  # chưa đủ dữ liệu — không suy đoán
+        cpus = [float(m.get("cpu_percent") or 0.0) for m in hist]
+        temps = [float(m.get("temp_c") or 0.0) for m in hist]
+        hot = sum(1 for c in cpus if c >= 70.0)
+        very_hot = any(t >= 70.0 for t in temps)
+        if hot >= 4 or very_hot:
+            return "LOW"
+        cool = sum(1 for c in cpus if c <= 45.0)
+        if cool >= 4:
+            return "NORMAL"  # phục hồi đủ lâu mới trả NORMAL
+        return "NORMAL"  # vùng trung gian — giữ hiện trạng (hysteresis)
+
     def get_metrics_history(self, limit: int = 30) -> list[dict[str, Any]]:
         with self._lock:
             hist = list(self._metrics_history)

@@ -1264,6 +1264,15 @@ class EdgeDaemonState:
         self.last_activity_epoch: float = time.time()
         self.auto_sleep_enabled: bool = True
 
+        # M5c (duyệt 16/11): FPS thật do browser đo + đẩy về qua POST
+        # /api/kiosk/perf — benchmark tool đọc từ đây, không đoán.
+        self.kiosk_perf: dict[str, Any] = {
+            "fps_measured": None,
+            "render_ms_avg": None,
+            "perf_profile": "NORMAL",
+            "epoch": 0.0,
+        }
+
         # Remote Audio & Microphone State (ADDENDUM V2.1)
         self.mic_enabled: bool = True
         self.mic_muted: bool = False
@@ -1380,6 +1389,10 @@ class EdgeDaemonState:
                     "last_timestamp": self.last_camera_timestamp,
                     "last_error": self.last_camera_error,
                 },
+                # M5b (duyệt 16/11): PROFILE A — Edge Agent đề xuất profile render
+                # theo CPU/nhiệt (LOW khi quá tải) → kiosk.js áp vào avatar engine.
+                "perf_profile": (self.edge_agent.suggest_perf_profile()
+                                 if getattr(self, "edge_agent", None) else "NORMAL"),
             }
 
 
@@ -1477,9 +1490,13 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
         # V41: trạng thái Edge Agent (5 năng lực chủ động)
         if path == "/api/kiosk/agent/status":
             try:
+                with self.daemon_state.lock:
+                    kiosk_perf = dict(self.daemon_state.kiosk_perf)
                 self._send_json({
                     "success": True,
                     "agent": self.daemon_state.edge_agent.get_status_summary(),
+                    # M5c (duyệt 16/11): FPS thật browser đẩy về + perf profile
+                    "kiosk_perf": kiosk_perf,
                 })
             except Exception as exc:
                 self._send_error_json(f"AGENT_STATUS_ERROR: {exc}", 500)
@@ -1573,6 +1590,22 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/kiosk/control":
             self._handle_api_kiosk_remote_control(body)
+            return
+
+        # M5c (duyệt 16/11): kiosk đẩy FPS THẬT đo trong browser (avatar engine
+        # FPS meter) về daemon; daemon giữ bản mới nhất cho benchmark tool đọc.
+        if path == "/api/kiosk/perf":
+            fps = body.get("fps_measured")
+            render_ms = body.get("render_ms_avg")
+            profile = body.get("perf_profile")
+            with self.daemon_state.lock:
+                self.daemon_state.kiosk_perf = {
+                    "fps_measured": float(fps) if fps is not None else None,
+                    "render_ms_avg": float(render_ms) if render_ms is not None else None,
+                    "perf_profile": profile or "NORMAL",
+                    "epoch": time.time(),
+                }
+            self._send_json({"success": True})
             return
 
         if path == "/api/kiosk/audio/control":

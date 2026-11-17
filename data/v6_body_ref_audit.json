@@ -1,0 +1,70 @@
+{
+ "nguon": {
+  "ht": {
+   "file": "E:/BRAIN/Pi5/hình thể.mp4",
+   "mo_ta": "Live session 'Phú Đêm – Mỹ Duyên' (Vietnam Guitar), nữ ca sĩ váy xanh, kính tròn, micro vàng",
+   "spec": {
+    "res": "3826x2160",
+    "fps": 50.0,
+    "frames": 17622,
+    "dur_s": 352
+   }
+  },
+  "ht1": {
+   "file": "E:/BRAIN/Pi5/hình thể1.mp4",
+   "mo_ta": "MV 'Chuyện Hoa Sim – Cẩm Tú', nữ ca sĩ váy trắng off-shoulder, búi tóc ghim pha lê + ban nhạc",
+   "spec": {
+    "res": "1920x1080",
+    "fps": 30.0,
+    "frames": 9410,
+    "dur_s": 314
+   }
+  }
+ },
+ "nhan_dinh": "2 video = NGƯỜI THẬT biểu diễn ca nhạc (KHÔNG phải nhân vật Cherry, KHÔNG có tai nghe cyan). Dùng làm THAM CHIẾU CHUYỂN ĐỘNG/BIỂU CẢM, tuyệt đối không sao chép danh tính (đúng yêu cầu owner §2B).",
+ "motion_stats": {
+  "ht": {
+   "flow_mean": 0.469,
+   "flow_p90": 1.13,
+   "still_ratio": 0.44,
+   "cx_std": 0.119,
+   "cy_std": 0.169
+  },
+  "ht1": {
+   "flow_mean": 0.373,
+   "flow_p90": 0.609,
+   "still_ratio": 0.402,
+   "cx_std": 0.149,
+   "cy_std": 0.191
+  }
+ },
+ "dien_giai": {
+  "still_ratio_40_44": "40-44% thời gian near-still (micro-rest) — khớp chuẩn 6.mp4 (87-98% vẫn hơn ở phóng to vùng mặt); chuyển động là ĐỈNH NHỊP chứ không liên tục",
+  "cx_std_012_015": "trọng tâm ngang dao động ±12-15% khung — người ca sĩ đổi trọng tâm người thật, không phải chỉ lắc đầu",
+  "cy_std_017_019": "trọng tâm dọc dao động ±17-19% — gật/cúi/ngửa theo nhịp nhạc rõ rệt hơn ngang",
+  "flow_mean_037_047": "flow TB 0.37-0.47px (240px crop) ≈ nhẹ; p90 0.61-1.13 = có nhịp chuyển động rõ khi nhạc điểm"
+ },
+ "head_pose_do_duoc": {
+  "hat_binh_thuong": "yaw 5-10° (hơi hướng micro), pitch 0..-5°, roll 5-8° (nghiêng vào micro)",
+  "mo_mieng_lon": "frontal, yaw 5-10°, pitch trung tính — đầu VỮNG khi mở miệng lớn (khác phỏng đoán: không gật khi belt)",
+  "ballad_lang_dong": "yaw 30-40° (3/4 quay), pitch cúi 5-15°, mắt hạ mi — 'chìm vào lời hát'",
+  "ket_luan": "head pose người hát: yaw NHIỀU hơn pitch; roll ổn định; pitch cúi khi cảm xúc; đầu giữ vững khi mở miệng lớn"
+ },
+ "viseme_meo": {
+  "mo_vua_50_60pct": "nguyên âm trung tính: oval dọc, lộ 6-8 răng trên, khoang tối trong, môi trên nhấc, hàm hạ 1-1.5cm tương đối",
+  "mo_nho": "hát nhẹ legato: môi hé rất nhỏ — dải độ mở rộng (khép~0 → ~0.6), khớp dải 6.mp4 0.42-0.78 khi nói bình thường",
+  "mat_ma": "má nâng nhẹ theo mở miệng; mắt nheo nhẹ khi cười-hát; môi khóe nhếch giữ nụ cười nền"
+ },
+ "body": {
+  "vai": "thả lỏng mở nhẹ ra sau; 1 vai nâng rất nhẹ khi cử tay (micro)",
+  "thon": "thẳng, hơi xoay theo hướng đầu; tư thế ổn định, ít chuyển động ở đoạn chậm",
+  "co_chi": "1 tay nâng (micro) chủ đạo — avatar Cherry không cầm micro → ánh xạ sang GESTURE tay-trái/phải nhấn nhá"
+ },
+ "anh_xa_vao_cherry": {
+  "IDLE": "thở nhẹ + vai nhấp theo thở + blink ngẫu nhiên + vi-mô đầu (đã có v6mot/P2, giữ)",
+  "LISTENING": "yaw về owner 2-3° + roll nghiêng 1.5° + gật nhẹ xác nhận thi thoảng (đã có P2)",
+  "THINKING": "yaw lệch + mắt chuyển hướng + chớp chậm (P2 có, thêm chớp chậm)",
+  "SPEAKING": "viseme theo dải đo được (đã có v6mou 0.42-0.78) + đầu vững khi mở lớn (MỚI: giảm statePitch khi openRatio cao) + gật nhấn nhá",
+  "EMOTION": "ballad-lắng: yaw 30-40° không dùng (quá lớn cho portrait) → giới hạn MAX_YAW 6° giữ nhận diện; chuyển cảm xúc bằng mày + khóe + má (rig P1)"
+ }
+}

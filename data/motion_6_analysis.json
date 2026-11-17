@@ -1,0 +1,85 @@
+{
+ "meta": {
+  "w": 1920,
+  "h": 1080,
+  "fps": 30.0,
+  "frames": 177706,
+  "duration_s": 5923.5
+ },
+ "sampled": 200,
+ "flow_mean_px": 0.35,
+ "flow_p95_px": 2.03,
+ "still_ratio": 0.88,
+ "head_flow_mean": 0.75,
+ "torso_flow_mean": 0.36,
+ "head_to_torso": 2.09,
+ "head_v_over_h": 1.21,
+ "torso_v_over_h": 1.19,
+ "micro_still_ratio": 0.98,
+ "head_cycles": [
+  {
+   "hz": 0.22,
+   "period_s": 4.55,
+   "power": 78.2
+  },
+  {
+   "hz": 0.62,
+   "period_s": 1.61,
+   "power": 69.3
+  },
+  {
+   "hz": 0.31,
+   "period_s": 3.23,
+   "power": 63.3
+  },
+  {
+   "hz": 0.84,
+   "period_s": 1.19,
+   "power": 53.4
+  }
+ ],
+ "torso_cycles": [
+  {
+   "hz": 0.22,
+   "period_s": 4.55,
+   "power": 37.3
+  },
+  {
+   "hz": 0.31,
+   "period_s": 3.23,
+   "power": 35.0
+  },
+  {
+   "hz": 0.62,
+   "period_s": 1.61,
+   "power": 31.2
+  },
+  {
+   "hz": 0.85,
+   "period_s": 1.18,
+   "power": 28.2
+  }
+ ],
+ "head_sway_cycles": [
+  {
+   "hz": 0.22,
+   "period_s": 4.55,
+   "power": 40.1
+  },
+  {
+   "hz": 0.31,
+   "period_s": 3.23,
+   "power": 38.8
+  },
+  {
+   "hz": 0.62,
+   "period_s": 1.61,
+   "power": 33.9
+  },
+  {
+   "hz": 0.84,
+   "period_s": 1.19,
+   "power": 26.7
+  }
+ ]
+}
