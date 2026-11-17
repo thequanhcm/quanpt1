@@ -39,6 +39,10 @@
     PROUD: { name: "PROUD (TỰ HÀO)", auraColor: "#facc15", haloSpeed: 0.07, eyes: "open", smile: "happy", symbol: "🌟", defaultTone: "PROUD" },
     // M4a (duyệt 16/11): GOODBYE — gật chào tạm biệt + lean-back + tự về IDLE
     GOODBYE: { name: "GOODBYE (TẠM BIỆT)", auraColor: "#00e5ff", haloSpeed: 0.05, eyes: "open", smile: "happy", symbol: "👋", defaultTone: "WARM_GREETING" },
+    // (17/11) M4b: 2 state mới cho cử chỉ tay — alias emotion tone tương ứng.
+    // Tay procedural 2D chỉ chạy khi state ∈ {IDLE, GREETING, EXPLAINING} (gate _render).
+    GREETING: { name: "GREETING (CHÀO)", auraColor: "#22d3ee", haloSpeed: 0.06, eyes: "open", smile: "happy", symbol: "👋", defaultTone: "WARM_GREETING" },
+    EXPLAINING: { name: "EXPLAINING (GIẢI THÍCH)", auraColor: "#a78bfa", haloSpeed: 0.05, eyes: "open", smile: "natural", symbol: "💬", defaultTone: "CONFIDENT_SUCCESS" },
   };
 
   // ===== 11 EMOTION_PRESETS (canonical — khớp PC dashboard 13/11) =====

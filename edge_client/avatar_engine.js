@@ -112,9 +112,12 @@ class DigitalHumanAvatar {
     // Offscreen helper canvases for seamless feathered blending
     this._featherMouthCanvas = null;
     this._featherEyeCanvas = null;
-    // (13/11/2026) Body+arms offscreen cache (vẽ thân + tay + đàn keyboard)
-    this._bodyCanvas = null;
-    this._bodyCacheKey = null;
+    // (17/11) M4b: tay procedural 2D — toggle + state gate (chỉ chạy khi state phù hợp)
+    this._handsEnabled = true;
+    this._handsSkinTone = [236, 188, 180];  // fallback nếu sample thất bại
+    this._handsSkinSampled = false;
+    this._handsGesture = "rest";  // "wave" | "palm" | "rest" — auto theo state
+    this._handsSpeed = 1.6;
     // (13/11/2026) Portrait masked offscreen (chỉ giữ đầu + vai, ngực fade dần)
     this._portraitMaskedCanvas = null;
     this._portraitMaskedKey = null;
@@ -216,6 +219,11 @@ class DigitalHumanAvatar {
       SURPRISED: { name: "SURPRISED (NGẠC NHIÊN)", auraColor: "#8b5cf6", haloSpeed: 0.10, eyes: "open", smile: "neutral", symbol: "😯", defaultTone: "SURPRISED" },
       // M4a fallback (protocol là nguồn sự thật — bản này chỉ khi protocol thiếu)
       GOODBYE: { name: "GOODBYE (TẠM BIỆT)", auraColor: "#00e5ff", haloSpeed: 0.05, eyes: "open", smile: "happy", symbol: "👋", defaultTone: "WARM_GREETING" },
+      // (17/11) M4b: 2 state mới cho cử chỉ tay — alias emotion tone tương ứng
+      // (WARM_GREETING cho chào, CONFIDENT_SUCCESS cho giải thích). Tay procedural
+      // 2D chỉ chạy khi state ∈ {IDLE, GREETING, EXPLAINING} (gate trong _render).
+      GREETING: { name: "GREETING (CHÀO)", auraColor: "#22d3ee", haloSpeed: 0.06, eyes: "open", smile: "happy", symbol: "👋", defaultTone: "WARM_GREETING" },
+      EXPLAINING: { name: "EXPLAINING (GIẢI THÍCH)", auraColor: "#a78bfa", haloSpeed: 0.05, eyes: "open", smile: "natural", symbol: "💬", defaultTone: "CONFIDENT_SUCCESS" },
     };
 
     // Sprint 1 (14/11): Unified Emotion Protocol — avatar_protocol.js là NGUỒN
@@ -630,6 +638,153 @@ class DigitalHumanAvatar {
     this.cancelUtterance();
     this.setState("GOODBYE");
     return "GOODBYE";
+  }
+
+  /* (17/11) M4b: toggle tay procedural 2D — owner duyệt PoC v9 (data/_poc_arms_sheet.png).
+     Bài học arms-1311: KHÔNG sprite chibi, KHÔNG warp dải ảnh. Tay chỉ nhô 18-32px
+     từ mép dưới (≤6% khung), sample màu da từ portrait, 3 gesture (wave/palm/rest)
+     phân biệt rõ. Chỉ chạy khi state ∈ {IDLE, GREETING, EXPLAINING} (gate _render). */
+  setHandsEnabled(enabled) {
+    this._handsEnabled = !!enabled;
+    return this._handsEnabled;
+  }
+  getHandsEnabled() {
+    return this._handsEnabled;
+  }
+  setHandsGesture(gesture) {
+    if (gesture === "wave" || gesture === "palm" || gesture === "rest") {
+      this._handsGesture = gesture;
+    }
+    return this._handsGesture;
+  }
+  getHandsGesture() {
+    return this._handsGesture;
+  }
+
+  /* (17/11) M4b: sample màu da từ portrait tại vùng cằm/má dưới (448,520 30×20)
+     — verbatim từ PoC v9. Chạy 1 lần sau khi portrait load xong. */
+  _sampleHandsSkinTone() {
+    if (this._handsSkinSampled) return;
+    const portrait = this.assets && this.assets.portrait;
+    if (!portrait || !portrait.complete || !portrait.naturalWidth) return;
+    try {
+      const c = document.createElement("canvas");
+      c.width = 896; c.height = 896;
+      const x = c.getContext("2d");
+      x.drawImage(portrait, 0, 0, 896, 896);
+      const d = x.getImageData(448, 520, 30, 20).data;
+      let r = 0, g = 0, b = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i+2]; n++; }
+      this._handsSkinTone = [r / n | 0, g / n | 0, b / n | 0];
+      this._handsSkinSampled = true;
+    } catch (_) { /* CORS hoặc portrait chưa sẵn sàng — giữ fallback */ }
+  }
+
+  /* (17/11) M4b: vẽ 1 bàn tay procedural 2D — geometry verbatim từ PoC v9
+     (data/cherry_poc_arms.html). Tay nhô từ mép dưới, sample màu da, 3 gesture
+     phân biệt rõ (wave: ngón dang + tilt; palm: ngón khép khối tròn; rest: ngón
+     cong xuống + chìm gần hết). */
+  _drawHand2D(ctx, side, t, w, h) {
+    let raise = 0, tilt = 0, wave = 0;
+    const gesture = this._handsGesture;
+    if (gesture === "wave") { raise = 32 + 8 * Math.sin(t * 2.1); tilt = 0.05 * Math.sin(t * 2.1 + 0.4); wave = Math.sin(t * 4.2) * 5; }
+    else if (gesture === "palm") { raise = 22 + 4 * Math.sin(t * 0.9); tilt = 0.02; }
+    else { raise = 6 + 2 * Math.sin(t * 0.7); tilt = 0.006 * Math.sin(t * 0.5); wave = 0; }
+    if (side > 0 && gesture === "rest") raise *= 0.55;
+    const [r, g, b] = this._handsSkinTone;
+    // Map 896-space → canvas-space (PoC v9 dùng 896×896, engine dùng w×h)
+    const fX = w / 896, fY = h / 896;
+    const hx = (side < 0 ? 200 : 696) * fX;
+    const baseY = h + 14 * fY;
+    const wristY = h - (8 + raise * 0.35) * fY;
+    const topY = wristY - (14 + raise * 0.55) * fY;
+    ctx.save();
+    ctx.translate(hx + wave * (gesture === "wave" ? 1 : 0) * side, 0);
+    ctx.rotate(tilt * side);
+    // CẲNG TAY
+    const armGrad = ctx.createLinearGradient(0, baseY, 0, wristY);
+    armGrad.addColorStop(0, "rgba(" + [r*0.68|0, g*0.68|0, b*0.66|0].join(",") + ",0)");
+    armGrad.addColorStop(0.4, "rgba(" + [r*0.86|0, g*0.84|0, b*0.82|0].join(",") + ",0.88)");
+    armGrad.addColorStop(1, "rgba(" + Math.min(255,r*1.02|0) + "," + Math.min(255,g*0.98|0) + "," + Math.min(255,b*0.95|0) + ",0.97)");
+    ctx.fillStyle = armGrad;
+    ctx.beginPath();
+    ctx.moveTo(hx - 38 * fX, baseY);
+    ctx.quadraticCurveTo(hx - 30 * fX, wristY + 18 * fY, hx - 20 * fX, wristY);
+    ctx.quadraticCurveTo(hx - 18 * fX, wristY - 6 * fY, hx - 21 * fX, wristY - 10 * fY);
+    ctx.lineTo(hx + 21 * fX, wristY - 10 * fY);
+    ctx.quadraticCurveTo(hx + 18 * fX, wristY - 6 * fY, hx + 20 * fX, wristY);
+    ctx.quadraticCurveTo(hx + 30 * fX, wristY + 18 * fY, hx + 38 * fX, baseY);
+    ctx.closePath();
+    ctx.fill();
+    // BÀN TAY
+    ctx.fillStyle = "rgba(" + Math.min(255,r*1.03|0) + "," + Math.min(255,g*0.99|0) + "," + Math.min(255,b*0.96|0) + ",0.98)";
+    ctx.beginPath();
+    ctx.moveTo(hx - 22 * fX, wristY - 8 * fY);
+    ctx.quadraticCurveTo(hx - 25 * fX, topY + 4 * fY, hx - 14 * fX, topY);
+    ctx.quadraticCurveTo(hx, topY - 4 * fY, hx + 14 * fX, topY);
+    ctx.quadraticCurveTo(hx + 25 * fX, topY + 4 * fY, hx + 22 * fX, wristY - 8 * fY);
+    ctx.quadraticCurveTo(hx, wristY - 2 * fY, hx - 22 * fX, wristY - 8 * fY);
+    ctx.closePath();
+    ctx.fill();
+    // 4 NGÓN
+    if (gesture === "palm") {
+      ctx.beginPath();
+      ctx.ellipse(hx, topY - 6 * fY, 18 * fX, 10 * fY, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (gesture === "rest") {
+      for (let fi = 0; fi < 4; fi++) {
+        const fx = hx - 12 * fX + fi * 8 * fX;
+        ctx.beginPath();
+        ctx.ellipse(fx, topY + 2 * fY, 2.4 * fX, 5 * fY, (fi - 1.5) * 0.08, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // WAVE: ngón DANG — 4 ellipse dài, spacing rõ
+      for (let fi = 0; fi < 4; fi++) {
+        const fx = hx - 15 * fX + fi * 10 * fX;
+        const lenArr = [16, 22, 20, 14];
+        const fl = lenArr[fi] + Math.sin(t * 4.2 + fi * 0.9) * 1.8;
+        ctx.beginPath();
+        ctx.ellipse(fx, topY - fl * 0.5 * fY, 2.6 * fX, fl * 1.0 * fY, (fi - 1.5) * 0.04, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255,238,230,0.22)";
+        ctx.beginPath();
+        ctx.ellipse(fx, topY - fl * 0.5 * fY - 1.2 * fY, 2 * fX, 1 * fY, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(" + Math.min(255,r*1.03|0) + "," + Math.min(255,g*0.99|0) + "," + Math.min(255,b*0.96|0) + ",0.98)";
+      }
+    }
+    // NGÓN CÁI — chỉ wave/palm
+    if (gesture !== "rest") {
+      ctx.beginPath();
+      ctx.ellipse(hx - side * 26 * fX, topY + 8 * fY, 4.2 * fX, 9 * fY, -side * 0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+    // FEATHER ĐÁY — hoà vào mép khung
+    const fe = ctx.createLinearGradient(0, h - 22 * fY, 0, h);
+    fe.addColorStop(0, "rgba(10,15,30,0)");
+    fe.addColorStop(1, "rgba(10,15,30,0.7)");
+    ctx.save();
+    ctx.fillStyle = fe;
+    ctx.fillRect(hx - 30 * fX, h - 22 * fY, 60 * fX, 22 * fY);
+    ctx.restore();
+  }
+
+  /* (17/11) M4b: render 2 tay — gate theo state + toggle. Auto chọn gesture
+     theo state: GREETING→wave, EXPLAINING→palm, IDLE→rest. */
+  _renderHandsOverPortrait(ctx, w, h, now) {
+    if (!this._handsEnabled) return;
+    const allowed = this.state === "IDLE" || this.state === "GREETING" || this.state === "EXPLAINING";
+    if (!allowed) return;
+    // Auto gesture theo state (nếu owner chưa set tay)
+    if (this.state === "GREETING") this._handsGesture = "wave";
+    else if (this.state === "EXPLAINING") this._handsGesture = "palm";
+    else if (this.state === "IDLE") this._handsGesture = "rest";
+    this._sampleHandsSkinTone();
+    const t = (now - this.startTime) / 1000 * this._handsSpeed;
+    this._drawHand2D(ctx, -1, t, w, h);
+    this._drawHand2D(ctx, 1, t, w, h);
   }
 
   startSpeaking(durationMs = 3000) {
@@ -1297,6 +1452,11 @@ class DigitalHumanAvatar {
 
       // 9. Cyber Lighting & High-Tech Vignette
       this._renderCyberLighting(ctx, w, h, config.auraColor);
+
+      // (17/11) M4b: Tay procedural 2D — SAU cyber lighting, TRƯỚC symbol overlay.
+      // Gate theo state (IDLE/GREETING/EXPLAINING) + toggle _handsEnabled.
+      // Bài học arms-1311: KHÔNG sprite chibi, KHÔNG warp dải ảnh.
+      this._renderHandsOverPortrait(ctx, w, h, now);
 
       // (13/11/2026) Tay SAU portrait (đè lên vai + đàn) — vẽ cuối để luôn thấy
       // (13/11/2026) TẮT render arms (2 cánh tay tím đang quay) — owner yêu cầu xoá.
