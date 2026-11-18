@@ -819,6 +819,12 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_skills()
             return
 
+        # V7 vivi port 18/11: chạy skill read-only qua HTTP (GET /api/v7/skill/<name>)
+        if path.startswith("/api/v7/skill/"):
+            skill_name = path[len("/api/v7/skill/"):].strip("/")
+            self._handle_api_v7_skill(skill_name, parsed.query)
+            return
+
         if path == "/api/executive/consultations":
             self._handle_api_executive_consultations(parsed.query)
             return
@@ -2092,6 +2098,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Failed to execute cogitation: {exc}", 500)
 
     def _handle_api_chat(self, body: dict) -> None:
+        _v7_extras: dict = {}
         query = str(body.get("query") or body.get("message", "")).strip()
         if not query:
             self._send_error_json("Query cannot be empty", 400)
@@ -2474,6 +2481,46 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             sanitized_reply, guardrail_warnings = OutputGuardrails.sanitize(resp.text)
             grounding_analysis = OutputGuardrails.analyze_grounding(sanitized_reply, context=context)
 
+            # 3.9 Self-RAG lite (TASK-MEMORY-TRUTH-M6 P1, 18/11) — câu trả lời DỰA
+            # TRÊN EVIDENCE (memory_recall / semantic / ttns) được chấm căn cứ 1
+            # lần; thiếu căn cứ → sửa bằng cách XÓA/RÚT GỌN (cấm thêm ý); vẫn sai
+            # → từ chối trung thực. Fail-open: LLM lỗi/quá giờ → giữ câu gốc.
+            self_check_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.cognition.self_check import self_check_reply
+                _ev_parts: list[str] = []
+                try:
+                    if isinstance(recall, dict) and recall.get("block"):
+                        _ev_parts.append(str(recall["block"]))
+                except NameError:
+                    pass
+                # semantic/ttns evidence nằm trong system_instructions dưới dạng
+                # block [SEMANTIC RECALL ...] / [EVIDENCE TTNS ...] — trích nguyên
+                # system_instructions hiện hành làm bằng chứng cho grader.
+                if context.system_instructions:
+                    _ev_parts.append(context.system_instructions)
+                _evidence = "\n\n".join(_ev_parts)
+                if _evidence and resp.success and sanitized_reply:
+                    _sc = self_check_reply(query, sanitized_reply, _evidence,
+                                           provider, selected_model)
+                    self_check_info = {
+                        "attempted": True,
+                        "ran": _sc["ran"],
+                        "revised": _sc["revised"],
+                        "claims": _sc["claims"][:5],
+                        "error": _sc["error"],
+                    }
+                    if _sc["revised"]:
+                        sanitized_reply = _sc["revised_text"]
+                        self_check_info["note"] = "self-check sửa (xóa/rút gọn ý không căn cứ)"
+                    _audit("self_check.done", {
+                        "ran": _sc["ran"], "revised": _sc["revised"],
+                        "n_claims": len(_sc["claims"]),
+                    })
+            except Exception as sc_exc:
+                self_check_info["error"] = str(sc_exc)[:200]
+                _audit("self_check.error", {"error": str(sc_exc)[:200]})
+
             # 5. Continuous Session & Memory Persistence
             persistence_info: dict[str, Any] = {}
             if resp.success and sanitized_reply:
@@ -2640,6 +2687,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
 
+                # V7 skills 18/11: 3 skill mới TESTED (MEMORY_HEALTH_AUDIT, LESSON_MINING,
+                # SYSTEM_STATUS_SUMMARY) + skill cũ TASK_STATUS_RECONCILIATION. Chạy theo
+                # trigger, đọc-only, fail-honest, không chặn chat (lỗi chỉ append warning).
                 # V7 Cấp 2: chain skill kiểm tra tiến độ — chạy khi query khớp
                 # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
                 # fail-honest, không chặn chat (lỗi chỉ append warning).
@@ -2651,7 +2701,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
                     if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
                         _v7_result = _v7_chain(query or "", _v7_ws)
-                        response_data["progress_check"] = {
+                        _v7_extras["progress_check"] = {
                             "chain": _v7_result["chain"],
                             "conclusion": _v7_result["reconciliation"]["conclusion"],
                             "records_matched": _v7_result["reconciliation"]["records_matched"],
@@ -2662,6 +2712,66 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         }
                 except Exception as v7_err:
                     all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
+
+            # V7 expansion (18/11, fix scope: block nằm ngoài nhánh create_task để
+            # MỌI lượt chat thường cũng chạy skill theo trigger — đây là lý do trước
+            # giờ /api/chat không emit skill keys). Đọc-only, fail-honest, không chặn.
+            try:
+                from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR2
+                _v7_ws2 = _find_workspace_root()
+                _v7_matches2 = _V7SR2(_v7_ws2 / "data" / "skill_registry.json").find_matching_skills(query or "")
+                _v7_names2 = {s.name for s in _v7_matches2}
+                if "MEMORY_HEALTH_AUDIT" in _v7_names2:
+                    from quan_ai_brain.cognition.v7_skills import memory_health_audit as _v7_mha
+                    _v7_extras["memory_health"] = _v7_mha(_v7_ws2)
+                if "LESSON_MINING" in _v7_names2:
+                    from quan_ai_brain.cognition.v7_skills import lesson_mining as _v7_lm
+                    _v7_extras["lessons"] = _v7_lm(_v7_ws2, limit=5)
+                if "SYSTEM_STATUS_SUMMARY" in _v7_names2:
+                    from quan_ai_brain.cognition.v7_skills import system_status_summary as _v7_sss
+                    _v7_extras["system_summary"] = _v7_sss(_v7_ws2)
+                # vivi port 18/11: 2 skill quản trị mới
+                if "pipeline_audit" in _v7_names2:
+                    from quan_ai_brain.cognition.v7_skills import pipeline_audit as _v7_pa
+                    _v7_extras["pipeline_audit"] = _v7_pa(_v7_ws2, limit=5)
+                if "voice_health_check" in _v7_names2:
+                    from quan_ai_brain.cognition.v7_skills import voice_health_check as _v7_vhc
+                    _v7_extras["voice_health"] = _v7_vhc(_v7_ws2)
+            except Exception as v7e_err:
+                all_warnings.append(f"V7 expansion: {str(v7e_err)[:100]}")
+
+            # V7 vivi 18/11: chèm kết quả skill (nếu có) vào ĐUÔI reply để owner thấy
+            # ngay trong khung chat — format gọn 2-4 dòng, không đụng câu trả lời chính.
+            try:
+                _skill_lines: list[str] = []
+                _mh = _v7_extras.get("memory_health")
+                if isinstance(_mh, dict):
+                    _a = _mh.get("audit", {})
+                    _skill_lines.append(
+                        f"🧠 Sức khỏe trí nhớ: **{_mh.get('conclusion')}** — "
+                        f"{_a.get('memories_total', '?')} memories / "
+                        f"{_a.get('semantic_memory_total', '?')} semantic / "
+                        f"{_a.get('episodes_total', '?')} episodes"
+                    )
+                _vh = _v7_extras.get("voice_health")
+                if isinstance(_vh, dict):
+                    _c = _vh.get("checks", {})
+                    _skill_lines.append(
+                        f"🔊 Giọng nói: **{_vh.get('conclusion')}** — "
+                        f"provider {_c.get('tts_provider', '?')}, "
+                        f"voice {_c.get('tts_preference', {}).get('voice_id', 'n/a') if isinstance(_c.get('tts_preference'), dict) else 'n/a'}"
+                    )
+                _pa = _v7_extras.get("pipeline_audit")
+                if isinstance(_pa, dict):
+                    _skill_lines.append(
+                        f"📜 Audit trail: **{_pa.get('conclusion')}** — "
+                        f"{len(_pa.get('recent_turns', []))} turns gần nhất, "
+                        f"{len(_pa.get('governance_risks', []))} governance events"
+                    )
+                if _skill_lines and sanitized_reply:
+                    sanitized_reply = sanitized_reply + "\n\n" + "\n".join(_skill_lines)
+            except Exception:
+                pass  # fail-open: không bao giờ vỡ chat vì phần chèm
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
@@ -2715,8 +2825,11 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "self_check": self_check_info,
                 "tool_calls": tool_calls_info,
                 "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
+                # V7 skills 18/11: chỉ xuất hiện khi trigger match — fail-honest
+                **_v7_extras,
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
@@ -3689,6 +3802,54 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_json({"success": False, "error": str(exc)[:200]})
+
+    # Whitelist skill read-only được chạy qua HTTP (V7 vivi port 18/11).
+    # Chỉ skill report_only, không ghi/gửi ngoài — an toàn khi gọi tự do từ dashboard.
+    _V7_READONLY_SKILLS = {
+        "memory_health_audit": ("memory_health_audit", {}),
+        "lesson_mining": ("lesson_mining", {"limit": int}),
+        "system_status_summary": ("system_status_summary", {}),
+        "pipeline_audit": ("pipeline_audit", {"limit": int}),
+        "voice_health_check": ("voice_health_check", {}),
+    }
+
+    def _handle_api_v7_skill(self, skill_name: str, query) -> None:
+        """V7 vivi port: GET /api/v7/skill/<name>[?limit=N] — chạy skill read-only.
+
+        Chỉ cho phép skill trong whitelist _V7_READONLY_SKILLS (report_only).
+        Args từ query string: limit=N (int). Kết quả trả nguyên dict của skill.
+        """
+        from urllib.parse import parse_qs
+
+        entry = self._V7_READONLY_SKILLS.get(skill_name)
+        if entry is None:
+            self._send_json({
+                "success": False,
+                "error": f"skill '{skill_name}' không trong whitelist read-only "
+                         f"(có sẵn: {sorted(self._V7_READONLY_SKILLS)})",
+            }, status=404)
+            return
+        fn_name, arg_spec = entry
+        # Parse args
+        kwargs: dict = {}
+        try:
+            params = parse_qs(query or "")
+            for arg_name, arg_type in arg_spec.items():
+                if arg_name in params:
+                    kwargs[arg_name] = arg_type(params[arg_name][0])
+        except Exception as exc:
+            self._send_json({"success": False, "error": f"bad args: {exc}"})
+            return
+        try:
+            import importlib
+            mod = importlib.import_module("quan_ai_brain.cognition.v7_skills")
+            fn = getattr(mod, fn_name)
+            workspace = _find_workspace_root()
+            result = fn(workspace, **kwargs)
+            self._send_json({"success": True, "skill": skill_name, "result": result})
+        except Exception as exc:
+            self._send_json({"success": False, "skill": skill_name,
+                             "error": f"{type(exc).__name__}: {str(exc)[:200]}"})
 
     def _handle_api_executive_consultations(self, query_str: str) -> None:
         workspace = _find_workspace_root()

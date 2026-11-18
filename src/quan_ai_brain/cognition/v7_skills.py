@@ -617,3 +617,477 @@ def owner_advisory_report(
         "generated_at": now_utc(),
         "action_policy": "report_only — không hành động ghi/gửi ngoài nếu chưa duyệt",
     }
+
+
+# -------------------------------------------------------------------------------------
+# V7 expansion 18/11 (skill bổ sung — 3 skill dựa trên dữ liệu SỐNG trong brain.db)
+# Lifecycle: PROPOSED (18/11) → IMPLEMENTED_IN_SANDBOX (18/11) → TESTED (18/11, 17/17 PASS).
+# Triggers + fail-honest đăng ký ở skill_registry.json.
+# -------------------------------------------------------------------------------------
+
+def memory_health_audit(workspace_root: Path) -> dict:
+    """MEMORY_HEALTH_AUDIT — đánh giá sức khỏe 2 hệ trí nhớ chính của QUAN AI BRAIN:
+    - memories (fact layer) — bảng SQLite 'memories' trong brain.db.
+    - semantic_memory (vector layer) — ChromaDB collection 'semantic_memory_v1'.
+    
+    Trả về:
+      conclusion: HEALTHY | PARTIAL | UNKNOWN
+      audit: {memories_total, semantic_memory_total, semantic_orphan_if_chroma_unavailable, episodes_total}
+      anomalies: list[dict] — mỗi entry có type + message + severity (LOW/MED/HIGH)
+      sources_accessed: list[str] — đường dẫn tuyệt đối của từng nguồn đã đọc thành công
+      sources_blocked: list[str] — nguồn đọc fail + lý do (PermissionError, missing file, etc.)
+      action_policy: 'report_only' (fail-honest, không chỉnh sửa dữ liệu)
+    """
+    ws = workspace_root
+    audit: dict = {}
+    anomalies: list[dict] = []
+    accessed: list[str] = []
+    blocked: list[str] = []
+    
+    # 1. Brain SQLite
+    db = ws / "data" / "brain.db"
+    if db.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db), timeout=5)
+            try:
+                memories_total = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+                episodes_total = conn.execute(
+                    "SELECT COUNT(*) FROM episodes WHERE kind='chat_turn'"
+                ).fetchone()[0]
+                audit["memories_total"] = memories_total
+                audit["episodes_total"] = episodes_total
+                accessed.append(str(db))
+            finally:
+                conn.close()
+        except Exception as exc:
+            blocked.append(f"{db}: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        blocked.append(f"{db}: missing")
+    
+    # 2. ChromaDB semantic — dùng cấu hình Y HỆT SemanticMemoryEngine (default Settings)
+    # để tránh Chroma "already exists with different settings" khi server đã mở client
+    # (18/11 fix: trước đây truyền anonymized_telemetry=False → conflict → skill chết)
+    try:
+        import chromadb
+        chroma_dir = ws / "data" / "vector_db_semantic"
+        if chroma_dir.exists():
+            client = chromadb.PersistentClient(path=str(chroma_dir))
+            try:
+                coll = client.get_collection("semantic_memory_v1")
+                audit["semantic_memory_total"] = coll.count()
+                accessed.append(str(chroma_dir))
+            except Exception as exc:
+                blocked.append(f"chroma collection: {type(exc).__name__}: {str(exc)[:80]}")
+                audit["semantic_memory_total"] = 0
+        else:
+            blocked.append(f"{chroma_dir}: missing")
+            audit["semantic_memory_total"] = 0
+    except ImportError:
+        audit["semantic_memory_total"] = 0
+        audit["semantic_orphan_if_chroma_unavailable"] = True
+        blocked.append("chromadb import failed")
+    
+    # 3. Anomaly detection (chỉ check tỷ lệ fallback)
+    if audit.get("memories_total", 0) == 0:
+        anomalies.append({
+            "type": "memories_empty",
+            "message": "memories table rỗng — Cherry không có fact layer",
+            "severity": "HIGH",
+        })
+    sem = audit.get("semantic_memory_total", 0)
+    fac = audit.get("memories_total", 0)
+    if fac > 100 and sem < fac * 0.3:
+        anomalies.append({
+            "type": "semantic_low_coverage",
+            "message": f"semantic ({sem}) thấp hơn 30% fact layer ({fac}) — có thể nhiều memory chưa được embed",
+            "severity": "MED",
+        })
+    
+    if not accessed:
+        conclusion = "UNKNOWN"
+    elif blocked:
+        conclusion = "PARTIAL"
+    else:
+        conclusion = "HEALTHY"
+    
+    return {
+        "conclusion": conclusion,
+        "audit": audit,
+        "anomalies": anomalies,
+        "sources_accessed": accessed,
+        "sources_blocked": blocked,
+        "action_policy": "report_only — không chỉnh sửa dữ liệu, không ghi lại",
+    }
+
+
+def lesson_mining(workspace_root: Path, limit: int = 5) -> dict:
+    """LESSON_MINING — trích top bài học đã được Cherry ghi nhận từ bảng 'lessons'
+    (kind='experience_lesson' trong episodes). Trả về sorted theo confidence desc.
+    
+    Khi confidence < 0.4 thì chuyển sang 'verified_human_required' — Cherry phải hỏi
+    owner trước khi dùng làm căn cứ (Cognitive V1.0: VERIFY BEFORE BELIEVING).
+    """
+    ws = workspace_root
+    db = ws / "data" / "brain.db"
+    if not db.exists():
+        return {
+            "conclusion": "UNKNOWN",
+            "total_lessons": 0,
+            "top_lessons": [],
+            "sources_blocked": [f"{db}: missing"],
+            "action_policy": "report_only",
+        }
+    
+    try:
+        import sqlite3
+        conn = sqlite3.connect(str(db), timeout=5)
+        try:
+            rows = conn.execute(
+                "SELECT summary, metadata_json, created_at_utc FROM episodes "
+                "WHERE kind='experience_lesson' "
+                "ORDER BY created_at_utc DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            total = conn.execute(
+                "SELECT COUNT(*) FROM episodes WHERE kind='experience_lesson'"
+            ).fetchone()[0]
+        finally:
+            conn.close()
+        import json as _j_lm
+        top = []
+        for summary, mjson, created_at in rows:
+            try:
+                meta = _j_lm.loads(mjson) if mjson else {}
+            except Exception:
+                meta = {}
+            conf = float(meta.get("confidence", 0.0) or 0.0)
+            top.append({
+                "summary": summary or "",
+                "confidence": conf,
+                "scope": meta.get("scope", "unknown"),
+                "created_at": created_at,
+                "verified": conf >= 0.4,
+            })
+        top.sort(key=lambda x: x["confidence"], reverse=True)
+        return {
+            "conclusion": "EXTRACTED" if top else "EMPTY",
+            "total_lessons": total,
+            "top_lessons": top,
+            "sources_accessed": [str(db)],
+            "sources_blocked": [],
+            "action_policy": "report_only",
+        }
+    except Exception as exc:
+        return {
+            "conclusion": "UNKNOWN",
+            "total_lessons": 0,
+            "top_lessons": [],
+            "sources_blocked": [f"{db}: {type(exc).__name__}: {str(exc)[:80]}"],
+            "action_policy": "report_only",
+        }
+
+
+def system_status_summary(workspace_root: Path) -> dict:
+    """SYSTEM_STATUS_SUMMARY — snapshot nhanh trạng thái hệ thống:
+    - skills đã đăng ký (phân bổ theo status)
+    - số memory / semantic memory / episode
+    - daemon Pi (qua /api/health của daemon edge nếu reachable)
+    
+    Đọc-only, fail-honest. Không gọi ngoài network ngoài Pi 192.168.1.21:8768.
+    """
+    import urllib.request as _ur
+    
+    ws = workspace_root
+    summary: dict = {}
+    accessed: list[str] = []
+    blocked: list[str] = []
+    
+    # 1. Skills (local JSON) — chỉ ĐỌC, không tự tạo file (18/11 fix: SkillRegistry
+    # __init__ tự mkdir + tạo file khi missing → vi phạm report_only của skill này)
+    reg_path = ws / "data" / "skill_registry.json"
+    if reg_path.exists():
+        try:
+            from quan_ai_brain.cognition.skill_registry import SkillRegistry, SkillStatus
+            reg = SkillRegistry(reg_path)
+            all_skills = reg.list_skills()
+            summary["skills_total"] = len(all_skills)
+            summary["skills_by_status"] = {
+                st.name: sum(1 for s in all_skills if s.status == st)
+                for st in SkillStatus
+            }
+            accessed.append(str(reg_path))
+        except Exception as exc:
+            blocked.append(f"registry: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        blocked.append(f"{reg_path}: missing")
+    
+    # 2. brain.db counts
+    db = ws / "data" / "brain.db"
+    if db.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db), timeout=5)
+            try:
+                summary["memories_total"] = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+                summary["episodes_total"] = conn.execute("SELECT COUNT(*) FROM episodes").fetchone()[0]
+                summary["lessons_total"] = conn.execute(
+                    "SELECT COUNT(*) FROM episodes WHERE kind='experience_lesson'"
+                ).fetchone()[0]
+            finally:
+                conn.close()
+            accessed.append(str(db))
+        except Exception as exc:
+            blocked.append(f"{db}: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        blocked.append(f"{db}: missing")
+    
+    # 3. Pi daemon (read-only, timeout 2s, fail-open)
+    pi_status: dict = {"reachable": False}
+    try:
+        req = _ur.Request("http://192.168.1.21:8768/api/kiosk/status", method="GET")
+        with _ur.urlopen(req, timeout=2) as resp:
+            import json as _j
+            data = _j.loads(resp.read())
+        pi_status.update({
+            "reachable": True,
+            "kiosk_running": data.get("kiosk_running"),
+            "avatar_state": data.get("avatar_state"),
+            "core_connected": data.get("core_connected"),
+            "embodiment_mode": data.get("embodiment_mode"),
+        })
+        accessed.append("http://192.168.1.21:8768/api/kiosk/status")
+    except Exception as exc:
+        pi_status["error"] = f"{type(exc).__name__}: {str(exc)[:60]}"
+    
+    summary["pi_daemon"] = pi_status
+    
+    if not accessed:
+        conclusion = "UNKNOWN"
+    elif blocked:
+        conclusion = "PARTIAL"
+    else:
+        conclusion = "OK"
+    
+    return {
+        "conclusion": conclusion,
+        "summary": summary,
+        "sources_accessed": accessed,
+        "sources_blocked": blocked,
+        "action_policy": "report_only — chỉ đọc, không điều khiển Pi",
+    }
+
+
+# -------------------------------------------------------------------------------------
+# V7 vivi-agent port 18/11 (2 skill quản trị đa dạng, nguồn vivi-agent-20261118.zip)
+# PIPELINE_AUDIT      ← vivi "Pipeline trace + Audit log" (docs/ky_thuat/API_VA_TRACE.md)
+# VOICE_HEALTH_CHECK  ← vivi scripts/check_voice.py + ADR-0054 (STT/TTS sẵn sàng)
+# -------------------------------------------------------------------------------------
+
+def pipeline_audit(workspace_root: Path, limit: int = 10) -> dict:
+    """PIPELINE_AUDIT — audit trail các lượt xử lý gần nhất của Cherry (vivi-style).
+
+    Gom 3 nguồn dữ liệu sống:
+    - brain.db episodes (chat_turn + experience_lesson): ai nói gì khi nào
+    - brain.db error_events: lỗi pipeline (nếu có)
+    - governance.db governance_events: hành động bị quản trị (approvals, risk)
+
+    Output vivi-style: mỗi turn = 1 trace entry; lỗi + governance risk riêng.
+    Đọc-only, fail-honest. action_policy: report_only.
+    """
+    ws = workspace_root
+    accessed: list[str] = []
+    blocked: list[str] = []
+    turns: list[dict] = []
+    errors: list[dict] = []
+    gov_risks: list[dict] = []
+
+    # 1. Episodes gần nhất (chat_turn + experience_lesson)
+    db = ws / "data" / "brain.db"
+    if db.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db), timeout=5)
+            try:
+                rows = conn.execute(
+                    "SELECT kind, summary, created_at_utc, status FROM episodes "
+                    "WHERE kind IN ('chat_turn', 'experience_lesson') "
+                    "ORDER BY created_at_utc DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                for kind, summary, ts, status in rows:
+                    turns.append({
+                        "kind": kind,
+                        "summary": (summary or "")[:120],
+                        "ts_utc": ts,
+                        "status": status,
+                    })
+                # error_events
+                err_rows = conn.execute(
+                    "SELECT ts_utc, source, error_type, detail, resolved_utc FROM error_events "
+                    "ORDER BY ts_utc DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                for ts, source, etype, detail, resolved in err_rows:
+                    errors.append({
+                        "ts_utc": ts,
+                        "source": source,
+                        "error_type": etype,
+                        "detail": (detail or "")[:120],
+                        "resolved_utc": resolved,
+                    })
+            finally:
+                conn.close()
+            accessed.append(str(db))
+        except Exception as exc:
+            blocked.append(f"brain.db: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        blocked.append(f"{db}: missing")
+
+    # 2. Governance risk events
+    gov = ws / "data" / "governance.db"
+    if gov.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(gov), timeout=5)
+            try:
+                rows = conn.execute(
+                    "SELECT event_type, timestamp_utc, entity_id, risk_level, outcome "
+                    "FROM governance_events "
+                    "WHERE risk_level IS NOT NULL AND risk_level != '' "
+                    "ORDER BY timestamp_utc DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                for etype, ts, eid, risk, outcome in rows:
+                    gov_risks.append({
+                        "event_type": etype,
+                        "ts_utc": ts,
+                        "entity_id": eid,
+                        "risk_level": risk,
+                        "outcome": outcome,
+                    })
+            finally:
+                conn.close()
+            accessed.append(str(gov))
+        except Exception as exc:
+            blocked.append(f"governance.db: {type(exc).__name__}: {str(exc)[:80]}")
+
+    if not accessed:
+        conclusion = "UNKNOWN"
+    elif blocked:
+        conclusion = "PARTIAL"
+    else:
+        conclusion = "OK"
+
+    return {
+        "conclusion": conclusion,
+        "recent_turns": turns,
+        "recent_errors": errors,
+        "governance_risks": gov_risks,
+        "sources_accessed": accessed,
+        "sources_blocked": blocked,
+        "action_policy": "report_only — chỉ đọc audit trail, không ghi/sửa",
+    }
+
+
+def voice_health_check(workspace_root: Path) -> dict:
+    """VOICE_HEALTH_CHECK — kiểm pipeline giọng nói Cherry sẵn sàng (vivi-style).
+
+    Nguồn vivi: scripts/check_voice.py + ADR-0054/0058. Kiểm:
+    - TTS config (giọng Hoài My, provider, status) — đọc từ tts_config.py module state
+    - Edge TTS binary importable
+    - ASR/Wake modules importable
+    - TTS preference file (data/tts_preference.json)
+
+    Đọc-only, không synthesize, không gọi network ngoài. fail-honest.
+    """
+    ws = workspace_root
+    accessed: list[str] = []
+    blocked: list[str] = []
+    checks: dict = {}
+
+    # 1. TTS module + config
+    try:
+        from quan_ai_brain.voice.tts_config import GLOBAL_TTS_MANAGER, TTSStatus
+        status = getattr(GLOBAL_TTS_MANAGER, "status", None)
+        checks["tts_status"] = status.name if hasattr(status, "name") else str(status)
+        # Voice hiện tại
+        cfg = getattr(GLOBAL_TTS_MANAGER, "_config", None) or getattr(GLOBAL_TTS_MANAGER, "config", None)
+        if cfg is not None:
+            checks["tts_voice_id"] = getattr(cfg, "voice_id", None) or getattr(cfg, "preferred_voice", None)
+            checks["tts_provider"] = getattr(cfg, "provider", None)
+        accessed.append("quan_ai_brain.voice.tts_config")
+    except Exception as exc:
+        blocked.append(f"tts_config: {type(exc).__name__}: {str(exc)[:80]}")
+        checks["tts_status"] = "IMPORT_FAILED"
+
+    # 2. Edge-tts importable
+    try:
+        import edge_tts  # noqa: F401
+        checks["edge_tts_importable"] = True
+    except ImportError:
+        checks["edge_tts_importable"] = False
+
+    # 3. Voice modules — probe import (wake_word_service cần vosk = Pi-only, PC fail expected)
+    try:
+        import importlib as _ilm
+        # Package modules: import qua importlib (đúng namespace, relative imports hoạt động)
+        for mod_name in ("voice_pipeline", "vad_processor", "barge_in_handler", "mouth_sync"):
+            try:
+                _ilm.import_module(f"quan_ai_brain.voice.{mod_name}")
+                checks[f"{mod_name}_importable"] = True
+            except ImportError as exc:
+                # vosk/pyaudio chỉ cài trên Pi — fail expected trên PC, không phải lỗi
+                checks[f"{mod_name}_importable"] = False
+                checks[f"{mod_name}_error"] = f"ImportError (pi-only deps ok): {str(exc)[:60]}"
+            except Exception as exc:
+                checks[f"{mod_name}_importable"] = False
+                checks[f"{mod_name}_error"] = f"{type(exc).__name__}: {str(exc)[:60]}"
+        # wake_word_service: standalone script edge_client (chạy trên Pi, import vosk)
+        wws = ws / "edge_client" / "wake_word_service.py"
+        if wws.exists():
+            try:
+                spec = _ilm.util.spec_from_file_location("wake_word_service", str(wws))
+                mod = _ilm.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                checks["wake_word_service_importable"] = True
+            except ImportError as exc:
+                checks["wake_word_service_importable"] = False
+                checks["wake_word_service_error"] = f"ImportError (pi-only deps ok): {str(exc)[:60]}"
+            except Exception as exc:
+                checks["wake_word_service_importable"] = False
+                checks["wake_word_service_error"] = f"{type(exc).__name__}: {str(exc)[:60]}"
+        else:
+            checks["wake_word_service_importable"] = False
+            checks["wake_word_service_error"] = "file missing"
+    except Exception as exc:
+        blocked.append(f"module_probe: {type(exc).__name__}: {str(exc)[:80]}")
+
+    # 4. TTS preference file
+    pref = ws / "data" / "tts_preference.json"
+    if pref.exists():
+        try:
+            import json as _j
+            data = _j.loads(pref.read_text(encoding="utf-8"))
+            checks["tts_preference"] = data
+            accessed.append(str(pref))
+        except Exception as exc:
+            blocked.append(f"tts_preference: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        checks["tts_preference"] = None
+        blocked.append(f"{pref}: missing")
+
+    if not accessed:
+        conclusion = "UNKNOWN"
+    elif blocked:
+        conclusion = "PARTIAL"
+    else:
+        conclusion = "READY"
+
+    return {
+        "conclusion": conclusion,
+        "checks": checks,
+        "sources_accessed": accessed,
+        "sources_blocked": blocked,
+        "action_policy": "report_only — không synthesize, không điều khiển giọng",
+    }

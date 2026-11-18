@@ -39,6 +39,10 @@ WAKE_PHRASES = (
     "ché ri", "ché ri ơi", "ché ri à",
     "che ri", "che ri ơi", "che ri oi", "che ri à", "che ri a",
     "chè ri", "chè ri ơi", "chè ri à",
+    # (18/11/2026) Bổ sung từ vivi-agent ADR-0057/0061/0074 — "Hey/Hey Cherry" không
+    # cần "ơi", STT ghi "hey" thành "hai/hay" — chỉ mở rộng nhận diện, KHÔNG đổi
+    # bộ từ owner chốt 11/11:
+    "hey cherry", "hei cherry", "hai cherry", "hay cherry",
 )
 # Từ khóa phụ trong lúc nghe: "ngủ đi" → sleep ngay (đồng bộ lệnh DM)
 SLEEP_PHRASES = ("ngủ đi", "ngu di", "ngu ngu", "đi ngủ")

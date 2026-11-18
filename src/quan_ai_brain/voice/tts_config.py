@@ -235,7 +235,18 @@ def normalize_text_for_vietnamese_tts(text: str, max_chars: int = 500) -> str:
     # 8. Collapse whitespace
     s = re.sub(r"\s+", " ", s).strip()
 
-    # 9. Smart sentence boundary truncation if text exceeds max_chars
+    # 9. (18/11) Lọc câu dẫn thừa đầu câu trả lời trước khi cắt độ dài.
+    # Nguồn: vivi-agent app/lead_in.py (ADR-0071) port vào speech_utils. Lỗi nhẹ
+    # ("Mình cần tra cứu…") nhưng đọc lên giọng thì thừa. Fail-open: lỗi → giữ s.
+    try:
+        from quan_ai_brain.cognition.speech_utils import strip_lead_in
+        _stripped = strip_lead_in(s)
+        if _stripped and _stripped.strip():
+            s = _stripped.strip()
+    except Exception:
+        pass
+
+    # 10. Smart sentence boundary truncation if text exceeds max_chars
     if len(s) > max_chars:
         sentences = re.split(r"(?<=[.!?])\s+", s)
         truncated = ""

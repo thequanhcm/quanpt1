@@ -15,7 +15,8 @@ $markers = @(
     'netchat_auto_responder',
     'learning_daemon',
     'watchdog\.py',
-    'khoi_dong_ollama'
+    'khoi_dong_ollama',
+    'cherry_autonomous'
 )
 
 $pattern = ($markers -join '|')

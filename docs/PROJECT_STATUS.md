@@ -2,6 +2,16 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 18/11/2026 ~13:45 — SPRINT MEMORY-TRUTH P1+P4 (MỚI) ✅ TRIỂN KHAI (owner: "duyệt sprint kế Sprint MEMORY-TRUTH (P1+P4)… M6 chọn (c) Self-RAG lite + eval trí nhớ từ phân tích vivi-agent")
+- **Tiền đề**: PR #35 MERGED (998517a) + card TASK-SEMANTIC-MEMORY-M6 consumed (f8a27d37). Card mới TASK-MEMORY-TRUTH-M6 APPROVED + consumed.
+- **P1 Self-RAG lite** `cognition/self_check.py` (MỚI 208 LOC): grader GLM chấm ý không căn cứ (JSON strict) → repair CHỈ XÓA/RÚT GỌN (guard cấm thêm ý, vi phạm → refusal trung thực); fail-open mọi bước; greeting/điều khiển bypass. Wire `/api/chat` bước 3.9 + field `self_check` trong response.
+- **P4 Eval trí nhớ** `tools/memory_eval.py` (MỚI) + CSV 8 câu thật: HYBRID semantic+keyword LIKE → **recall@3 0.625 → 1.0** (8/8), avg 234ms/câu. Report `data/memory_eval_report.md`.
+- **Test**: `tests/test_self_check.py` 15/15 PASS (mock LLM 100%); focused 38 pass / 3 fail TRÙNG 11 PRE-EXISTING (stash-proof 4 run).
+- **Live E2E**: sửa ý bịa → refusal trung thực; câu có căn cứ → không sửa oan; greeting bypass 2.8s; injection BLOCK không bị phá.
+- **Ingest bổ sung**: +521 chunks → semantic_memory_v1 = 6578 chunks.
+- **Báo cáo**: `bao cao xay dung he thong/BAO_CAO_V6_M6_MEMORY_TRUTH_20261118.md`.
+- **Limitations**: chưa wire stream/DM responder; chưa BM25 thật/synonyms/parent-child (3 kỹ thuật vivi còn lại chờ duyệt); grader tốn ~0.3-1s trên câu evidence-based.
+
 ## 18/11/2026 ~11:50 — SEMANTIC MEMORY ONNX MiniLM (MỚI) ✅ TRIỂN KHAI (owner: "thực hiện: sprint kế (a) Semantic search dùng chromadb ONNX MiniLM")
 - **Bối cảnh**: Ollama đã audit KHÔNG tồn tại trên máy QUANPT 18/11 (no exe/service/models). chromadb collection legacy 53 chunks fail query do phụ thuộc BGE-M3.
 - **Module mới** `src/quan_ai_brain/cognition/semantic_memory.py` (171 LOC): ChromaDB default embedding (ONNX MiniLM local), ingest `brain.db` mode=ro (memories active + episodes chat_turn + experience_lesson), idempotent theo `original_id` metadata.
