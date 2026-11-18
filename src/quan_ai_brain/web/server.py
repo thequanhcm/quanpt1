@@ -2474,6 +2474,46 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             sanitized_reply, guardrail_warnings = OutputGuardrails.sanitize(resp.text)
             grounding_analysis = OutputGuardrails.analyze_grounding(sanitized_reply, context=context)
 
+            # 3.9 Self-RAG lite (TASK-MEMORY-TRUTH-M6 P1, 18/11) — câu trả lời DỰA
+            # TRÊN EVIDENCE (memory_recall / semantic / ttns) được chấm căn cứ 1
+            # lần; thiếu căn cứ → sửa bằng cách XÓA/RÚT GỌN (cấm thêm ý); vẫn sai
+            # → từ chối trung thực. Fail-open: LLM lỗi/quá giờ → giữ câu gốc.
+            self_check_info: dict[str, Any] = {"attempted": False}
+            try:
+                from quan_ai_brain.cognition.self_check import self_check_reply
+                _ev_parts: list[str] = []
+                try:
+                    if isinstance(recall, dict) and recall.get("block"):
+                        _ev_parts.append(str(recall["block"]))
+                except NameError:
+                    pass
+                # semantic/ttns evidence nằm trong system_instructions dưới dạng
+                # block [SEMANTIC RECALL ...] / [EVIDENCE TTNS ...] — trích nguyên
+                # system_instructions hiện hành làm bằng chứng cho grader.
+                if context.system_instructions:
+                    _ev_parts.append(context.system_instructions)
+                _evidence = "\n\n".join(_ev_parts)
+                if _evidence and resp.success and sanitized_reply:
+                    _sc = self_check_reply(query, sanitized_reply, _evidence,
+                                           provider, selected_model)
+                    self_check_info = {
+                        "attempted": True,
+                        "ran": _sc["ran"],
+                        "revised": _sc["revised"],
+                        "claims": _sc["claims"][:5],
+                        "error": _sc["error"],
+                    }
+                    if _sc["revised"]:
+                        sanitized_reply = _sc["revised_text"]
+                        self_check_info["note"] = "self-check sửa (xóa/rút gọn ý không căn cứ)"
+                    _audit("self_check.done", {
+                        "ran": _sc["ran"], "revised": _sc["revised"],
+                        "n_claims": len(_sc["claims"]),
+                    })
+            except Exception as sc_exc:
+                self_check_info["error"] = str(sc_exc)[:200]
+                _audit("self_check.error", {"error": str(sc_exc)[:200]})
+
             # 5. Continuous Session & Memory Persistence
             persistence_info: dict[str, Any] = {}
             if resp.success and sanitized_reply:
@@ -2715,6 +2755,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "persistence": persistence_info,
                 "durable_task": durable_task_dict,
                 "external_lookup": ext_lookup_info,
+                "self_check": self_check_info,
                 "tool_calls": tool_calls_info,
                 "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
             })
