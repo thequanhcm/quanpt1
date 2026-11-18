@@ -35,7 +35,16 @@ PC_DIR = WORKSPACE / "edge_client"
 SERVICE = "quan_ai_edge.service"
 
 # 3 file phải đồng bộ (PC path name == Pi5 path name)
-SYNC_FILES = ["kiosk.html", "avatar_engine.js", "avatar_protocol.js"]
+# (19/11/2026) Thêm kiosk.js + kiosk.css — bug 18/11: chromium Pi5 còn kiosk.js
+# cũ 30KB từ 16/11 → avatar face + đồng hồ chỉ render glow `--:--:--`. Cache
+# bump v6full4_1911 đảm bảo chromium tải CSS + JS mới sau khi sync.
+SYNC_FILES = [
+    "kiosk.html",
+    "kiosk.css",
+    "kiosk.js",
+    "avatar_engine.js",
+    "avatar_protocol.js",
+]
 
 SSH_BASE = [
     "ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",

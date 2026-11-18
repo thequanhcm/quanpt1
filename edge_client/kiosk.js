@@ -15,6 +15,23 @@ document.addEventListener("DOMContentLoaded", () => {
   const transcriptEl = document.getElementById("transcript-line");
   const taskTextEl = document.getElementById("task-glance-text");
   const marqueeTrack = document.getElementById("marquee-track");
+
+  // (19/11/2026) Strip markdown cho marquee: thay vì để `**PC Core**` lộ
+  // nguyên dấu sao trong caption, bỏ ** (bold), _ (italic), ` (code) trước
+  // khi gán textContent. Không thay đổi transcript — vẫn là readable text.
+  function stripMarkdownForMarquee(raw) {
+    if (!raw) return "";
+    return raw
+      .replace(/\*\*([^*]+)\*\*/g, "$1")   // **bold**
+      .replace(/__([^_]+)__/g, "$1")        // __bold__
+      .replace(/\*([^*]+)\*/g, "$1")        // *italic*
+      .replace(/_([^_]+)_/g, "$1")          // _italic_
+      .replace(/`([^`]+)`/g, "$1")          // `code`
+      .replace(/^#{1,6}\s+/gm, "")          // # heading
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // [text](url) → text
+      .replace(/\s+/g, " ")
+      .trim();
+  }
   const bannerEl = document.getElementById("consultation-banner");
   const bannerText = document.getElementById("consultation-banner-text");
   const overlay = document.getElementById("offline-overlay");
@@ -644,7 +661,10 @@ document.addEventListener("DOMContentLoaded", () => {
         // (31/10) MARQUEE: hội thoại đang giao tiếp — bản tiếng Anh từ PC core,
         // fallback transcript gốc nếu chưa có bản dịch.
         if (marqueeTrack) {
-          const enText = (data.transcript_en || data.transcript || "").trim();
+          const rawText = (data.transcript_en || data.transcript || "").trim();
+          // (19/11/2026) Strip markdown ** __ * _ ` # [text](url) trước khi
+          // đưa vào marquee — caption dạng thuần text, không render markup.
+          const enText = stripMarkdownForMarquee(rawText);
           if (enText && marqueeTrack.dataset.text !== enText) {
             marqueeTrack.dataset.text = enText;
             marqueeTrack.textContent = enText;

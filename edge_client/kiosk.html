@@ -7,9 +7,9 @@
   <meta http-equiv="Content-Language" content="vi">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>QUAN AI BRAIN — Raspberry Pi 5 Edge Kiosk</title>
-  <!-- (16/11/2026 v6full_1511) Buffer 1080×1080: portrait full-height trên màn
-       4K sắc nét hơn (buffer vuông = box vuông, không méo); bump cache CSS -->
-  <link rel="stylesheet" href="/kiosk.css?v=v6full3_1511">
+  <!-- (19/11/2026 v6full4_1911) Fix CSS btn-wake/btn-stop flex 0 0 auto để
+       không đè footer-marquee; strip markdown trong marquee. Bump cache. -->
+  <link rel="stylesheet" href="/kiosk.css?v=v6full4_1911">
 </head>
 <body>
   <div class="kiosk-app">
@@ -122,6 +122,6 @@
   <!-- (31/10/2026) mic-only: engine nạp LƯỚI khi bấm nút mic (kiosk.js) —
        trình duyệt không giữ mic stream nền 24/7 -->
   <script>window.__WAKE_ENGINE_DEFERRED__ = true;</script>
-  <script src="/kiosk.js?v=v6m5_1611"></script>
+  <script src="/kiosk.js?v=v6full4_1911"></script>
 </body>
 </html>

@@ -537,6 +537,12 @@ body {
   background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4);
+  /* (19/11/2026) Cố định kích thước nút để KHÔNG đè .footer-marquee khi text
+     "CHERRY ƠI..." dài. flex: 0 0 auto không cho nút co lại/mở rộng đè lên
+     ticker; .footer-marquee đã có flex:1 min-width:0 nên nó nhận phần dư. */
+  flex: 0 0 auto;
+  min-width: 124px;
+  max-width: 132px;
 }
 
 .btn-wake.listening {
@@ -583,6 +589,11 @@ body {
   background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
   color: #ffffff;
   box-shadow: 0 4px 14px rgba(239, 68, 68, 0.45);
+  /* (19/11/2026) Tương tự btn-wake: cố định kích thước để cân xứng + không
+     đè footer-marquee bên trái. */
+  flex: 0 0 auto;
+  min-width: 86px;
+  max-width: 96px;
 }
 
 /* ================= OFFLINE FAIL-SAFE OVERLAY ================= */
