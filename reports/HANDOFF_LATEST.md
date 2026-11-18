@@ -5,13 +5,13 @@
 > bảo đảm tính minh bạch, độc lập và khả năng phục hồi phiên làm việc cho ChatGPT.
 
 ## 1. Thông tin phiên làm việc (Session Metadata)
-- **Mã phiên (UTC):** `2026-11-15T23:47:10.786387+00:00`
-- **Thời gian máy chủ:** `2026-11-16 06:47:10` (Local Time)
+- **Mã phiên (UTC):** `2026-11-18T13:11:50.807181+00:00`
+- **Thời gian máy chủ:** `2026-11-18 20:11:50` (Local Time)
 - **Workspace root:** `E:/BRAIN`
 - **Python Runtime:** `3.11.9` (64bit)
 - **Hệ điều hành:** `Windows-10-10.0.19045-SP0`
 - **Phiên bản ứng dụng:** `0.2.0` (Foundation Evolution — Phase A)
-- **Git Branch:** `master` | **Commit:** `f0998ad`
+- **Git Branch:** `feat/v6-m6-memory-truth` | **Commit:** `149e475`
 - **Trạng thái Working Tree:** Có thay đổi chưa commit
 
 ## 2. Tóm tắt điều hành (Executive Summary)
@@ -21,7 +21,7 @@
   2. Hiện thực `SessionMemoryManager` (`src/quan_ai_brain/cognition/session_memory.py`) trích xuất sự thật người dùng và lưu trữ phiên hội thoại bền vững vào `data/brain.db`.
   3. Cài đặt `OutputGuardrails` (`src/quan_ai_brain/core/guardrails.py`) lọc rò rỉ credential, script tag injection và che giấu đường dẫn tệp nhạy cảm.
   4. Mở rộng `PromptContextBuilder` và API `/api/chat`, `/api/chat/history` trên Web Server phục vụ hội thoại đa lượt liên tục có trí nhớ.
-  5. Kết quả kiểm thử tự động phiên hiện tại: 4082 PASSED, 11 FAILED, 28 SKIPPED (Tổng: 4121 bài test, FAIL (11 test(s) failed)).
+  5. Kết quả kiểm thử tự động phiên hiện tại: 4193 PASSED, 9 FAILED, 28 SKIPPED (Tổng: 4230 bài test, FAIL (9 test(s) failed)).
 - **Các hạng mục đã hoàn thành:**
   - [x] Bộ định tuyến mô hình động `LLMRouter` với phân tầng fast / reasoning và fallback tin cậy.
   - [x] Quản lý bộ nhớ phiên `SessionMemoryManager` và trích xuất tự động danh tính, sở thích, chỉ thị của chủ sở hữu.
@@ -30,7 +30,7 @@
   - [x] Tích hợp lịch sử hội thoại gần nhất `[RECENT CONVERSATION HISTORY]` vào ngữ cảnh suy luận của LLM.
   - [x] Endpoint `GET /api/chat/history` và nâng cấp toàn diện `POST /api/chat` trên `BrainAPIHandler`.
   - [x] 5 bài kiểm thử E2E đầu cuối (`tests/test_end_to_end_chat.py`) xác minh đa lượt đàm thoại và trí nhớ dài hạn.
-  - [x] Kiểm thử tự động: 4082 bài PASS, 28 bài SKIP (Phần cứng Pi 5 offline), 11 bài FAIL (FAIL (11 test(s) failed)).
+  - [x] Kiểm thử tự động: 4193 bài PASS, 28 bài SKIP (Phần cứng Pi 5 offline), 9 bài FAIL (FAIL (9 test(s) failed)).
 - **Các hạng mục tiếp theo (Sprint 2):**
   - Kết nối TaskPlan vào `DurableTaskRegistry` (`data/tasks.db`) và xây dựng vòng lặp thực thi có kiểm soát an toàn (Inert Sandbox).
 - **Lưu ý kỹ thuật quan trọng cho kỹ sư tiếp theo:**
@@ -41,99 +41,102 @@
 ## 3. Thay đổi mã nguồn (Code Changes & Working Tree)
 - **Git Status:**
 ```text
-?? data/mau_visemes_v29/
-?? data/mau_visemes_v3/
-?? data/mau_visemes_v30/
-?? data/mau_visemes_v31/
-?? data/mau_visemes_v32/
-?? data/mau_visemes_v33/
-?? data/mau_visemes_v34/
-?? data/mau_visemes_v35/
-?? data/mau_visemes_v36/
-?? data/mau_visemes_v37/
-?? data/mau_visemes_v38/
-?? data/mau_visemes_v39/
-?? data/mau_visemes_v40/
-?? data/mau_visemes_v41/
-?? data/mau_visemes_v42/
-?? data/mau_visemes_v43/
-?? data/mau_visemes_v44/
-?? data/mau_visemes_v45/
-?? data/mau_visemes_v46/
-?? data/mau_visemes_v47/
-?? data/mau_visemes_v48/
-?? data/mau_visemes_v49/
-?? data/mau_visemes_v50/
-?? data/mau_visemes_v51/
-?? data/mau_visemes_v52/
-?? data/mau_visemes_v53/
-?? data/mau_visemes_v54/
-?? data/mau_visemes_v55/
-?? data/mau_visemes_v56/
-?? data/mau_visemes_v57/
-?? data/mau_visemes_v58/
-?? data/mau_visemes_v59/
-?? data/mau_visemes_v6/
-?? data/mau_visemes_v60/
-?? data/mau_visemes_v61/
-?? data/mau_visemes_v62/
-?? data/mau_visemes_v63/
-?? data/mau_visemes_v64/
-?? data/mau_visemes_v65/
-?? data/mau_visemes_v66/
-?? data/mau_visemes_v67/
-?? data/mau_visemes_v68/
-?? data/mau_visemes_v69/
-?? data/mau_visemes_v7/
-?? data/mau_visemes_v70/
-?? data/mau_visemes_v71/
-?? data/mau_visemes_v72/
-?? data/mau_visemes_v73/
-?? data/mau_visemes_v74/
-?? data/mau_visemes_v75/
-?? data/mau_visemes_v76/
-?? data/mau_visemes_v77/
-?? data/mau_visemes_v78/
-?? data/mau_visemes_v79/
-?? data/mau_visemes_v8/
-?? data/mau_visemes_v80/
-?? data/mau_visemes_v81/
-?? data/mau_visemes_v82/
-?? data/mau_visemes_v9/
-?? data/motion_345_analysis.json
-?? data/motion_345_cycles.json
-?? data/motion_345_regions.json
-?? data/motion_6_analysis.json
-?? data/motion_6_segments.json
-?? data/mouth_ab_timeline_vs_audio.js
-?? data/mouth_fix_ab.js
-?? data/mouth_voice_engine_test.js
-?? data/open_prs_1611.json
-?? data/pi5_assets.txt
-?? data/pi5_audio_route.py
-?? data/pi5_device_watcher.py
-?? data/pi5_monitor_task.xml
-?? data/pi5_wake_engine.js
-?? data/poc_assets/
+eck40.png
+?? data/rig_check41.png
+?? data/rig_check42.png
+?? data/rig_check43.png
+?? data/rig_check44.png
+?? data/rig_check45.png
+?? data/rig_check46.png
+?? data/rig_check47.png
+?? data/rig_check48.png
+?? data/rig_check49.png
+?? data/rig_check5.png
+?? data/rig_check50.png
+?? data/rig_check51.png
+?? data/rig_check52.png
+?? data/rig_check53.png
+?? data/rig_check54.png
+?? data/rig_check55.png
+?? data/rig_check56.png
+?? data/rig_check57.png
+?? data/rig_check58.png
+?? data/rig_check59.png
+?? data/rig_check6.png
+?? data/rig_check60.png
+?? data/rig_check61.png
+?? data/rig_check62.png
+?? data/rig_check63.png
+?? data/rig_check64.png
+?? data/rig_check65.png
+?? data/rig_check66.png
+?? data/rig_check67.png
+?? data/rig_check68.png
+?? data/rig_check69.png
+?? data/rig_check7.png
+?? data/rig_check70.png
+?? data/rig_check71.png
+?? data/rig_check72.png
+?? data/rig_check73.png
+?? data/rig_check74.png
+?? data/rig_check75.png
+?? data/rig_check76.png
+?? data/rig_check77.png
+?? data/rig_check78.png
+?? data/rig_check79.png
+?? data/rig_check8.png
+?? data/rig_check80.png
+?? data/rig_check81.png
+?? data/rig_check82.png
+?? data/rig_check83.png
+?? data/rig_check84.png
+?? data/rig_check85.png
+?? data/rig_check86.png
+?? data/rig_check87.png
+?? data/rig_check88.png
+?? data/rig_check89.png
+?? data/rig_check9.png
+?? data/rig_check90.png
+?? data/rig_check91.png
+?? data/rig_check92.png
+?? data/rig_check93.png
+?? data/rig_check94.png
+?? data/rig_check95.png
+?? data/rig_check96.png
+?? data/rig_check97.png
+?? data/rig_check98.png
+?? data/rig_check99.png
+?? data/rig_zone_left.png
+?? data/rig_zone_right.png
 ?? data/seq_1.png
 ?? data/seq_2.png
 ?? data/seq_3.png
+?? data/sheet_ht.jpg
+?? data/sheet_ht1.jpg
+?? data/shot_avatar_exact.png
 ?? data/simulate_mouth_voice_match.py
+?? data/strawberry_zoom.png
 ?? data/synth_voices_test.py
+?? data/user_marked_zoom.png
+?? data/v2_confused_arms.png
+?? data/v2_thinking_bottom.png
 ?? data/v3_check/
 ?? data/v6voice_e2e.png
 ?? data/v6voice_final_test.mp3
 ?? data/v6voice_final_test.wav
+?? data/vector_db_semantic/
 ?? data/vi_frames/
 ?? data/voice_envelopes.json
 ?? data/voice_test_piper_vi_VN_vais1000_medium.mp3
 ?? data/voice_test_piper_vi_VN_vivos_x_low.mp3
 ?? data/voice_test_vi_VN_HoaiMyNeural.mp3
 ?? data/voice_test_vi_VN_NamMinhNeural.mp3
-?? edge_client/assets/avatar/body_motion_engine.js
+?? data/vui_suong_bottom.png
+?? data/wire_v6m4b_test.js
 ?? edge_client/assets/avatar/tai_lieu_test.png
 ?? edge_client/avatar_engine.js.bak_v6cin_1411
 ?? edge_client/kiosk.html.bak_v6cin_1411
+?? projects/
 ?? quarantine_audit_20261113/
 ?? quarantine_cleanup/
 ?? reports/CHERRY_COGNITIVE_DISCOVERY_REPORT.md
@@ -142,7 +145,9 @@
 ?? reports/intelligence_maturity/cisc_runs/cpsl_mini_20261112_104626.json
 ?? reports/intelligence_maturity/cisc_runs/cpsl_mini_20261112_105311.json
 [secret-like path omitted]
-?? src_backup_avatar_1611/
+?? src/quan_ai_brain/web/static/poc_assets/
+?? tools/v6_m4b_watch_sync_pi5.py
+?? vivi-agent-20261118.zip
 ```
 - **Tệp mã nguồn cốt lõi trong Sprint 7A:**
   - `src/quan_ai_brain/execution/process_containment.py`: Hợp đồng `ProcessBackendInterface`, `ProcessContainmentConfig`, `InertProcessBackend`, `ContainedExecutionRunner`.
@@ -169,18 +174,20 @@
   - `tests/test_edge_client.py`: 6 bài test xác thực HMAC, nonce anti-replay, kiosk HTTP endpoints, fail-safe disconnect.
 
 ## 4. Kết quả kiểm thử (Test Verification)
-- **Kết luận kiểm thử:** **FAIL (11 test(s) failed)**
+- **Kết luận kiểm thử:** **FAIL (9 test(s) failed)**
 - **Lệnh thực thi:** `E:\BRAIN\.venv\Scripts\python.exe -m pytest -q tests`
-- **Tổng số bài test:** `4121` | **Passed:** `4082` | **Failed:** `11` | **Skipped:** `28`
-- **Thời gian chạy:** `755.57s`
+- **Tổng số bài test:** `4230` | **Passed:** `4193` | **Failed:** `9` | **Skipped:** `28`
+- **Thời gian chạy:** `705.04s`
 - **Exit Code:** `1`
 
-- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `4121` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
+- **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `4230` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
 - **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.
-- **Trạng thái xác minh (`verification_status`):** `FAIL (11 test(s) failed)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
+- **Trạng thái xác minh (`verification_status`):** `FAIL (9 test(s) failed)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
 
 ```text
-l\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
+n\Python311\Lib\subprocess.py", line 1026, in __init__
+      self._execute_child(args, executable, preexec_fn, close_fds,
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
       hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   FileNotFoundError: [WinError 2] The system cannot find the file specified
@@ -189,7 +196,7 @@ l\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
   See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
-tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_message
+tests/test_process_containment.py::test_runner_fails_closed_on_containment_configuration_error
   E:\BRAIN\.venv\Lib\site-packages\_pytest\threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-912 (_do_reboot)
   
   Traceback (most recent call last):
@@ -197,9 +204,9 @@ tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_m
       self.run()
     File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
       self._target(*self._args, **self._kwargs)
-    File "E:\BRAIN\edge_client\client_daemon.py", line 2387, in _do_reboot
+    File "E:\BRAIN\edge_client\client_daemon.py", line 2430, in _do_reboot
       subprocess.run(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    File "E:\BRAIN\tools\netchat_auto_responder.py", line 94, in _subprocess_run_no_window
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 115, in _subprocess_run_no_window
       return _orig_subprocess_run(*args, **kwargs)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
@@ -212,7 +219,7 @@ tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_m
       return _orig_subprocess_run(*args, **kwargs)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     [Previous line repeated 2 more times]
-    File "E:\BRAIN\tools\netchat_auto_responder.py", line 94, in _subprocess_run_no_window
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 115, in _subprocess_run_no_window
       return _orig_subprocess_run(*args, **kwargs)
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
     File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 548, in run
@@ -283,10 +290,8 @@ FAILED tests/test_digital_identity_persona.py::test_voice_pipeline_spoken_saniti
 FAILED tests/test_edge_client.py::test_edge_client_daemon_local_kiosk_endpoints
 FAILED tests/test_media_only_dm.py::test_photo_success_returns_empty_text_only_image
 FAILED tests/test_web_executive_endpoints.py::test_executive_edge_telemetry_and_control
-FAILED tests/test_web_executive_endpoints.py::test_executive_edge_files_and_actions
-FAILED tests/test_web_executive_endpoints.py::test_executive_edge_startup_sequence
 FAILED tests/test_web_server.py::test_edge_control_speak_audio_forwarding - A...
-11 failed, 4082 passed, 28 skipped, 13 warnings in 755.57s (0:12:35)
+9 failed, 4193 passed, 28 skipped, 13 warnings in 705.04s (0:11:45)
 ```
 
 ## 5. Danh mục module & Trạng thái hiện tại
@@ -360,7 +365,7 @@ FAILED tests/test_web_server.py::test_edge_control_speak_audio_forwarding - A...
 - **Bảo vệ bí mật:** Tự động che giấu token, mật khẩu, api_key trước khi ghi vào log hoặc CSDL.
 
 ## 8. Danh mục tài liệu ngữ cảnh an toàn
-- `docs/PROJECT_STATUS.md` (228401 bytes) â **
+- `docs/PROJECT_STATUS.md` (232205 bytes) â **
 - `docs/SYSTEM_BASELINE.md` (8796 bytes) â *SYSTEM BASELINE: QUAN AI BRAIN*
 - `docs/ARCHITECTURE_GAP_ANALYSIS.md` (11037 bytes) â *ARCHITECTURE GAP ANALYSIS: QUAN AI BRAIN*
 - `docs/NEXT_STEPS.md` (8247 bytes) â *NEXT STEPS ROADMAP: QUAN AI BRAIN*
@@ -394,10 +399,10 @@ WORKSPACE: E:\BRAIN
 CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object
 PYTHON_VERSION: 3.11.9 x64
 TEST_SUMMARY:
-  verdict: FAIL (11 test(s) failed)
-  total_tests: 4121
-  passed: 4082
-  failed: 11
+  verdict: FAIL (9 test(s) failed)
+  total_tests: 4230
+  passed: 4193
+  failed: 9
   skipped: 28
 CORE_CAPABILITIES_IMPLEMENTED:
   - Self-Learning & Self-Upgrade Engine V1 (src/quan_ai_brain/learning)
@@ -459,5 +464,5 @@ PROTECTED_EXTERNAL_PROJECTS:
   - E:\AI\battery-ai-\BATTERY_AI_V4 (Battery Intelligence Brain)
   - E:\AI\BOT (Active production bots)
 INSTRUCTION_FOR_NEXT_SESSION:
-  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (4121 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
+  Continue from Phase A completion. Read AGENTS.md, docs/PROJECT_STATUS.md, docs/QUAN_AI_BRAIN_FOUNDATION_ROADMAP.md, and reports/HANDOFF_LATEST.md. Verify test suite passes (4230 tests), propose smallest testable increment, show diff before editing, run tests and tools/validate_and_report.py, and verify reports/HANDOFF_LATEST.md.
 ```
