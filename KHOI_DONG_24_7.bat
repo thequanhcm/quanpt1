@@ -41,8 +41,10 @@ ping -n 9 127.0.0.1 >nul
 
 REM ---- [2/5] NetChat Auto-Responder ----
 echo [2/5] Khoi dong NetChat Auto-Responder (bot_tony)...
+REM (18/11/2026) Redirect log — pythonw khong co console, khong redirect = mat log debug
+REM (17/11) Responder PHAI chay env BRAIN (PYTHON_EXE da patch uu tien BRAIN venv)
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "netchat_auto_responder" >nul 2>&1
-if errorlevel 1 ".venv\Scripts\python.exe" tools\spawn_detached.py ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py
+if errorlevel 1 ".venv\Scripts\python.exe" tools\spawn_detached.py ".venv\Scripts\pythonw.exe" tools\netchat_auto_responder.py >> "logs\netchat_responder_v2.log" 2>&1
 ping -n 4 127.0.0.1 >nul
 
 REM ---- [3/5] Learning Daemon ----
