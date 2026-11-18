@@ -158,20 +158,32 @@ class LLMProvider:
         if isinstance(request, str):
             request = LLMRequest(prompt=request, model=self.default_model, **kwargs)
         if self.netmind is not None and _is_netmind_model(self.netmind, request.model):
-            buffered: list[dict[str, Any]] = []
+            # (18/11/2026, owner: "tối ưu tốc độ phản hồi GLM — streaming về Pi5")
+            # STREAM PASS-THROUGH: yield delta NGAY khi gateway gửi — KHÔNG buffer
+            # toàn bộ nữa (buffer cũ làm TTFT ≈ tổng, 12-17s cho câu dài).
+            # Failover giữ nguyên ngữ nghĩa: chỉ khi chưa có delta nào đến mới
+            # được replay trên model khác (delta đã phát KHÔNG bao giờ lặp lại —
+            # kiosk đã đọc; replay sẽ nhân đôi nội dung).
+            got_delta = False
             error_event: dict[str, Any] | None = None
             for event in self.netmind.stream_chat(request):
-                if event.get("type") == "error":
+                etype = event.get("type")
+                if etype == "error":
                     error_event = event
                     break
-                buffered.append(event)
+                if etype == "delta":
+                    got_delta = True
+                yield event  # meta / delta / final — passthrough real-time
             if error_event is None:
-                yield from buffered
+                return
+            if got_delta:
+                # Delta đã phát → KHÔNG failover (tránh lặp nội dung đã nói);
+                # báo lỗi cấu trúc để caller quyết định (fail-honest).
+                yield error_event
                 return
             # (13/11/2026, yêu cầu owner) FAILOVER CLOUD→CLOUD: model được chọn
-            # chết giữa dòng → thử model cloud KHÁC còn served (thứ tự ưu tiên
-            # tốc độ đã benchmark) TRƯỚC khi rớt local. Replay toàn bộ từ đầu
-            # trên model mới — delta cũ đã discard, không lặp nội dung.
+            # chết TRƯỚC delta đầu (connect/gate lỗi) → thử model cloud KHÁC còn
+            # served (thứ tự ưu tiên tốc độ đã benchmark) TRƯỚC khi rớt local.
             for alt_model in self.netmind.cloud_failover_order(exclude=request.model):
                 alt_req = LLMRequest(
                     prompt=request.prompt,
@@ -179,20 +191,16 @@ class LLMProvider:
                     model=alt_model,
                     metadata=request.metadata,
                 )
-                alt_buffered: list[dict[str, Any]] = []
                 alt_error: dict[str, Any] | None = None
                 for event in self.netmind.stream_chat(alt_req):
-                    if event.get("type") == "error":
+                    etype = event.get("type")
+                    if etype == "error":
                         alt_error = event
                         break
-                    alt_buffered.append(event)
-                if alt_error is None and any(e.get("type") == "delta" for e in alt_buffered):
-                    yield {"type": "meta", "model": alt_model, "note": (
-                        f"FAILOVER CLOUD — '{request.model}' lỗi [{error_event.get('code')}], "
-                        f"chuyển sang model NetMind '{alt_model}'."
-                    )}
-                    yield from alt_buffered
+                    yield event
+                if alt_error is None:
                     return
+                error_event = alt_error
             # (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG LOCAL cho stream:
             # cloud chết giữa dòng → thử Ollama local trước khi báo error.
             if allow_fallback is None:

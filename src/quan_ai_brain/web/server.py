@@ -2158,6 +2158,25 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     conversation_history=recent_history,
                 )
 
+                # 2.1 Memory Recall (meta) — câu hỏi "anh đã nói gì X trước / em nhớ gì"
+                # → recall theo KHOẢNG THỜI GIAN từ brain.db (thay vì token LIKE match
+                # vốn trả self-match → bot nói "không nhớ" dù có 3.5k episodes).
+                # Dữ liệu 100% LOCAL brain.db (riêng tư owner); chỉ excerpt vào prompt.
+                try:
+                    from quan_ai_brain.cognition.memory_recall import recall_memory_summary
+
+                    recall = recall_memory_summary(query, db_path, max_chars=3000)
+                    if recall and recall.get("block"):
+                        context.system_instructions = (
+                            recall["block"] + "\n\n" + (context.system_instructions or "")
+                        )
+                        _audit("memory_recall.hit", {
+                            "span": recall.get("span_label"),
+                            "n_scanned": recall.get("n_scanned"),
+                        })
+                except Exception as recall_exc:
+                    _audit("memory_recall.error", {"error": str(recall_exc)[:200]})
+
             # 2.5 Living Grounding Facts — probe thật, ép bot nói đúng về bản thân
             try:
                 from quan_ai_brain.cognition.grounding_facts import collect_grounding_facts, render_grounding_block
