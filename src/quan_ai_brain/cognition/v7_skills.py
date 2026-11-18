@@ -665,15 +665,14 @@ def memory_health_audit(workspace_root: Path) -> dict:
     else:
         blocked.append(f"{db}: missing")
     
-    # 2. ChromaDB semantic
+    # 2. ChromaDB semantic — dùng cấu hình Y HỆT SemanticMemoryEngine (default Settings)
+    # để tránh Chroma "already exists with different settings" khi server đã mở client
+    # (18/11 fix: trước đây truyền anonymized_telemetry=False → conflict → skill chết)
     try:
         import chromadb
-        from chromadb.config import Settings as _CS
         chroma_dir = ws / "data" / "vector_db_semantic"
         if chroma_dir.exists():
-            client = chromadb.PersistentClient(
-                path=str(chroma_dir), settings=_CS(anonymized_telemetry=False)
-            )
+            client = chromadb.PersistentClient(path=str(chroma_dir))
             try:
                 coll = client.get_collection("semantic_memory_v1")
                 audit["semantic_memory_total"] = coll.count()
