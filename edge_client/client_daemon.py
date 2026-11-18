@@ -1448,6 +1448,16 @@ class KioskHTTPHandler(http.server.BaseHTTPRequestHandler):
             self._serve_static_file("wake_engine.js", "application/javascript; charset=utf-8")
             return
 
+        # (17/11/2026 M4b-sync) OWNER: avatar_protocol.js (STATE_CONFIGS nguồn sự
+        # thật) + motion_scheduler.js + emotion_engine.js cũng được kiosk.html load
+        # từ root — thiếu → 404 → kiosk mất protocol/GREETING/EXPLAINING.
+        for js_name in ("avatar_protocol.js", "motion_scheduler.js", "emotion_engine.js"):
+            if path == f"/{js_name}":
+                cand = STATIC_DIR / js_name
+                if cand.exists() and cand.is_file():
+                    self._serve_static_file(js_name, "application/javascript; charset=utf-8")
+                    return
+
         # (15/11/2026 v6cin) OWNER: tham chiếu video vi1/vi2 — body motion cinematic
         # cần body_motion_engine.js + presence_engine.js + audio_mouth_driver.js
         # được serve từ root. Daemon cũ chỉ serve avatar_engine.js + wake_engine.js.

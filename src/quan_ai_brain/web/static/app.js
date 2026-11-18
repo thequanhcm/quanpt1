@@ -77,6 +77,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // (17/11) Cherry Studio: đủ 23 state engine — chip GOODBYE/ERROR đồng bộ pill
         GOODBYE: { css: 'state-goodbye', name: 'GOODBYE (TẠM BIỆT)', icon: '👋' },
         ERROR: { css: 'state-error', name: 'ERROR (LỖI)', icon: '❌' },
+        // (17/11) M4b: 2 state mới cho cử chỉ tay — đồng bộ engine (commit 0c3adc7)
+        GREETING: { css: 'state-greeting', name: 'GREETING (CHÀO)', icon: '👋' },
+        EXPLAINING: { css: 'state-explaining', name: 'EXPLAINING (GIẢI THÍCH)', icon: '💬' },
     };
 
     function setAvatarState(stateKey, contextText = null) {

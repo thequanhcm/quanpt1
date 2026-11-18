@@ -22,6 +22,8 @@
         'SUCCESS', 'SURPRISED', 'CURIOUS', 'CONFUSED', 'DREAMY', 'SLEEPING',
         'RESEARCHING', 'LEARNING', 'WAITING_FOR_OWNER', 'SAFE_MODE',
         'BLOCKED', 'ERROR',
+        // (17/11) M4b: 2 state mới cho cử chỉ tay — đồng bộ engine (commit 0c3adc7)
+        'EXPLAINING',
     ];
 
     // 12 nguyên âm tiếng Việt — khớp VISEME_VI trong audio_mouth_driver.js

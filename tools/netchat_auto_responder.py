@@ -12,6 +12,27 @@ import json
 import re
 import os
 import subprocess
+
+# (17/11/2026) RATE LIMIT GUARD — đếm API calls/phút, pause khi >80 calls
+import time as _time
+_rate_limit_calls = []  # list timestamps calls trong phút gần nhất
+_RATE_LIMIT_MAX = 80  # 80% ngưỡng 100 calls/phút của BMS
+
+def _rate_limit_guard():
+    """Pause nếu vượt quá 80 calls/phút — tránh suspend."""
+    now = _time.time()
+    # Xóa calls cũ hơn 60s
+    _rate_limit_calls[:] = [t for t in _rate_limit_calls if now - t < 60]
+    if len(_rate_limit_calls) >= _RATE_LIMIT_MAX:
+        oldest = min(_rate_limit_calls) if _rate_limit_calls else now
+        wait = 60 - (now - oldest)
+        if wait > 0:
+            print(f"   ⏸️ Rate limit guard: {len(_rate_limit_calls)} calls/phút — ngủ {wait:.0f}s")
+            _time.sleep(wait)
+            # Xóa lại sau khi ngủ
+            _rate_limit_calls[:] = [t for t in _rate_limit_calls if _time.time() - t < 60]
+    _rate_limit_calls.append(now)
+
 import sys
 import time
 from datetime import datetime, timezone
@@ -209,7 +230,13 @@ _script_cand = [
     Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\skills\bot-netchat\netchat_bot.py"),
 ]
 NETCHAT_SCRIPT = str(next((p for p in _script_cand if p.exists()), _script_cand[0]))
+# (18/11/2026) Đường python BRAIN venv — dùng cho subprocess netchat_bot.py
+BRAIN_VENV_PY = Path(__file__).resolve().parent.parent / ".venv" / "Scripts" / "python.exe"
+
+# (18/11/2026) Ưu tiên BRAIN venv — venv netmind-agent gây subprocess timeout
+# 30s/lần đọc (bot điếc 17-18/11, image_58d112). BRAIN venv read 0.5s.
 _py_cand = [
+    BRAIN_VENV_PY,
     _local_appdata / "netmind_desktop" / "netmind-agent" / "venv" / "Scripts" / "python.exe",
     Path(r"C:\Users\DELL\AppData\Local\netmind_desktop\netmind-agent\venv\Scripts\python.exe"),
 ]
@@ -745,6 +772,7 @@ def read_channel_messages(count=10):
     all_msgs = []
     for src, cid in sources:
         try:
+            _rate_limit_guard()
             result = subprocess.run(
                 [PYTHON_EXE, NETCHAT_SCRIPT, "read", cid, str(count)],
                 capture_output=True, creationflags=_NO_WIN,
@@ -863,6 +891,7 @@ def send_message(text, confirmed_token=None, target_channel=None, root_id=None):
         if confirmed_token:
             cmd.extend(["--confirmed", confirmed_token])
 
+        _rate_limit_guard()
         result = subprocess.run(cmd, capture_output=True, creationflags=_NO_WIN, text=True, timeout=30)
 
         if result.returncode == 0:
@@ -1493,7 +1522,7 @@ def main():
                 except Exception as _rem_err:
                     print(f"   ⚠️ reminder job error: {_rem_err}")
 
-            time.sleep(2)  # (01/11/2026, owner) 5s→2s — phản hồi nhanh hơn
+            time.sleep(10)  # (17/11/2026) 2s→10s — giảm 5x API calls/phút, tránh rate limit
 
         except KeyboardInterrupt:
             print("\n\n🛑 Auto-responder stopped by user")
