@@ -62,10 +62,28 @@ const LM = {
   chin: { cx: 515, cy: 742 },
   neck: { cx: 515, cy: 800 },
 };
-const img = new Image();
-img.src = "data/poc_assets/avatar_v3_thu_thai.png";
 const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
 const $ = id => document.getElementById(id);
+
+// FIX 18/11: path tương đối "data/poc_assets/..." chỉ đúng khi html nằm ở workspace root.
+// Khi mở file từ E:/BRAIN/data/ (file://) nó resolve E:/BRAIN/data/data/... → sai.
+// Thử lần lượt các candidate, candidate đầu OK thì dừng. onerror báo rõ thay vì kẹt im lặng.
+const PORTRAIT_CANDIDATES = [
+  "poc_assets/avatar_v3_thu_thai.png",            // html nằm trong data/ (file:// hoặc /api/web/page)
+  "data/poc_assets/avatar_v3_thu_thai.png",       // html serve từ workspace root
+  "http://127.0.0.1:8765/static/poc_assets/avatar_v3_thu_thai.png", // server 8765 (đã copy vào static/)
+];
+const img = new Image();
+let _pIdx = 0;
+img.onerror = () => {
+  _pIdx++;
+  if (_pIdx < PORTRAIT_CANDIDATES.length) {
+    img.src = PORTRAIT_CANDIDATES[_pIdx];
+  } else {
+    $("stat").textContent = "LỖI: không tải được portrait v3 — kiểm tra data/poc_assets/avatar_v3_thu_thai.png";
+  }
+};
+img.src = PORTRAIT_CANDIDATES[0];
 const S = { or: 0, sm: 0.3, br: 0, yaw: 0, pit: 0, bl: 0, emo: "IDLE", talk: false };
 let last = performance.now(), blinkTimer = 3, blinkAnim = 0, fps = 0, t = 0;
 
