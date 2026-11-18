@@ -192,8 +192,11 @@ def check_ollama() -> bool:
         logger.info(f"Ollama state changed: {state}")
     _component_states["ollama_prev"] = state
     if not alive:
-        logger.warning(f"Ollama port {CONFIG['ollama_port']} not responding (state={state})")
-        if state in ("DEGRADED", "OFFLINE"):
+        # (18/11/2026, owner: "tắt hoàn toàn ollama của cherry") Revival tắt hẳn —
+        # KHÔNG spawn ollama serve, KHÔNG bounded counter, KHÔNG log warning.
+        # Cherry dùng NetMind + MiniLM; Ollama OFFLINE là bình thường. Đặt
+        # CONFIG["ollama_revival_enabled"]=True nếu muốn bật lại.
+        if CONFIG.get("ollama_revival_enabled", False) and state in ("DEGRADED", "OFFLINE"):
             exe = Path(CONFIG["ollama_exe"])
             now = datetime.now(timezone.utc)
             global _ollama_revival_times

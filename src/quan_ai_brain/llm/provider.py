@@ -29,46 +29,26 @@ def _is_netmind_model(netmind: "NetMindProvider | None", model: str) -> bool:
     except Exception:  # noqa: BLE001 — /models lỗi → fail-closed về verified
         return False
 
-# (01/11/2026, yêu cầu chủ sở hữu) MODEL DỰ PHÒNG khi NetMind cloud chết:
-# chuỗi ưu tiên local — model suy luận 7B trước, rồi nhỏ, rồi llama/mistral.
-# Chỉ chọn model CÓ THẬT trong Ollama tại thời điểm fail (không đoán mò).
-LOCAL_FALLBACK_ORDER = (
-    "qwen2.5:7b",
-    "llama3.1:latest",
-    "qwen2.5:3b",
-    "qwen2.5:1.5b",
-    "qwen2.5:0.5b",
-    "mistral:latest",
-    "qwen:latest",
-)
+# (18/11/2026, owner: "tắt hoàn toàn ollama của cherry, sử dụng mô hình của netmind desktop")
+# Ollama đã được gỡ khỏi máy mới (watchdog.py comment; registry rỗng). Cherry chat dùng
+# NetMind GLM-5.3-Flash Cloud + cloud_failover_order (GLM ↔ Qwen3.5-122B), semantic search
+# dùng ONNX MiniLM local (chromadb default) — đủ 2 lớp redundancy KHÔNG cần Ollama.
+#
+# LOCAL_FALLBACK_ORDER rỗng → _pick_local_fallback trả None → khi cloud chết hết + không
+# còn model cloud khả dụng, caller rơi xuống yield error_event (fail-honest) thay vì
+# cố gọi Ollama rồi nhận connection refused → DEGRADED.
+LOCAL_FALLBACK_ORDER: tuple[str, ...] = ()
 
 
 def _pick_local_fallback(client: "OllamaClient") -> str | None:
-    """Trả model local đầu tiên có thật trong Ollama theo LOCAL_FALLBACK_ORDER."""
-    return next(_local_fallback_candidates(client), None)
+    """(18/11/2026) Ollama tắt hoàn toàn — luôn trả None."""
+    return None
 
 
 def _local_fallback_candidates(client: "OllamaClient"):
-    """Sinh lần lượt các model dự phòng CÓ THẬT trong Ollama theo ưu tiên.
-
-    (01/11/2026) Model lớn có thể fail khi load (RAM busy) → caller phải thử
-    model tiếp theo trong thứ tự cho tới khi một model sinh văn bản thành công.
-    """
-    try:
-        if not client.ping(timeout=1.5):
-            return
-        names = {m.name.lower() for m in client.list_models(timeout=2.0)}
-    except Exception:
-        return
-    for cand in LOCAL_FALLBACK_ORDER:
-        base = cand.lower()
-        base_root = base.split(":")[0]
-        for name in names:  # giữ THỨ TỰ ƯU TIÊN của LOCAL_FALLBACK_ORDER (không sort)
-            name_root = name.split(":")[0]
-            # khớp CHÍNH XÁC name: hoặc cùng gốc VÀ candidate KHÔNG chỉ định tag
-            if name == base or (":" not in cand and name_root == base_root):
-                yield name  # dùng đúng tên thật (vd llama3.1:latest)
-                break
+    """(18/11/2026) Ollama tắt hoàn toàn — generator rỗng."""
+    return
+    yield  # unreachable — đảm bảo generator
 
 
 class LLMProvider:

@@ -62,8 +62,14 @@ class BGEEmbeddingService:
         self._cache_keys: list[str] = []
 
     def is_available(self) -> bool:
-        """Check if local Ollama daemon is reachable and responding."""
-        return self.client.ping(timeout=0.5)
+        """Check if local Ollama daemon is reachable and responding.
+
+        (18/11/2026, owner: "tắt hoàn toàn ollama") — luôn False. BGEEmbeddingService
+        chỉ dùng làm fallback cache, semantic search chính chạy ONNX MiniLM local
+        qua chromadb default (xem cognition/semantic_memory.py). Trả False để code
+        mới nhận biết KHÔNG cần thử gọi Ollama nữa.
+        """
+        return False
     
     def get_dimension(self) -> int:
         """Return embedding dimension for BGE-M3 (1024)."""
