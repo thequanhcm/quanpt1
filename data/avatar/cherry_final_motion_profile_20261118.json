@@ -1,0 +1,102 @@
+{
+  "video": "E:/BRAIN/Pi5/Cherry final.mp4",
+  "video_meta": {
+    "duration_s": 9891,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "codec": "av1"
+  },
+  "sampled_at": "2026-11-18T18:30",
+  "method": "frame diff magnitude (MotionPixels) trên 6 sample windows 30s mỗi đoạn + mouth peak detection qua row diff",
+  "segments": [
+    {
+      "label": "intro_seg0 (60-90s)",
+      "motion_mean": 0.21,
+      "motion_max": 0.42,
+      "still_ratio": 0.05,
+      "speaking": true
+    },
+    {
+      "label": "broll_seg1 (1500-1530s)",
+      "motion_mean": 0.06,
+      "motion_max": 0.18,
+      "still_ratio": 0.89,
+      "speaking": false
+    },
+    {
+      "label": "broll_seg2 (2700-2730s)",
+      "motion_mean": 0.08,
+      "motion_max": 0.21,
+      "still_ratio": 0.85,
+      "speaking": false
+    },
+    {
+      "label": "speaking_seg3 (3600-3630s)",
+      "motion_mean": 0.18,
+      "motion_max": 0.38,
+      "still_ratio": 0.07,
+      "speaking": true
+    },
+    {
+      "label": "speaking_seg4 (4500-4530s)",
+      "motion_mean": 0.17,
+      "motion_max": 0.35,
+      "still_ratio": 0.08,
+      "speaking": true
+    },
+    {
+      "label": "speaking_seg5 (5400-5430s)",
+      "motion_mean": 0.19,
+      "motion_max": 0.4,
+      "still_ratio": 0.06,
+      "speaking": true
+    },
+    {
+      "label": "speaking_seg6 (6300-6330s)",
+      "motion_mean": 0.18,
+      "motion_max": 0.37,
+      "still_ratio": 0.08,
+      "speaking": true
+    }
+  ],
+  "face_region": {
+    "motion_mean_speaking": 0.22,
+    "motion_mean_idle": 0.04,
+    "ratio_speaking_to_idle": 5.5
+  },
+  "body_region": {
+    "motion_mean_speaking": 0.18,
+    "body_to_face_ratio": 0.82,
+    "interpretation": "body motion ~82% face motion = chest sway + small gestures (NOT full arm animation)"
+  },
+  "mouth": {
+    "active_ratio_when_speaking": 0.99,
+    "peak_intensity_min": 0.71,
+    "peak_intensity_max": 0.87,
+    "peak_intensity_mean": 0.79,
+    "interpretation": "MC talks continuously, peaks during vowels (AA/EE/OH)"
+  },
+  "blink": {
+    "approx_rate_per_min": 17,
+    "5fps_sample_limitations": "true blink rate may be 18-20 (5fps undersamples)",
+    "comparison_to_human_norm": "normal human 15-20 blinks/min — within range"
+  },
+  "syllable": {
+    "approx_peaks_per_sec": 4.5,
+    "interpretation": "English speech rate 4-6 syllable/s"
+  },
+  "head_pose": {
+    "estimated_yaw_range_deg": 5.0,
+    "estimated_pitch_range_deg": 4.0,
+    "estimated_roll_range_deg": 2.5,
+    "interpretation": "small natural head motion, NOT exaggerated"
+  },
+  "used_for_engine_calibration": {
+    "head_dynamics": "YAW_MAX=8 PITCH_MAX=6 ROLL_MAX=4 (deg)",
+    "saccade_engine": "BLINK_MIN=2500ms BLINK_MAX=6000ms, SACCADE_HZ=2-4",
+    "audio_mouth_driver": "12 viseme Preston Blair, intensity_max ~0.85",
+    "micro_expression_loop": "MICRO_SET 12 items, interval 2.8-7s",
+    "physics": "angular inertia 0.13-0.15, damp 0.16-0.18"
+  }
+}
