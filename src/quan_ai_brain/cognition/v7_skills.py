@@ -804,19 +804,24 @@ def system_status_summary(workspace_root: Path) -> dict:
     accessed: list[str] = []
     blocked: list[str] = []
     
-    # 1. Skills (local JSON)
-    try:
-        from quan_ai_brain.cognition.skill_registry import SkillRegistry, SkillStatus
-        reg = SkillRegistry(ws / "data" / "skill_registry.json")
-        all_skills = reg.list_skills()
-        summary["skills_total"] = len(all_skills)
-        summary["skills_by_status"] = {
-            st.name: sum(1 for s in all_skills if s.status == st)
-            for st in SkillStatus
-        }
-        accessed.append(str(ws / "data" / "skill_registry.json"))
-    except Exception as exc:
-        blocked.append(f"registry: {type(exc).__name__}: {str(exc)[:80]}")
+    # 1. Skills (local JSON) — chỉ ĐỌC, không tự tạo file (18/11 fix: SkillRegistry
+    # __init__ tự mkdir + tạo file khi missing → vi phạm report_only của skill này)
+    reg_path = ws / "data" / "skill_registry.json"
+    if reg_path.exists():
+        try:
+            from quan_ai_brain.cognition.skill_registry import SkillRegistry, SkillStatus
+            reg = SkillRegistry(reg_path)
+            all_skills = reg.list_skills()
+            summary["skills_total"] = len(all_skills)
+            summary["skills_by_status"] = {
+                st.name: sum(1 for s in all_skills if s.status == st)
+                for st in SkillStatus
+            }
+            accessed.append(str(reg_path))
+        except Exception as exc:
+            blocked.append(f"registry: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        blocked.append(f"{reg_path}: missing")
     
     # 2. brain.db counts
     db = ws / "data" / "brain.db"
@@ -871,4 +876,219 @@ def system_status_summary(workspace_root: Path) -> dict:
         "sources_accessed": accessed,
         "sources_blocked": blocked,
         "action_policy": "report_only — chỉ đọc, không điều khiển Pi",
+    }
+
+
+# -------------------------------------------------------------------------------------
+# V7 vivi-agent port 18/11 (2 skill quản trị đa dạng, nguồn vivi-agent-20261118.zip)
+# PIPELINE_AUDIT      ← vivi "Pipeline trace + Audit log" (docs/ky_thuat/API_VA_TRACE.md)
+# VOICE_HEALTH_CHECK  ← vivi scripts/check_voice.py + ADR-0054 (STT/TTS sẵn sàng)
+# -------------------------------------------------------------------------------------
+
+def pipeline_audit(workspace_root: Path, limit: int = 10) -> dict:
+    """PIPELINE_AUDIT — audit trail các lượt xử lý gần nhất của Cherry (vivi-style).
+
+    Gom 3 nguồn dữ liệu sống:
+    - brain.db episodes (chat_turn + experience_lesson): ai nói gì khi nào
+    - brain.db error_events: lỗi pipeline (nếu có)
+    - governance.db governance_events: hành động bị quản trị (approvals, risk)
+
+    Output vivi-style: mỗi turn = 1 trace entry; lỗi + governance risk riêng.
+    Đọc-only, fail-honest. action_policy: report_only.
+    """
+    ws = workspace_root
+    accessed: list[str] = []
+    blocked: list[str] = []
+    turns: list[dict] = []
+    errors: list[dict] = []
+    gov_risks: list[dict] = []
+
+    # 1. Episodes gần nhất (chat_turn + experience_lesson)
+    db = ws / "data" / "brain.db"
+    if db.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(db), timeout=5)
+            try:
+                rows = conn.execute(
+                    "SELECT kind, summary, created_at_utc, status FROM episodes "
+                    "WHERE kind IN ('chat_turn', 'experience_lesson') "
+                    "ORDER BY created_at_utc DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                for kind, summary, ts, status in rows:
+                    turns.append({
+                        "kind": kind,
+                        "summary": (summary or "")[:120],
+                        "ts_utc": ts,
+                        "status": status,
+                    })
+                # error_events
+                err_rows = conn.execute(
+                    "SELECT ts_utc, source, error_type, detail, resolved_utc FROM error_events "
+                    "ORDER BY ts_utc DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                for ts, source, etype, detail, resolved in err_rows:
+                    errors.append({
+                        "ts_utc": ts,
+                        "source": source,
+                        "error_type": etype,
+                        "detail": (detail or "")[:120],
+                        "resolved_utc": resolved,
+                    })
+            finally:
+                conn.close()
+            accessed.append(str(db))
+        except Exception as exc:
+            blocked.append(f"brain.db: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        blocked.append(f"{db}: missing")
+
+    # 2. Governance risk events
+    gov = ws / "data" / "governance.db"
+    if gov.exists():
+        try:
+            import sqlite3
+            conn = sqlite3.connect(str(gov), timeout=5)
+            try:
+                rows = conn.execute(
+                    "SELECT event_type, timestamp_utc, entity_id, risk_level, outcome "
+                    "FROM governance_events "
+                    "WHERE risk_level IS NOT NULL AND risk_level != '' "
+                    "ORDER BY timestamp_utc DESC LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                for etype, ts, eid, risk, outcome in rows:
+                    gov_risks.append({
+                        "event_type": etype,
+                        "ts_utc": ts,
+                        "entity_id": eid,
+                        "risk_level": risk,
+                        "outcome": outcome,
+                    })
+            finally:
+                conn.close()
+            accessed.append(str(gov))
+        except Exception as exc:
+            blocked.append(f"governance.db: {type(exc).__name__}: {str(exc)[:80]}")
+
+    if not accessed:
+        conclusion = "UNKNOWN"
+    elif blocked:
+        conclusion = "PARTIAL"
+    else:
+        conclusion = "OK"
+
+    return {
+        "conclusion": conclusion,
+        "recent_turns": turns,
+        "recent_errors": errors,
+        "governance_risks": gov_risks,
+        "sources_accessed": accessed,
+        "sources_blocked": blocked,
+        "action_policy": "report_only — chỉ đọc audit trail, không ghi/sửa",
+    }
+
+
+def voice_health_check(workspace_root: Path) -> dict:
+    """VOICE_HEALTH_CHECK — kiểm pipeline giọng nói Cherry sẵn sàng (vivi-style).
+
+    Nguồn vivi: scripts/check_voice.py + ADR-0054/0058. Kiểm:
+    - TTS config (giọng Hoài My, provider, status) — đọc từ tts_config.py module state
+    - Edge TTS binary importable
+    - ASR/Wake modules importable
+    - TTS preference file (data/tts_preference.json)
+
+    Đọc-only, không synthesize, không gọi network ngoài. fail-honest.
+    """
+    ws = workspace_root
+    accessed: list[str] = []
+    blocked: list[str] = []
+    checks: dict = {}
+
+    # 1. TTS module + config
+    try:
+        from quan_ai_brain.voice.tts_config import GLOBAL_TTS_MANAGER, TTSStatus
+        status = getattr(GLOBAL_TTS_MANAGER, "status", None)
+        checks["tts_status"] = status.name if hasattr(status, "name") else str(status)
+        # Voice hiện tại
+        cfg = getattr(GLOBAL_TTS_MANAGER, "_config", None) or getattr(GLOBAL_TTS_MANAGER, "config", None)
+        if cfg is not None:
+            checks["tts_voice_id"] = getattr(cfg, "voice_id", None) or getattr(cfg, "preferred_voice", None)
+            checks["tts_provider"] = getattr(cfg, "provider", None)
+        accessed.append("quan_ai_brain.voice.tts_config")
+    except Exception as exc:
+        blocked.append(f"tts_config: {type(exc).__name__}: {str(exc)[:80]}")
+        checks["tts_status"] = "IMPORT_FAILED"
+
+    # 2. Edge-tts importable
+    try:
+        import edge_tts  # noqa: F401
+        checks["edge_tts_importable"] = True
+    except ImportError:
+        checks["edge_tts_importable"] = False
+
+    # 3. Voice modules — probe import (wake_word_service cần vosk = Pi-only, PC fail expected)
+    try:
+        import importlib as _ilm
+        # Package modules: import qua importlib (đúng namespace, relative imports hoạt động)
+        for mod_name in ("voice_pipeline", "vad_processor", "barge_in_handler", "mouth_sync"):
+            try:
+                _ilm.import_module(f"quan_ai_brain.voice.{mod_name}")
+                checks[f"{mod_name}_importable"] = True
+            except ImportError as exc:
+                # vosk/pyaudio chỉ cài trên Pi — fail expected trên PC, không phải lỗi
+                checks[f"{mod_name}_importable"] = False
+                checks[f"{mod_name}_error"] = f"ImportError (pi-only deps ok): {str(exc)[:60]}"
+            except Exception as exc:
+                checks[f"{mod_name}_importable"] = False
+                checks[f"{mod_name}_error"] = f"{type(exc).__name__}: {str(exc)[:60]}"
+        # wake_word_service: standalone script edge_client (chạy trên Pi, import vosk)
+        wws = ws / "edge_client" / "wake_word_service.py"
+        if wws.exists():
+            try:
+                spec = _ilm.util.spec_from_file_location("wake_word_service", str(wws))
+                mod = _ilm.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                checks["wake_word_service_importable"] = True
+            except ImportError as exc:
+                checks["wake_word_service_importable"] = False
+                checks["wake_word_service_error"] = f"ImportError (pi-only deps ok): {str(exc)[:60]}"
+            except Exception as exc:
+                checks["wake_word_service_importable"] = False
+                checks["wake_word_service_error"] = f"{type(exc).__name__}: {str(exc)[:60]}"
+        else:
+            checks["wake_word_service_importable"] = False
+            checks["wake_word_service_error"] = "file missing"
+    except Exception as exc:
+        blocked.append(f"module_probe: {type(exc).__name__}: {str(exc)[:80]}")
+
+    # 4. TTS preference file
+    pref = ws / "data" / "tts_preference.json"
+    if pref.exists():
+        try:
+            import json as _j
+            data = _j.loads(pref.read_text(encoding="utf-8"))
+            checks["tts_preference"] = data
+            accessed.append(str(pref))
+        except Exception as exc:
+            blocked.append(f"tts_preference: {type(exc).__name__}: {str(exc)[:80]}")
+    else:
+        checks["tts_preference"] = None
+        blocked.append(f"{pref}: missing")
+
+    if not accessed:
+        conclusion = "UNKNOWN"
+    elif blocked:
+        conclusion = "PARTIAL"
+    else:
+        conclusion = "READY"
+
+    return {
+        "conclusion": conclusion,
+        "checks": checks,
+        "sources_accessed": accessed,
+        "sources_blocked": blocked,
+        "action_policy": "report_only — không synthesize, không điều khiển giọng",
     }
