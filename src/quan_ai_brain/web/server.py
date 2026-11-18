@@ -2092,6 +2092,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_json(f"Failed to execute cogitation: {exc}", 500)
 
     def _handle_api_chat(self, body: dict) -> None:
+        _v7_extras: dict = {}
         query = str(body.get("query") or body.get("message", "")).strip()
         if not query:
             self._send_error_json("Query cannot be empty", 400)
@@ -2680,6 +2681,9 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 except Exception as plan_err:
                     all_warnings.append(f"Auto-planning registration: {plan_err}")
 
+                # V7 skills 18/11: 3 skill mới TESTED (MEMORY_HEALTH_AUDIT, LESSON_MINING,
+                # SYSTEM_STATUS_SUMMARY) + skill cũ TASK_STATUS_RECONCILIATION. Chạy theo
+                # trigger, đọc-only, fail-honest, không chặn chat (lỗi chỉ append warning).
                 # V7 Cấp 2: chain skill kiểm tra tiến độ — chạy khi query khớp
                 # trigger của skill TASK_STATUS_RECONCILIATION (AVAILABLE). Đọc-only,
                 # fail-honest, không chặn chat (lỗi chỉ append warning).
@@ -2691,7 +2695,7 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                     _v7_matches = _V7SR(_v7_ws / "data" / "skill_registry.json").find_matching_skills(query or "")
                     if any(s.name == "TASK_STATUS_RECONCILIATION" for s in _v7_matches):
                         _v7_result = _v7_chain(query or "", _v7_ws)
-                        response_data["progress_check"] = {
+                        _v7_extras["progress_check"] = {
                             "chain": _v7_result["chain"],
                             "conclusion": _v7_result["reconciliation"]["conclusion"],
                             "records_matched": _v7_result["reconciliation"]["records_matched"],
@@ -2702,6 +2706,25 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         }
                 except Exception as v7_err:
                     all_warnings.append(f"V7 progress chain: {str(v7_err)[:100]}")
+
+                # V7 expansion (18/11): 3 skill mới chạy theo trigger riêng.
+                try:
+                    from quan_ai_brain.cognition.skill_registry import SkillRegistry as _V7SR2
+                    _v7_ws2 = _find_workspace_root()
+                    _v7_matches2 = _V7SR2(_v7_ws2 / "data" / "skill_registry.json").find_matching_skills(query or "")
+                    _v7_names2 = {s.name for s in _v7_matches2}
+                    if "MEMORY_HEALTH_AUDIT" in _v7_names2:
+                        from quan_ai_brain.cognition.v7_skills import memory_health_audit as _v7_mha
+                        _mha = _v7_mha(_v7_ws2)
+                        _v7_extras["memory_health"] = _mha
+                    if "LESSON_MINING" in _v7_names2:
+                        from quan_ai_brain.cognition.v7_skills import lesson_mining as _v7_lm
+                        _v7_extras["lessons"] = _v7_lm(_v7_ws2, limit=5)
+                    if "SYSTEM_STATUS_SUMMARY" in _v7_names2:
+                        from quan_ai_brain.cognition.v7_skills import system_status_summary as _v7_sss
+                        _v7_extras["system_summary"] = _v7_sss(_v7_ws2)
+                except Exception as v7e_err:
+                    all_warnings.append(f"V7 expansion: {str(v7e_err)[:100]}")
 
             elapsed = round((time.perf_counter() - start_time) * 1000, 2)
             warning_out = "; ".join(all_warnings) if all_warnings else None
@@ -2758,6 +2781,8 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                 "self_check": self_check_info,
                 "tool_calls": tool_calls_info,
                 "music_playback": music_info.get("track") if music_info.get("playing") else ({"action": "stop", "playing": False} if music_info.get("action") == "stop" else None),
+                # V7 skills 18/11: chỉ xuất hiện khi trigger match — fail-honest
+                **_v7_extras,
             })
         except Exception as exc:
             self._send_error_json(f"Chat execution error: {exc}", 500)
