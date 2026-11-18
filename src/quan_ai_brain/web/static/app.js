@@ -853,7 +853,10 @@ document.addEventListener('DOMContentLoaded', () => {
         setAvatarState('THINKING');
 
         try {
-            const res = await fetch('/api/chat', {
+            // (18/11/2026, owner: "tối ưu tốc độ phản hồi GLM — streaming về Pi5")
+            // Dùng SSE /api/chat/stream: text hiện DẦN từng delta (TTFT ~1.4s)
+            // thay vì chờ final 12-17s. TTS + edge sync vẫn chạy trên final text.
+            const res = await fetch('/api/chat/stream', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -865,22 +868,77 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             removeTypingIndicator();
-            const data = await res.json();
 
-            if (data.success && data.answer) {
-                appendMessage('QUAN AI BRAIN', data.answer, false, {
-                    model: data.model,
-                    elapsed_ms: data.elapsed_ms,
-                    used_memories: data.used_memories,
-                });
+            const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+            let streamText = '';
+            let metaInfo = { model: null, elapsed_ms: null };
+            let errMsg = null;
+            let bubbleEl = null;
+            let streamFailed = false;
+
+            const applyBubble = (txt) => {
+                if (!bubbleEl) {
+                    bubbleEl = appendMessage('QUAN AI BRAIN', txt, false, { model: metaInfo.model });
+                } else {
+                    const body = bubbleEl.querySelector('.msg-body');
+                    if (body) body.textContent = txt;
+                    chatMessages.scrollTop = chatMessages.scrollHeight;
+                }
+            };
+
+            if (reader) {
+                setAvatarState('THINKING');
+                const decoder = new TextDecoder();
+                let sseBuf = '';
+                for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    sseBuf += decoder.decode(value, { stream: true });
+                    let sep;
+                    while ((sep = sseBuf.indexOf('\n\n')) !== -1) {
+                        const frame = sseBuf.slice(0, sep);
+                        sseBuf = sseBuf.slice(sep + 2);
+                        const line = frame.split('\n').find(l => l.startsWith('data: '));
+                        if (!line) continue;
+                        let ev;
+                        try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+                        if (ev.type === 'meta') {
+                            metaInfo.model = ev.model;
+                        } else if (ev.type === 'delta') {
+                            if (currentAvatarState === 'THINKING') setAvatarState('SPEAKING');
+                            streamText += ev.text;
+                            applyBubble(streamText);
+                        } else if (ev.type === 'final') {
+                            metaInfo.elapsed_ms = ev.elapsed_ms;
+                            if (ev.model) metaInfo.model = ev.model;
+                        } else if (ev.type === 'error') {
+                            errMsg = ev.message || ev.code || 'stream error';
+                        }
+                    }
+                }
+            } else {
+                streamFailed = true;
+            }
+
+            if (streamFailed || (!streamText && errMsg)) {
+                setAvatarState('IDLE');
+                appendMessage('QUAN AI BRAIN', `⚠️ Lỗi xử lý: ${errMsg || 'Không nhận được phản hồi'}`, false);
+            } else if (streamText) {
+                // Cập nhật meta (model + elapsed) trên bubble streaming hiện có — không tạo bubble mới
+                if (bubbleEl) {
+                    const metaEl = bubbleEl.querySelector('.msg-meta');
+                    const metaHtml = `<span class="meta-tag">Model: ${metaInfo.model || 'GLM'}</span>` +
+                        (metaInfo.elapsed_ms ? `<span class="meta-tag">Thời gian: ${Math.round(metaInfo.elapsed_ms)}ms</span>` : '');
+                    if (metaEl) metaEl.innerHTML = metaHtml;
+                }
                 // Analyze Vietnamese semantic intent for dynamic facial expressions
                 if (window.digitalHuman && typeof window.digitalHuman.setContextFromText === 'function') {
-                    window.digitalHuman.setContextFromText(data.answer);
+                    window.digitalHuman.setContextFromText(streamText);
                 }
-                speakText(data.answer);
+                speakText(streamText);
             } else {
                 setAvatarState('IDLE');
-                appendMessage('QUAN AI BRAIN', `⚠️ Lỗi xử lý: ${data.error_message || data.error || 'Không nhận được phản hồi'}`, false);
+                appendMessage('QUAN AI BRAIN', '⚠️ Không nhận được phản hồi', false);
             }
         } catch (err) {
             removeTypingIndicator();

@@ -168,14 +168,10 @@ def generate_memory_storage_answer() -> str:
 - Đặc điểm: Tạm thời, mất khi kết thúc phiên
 
 **2. Trí nhớ dài hạn (Long-term Memory)** 🗄️
-- Lưu tại: `data/vector_db` (ChromaDB vector database)
-- Nội dung: 
-  • 150+ kiến thức từ brain.db đã được embedding
-  • Kiến thức USER_PROVIDED (anh dạy)
-  • Kiến thức VERIFIED (đã xác minh)
-  • Kiến thức UNVERIFIED (chờ duyệt)
-- Đặc điểm: Vĩnh viễn, có semantic search
-- Công nghệ: ChromaDB + BGE-M3 embeddings (1024 dims)
+- Lưu tại: `data/brain.db` (SQLite, ~2.900 trí nhớ active + ~3.500 ghi chép hội thoại từ 17/10/2026)
+- Truy xuất: recall theo khoảng thời gian + từ khóa (đã hoạt động 18/11); semantic search (ChromaDB) đang nâng cấp engine embedding
+- Kiến thức VERIFIED: 72 mục (đã anh duyệt) • USER_PROVIDED: 13 • Quarantine chờ duyệt: 50
+- Đặc điểm: Vĩnh viễn, riêng tư 100% trên máy này
 
 **3. Kiến thức chuẩn (Verified Knowledge)** ✅
 - Lưu tại: Cùng vector_db nhưng với verification_status = VERIFIED hoặc USER_PROVIDED
