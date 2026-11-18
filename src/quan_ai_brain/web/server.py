@@ -775,6 +775,14 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             self._handle_api_review_session(parsed.query)
             return
 
+        # 18/11 Sprint TASK-SEMANTIC-MEMORY-M6: semantic search ONNX MiniLM
+        if path == "/api/memory/semantic/stats":
+            self._handle_api_memory_semantic_stats(parsed.query)
+            return
+        if path == "/api/memory/semantic/search":
+            self._handle_api_memory_semantic_search(parsed.query)
+            return
+
         if path == "/api/executive/overview":
             self._handle_api_executive_overview()
             return
@@ -1161,6 +1169,15 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/memory/review/undo":
             self._handle_api_review_undo(body)
+            return
+
+        # 18/11 Sprint TASK-SEMANTIC-MEMORY-M6: semantic search qua ONNX MiniLM
+        # (local, không cần Ollama) — localhost-only read-only.
+        if path == "/api/memory/semantic/stats":
+            self._handle_api_memory_semantic_stats(parsed.query)
+            return
+        if path == "/api/memory/semantic/search":
+            self._handle_api_memory_semantic_search(parsed.query)
             return
 
         if path == "/api/plan":
@@ -1961,6 +1978,40 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
         except Exception as exc:
             self._send_error_json(f"Review session error: {exc}", 500)
 
+    # ----- 18/11 Sprint TASK-SEMANTIC-MEMORY-M6: ONNX MiniLM semantic search --
+    def _get_semantic_engine(self):
+        """Lazy singleton — tránh init ChromaDB nhiều lần."""
+        if not hasattr(self, "_semantic_engine") or self._semantic_engine is None:
+            from quan_ai_brain.cognition.semantic_memory import SemanticMemoryEngine
+            ws = _find_workspace_root()
+            self._semantic_engine = SemanticMemoryEngine(
+                ws / "data" / "vector_db_semantic",
+                ws / "data" / "brain.db",
+            )
+        return self._semantic_engine
+
+    def _handle_api_memory_semantic_stats(self, query: dict) -> None:
+        try:
+            engine = self._get_semantic_engine()
+            self._send_json({"success": True, "stats": engine.stats()})
+        except Exception as exc:
+            self._send_error_json(f"semantic stats error: {exc}", 500)
+
+    def _handle_api_memory_semantic_search(self, query: str) -> None:
+        # query ở đây là RAW query string ("q=foo&top_k=3"), KHÔNG phải dict
+        params = urllib.parse.parse_qs(query or "")
+        q = (params.get("q") or params.get("query") or [""])[0]
+        try:
+            top_k = int((params.get("top_k") or ["5"])[0])
+        except (TypeError, ValueError):
+            top_k = 5
+        try:
+            engine = self._get_semantic_engine()
+            hits = engine.search(q, top_k=top_k)
+            self._send_json({"success": True, "query": q, "n_hits": len(hits), "hits": hits})
+        except Exception as exc:
+            self._send_error_json(f"semantic search error: {exc}", 500)
+
     def _handle_api_autonomic_status(self) -> None:
         """Return the latest autonomic health report, active pains, and hardware organ audits."""
         try:
@@ -2176,6 +2227,35 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
                         })
                 except Exception as recall_exc:
                     _audit("memory_recall.error", {"error": str(recall_exc)[:200]})
+
+                # 2.15 Semantic recall (TASK-SEMANTIC-MEMORY-M6 18/11) — search ngữ
+                # nghĩa qua ChromaDB ONNX MiniLM (local, không Ollama). BỔ SUNG cho
+                # token recall: giúp câu trừu tượng ("em biết gì về chuyện X") ra
+                # được chunk liên quan ngay cả khi từ khóa khác đi. Cap 1200 chars.
+                try:
+                    from quan_ai_brain.cognition.semantic_memory import SemanticMemoryEngine
+                    sem_engine = SemanticMemoryEngine(
+                        _find_workspace_root() / "data" / "vector_db_semantic",
+                        _find_workspace_root() / "data" / "brain.db",
+                    )
+                    sem_hits = sem_engine.search(query, top_k=5)
+                    if sem_hits:
+                        lines = [
+                            "[SEMANTIC RECALL — ONNX MiniLM local, không cần Ollama; "
+                            f"{len(sem_hits)} chunks liên quan]"
+                        ]
+                        for h in sem_hits[:5]:
+                            tag = f"[{h.get('source','?')}|{h.get('verification','?')}|d={h.get('distance')}]"
+                            lines.append(f"- {tag} {h['text'][:180]}")
+                        sem_block = "\n".join(lines)
+                        if len(sem_block) > 1200:
+                            sem_block = sem_block[:1200] + " …]"
+                        context.system_instructions = (
+                            sem_block + "\n\n" + (context.system_instructions or "")
+                        )
+                        _audit("semantic_recall.hit", {"n_hits": len(sem_hits)})
+                except Exception as sem_exc:
+                    _audit("semantic_recall.error", {"error": str(sem_exc)[:200]})
 
             # 2.5 Living Grounding Facts — probe thật, ép bot nói đúng về bản thân
             try:

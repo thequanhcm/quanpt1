@@ -1,6 +1,21 @@
 
 # QUAN AI BRAIN — Project Status
 
+
+## 18/11/2026 ~11:50 — SEMANTIC MEMORY ONNX MiniLM (MỚI) ✅ TRIỂN KHAI (owner: "thực hiện: sprint kế (a) Semantic search dùng chromadb ONNX MiniLM")
+- **Bối cảnh**: Ollama đã audit KHÔNG tồn tại trên máy QUANPT 18/11 (no exe/service/models). chromadb collection legacy 53 chunks fail query do phụ thuộc BGE-M3.
+- **Module mới** `src/quan_ai_brain/cognition/semantic_memory.py` (171 LOC): ChromaDB default embedding (ONNX MiniLM local), ingest `brain.db` mode=ro (memories active + episodes chat_turn + experience_lesson), idempotent theo `original_id` metadata.
+- **Wire** vào `/api/chat` sau `memory_recall`: câu meta mà hybrid keyword miss → semantic search top_k=3 min_distance=0.85 → render block `[TRÍ NHỚ NGỮ NGHĨA]` vào system_instructions.
+- **2 API endpoint mới**: `GET /api/memory/semantic/stats` (6057 chunks) + `GET /api/memory/semantic/search?q=…&top_k=…`.
+- **Test mới** `tests/test_semantic_memory.py` 7/7 PASS (stats, ingest idempotent, match ngữ nghĩa với query sai chính tả, distance filter, missing DB fail-honest, hit metadata schema).
+- **Bug đã sửa trên đường wire**: `parsed.query` là string không phải dict (handler nổ im lặng), `self._workspace_path` không tồn tại (AttributeError 500).
+- **Full regression**: 4088 passed / 11 failed / 27 skipped (11 fail PRE-EXISTING, xác minh bằng git stash: stash `server.py` → 11 fail y nguyên, pop → 11 fail y nguyên). **0 fail mới**.
+- **E2E sống**: stats 6057 chunks; search "chụp ảnh kiosk" → top-1 đúng d=0.66; search trừu tượng "làm sao tăng cường ổn định hệ thống" → 3 hit; `/api/chat` recall "điều quan trọng nhất" → Cherry nhớ nguyên tắc ngắn gọn/trung thực (3.6s).
+- **Trung thực**: 6.057 chunks bao gồm cả EPHEMERAL chat_turn (tính năng, không bug); collection legacy không đụng; BGE-M3 / re-ranker chưa có; Pi5 chưa sync (chạy local PC).
+- **Card**: TASK-SEMANTIC-MEMORY-M6 APPROVED + commit 7f536ad + PR #35.
+- **(b) M6 bảng nghiệm thu 10 TEST — CHƯA BẮT ĐẦU**: brief gốc 10 TEST không có trong plan doc. Cần owner cung cấp brief gốc hoặc duyệt tiêu chí runtime stability 24h.
+
+
 ## 14/11/2026 ~00:30 — LINH ĐỘNG ĐIỀU CHUYỂN MODEL NETMIND ✅ TRIỂN KHAI (owner: "cấu hình để core linh động điều chuyển các mô hình ngôn ngữ... luôn lựa chọn mạnh nhất, sẵn có và đáp ứng nhanh nhất")
 - **Bằng chứng catalog ĐỔI THEO NGÀY**: 25/10 có MiniMax-M2.7; 13/11 M2.7 RÚT KHỎI gateway, Qwen3.6-35B-XUẤT HIỆN — allow-list cứng 2 model sẽ từ chối nhầm model hợp lệ.
 - **Benchmark probe thật 13/11** (1 câu ngắn/model, reasoning_effort=low): GLM-5.3-Flash **0.34s** < MiniMax-M3 **0.61s** < Qwen3.6-35B **2.09s**; Qwen3.5-122B luôn-reason ~22s (deep tier).
