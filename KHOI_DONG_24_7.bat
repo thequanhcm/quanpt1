@@ -53,14 +53,20 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instanc
 if errorlevel 1 ".venv\Scripts\python.exe" tools\spawn_detached.py ".venv\Scripts\pythonw.exe" tools\learning_daemon.py
 ping -n 3 127.0.0.1 >nul
 
-REM ---- [4/5] Watchdog ----
-echo [4/5] Khoi dong Watchdog (tu restart, cap 5/gio)...
+REM ---- [4/6] Watchdog ----
+echo [4/6] Khoi dong Watchdog (tu restart, cap 5/gio)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "tools\watchdog.py" >nul 2>&1
 if errorlevel 1 ".venv\Scripts\python.exe" tools\spawn_detached.py ".venv\Scripts\pythonw.exe" tools\watchdog.py
 ping -n 3 127.0.0.1 >nul
 
-REM ---- [5/5] Backup 2AM (QUAN_AI_BRAIN_BACKUP_2AM) + Report 8AM (Task Scheduler, idempotent) ----
-echo [5/5] Dat lich backup 2AM + report 8AM (Task Scheduler)...
+REM ---- [5/6] Cherry Autonomous Mode ----
+echo [5/6] Khoi dong Cherry Autonomous Mode (tu van hanh chu dong 24/7)...
+powershell -NoProfile -ExecutionPolicy Bypass -File "tools\ensure_single_instance.ps1" -Marker "cherry_autonomous" >nul 2>&1
+if errorlevel 1 ".venv\Scripts\python.exe" tools\spawn_detached.py ".venv\Scripts\pythonw.exe" tools\cherry_autonomous.py
+ping -n 3 127.0.0.1 >nul
+
+REM ---- [6/6] Backup 2AM (QUAN_AI_BRAIN_BACKUP_2AM) + Report 8AM (Task Scheduler, idempotent) ----
+echo [6/6] Dat lich backup 2AM + report 8AM (Task Scheduler)...
 ".venv\Scripts\python.exe" tools\sched_task_setup.py
 
 echo.
@@ -70,6 +76,7 @@ echo      - QAB-DualServers : http://127.0.0.1:8765 + 8766
 echo      - QAB-NetChatBot  : Bot TONY (NetChat 24/7)
 echo      - QAB-Learning    : Tu hoc lien tuc
 echo      - QAB-Watchdog    : Tu restart neu crash
+echo      - CHERRY-AutoMode : Tu van hanh chu dong 24/7
 echo    Backup tu dong 2AM + Bao cao sang 8AM (Task Scheduler)
 echo ============================================================
 echo.

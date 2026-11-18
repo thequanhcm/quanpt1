@@ -23,9 +23,9 @@ TASKS = [
 def write_vbs() -> None:
     """Tạo 3 file .vbs wrapper 0-window (ASCII + CRLF — bắt buộc cho WSH)."""
     vbs_map = {
-        "run_backup_hidden.vbs": f'WshShell.Run """{WS}\\tools\\run_backup.bat""", 0, False\n',
-        "run_morning_report_hidden.vbs": f'WshShell.Run """{WS}\\tools\\run_morning_report.bat""", 0, False\n',
-        "khoi_dong_24_7_hidden.vbs": f'WshShell.Run """{WS}\\KHOI_DONG_24_7.bat""", 0, False\n',
+        "run_backup_hidden.vbs": f'WshShell.CurrentDirectory = """{WS}"""\nWshShell.Run """{WS}\\tools\\run_backup.bat""", 0, False\n',
+        "run_morning_report_hidden.vbs": f'WshShell.CurrentDirectory = """{WS}"""\nWshShell.Run """{WS}\\tools\\run_morning_report.bat""", 0, False\n',
+        "khoi_dong_24_7_hidden.vbs": f'WshShell.CurrentDirectory = """{WS}"""\nWshShell.Run """{WS}\\KHOI_DONG_24_7.bat""", 0, False\n',
     }
     for fname, body in vbs_map.items():
         path = f"{WS}\\tools\\{fname}"
