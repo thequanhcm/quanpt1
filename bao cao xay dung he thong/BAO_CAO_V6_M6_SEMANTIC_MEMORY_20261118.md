@@ -133,8 +133,9 @@ TOTAL focused                  17 passed  4.49s
 ```
 
 ### Full regression
-- Đang chạy background (PID 14368, uptime ~290s, đã đến ~27%). Ước tính ~3650 test tổng, hiện thấy 8 fail (`F`) + 1 skip (`s`) trong 27% đầu — đúng pattern pre-existing baseline (M5 trước có 10 fail pre-existing, xem skill reference M5).
-- Final number sẽ được update khi pytest xong.
+- **Run đầy đủ (không ignore file nào):** `4099 passed / 11 failed / 28 skipped in 744.13s` — 11 FAILED trùng khớp CHÍNH XÁC từng test với run bên dưới.
+- **Run với 2 file heavy ignored** (test_vietnamese_tts cần cloud, test_pi5_kiosk cần Pi5 live): `4088 passed / 11 failed / 27 skipped in 721.89s`.
+- Cả 2 run đều ra **cùng 11 fail** → kết luận ổn định: 11 fail pre-existing, **0 fail mới** từ sprint này.
 
 ### Bug mới phát hiện trong regression nếu có
 - Fail mới → fix và rerun focused + affected area; KHÔNG rerun full nếu thuộc về thay đổi cũ.
