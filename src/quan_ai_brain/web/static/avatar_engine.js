@@ -51,7 +51,14 @@ class DigitalHumanAvatar {
     // Feature Bounding Boxes (calibrated to Digital Human Model A - Pi5/4.png 1024x1024 master)
     // (14/11 v6emo) Tâm căn lại theo sheet avatar_v3: eyes tâm (496,438), mouth
     // tâm (502,670) — lệch nhẹ so master v2 (eyes 502,482 / mouth 527,702).
-    this.EYES_BOX = { x: 316, y: 373, w: 360, h: 130 };
+    // (19/11 v6fix) BUG "mảng mắt bay trên trán khi chuyển trạng thái" (ảnh
+    // owner 18:08 Pi5 kiosk): EYES_BOX cũ y=373 là tọa độ V2 1024 — nhưng
+    // portrait v3 896 có mắt thấp hơn (dải mi 389-408, tâm ~398/896 = 455
+    // theo 1024). Overlay blink/thinking (crop V2) vẽ tại box cũ → cao hơn
+    // mắt thật ~60px → thành mảnh mắt lơ lửng trên trán lúc crossfade/blink.
+    // Căn lại theo pixel đo thật trên avatar_v3_thu_thai.png (896-space
+    // y 375-495, x 300-620 → 1024-space: x=343 y=429 w=366 h=137).
+    this.EYES_BOX = { x: 343, y: 429, w: 366, h: 137 };
     this.MOUTH_BOX = { x: 427, y: 630, w: 240, h: 100 };
 
     // (14/11 v6emo) Crossfade portrait state
