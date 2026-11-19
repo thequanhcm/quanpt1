@@ -6,6 +6,17 @@ Task Scheduler trỏ tới wscript.exe chạy .vbs wrapper ẩn (WshShell.Run
 "...", 0, False) — không cửa sổ nào xuất hiện.
 
 LOGON task (QUAN_AI_BRAIN_KHOI_DONG_LOGON) cũng được trỏ lại sang .vbs.
+
+(19/11/2026) FIX 8007007B (ERROR_INVALID_NAME): CurrentDirectory là LỆNH
+GÁN — chỉ dùng 1 cặp quote "E:\BRAIN". Triple-quote ở dòng .Run là escape
+argument string hợp lệ, NHƯNG khi đặt trong docstring Python thì 3 dấu
+ngoặc kép liền nhau ĐÓNG docstring → SyntaxError. Dùng cách diễn đạt lại
+bằng chữ: bản cũ sinh CurrentDirectory = ba-quotes + E:\BRAIN + ba-quotes
+→ WSH interpret thành chuỗi rỗng + tên không hợp lệ → popup lỗi mỗi 30
+phút. Commit 84ef261 (18/11) đã fix tay 3 file .vbs nhưng lần chạy
+LIVENESS_30MIN sau đó gọi lại hàm này → ghi đè 3 file về bản lỗi (mtime
+22:52:56 18/11 khớp cycle 30 phút). Fix gốc rễ tại template — mọi lần
+chạy lại sinh đúng cú pháp.
 """
 from __future__ import annotations
 
@@ -21,11 +32,24 @@ TASKS = [
 
 
 def write_vbs() -> None:
-    """Tạo 3 file .vbs wrapper 0-window (ASCII + CRLF — bắt buộc cho WSH)."""
+    """Tạo 3 file .vbs wrapper 0-window (ASCII + CRLF — bắt buộc cho WSH).
+
+    Cú pháp chuẩn: CurrentDirectory dùng 1 cặp quote (lệnh gán); .Run dùng
+    triple-quote (escape argument string của WshShell.Run).
+    """
     vbs_map = {
-        "run_backup_hidden.vbs": f'WshShell.CurrentDirectory = """{WS}"""\nWshShell.Run """{WS}\\tools\\run_backup.bat""", 0, False\n',
-        "run_morning_report_hidden.vbs": f'WshShell.CurrentDirectory = """{WS}"""\nWshShell.Run """{WS}\\tools\\run_morning_report.bat""", 0, False\n',
-        "khoi_dong_24_7_hidden.vbs": f'WshShell.CurrentDirectory = """{WS}"""\nWshShell.Run """{WS}\\KHOI_DONG_24_7.bat""", 0, False\n',
+        "run_backup_hidden.vbs": (
+            f'WshShell.CurrentDirectory = "{WS}"\n'
+            f'WshShell.Run """{WS}\\tools\\run_backup.bat""", 0, False\n'
+        ),
+        "run_morning_report_hidden.vbs": (
+            f'WshShell.CurrentDirectory = "{WS}"\n'
+            f'WshShell.Run """{WS}\\tools\\run_morning_report.bat""", 0, False\n'
+        ),
+        "khoi_dong_24_7_hidden.vbs": (
+            f'WshShell.CurrentDirectory = "{WS}"\n'
+            f'WshShell.Run """{WS}\\KHOI_DONG_24_7.bat""", 0, False\n'
+        ),
     }
     for fname, body in vbs_map.items():
         path = f"{WS}\\tools\\{fname}"
