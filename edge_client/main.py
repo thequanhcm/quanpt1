@@ -36,6 +36,7 @@ except ImportError:
 
 def launch_kiosk_browser(url: str = "http://127.0.0.1:8768/") -> None:
     """Tự động mở trình duyệt Chromium Kiosk toàn màn hình (1280x720) trên Raspberry Pi 5."""
+    import getpass
     import os
     import shutil
     import subprocess
@@ -46,6 +47,15 @@ def launch_kiosk_browser(url: str = "http://127.0.0.1:8768/") -> None:
         env = os.environ.copy()
         if "DISPLAY" not in env and "WAYLAND_DISPLAY" not in env:
             env["DISPLAY"] = ":0"
+        # (19/11) FIX crash-loop kiosk: daemon chạy dưới systemd không có
+        # XAUTHORITY → chromium kết nối X11 :0 bị từ chối auth → thoát ngay
+        # (guard log: start_kiosk -> True rồi chromium 0 sau vài giây, lặp
+        # mỗi 7 phút từ 10:37 19/11). Rò rỉ env của session X thật (quanpt1
+        # tty1) và nhét vào env spawn nếu thiếu.
+        if "XAUTHORITY" not in env:
+            xauth = f"/home/{getpass.getuser()}/.Xauthority"
+            if os.path.exists(xauth):
+                env["XAUTHORITY"] = xauth
 
         flags = [
             "--kiosk",
