@@ -9,8 +9,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/intelligence_tab.css?v=intel_12nov">
-    <link rel="stylesheet" href="/static/executive.css?v=dash_1411_r1">
-  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png">
+    <link rel="stylesheet" href="/static/executive.css?v=dash_1911_r1">
+  <!-- (19/11) Preload portrait v3 chính để avatar hiển thị ngay frame đầu (halo engine tắt theo lệnh 14/11) -->
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_thu_thai.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_vui_suong.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_tap_trung.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_dang_noi.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_lang_nghe.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_mo_mong.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v3_chop_mat.png?v=avatar_v6full4_1911" fetchpriority="high">
+  <link rel="preload" as="image" href="/static/assets/avatar/avatar_v2_portrait.png?v=avatar_v6full4_1911" fetchpriority="high">
   <script>
     window.switchTab = function(tabId) {
       try {
@@ -1694,14 +1702,14 @@
   <div id="exec-toast-container" aria-live="polite"></div>
 
   <script src="/static/wake_engine.js?v=5.0"></script>
-  <script src="/static/avatar_protocol.js?v=v6m4b_1711"></script>
-  <script src="/static/motion_scheduler.js?v=task001_1411"></script>
-  <script src="/static/emotion_engine.js?v=task001_1411"></script>
-  <script src="/static/audio_mouth_driver.js?v=task001_1411"></script>
-  <script src="/static/presence_engine.js?v=task001_1411"></script>
-  <script src="/static/body_motion_engine.js?v=v6mot_1511"></script>
-  <script src="/static/avatar_engine.js?v=v6m4b_1711"></script>
+  <script src="/static/avatar_protocol.js?v=v6m4b_1911"></script>
+  <script src="/static/motion_scheduler.js?v=task001_1911"></script>
+  <script src="/static/emotion_engine.js?v=task001_1911"></script>
+  <script src="/static/audio_mouth_driver.js?v=task001_1911"></script>
+  <script src="/static/presence_engine.js?v=task001_1911"></script>
+  <script src="/static/body_motion_engine.js?v=v6mot_1911"></script>
+  <script src="/static/avatar_engine.js?v=avatar_v6full4_1911"></script>
   <script src="/static/intelligence_tab.js?v=intel_12nov"></script>
-  <script src="/static/executive.js?v=dash_1411_r1"></script>
+  <script src="/static/executive.js?v=dash_1911_r1"></script>
 </body>
 </html>
