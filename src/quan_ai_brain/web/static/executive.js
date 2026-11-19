@@ -51,6 +51,12 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   let currentAvatarState = "IDLE";
   let setAvatarState = function(state) {};
+  // (19/11) FIX TDZ: safeInit(initEdgeAddon)/safeInit(initNetChat) chạy ở L84-96
+  // (trước khi các `let` dưới L1785/L3787 được thực thi) → gán virtualAvatar/
+  // netchatAvatar gây ReferenceError "Cannot access before initialization" →
+  // avatar mirror + netchat không init. Chuyển khai báo lên đây, xóa bản cũ.
+  let virtualAvatar = null;
+  let netchatAvatar = null;
 
  // ===== EXEC TOAST: phản hồi thao tác nút không bị chặn như alert() =====
  window.showExecToast = function(message, type = "info", durationMs = 5000) {
@@ -1782,7 +1788,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ==========================================================================
   // RASPBERRY PI 5 EDGE ADD-ON & LIVE WI-FI TELEMETRY CONTROLLER
   // ==========================================================================
-  let virtualAvatar = null;
+  // (19/11) virtualAvatar đã khai báo ở đầu file (fix TDZ — safeInit chạy trước let)
 
   // (07/11/2026, owner) Đồng bộ giao diện với biểu cảm đã chọn: aura khung gương,
   // màu tag trạng thái, chấm online/offline. Chống ghi đè: trong 4s sau khi owner
@@ -3784,7 +3790,7 @@ document.addEventListener("DOMContentLoaded", () => {
   window.loadPiFiles = loadPiFiles;
 
   // ================= NETCHAT CHANNEL COMMAND CENTER =================
-  let netchatAvatar = null;
+  // (19/11) netchatAvatar đã khai báo ở đầu file (fix TDZ — safeInit chạy trước let)
   let netchatTimer = null;
   let netchatLastPostId = null;
 

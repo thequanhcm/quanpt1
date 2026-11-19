@@ -211,6 +211,63 @@
     return Object.assign({}, this._cur);
   };
 
+  // (19/11) SPRINT-4 CONTRACT FIX — avatar_engine.js gọi 5 method mà bản V7-M2
+  // chưa export: start/stop/isActive/getCurrent/bargeIn. Thiếu → TypeError mỗi
+  // frame → render loop crash → viewport avatar trắng trên dashboard 8765.
+  // Envelope = RMS trung bình gần đây (0..1) dùng cho micro-rest + speech energy.
+  AudioMouthDriver.prototype._envelope = function () {
+    if (!this._audio_buf.length) return 0;
+    var sum = 0;
+    for (var i = 0; i < this._audio_buf.length; i++) sum += this._audio_buf[i];
+    var avg = sum / this._audio_buf.length;
+    return Math.max(0, Math.min(1, avg * 4));  // RMS ~0.25 → sat 1.0
+  };
+
+  AudioMouthDriver.prototype.isActive = function () {
+    return this._active === true;
+  };
+
+  AudioMouthDriver.prototype.getCurrent = function () {
+    return {
+      viseme: this._cur.viseme,
+      open: this._cur.open,
+      jaw: this._cur.jaw,
+      spread: this._cur.spread,
+      intensity: this._cur.intensity,
+      envelope: this._envelope(),
+      active: this._active === true
+    };
+  };
+
+  AudioMouthDriver.prototype.start = function (audioEl, opts) {
+    // audioEl: HTMLAudioElement/HTMLVideoElement phát TTS (engine đã set src).
+    // Driver V7-M2 là text/RMS-fed: engine sẽ feed RMS qua feedAudioBuffer hoặc
+    // feedText; start() chỉ đánh dấu session + cắm analyser nếu có sẵn.
+    this._active = true;
+    this._audioEl = audioEl || null;
+    this._analyser = (opts && opts.existingAnalyser) || null;
+    if (!this._mode || this._mode === "idle") this._mode = "text";
+  };
+
+  AudioMouthDriver.prototype.stop = function (reason) {
+    this._active = false;
+    this._audioEl = null;
+    this._analyser = null;
+    this.reset();
+  };
+
+  AudioMouthDriver.prototype.bargeIn = function () {
+    // Người dùng ngắt lời — cắt ngay, không mượt.
+    this._active = false;
+    this._audioEl = null;
+    this._analyser = null;
+    this._audio_buf = [];
+    this._text_buf = [];
+    this._text_idx = 0;
+    this._mode = "idle";
+    this._cur = { viseme: "REST", open: 0, jaw: 0, spread: 0, intensity: 0 };
+  };
+
   AudioMouthDriver.prototype.reset = function () {
     this._cur = { viseme: "REST", open: 0, jaw: 0, spread: 0, intensity: 0 };
     this._audio_buf = [];
@@ -227,7 +284,12 @@
 
   var api = {
     VERSION: VERSION,
+    // (19/11) FIX: avatar_engine.js constructor gọi `new _AUDIO.AudioMouthDriver(...)`
+    // nhưng api trước đây chỉ export `create` → TypeError khi engine init trên
+    // dashboard 8765 → viewport avatar trắng. Export thêm class để engine dùng
+    // trực tiếp; `create` giữ nguyên cho backward-compat.
     create: function (opts) { return new AudioMouthDriver(opts); },
+    AudioMouthDriver: AudioMouthDriver,
     VISEMES: VISEMES,
     TEXT_TO_VISEME: TEXT_TO_VISEME
   };
