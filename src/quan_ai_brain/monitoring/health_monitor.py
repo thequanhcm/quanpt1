@@ -139,6 +139,14 @@ class HealthMonitor:
         last = state.get("clo_last_session")
         if not last or str(last.get("status")) != "RUNNING":
             self._clo_stall_prev = False
+            # (22/11/2026) Hết kẹt → xoá state persist để cycle sau alert lại bình thường
+            try:
+                import json as _json
+                _sp = self.workspace / "data" / "health_clo_stall_state.json"
+                if _sp.exists():
+                    _sp.unlink()
+            except Exception:
+                pass
             return None
         try:
             from datetime import datetime, timezone
@@ -149,9 +157,39 @@ class HealthMonitor:
         if age_h < 24.0:
             self._clo_stall_prev = False
             return None
-        if self._clo_stall_prev:
-            return None  # đã cảnh báo trước đó — không lặp
+        # (22/11/2026, fix spam) Edge-trigger TRƯỚC ĐÂY chỉ ở biến in-memory — mỗi
+        # lần restart server process mới reset về False → DM lại owner ngay cycle
+        # đầu (thực tế: 20/11 gửi 4 lần = 4 lần restart; 22/11 22:31+23:32 = 2 lần).
+        # Fix: persist trạng thái đã-alert vào data/health_clo_stall_state.json
+        # (theo cycle). Re-alert chỉ khi age_h tăng thêm ≥12h kể từ lần alert cuối
+        # (nhắc lại có chủ đích, không spam); hết RUNNING → xoá state.
+        import json as _json
+        _state_path = self.workspace / "data" / "health_clo_stall_state.json" \
+            if hasattr(self.workspace, "__truediv__") else None
+        _prev_cycle = None
+        _prev_age = None
+        if _state_path is not None:
+            try:
+                _st = _json.loads(_state_path.read_text(encoding="utf-8"))
+                if _st.get("cycle") == last.get("cycle"):
+                    _prev_cycle = _st.get("cycle")
+                    _prev_age = float(_st.get("alerted_age_h", 0.0))
+            except Exception:
+                _prev_cycle = None  # fail-honest: state hỏng → coi như chưa alert
+        if _prev_cycle is not None and (age_h - _prev_age) < 12.0:
+            self._clo_stall_prev = True
+            return None  # đã cảnh báo cycle này — không lặp sau restart
         self._clo_stall_prev = True
+        if _state_path is not None:
+            try:
+                _state_path.parent.mkdir(parents=True, exist_ok=True)
+                _state_path.write_text(_json.dumps({
+                    "cycle": last.get("cycle"),
+                    "alerted_age_h": round(age_h, 2),
+                    "ts_utc": datetime.now(timezone.utc).isoformat(),
+                }, ensure_ascii=False), encoding="utf-8")
+            except Exception:
+                pass  # fail-honest: không ghi được state → vẫn alert như cũ
         # (01/11/2026, chuẩn hoá tiếng Việt) Trạng thái RUNNING → "ĐANG CHẠY"
         message = (f"Buổi tự học liên tục #{last.get('cycle')} ĐANG CHẠY {age_h:.0f}h "
                    f"không tiến triển — tự chủ học kẹt (thường do Q-4 chưa duyệt)")

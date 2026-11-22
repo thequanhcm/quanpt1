@@ -355,52 +355,32 @@ def check_clo_stall() -> None:
     Fail-honest: mọi lỗi chỉ log, không được giết watchdog. Chỉ chạy tối đa
     1 lần/giờ (state file mtime) để tránh lạm dụng.
     """
-    marker = Path(CONFIG["log_dir"]) / "clo_advance_last.txt"
+    # (01/11/2026, CLO-UNSTICK) Session tự chủ học RUNNING quá ngưỡng → advance
+    # (22/11/2026, F2 — owner: "xử lý luôn F2") Đổi sang self_study
+    # .enforce_stall_timeout với ngưỡng 48h (directive owner): kết thúc qua
+    # engine chuẩn + chốt HANDOFF + bài học vào lessons queue. Giữ marker
+    # 1 lần/giờ chống lạm dụng.
     try:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        if marker.exists() and (time.time() - marker.stat().st_mtime) < 3600:
-            return  # đã advance gần đây — đợi
-    except OSError:
-        pass
-    try:
-        from quan_ai_brain.memory.sqlite_store import MemoryStore
-        from quan_ai_brain.cognition.continuous_learning_engine import (
-            ContinuousLearningEngine,
-        )
-        from datetime import datetime as _dt
+        from quan_ai_brain.cognition.self_study import enforce_stall_timeout
 
-        ws = Path(BASE_DIR)
-        with MemoryStore(ws / "data" / "brain.db", workspace=ws) as store:
-            engine = ContinuousLearningEngine(store, workspace=ws)
-            cur = engine.session_manager.get_current_session()
-            if cur is None or cur.status.value != "RUNNING":
-                return
-            started = _dt.fromisoformat(cur.started_at)
-            stalled_h = (_dt.now(_dt.now().astimezone().tzinfo) - started).total_seconds() / 3600
-            if stalled_h < float(CONFIG["clo_stall_max_hours"]):
-                return
+        rep = enforce_stall_timeout(Path(BASE_DIR), max_hours=48.0)
+        if rep.get("triggered"):
             logger.warning(
-                f"CLO session #{cur.cycle_number} RUNNING {stalled_h:.1f}h > "
-                f"{CONFIG['clo_stall_max_hours']}h — advance qua engine chuẩn"
-            )
-            nxt = engine.end_session(
-                session_id=cur.session_id,
-                evaluation_result={
-                    "auto_end_reason": "CLO_STALL_AUTO_ADVANCE",
-                    "stalled_hours": round(stalled_h, 1),
-                    "root_cause": "advance chỉ xảy ra khi chat tạo task (server.py ~:1923); không có loop tự advance",
-                    "resolved_by": "watchdog clo_stall_max_hours gate",
-                },
-                unresolved_questions=[],
-                next_plan={
-                    "objectives": ["Resume continuous learning cycle — healthy handoff after stall"],
-                    "source_manifest": {"source": "watchdog_clo_advance", "date": _dt.now(timezone.utc).isoformat()},
-                },
-            )
-            logger.info(f"CLO advanced → session #{nxt.cycle_number} ({nxt.session_id[:8]}) RUNNING")
-        marker.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+                f"CLO session #{rep['session']['cycle']} stalled "
+                f"{rep.get('stalled_hours')}h ≥ 48h → HANDOFF + lesson "
+                f"{rep.get('lesson_episode_id')} (F2) — session mới "
+                f"#{rep.get('new_session', {}).get('cycle')} RUNNING")
+        elif rep.get("errors"):
+            logger.warning(f"CLO F2 errors: {rep['errors']}")
     except Exception as e:
         logger.warning(f"CLO stall check error (fail-honest, bỏ qua): {e}")
+    marker = None
+    try:
+        marker = Path(CONFIG["log_dir"]) / "clo_advance_last.txt"
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(datetime.now(timezone.utc).isoformat(), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def check_task_deadlines() -> None:

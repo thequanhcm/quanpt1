@@ -320,6 +320,124 @@ class StudyCycleEngine:
 
 
 # ───────────────────────── Tích hợp AutonomousMind ─────────────────────────
+def enforce_stall_timeout(workspace: str | Path, *, max_hours: float = 48.0) -> dict[str, Any]:
+    """(F2, 22/11/2026 — owner: "xử lý luôn F2") Session tự học RUNNING quá
+    `max_hours` → kết thúc QUA ENGINE CHUẨN (ContinuousLearningEngine.end_session,
+    không sửa DB tay) + ghi 1 episode kind='experience_lesson' vào lessons queue
+    (brain.db) để chu trình tự học kế tiếp (KnowledgeGapScanner) scan thành
+    knowledge gap → quarantined → chờ owner duyệt.
+
+    Idempotent: chỉ đụng session RUNNING; session khác status → no-op; lesson
+    chỉ ghi khi kết thúc session thật (1 lesson/1 session timeout).
+
+    Fail-honest: trả report dict với every step; lỗi chỉ ghi vào report, không raise.
+    """
+    ws = Path(workspace)
+    report: dict[str, Any] = {
+        "action": "enforce_stall_timeout",
+        "max_hours": max_hours,
+        "checked_at": datetime.now(UTC).isoformat(),
+        "triggered": False,
+        "session": None,
+        "lesson_episode_id": None,
+        "errors": [],
+    }
+    try:
+        from quan_ai_brain.memory.sqlite_store import MemoryStore
+        from quan_ai_brain.cognition.continuous_learning_engine import (
+            ContinuousLearningEngine,
+        )
+        from quan_ai_brain.cognition.learning_session import LearningSessionStatus
+
+        with MemoryStore(ws / "data" / "brain.db", workspace=ws) as store:
+            engine = ContinuousLearningEngine(store, workspace=ws)
+            cur = engine.session_manager.get_current_session()
+            if cur is None:
+                report["note"] = "không có session nào — no-op"
+                return report
+            report["session"] = {
+                "session_id": cur.session_id,
+                "cycle": cur.cycle_number,
+                "status": cur.status.value,
+                "started_at": cur.started_at,
+            }
+            if cur.status.value != "RUNNING":
+                report["note"] = f"status {cur.status.value} ≠ RUNNING — no-op"
+                return report
+            started = datetime.fromisoformat(cur.started_at)
+            stalled_h = (datetime.now(UTC) - started).total_seconds() / 3600.0
+            report["stalled_hours"] = round(stalled_h, 2)
+            if stalled_h < max_hours:
+                report["note"] = (f"chưa đạt ngưỡng {max_hours}h — no-op")
+                return report
+            nxt = engine.end_session(
+                session_id=cur.session_id,
+                evaluation_result={
+                    "auto_end_reason": "CLO_STALL_TIMEOUT_48H",
+                    "stalled_hours": round(stalled_h, 1),
+                    "max_hours": max_hours,
+                    "root_cause": ("advance chỉ xảy ra khi chat tạo task; không có "
+                                   "loop tự advance — session treo chờ duyệt"),
+                    "resolved_by": "self_study.enforce_stall_timeout (F2, owner 22/11/2026)",
+                },
+                unresolved_questions=[],
+                next_plan={
+                    "objectives": ["Resume continuous learning cycle — healthy handoff after stall"],
+                    "source_manifest": {"source": "f2_clo_timeout",
+                                        "date": datetime.now(UTC).isoformat()},
+                },
+            )
+            # (F2, owner directive "tự COMPLETED") end_session để CONSOLIDATING —
+            # chốt COMPLETED không có trong enum engine; trạng thái kết thúc sạch
+            # chuẩn của state machine là HANDOFF (session kết thúc + handoff xong).
+            try:
+                engine.session_manager.set_status(
+                    cur.session_id, LearningSessionStatus.HANDOFF,
+                    reason=(f"F2: timeout {max_hours}h (stalled {stalled_h:.1f}h) — "
+                            f"owner directive 22/11/2026; handoff xong"))
+            except Exception as exc:
+                report["errors"].append(f"handoff_status_error:{type(exc).__name__}")
+            report["triggered"] = True
+            report["new_session"] = {
+                "session_id": nxt.session_id,
+                "cycle": nxt.cycle_number,
+                "status": nxt.status.value,
+            }
+            # Chuyển bài học sang LESSONS QUEUE: episode kind='experience_lesson'
+            # (KnowledgeGapScanner.scan đọc đúng kind này → thành knowledge gap →
+            # quarantined → owner duyệt — giữ nguyên ranh giới §XI không tự nạp memory)
+            try:
+                import uuid as _uuid
+                lesson_id = f"les_{_uuid.uuid4().hex[:12]}"
+                con = sqlite3.connect(str(ws / "data" / "brain.db"))
+                try:
+                    con.execute(
+                        "INSERT INTO episodes(id, created_at_utc, kind, summary, "
+                        "source_ref, status, metadata_json) VALUES(?,?,?,?,?,?,?)",
+                        (lesson_id, datetime.now(UTC).isoformat(),
+                         "experience_lesson",
+                         (f"CLO session #{cur.cycle_number} tự học timeout sau "
+                          f"{stalled_h:.1f}h (ngưỡng {max_hours}h) — kẹt chờ duyệt "
+                          f"Q-4; bài học: chu trình tự học cần advance tự động, "
+                          f"không phụ thuộc chat tạo task"),
+                         f"clo_session:{cur.session_id}",
+                         "new",
+                         json.dumps({"auto_end_reason": "CLO_STALL_TIMEOUT_48H",
+                                     "stalled_hours": round(stalled_h, 1)},
+                                    ensure_ascii=False)))
+                    con.commit()
+                finally:
+                    con.close()
+                report["lesson_episode_id"] = lesson_id
+                report["lessons_queue"] = ("episode kind=experience_lesson status='new' "
+                                           "đã ghi — chu trình scan kế tiếp sẽ thành gap")
+            except Exception as exc:  # fail-honest: lesson fail không giết advance
+                report["errors"].append(f"lesson_queue_error:{type(exc).__name__}:{exc}")
+    except Exception as exc:
+        report["errors"].append(f"{type(exc).__name__}:{exc}")
+    return report
+
+
 def build_thought_from_cycle(cycle: dict[str, Any]) -> dict[str, Any]:
     """Suy nghĩ NỘI TÂM THẬT từ kết quả chu trình (thay hardcoded cogitate)."""
     q = cycle.get("quarantined", [])
