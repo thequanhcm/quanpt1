@@ -1,0 +1,225 @@
+........................................................................ [  1%]
+........................................................................ [  3%]
+........................................................................ [  5%]
+........................................................................ [  6%]
+.....................................F.................................. [  8%]
+......F..s.............................................................. [ 10%]
+.....................................................FF................. [ 11%]
+........................................................................ [ 13%]
+...F.................................................................... [ 15%]
+........................................................................ [ 16%]
+.......................................................................F [ 18%]
+.F....................F........................F........................ [ 20%]
+........................................................................ [ 21%]
+........................................................................ [ 23%]
+........................................................................ [ 25%]
+........................................................................ [ 27%]
+........................F............................................... [ 28%]
+........................................................................ [ 30%]
+........................................................................ [ 32%]
+..................................................F..................... [ 33%]
+........................................................................ [ 35%]
+........................................................................ [ 37%]
+........................................................................ [ 38%]
+..............s.s........................................F.............. [ 40%]
+........................................................................ [ 42%]
+........................................................................ [ 43%]
+........................................................................ [ 45%]
+................................................................sss..... [ 47%]
+.....................s.................................................. [ 49%]
+........................................................................ [ 50%]
+ssss.s.....ss........................................................... [ 52%]
+........................................................................ [ 54%]
+........................................................................ [ 55%]
+................................................................s....... [ 57%]
+.s........s.s....s.s.................................................... [ 59%]
+........................................................................ [ 60%]
+........................................................................ [ 62%]
+........................................................................ [ 64%]
+........................................................................ [ 65%]
+........................................................................ [ 67%]
+........................................................................ [ 69%]
+........................................................................ [ 71%]
+........................................................................ [ 72%]
+........................................................................ [ 74%]
+................................................s....................... [ 76%]
+........................................................................ [ 77%]
+.....................................................s..............s... [ 79%]
+........................ss..........s...s............................... [ 81%]
+........................................................................ [ 82%]
+........................................................................ [ 84%]
+........................................................................ [ 86%]
+........................................................................ [ 87%]
+.........................................F.............................. [ 89%]
+........................................................................ [ 91%]
+.......s...........................................................sssss [ 92%]
+ss...................................................................... [ 94%]
+........................................................................ [ 96%]
+..........................s............................................. [ 98%]
+...................................F...................F................ [ 99%]
+...........                                                              [100%]
+============================== warnings summary ===============================
+tests\advanced\registry.py:58
+  E:\BRAIN\tests\advanced\registry.py:58: PytestCollectionWarning: cannot collect test class 'TestGovernanceError' because it has a __init__ constructor (from: tests/advanced/test_registry.py)
+    class TestGovernanceError(Exception):
+
+tests\advanced\registry.py:62
+  E:\BRAIN\tests\advanced\registry.py:62: PytestCollectionWarning: cannot collect test class 'TestRegistry' because it has a __init__ constructor (from: tests/advanced/test_registry.py)
+    class TestRegistry:
+
+src\quan_ai_brain\analytics\statistical_engine.py:20
+  E:\BRAIN\src\quan_ai_brain\analytics\statistical_engine.py:20: PytestCollectionWarning: cannot collect test class 'TestType' because it has a __init__ constructor (from: tests/test_v39_analytics_engine.py)
+    class TestType(Enum):
+
+tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_message
+  E:\BRAIN\.venv\Lib\site-packages\_pytest\threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-911 (_do_reboot)
+  
+  Traceback (most recent call last):
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "E:\BRAIN\edge_client\client_daemon.py", line 2430, in _do_reboot
+      subprocess.run(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 115, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    [Previous line repeated 2 more times]
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 115, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 548, in run
+      with Popen(*popenargs, **kwargs) as process:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\.venv\Lib\site-packages\sitecustomize.py", line 34, in __init__
+      super().__init__(*args, **kwargs)
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1026, in __init__
+      self._execute_child(args, executable, preexec_fn, close_fds,
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
+      hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  FileNotFoundError: [WinError 2] The system cannot find the file specified
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_message
+  E:\BRAIN\.venv\Lib\site-packages\_pytest\threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-910 (_do_reboot)
+  
+  Traceback (most recent call last):
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 1045, in _bootstrap_inner
+      self.run()
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\threading.py", line 982, in run
+      self._target(*self._args, **self._kwargs)
+    File "E:\BRAIN\edge_client\client_daemon.py", line 2430, in _do_reboot
+      subprocess.run(["sudo", "reboot"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 115, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\tools\learning_daemon.py", line 58, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    [Previous line repeated 2 more times]
+    File "E:\BRAIN\tools\netchat_auto_responder.py", line 115, in _subprocess_run_no_window
+      return _orig_subprocess_run(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 548, in run
+      with Popen(*popenargs, **kwargs) as process:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    File "E:\BRAIN\.venv\Lib\site-packages\sitecustomize.py", line 34, in __init__
+      super().__init__(*args, **kwargs)
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1026, in __init__
+      self._execute_child(args, executable, preexec_fn, close_fds,
+    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
+      hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  FileNotFoundError: [WinError 2] The system cannot find the file specified
+  
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+    warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
+
+tests/test_tony_vision.py::test_analyze_image_ocr_and_facts
+tests/test_tony_vision.py::test_analyze_image_no_text_is_honest
+tests/test_tony_vision.py::test_handler_fallback_capture_photo
+tests/test_tony_vision.py::test_handler_dm_attach_priority
+  E:\BRAIN\src\quan_ai_brain\vision\image_analyzer.py:84: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    pixels = list(small.getdata())
+
+tests/test_tony_vision.py::test_analyze_image_ocr_and_facts
+tests/test_tony_vision.py::test_analyze_image_no_text_is_honest
+tests/test_tony_vision.py::test_handler_fallback_capture_photo
+tests/test_tony_vision.py::test_handler_dm_attach_priority
+  E:\BRAIN\src\quan_ai_brain\vision\image_analyzer.py:98: DeprecationWarning: Image.Image.getdata is deprecated and will be removed in Pillow 14 (2027-10-15). Use get_flattened_data instead.
+    for px in rgb.getdata():
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_bge_m3_embedding.py:172: Local Ollama daemon is offline; live test skipped.
+SKIPPED [1] tests\test_self_study.py:82: cần >=2 gap để test dedup
+SKIPPED [1] tests\test_self_study.py:134: chu kỳ 1 không quarantine được gì
+SKIPPED [1] tests\test_v14_ui_integration.py:23: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:27: API integration pending - placeholder test
+SKIPPED [1] tests\test_v14_ui_integration.py:31: API integration pending - placeholder test
+SKIPPED [1] tests\test_v15_knowledge_graph.py:182: Database lock issue - fix pending
+SKIPPED [1] tests\test_v21_final_integration.py:46: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:50: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:54: Integration test - manual verification
+SKIPPED [1] tests\test_v21_final_integration.py:62: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:73: Module dependency issue - manual test
+SKIPPED [1] tests\test_v21_final_integration.py:153: Performance test - manual run only
+SKIPPED [1] tests\test_v21_final_integration.py:157: Performance test - manual run only
+SKIPPED [1] tests\test_v25_analytics.py:109: Complex dataclass test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:251: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:372: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:383: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:449: Complex integration test - manual verification
+SKIPPED [1] tests\test_v25_analytics.py:460: Complex integration test - manual verification
+SKIPPED [1] tests\test_v36_asr.py:256: Azure Speech SDK not installed
+SKIPPED [1] tests\test_v39_analytics_engine.py:686: Small sample regression handled separately
+SKIPPED [1] tests\test_v39_creativity_engine.py:224: Domain synthesis tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:258: Solution generation tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:263: Troubleshooting workflow tested in integration tests
+SKIPPED [1] tests\test_v39_decision_engine.py:459: Problem solving pipeline tested in unit tests
+SKIPPED [1] tests\test_v39_decision_engine.py:516: Zero cost edge case handled separately
+SKIPPED [1] tests\test_v41_image_ocr.py:50: ảnh sample không tồn tại
+SKIPPED [1] tests\test_v7_skill_endpoint.py:45: dual servers 8765 không chạy
+SKIPPED [1] tests\test_v7_skill_endpoint.py:51: dual servers 8765 không chạy
+SKIPPED [1] tests\test_v7_skill_endpoint.py:60: dual servers 8765 không chạy
+SKIPPED [1] tests\test_v7_skill_endpoint.py:67: dual servers 8765 không chạy
+SKIPPED [1] tests\test_v7_skill_endpoint.py:74: dual servers 8765 không chạy
+SKIPPED [1] tests\test_v7_skill_endpoint.py:82: dual servers 8765 không chạy
+SKIPPED [1] tests\test_v7_skill_endpoint.py:89: dual servers 8765 không chạy
+SKIPPED [1] tests\test_vietnamese_tts.py:336: BLOCKED: Phần cứng Raspberry Pi 5 thực tế chưa kết nối mạng trong phiên kiểm thử tự động này. PC Core đã được xác thực hoàn chỉnh.
+FAILED tests/test_avatar_emotion_sync_1314.py::TestCacheBump::test_html_cache_version_bumped
+FAILED tests/test_bge_m3_embedding.py::test_bge_embedding_service_cache_and_similarity
+FAILED tests/test_cognitive_loop.py::test_api_health_returns_evidence_based_components
+FAILED tests/test_cognitive_loop.py::test_api_health_ollama_offline_is_honest
+FAILED tests/test_cpsl_runner.py::test_run_e2e_mock - assert 13 == 12
+FAILED tests/test_digital_human_avatar_v2.py::test_reference_image_preserved
+FAILED tests/test_digital_human_avatar_v2.py::test_avatar_engine_12_states_configured
+FAILED tests/test_digital_identity_persona.py::test_voice_pipeline_spoken_sanitization_preserves_self_intro
+FAILED tests/test_edge_client.py::test_edge_client_daemon_local_kiosk_endpoints
+FAILED tests/test_media_only_dm.py::test_photo_success_returns_empty_text_only_image
+FAILED tests/test_ok_confirmation_flow.py::test_responder_autoruns_probe_when_ai_asks_permission
+FAILED tests/test_sentinel_s3.py::TestContainment::test_whitelist_refuses_via_actions
+FAILED tests/test_v3_sprint6_hardening.py::test_backup_fresh_after_manual_run
+FAILED tests/test_web_executive_endpoints.py::test_executive_edge_telemetry_and_control
+FAILED tests/test_web_server.py::test_edge_control_speak_audio_forwarding - A...
+15 failed, 4208 passed, 36 skipped, 13 warnings in 882.09s (0:14:42)

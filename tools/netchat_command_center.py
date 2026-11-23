@@ -18,6 +18,7 @@ stop/freeze.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import time
@@ -28,6 +29,16 @@ WORKSPACE = Path(__file__).resolve().parent.parent
 
 COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "approve": ("phê duyệt", "phe duyet", "duyệt", "duyet", "approved", "đồng ý", "dong y"),
+    # TASK-OFFICE-S1 (23/11): lệnh đọc+tóm tắt email — READONLY (R2 DRAFT-ONLY,
+    # không gửi/xóa). Đặt TRƯỚC 'approve' để "duyệt email" không nuốt thành approve.
+    "email_today": ("email hôm nay", "email hom nay", "kiểm tra email", "kiem tra email",
+                    "email mới", "email moi", "đọc email", "doc email",
+                    "tóm tắt email", "tom tat email", "hộp thư", "hop thu"),
+    # SYNC-20261123: lịch họp VoIP (gián tiếp qua mail vofficeadmin — voffice_reader).
+    # Đặt TRƯỚC email_today vì "lịch họp hôm nay" chứa cả 2; VoIP cụ thể hơn.
+    "voffice_meetings": ("lịch họp voip", "lich hop voip", "lịch voip", "lich voip",
+                         "lịch họp voffice", "lich hop voffice", "họp voip", "hop voip",
+                         "lịch họp hôm nay", "lich hop hom nay", "lịch họp", "lich hop"),
     "status": ("trạng thái", "trang thai", "hiện trạng", "hien trang", "status", "sức khỏe", "suc khoe"),
     "report": ("báo cáo", "bao cao", "report"),
     "tasks": ("nhiệm vụ", "nhiem vu", "tasks", "backlog", "công việc", "cong viec"),
@@ -467,6 +478,72 @@ def detect_intent(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Handlers — every handler runs REAL system logic and reports honestly
 # ---------------------------------------------------------------------------
+
+
+def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """TASK-OFFICE-S1 (23/11, card APPROVED): 'email hôm nay' / 'kiểm tra email' —
+    đọc hộp thư vmail THẬT qua SOAP (tools/mail_reader READONLY) → intake store
+    (dedupe) → phân loại 10 nhóm + score → tóm tắt A/B master prompt §II.3.
+
+    R2 bất biến: CHỈ ĐỌC — không đánh dấu đã đọc, không xóa, KHÔNG GỬI.
+    Fail-honest: SOAP lỗi → báo lỗi, không fake số liệu."""
+    import subprocess as _sp
+    import sys as _sys
+
+    brain_root = WORKSPACE
+    env = dict(**os.environ)
+    env["PYTHONPATH"] = str(brain_root / "src") + os.pathsep + str(brain_root / "tools") + os.pathsep + env.get("PYTHONPATH", "")
+
+    # Chạy sync+analyze trong subprocess (SOAP có thể chậm — không treo responder)
+    runner = brain_root / "tools" / "office_email_sync_runner.py"
+    try:
+        proc = _sp.run(
+            [_sys.executable, "-u", str(runner)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=110, env=env, cwd=str(brain_root),
+        )
+        out = (proc.stdout or "").strip()
+        if proc.returncode != 0 or not out:
+            err = (proc.stderr or "").strip()[-300:] or "không có output"
+            return (f"⚠️ Đọc email thất bại (fail-honest): {err}\n"
+                    "Anh kiểm tra mạng/credentials rồi thử lại giúp em.")
+        return out
+    except _sp.TimeoutExpired:
+        return "⚠️ Đọc email quá 110s (hộp thư chậm phản hồi) — em dừng để không treo, anh thử lại giúp em."
+    except Exception as exc:
+        return f"⚠️ Lỗi đọc email: {type(exc).__name__}: {exc}"
+
+
+def handle_voffice_meetings(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """SYNC-20261123: 'lịch họp voip' / 'lịch họp hôm nay' — đọc lịch họp VoIP
+    GIÁN TIẾP qua mail vofficeadmin (tools/voffice_reader READONLY, SOAP chung
+    mail_reader). Fail-honest: lỗi SOAP → báo lỗi thật, không tự tạo lịch.
+
+    R2 bất biến: CHỈ ĐỌC — không trả lời mail, không thao tác voffice trực tiếp
+    (voffice.viettel.vn 10.60.7.120 LAN-only, chờ M-Suite tunnel)."""
+    import subprocess as _sp
+    import sys as _sys
+
+    brain_root = WORKSPACE
+    env = dict(**os.environ)
+    env["PYTHONPATH"] = str(brain_root / "tools") + os.pathsep + str(brain_root / "user, pass, token") + os.pathsep + env.get("PYTHONPATH", "")
+
+    try:
+        proc = _sp.run(
+            [_sys.executable, "-u", str(brain_root / "tools" / "voffice_reader.py"), "upcoming"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=110, env=env, cwd=str(brain_root),
+        )
+        out = (proc.stdout or "").strip()
+        if proc.returncode != 0 or not out:
+            err = (proc.stderr or "").strip()[-300:] or "không có output"
+            return (f"⚠️ Đọc lịch họp VoIP thất bại (fail-honest): {err}\n"
+                    "Anh kiểm tra mạng/credentials rồi thử lại giúp em.")
+        return out
+    except _sp.TimeoutExpired:
+        return "⚠️ Đọc lịch họp VoIP quá 110s — em dừng để không treo, anh thử lại giúp em."
+    except Exception as exc:
+        return f"⚠️ Lỗi đọc lịch họp VoIP: {type(exc).__name__}: {exc}"
 
 
 def handle_approve(payload: dict[str, Any] | None = None) -> str:
@@ -1892,6 +1969,10 @@ HANDLERS = {
     "knowledge": handle_knowledge,
     "help": handle_help,
     "todo": handle_todo_list,
+    # TASK-OFFICE-S1 (23/11): email — READONLY tóm tắt A/B
+    "email_today": handle_email_today,
+    # SYNC-20261123: lịch họp VoIP — READONLY qua mail vofficeadmin
+    "voffice_meetings": handle_voffice_meetings,
     "stop": handle_stop,
     "freeze": handle_freeze,
     # (31/10/2026) Điều khiển hình thể CHERRY/Pi5 qua DM — gọi edge control API thật
