@@ -36,6 +36,12 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "thread_summary": ("tóm tắt luồng", "tom tat luong", "luồng email", "luong email",
                        "thread email", "tổng hợp luồng", "tong hop luong",
                        "tóm tắt email", "tom tat email"),
+    # TASK-VMAIL-S4 (24/11): soạn nháp trả lời (Reply Draft §7, R2 DRAFT-ONLY) —
+    # đặt TRƯỚC thread_summary vì "soạn trả lời email" cụ thể hơn.
+    "reply_draft": ("soạn trả lời", "soan tra loi", "soạn nháp", "soan nhap",
+                    "soạn email trả lời", "soan email tra loi",
+                    "soạn thư trả lời", "soan thu tra loi", "nháp trả lời",
+                    "nhap tra loi", "draft reply"),
     "email_today": ("email hôm nay", "email hom nay", "kiểm tra email", "kiem tra email",
                     "email mới", "email moi", "đọc email", "doc email",
                     "hộp thư", "hop thu"),
@@ -572,6 +578,66 @@ def handle_thread_summary(text: str = "", payload: dict[str, Any] | None = None)
         return "⚠️ Tóm tắt luồng email quá 110s (SOAP chậm) — em dừng để không treo, anh thử lại giúp em."
     except Exception as exc:
         return f"⚠️ Lỗi tóm tắt luồng email: {type(exc).__name__}: {exc}"
+
+
+def handle_reply_draft(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """TASK-VMAIL-S4 (24/11, owner duyệt Sprint 4): 'soạn trả lời email <kw> [style]'
+    — Reply Draft §7 (context S2+S3, 11 style §7.2, quality check §7.3).
+
+    Đường dữ liệu: VmailConnector (SOAP READONLY) → office_reply_draft_runner
+    (subprocess 110s) → .eml DRAFT-ONLY + preview. R2 bất biến §7.4: KHÔNG GỬI
+    tự động — gửi cần owner phê duyệt riêng từng lần (owner mở .eml bấm Send).
+    Fail-honest: SOAP lỗi → báo lỗi thật, không fake nháp."""
+    import subprocess as _sp
+    import sys as _sys
+
+    brain_root = WORKSPACE
+    env = dict(**os.environ)
+    env["PYTHONPATH"] = (str(brain_root / "src") + os.pathsep
+                         + str(brain_root / "tools") + os.pathsep
+                         + str(brain_root / "user, pass, token") + os.pathsep
+                         + env.get("PYTHONPATH", ""))
+
+    # Trích đối số: 'soạn trả lời email <từ khóa> [style]' — style = token cuối
+    # nếu nằm trong REPLY_STYLES, còn lại là từ khóa.
+    from quan_ai_brain.office.reply_drafter import REPLY_STYLES as _STYLES
+    low = (text or "").lower()
+    kw, style = "", ""
+    for prefix in ("soạn trả lời email", "soan tra loi email", "soạn nháp email",
+                   "soan nhap email", "soạn email trả lời", "soan email tra loi",
+                   "soạn trả lời", "soan tra loi", "soạn nháp", "soan nhap",
+                   "nháp trả lời", "nhap tra loi"):
+        if prefix in low:
+            rest = (text or "")[low.index(prefix) + len(prefix):].strip(" ,.:;?!")
+            for w in ("về ", "ve ", "cho ", "help "):
+                if rest.lower().startswith(w):
+                    rest = rest[len(w):].strip()
+            toks = rest.split()
+            if toks and toks[-1].lower() in _STYLES:
+                style = toks[-1]
+                toks = toks[:-1]
+            kw = " ".join(toks).strip()
+            break
+    if not kw:
+        return ("⚠️ Cần từ khóa luồng để soạn nháp: 'soạn trả lời email <từ khóa> [style]'.\n"
+                "Styles: " + ", ".join(_STYLES))
+    try:
+        proc = _sp.run(
+            [_sys.executable, "-u", str(brain_root / "tools" / "office_reply_draft_runner.py"),
+             kw] + ([style] if style else []),
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=110, env=env, cwd=str(brain_root),
+        )
+        out = (proc.stdout or "").strip()
+        if proc.returncode != 0 or not out:
+            err = (proc.stderr or "").strip()[-300:] or "không có output"
+            return (f"⚠️ Soạn nháp thất bại (fail-honest): {err}\n"
+                    "Anh kiểm tra mạng/credentials rồi thử lại giúp em.")
+        return out
+    except _sp.TimeoutExpired:
+        return "⚠️ Soạn nháp quá 110s (SOAP chậm) — em dừng để không treo, anh thử lại giúp em."
+    except Exception as exc:
+        return f"⚠️ Lỗi soạn nháp: {type(exc).__name__}: {exc}"
 
 
 def handle_voffice_meetings(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -2033,6 +2099,8 @@ HANDLERS = {
     "email_today": handle_email_today,
     # TASK-VMAIL-S2 (23/11): Thread Analyzer — READONLY tóm tắt luồng 10 mục
     "thread_summary": handle_thread_summary,
+    # TASK-VMAIL-S4 (24/11): Reply Draft — DRAFT-ONLY soạn nháp §7 + .eml
+    "reply_draft": handle_reply_draft,
     # SYNC-20261123: lịch họp VoIP — READONLY qua mail vofficeadmin
     "voffice_meetings": handle_voffice_meetings,
     "stop": handle_stop,
@@ -2308,6 +2376,10 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
             if intent == "thread_summary":
                 # TASK-VMAIL-S2 (23/11): cần text gốc để trích từ khóa luồng
                 # ('tóm tắt luồng email <kw>') — không truyền thì kw rỗng → --latest
+                return intent, handler(text)
+            if intent == "reply_draft":
+                # TASK-VMAIL-S4 (24/11): cần text gốc để trích từ khóa + style
+                # ('soạn trả lời email <kw> [style]')
                 return intent, handler(text)
             return intent, handler()
         except Exception as exc:

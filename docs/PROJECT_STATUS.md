@@ -2,9 +2,22 @@
 # QUAN AI BRAIN — Project Status
 
 
-## 24/11/2026 — SPRINT 3 MEMORY-ADAPTER (MỚI) ✅ TRIỂN KHAI (owner: "duyệt" → Sprint 3 MEMORY-ADAPTER 24/11)
+## 24/11/2026 — SPRINT 4 REPLY-DRAFT (MỚI) ✅ TRIỂN KHAI (owner: "duyệt Sprint 4 REPLY-DRAFT (§17)")
+- **Card**: TASK-VMAIL-S4 (§17: 2✅ → 3✅ → **4 Reply Draft** → 5 Workflow → 6 Dashboard). Master prompt §7: Context-Aware Reply + 11 styles + Quality Check + Send Policy.
+- **Module mới** `src/quan_ai_brain/office/reply_drafter.py` (~330 lines): `ReplyDrafter` + `ReplyContext` + `DraftResult`:
+  - **§7.1 Context**: `ReplyContext.from_thread_analysis()` lấy questions/decisions/deadlines/contradictions CÓ THẬT từ ThreadAnalysis (S2); `gather_memory()` qua adapter S3 (§7.1.3, degraded an toàn); phát hiện thông tin thiếu (§7.1.7) — không bịa.
+  - **§7.2 Styles**: đủ 11 (ngắn gọn/chuyên nghiệp/hành chính/kỹ thuật/giải trình/xác nhận/từ chối lịch sự/đề nghị phối hợp/nhắc tiến độ/dứt khoát/tiếng Anh) — greeting + sign-off theo style; template deterministic hoặc custom_body (caller/GLM soạn).
+  - **§7.3 Quality check 8 mục**: câu hỏi chưa trả lời, body rỗng, mâu thuẫn luồng, **hủy vs xác nhận cuộc họp**, deadline khớp, cam kết vượt thẩm quyền (regex), từ nhạy cảm (mật khẩu/token), thiếu người nhận → warnings đi kèm nháp (owner quyết cuối, không chặn ghi).
+  - **§7.4 Send Policy**: KHÔNG có method send/smtp (bất biến test); nháp ghi .eml qua `tools email_draft.create_draft` hiện có (X-QAB-Source-Email-Id + Draft-Reason truy vết); gửi = owner mở .eml bấm Send.
+- **Runner** `tools/office_reply_draft_runner.py` (MỚI): SOAP READONLY → threads → chọn luồng theo kw → recipient = người gửi đầu (from_addr thật, bỏ owner) → draft + preview.
+- **Wire DM** `tools/netchat_command_center.py`: intent `reply_draft` ("soạn trả lời email \<kw\> [style]") đặt trước thread_summary + handler truyền text (pattern S2).
+- **Test**: `tests/test_office_reply_drafter.py` **24/24 PASS** (mock 100%, .eml vào tmp_path); focused bộ S1-S4 + MAIL_READ **122/122**; command_center **24/24**.
+- **Live E2E SOAP thật**: luồng Khói → .eml To `khanhnq@viettel.com.vn`, quality 0 warning; luồng Battery AI → style hành chính, **§7.3.1 phát hiện câu hỏi audit chéo quá hạn chưa trả lời** + cảnh báo đúng; .eml có X-QAB headers (drafts smoke đã dọn).
+- **Trung thực (chưa làm)**: body template còn thô khi luồng không có decisions/commitments (in trung thực "chưa đủ dữ liệu, không bịa") — LLM soạn body tự nhiên (GLM) là bước nâng cấp tiếp theo trong S4b nếu anh duyệt; KPI Reply Relevance §14 chưa đo (cần bộ dữ liệu gán nhãn); GỬI email vẫn KHÔNG có trong code — cần phê duyệt riêng từng lần.
+
+
 - **Card**: TASK-VMAIL-S3 (§17 lộ trình: 2✅ Thread Analyzer → **3 Shared Memory** → 4 Reply Draft → 5 Workflow → 6 Dashboard).
-- **Module mới** `src/quan_ai_brain/office/memory_adapter.py` (~350 lines): `CherryMemoryAdapter` — lớp mỏng TRÊN Memory Service hiện có (master prompt §6: KHÔNG db trí nhớ độc lập, KHÔNG core thứ 2):
+- **Ngày**: 24/11/2026 — Sprint 3. **Module mới** `src/quan_ai_brain/office/memory_adapter.py` (~350 lines): `CherryMemoryAdapter` — lớp mỏng TRÊN Memory Service hiện có (master prompt §6: KHÔNG db trí nhớ độc lập, KHÔNG core thứ 2):
   - **Retrieval §6.1/§6.3**: `retrieve_context/retrieve_email_history/retrieve_project_history/retrieve_decisions/retrieve_related_tasks` qua `MemoryFacade.search` (3.107 records: 3020 OBSERVED + 13 USER_PROVIDED + 72 VERIFIED); sort VERIFIED > OBSERVED > INFERENCE; **phát hiện mâu thuẫn** (2 hit tin được cùng chủ đề khác nội dung, token hóa bỏ dấu tiếng Việt ≥4 ký tự) → trả CẢ HAI kèm nguồn, không chọn hộ; mỗi hit giữ fact_level + source_ref + score.
   - **Update §6.4**: `create_memory_candidate` — CHỈ nội dung có giá trị dài hạn (quyết định/cam kết/deadline/nhiệm vụ/thay đổi trạng thái, regex tiền tố); TỪ CHỐI email thô/nhạy cảm (mật khẩu/spam)/quá ngắn; đường ghi **QuarantineStore hiện có** (`data/quarantine.db`, status PENDING_REVIEW, expires 30 ngày) — KHÔNG BAO GIỜ tự vào semantic, KHÔNG tự promote (owner duyệt qua `approve()` riêng); quarantine thiếu → TỪ CHỐI ghi (fail-honest).
   - **extract_candidates_from_thread**: quét ThreadAnalysis (S2) buckets decisions→commitments→changes, trích mail #id vào source_ref, max_items.
