@@ -106,3 +106,56 @@ logs/cherry_autonomous.log
 logs/pythonw_stdout_test.log
 # (13/11/2026) Ghi âm mic runtime (wav) — không commit
 data/voice_records/
+
+# (20/11/2026) Scratch motion/avatar pipeline + frame dumps — artifact tạm, không track
+.tmp_motion_frames/
+.tmp_motion_test/
+.tmp_cleanup_state.json
+data/mau_frames/
+data/mau_mouth*/
+data/mau_visemes*/
+data/frames_345/
+data/frames_vi/
+data/vi_frames/
+data/ref_frames/
+data/v3_check/
+data/poc_arms/
+data/poc_assets/
+data/vector_db_semantic/
+data/_poc_*
+data/_m12_*
+data/_m3_*
+data/_nm_probe.json
+data/_probe_vids.py
+
+# (20/11/2026) data/ root scratch — frame dumps + debug scripts + test audio (nhiều sprint)
+data/*.png
+data/*.jpg
+data/*.mp3
+data/*.wav
+data/analyze_*.py
+data/export_*.py
+data/extract_*.py
+data/simulate_*.py
+data/synth_*.py
+data/debug_*.js
+data/mouth_*.js
+data/wire_*.js
+data/cherry_poc_arms.html
+data/comm_*.json
+data/comm_*.txt
+data/motion_345_*.json
+data/ref_motion_stats.json
+data/voice_envelopes.json
+data/find_*.ps1
+data/last_bot_broadcast.txt
+data/memory_eval_*
+data/open_prs_*.json
+data/pi5_*.txt
+data/pi5_*.xml
+data/pr32_merge.json
+data/pr_m4b_body.json
+
+
+# (23/11/2026) Cách ly audit toàn hệ thống — folder cách ly không track, owner duyệt mới dọn
+_QUARANTINE_20261123/

@@ -1,0 +1,227 @@
+{
+  "date": "2026-11-23",
+  "items": [
+    {
+      "from": "E:\\BRAIN\\.tmp_motion_frames",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tmp_motion_frames__render_avatar_v8_v93_20261122",
+      "reason": "tmp render avatar, 0 refs, gitignore",
+      "size_bytes": 11703936178
+    },
+    {
+      "from": "E:\\BRAIN\\Module 3",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Module 3__duplicate_of_kho_tai_lieu",
+      "reason": "trùng 100% kho_tai_lieu Module 3 (38 files)",
+      "size_bytes": 5262779
+    },
+    {
+      "from": "E:\\BRAIN\\vivi-agent-20261118.zip",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\vivi-agent-20261118.zip",
+      "reason": "zip deploy 18/11 ở root",
+      "size_bytes": 112271125
+    },
+    {
+      "from": "E:\\BRAIN\\edge_client\\avatar_engine.js.bak_v6cin_1411",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\edge_client__avatar_engine.js.bak_v6cin_1411",
+      "reason": "engine backup cũ 14/11",
+      "size_bytes": 68620
+    },
+    {
+      "from": "E:\\BRAIN\\tmp_m5b",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tmp_m5b",
+      "reason": "tmp M5 kiosk chết, 0 refs",
+      "size_bytes": 348549
+    },
+    {
+      "from": "E:\\BRAIN\\quarantine_audit_20261113",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\quarantine_audit_20261113",
+      "reason": "quarantine cũ đã xử lý",
+      "size_bytes": 318503
+    },
+    {
+      "from": "E:\\BRAIN\\quarantine_cleanup",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\quarantine_cleanup",
+      "reason": "cleanup cũ 1 file",
+      "size_bytes": 5408
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_template_v2_preview_20261119.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_template_v2_preview_20261119.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 7999139
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_template_v2_preview_v4_natural_20261119.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_template_v2_preview_v4_natural_20261119.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 1557303
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_template_v2_preview_v5_20261119.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_template_v2_preview_v5_20261119.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 8156187
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_template_v2_preview_v6_20261119.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_template_v2_preview_v6_20261119.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 10184958
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_template_v2_preview_v7_20261120.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_template_v2_preview_v7_20261120.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 10512399
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_v8_soft_preview_20261120.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_v8_soft_preview_20261120.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 3314282
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_v91_fix_moi_dinh_preview_20261120.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_v91_fix_moi_dinh_preview_20261120.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 3112023
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_v92_seam_clean_preview_20261120.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_v92_seam_clean_preview_20261120.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 3147899
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_v93_head8dir_preview_20261120.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_v93_head8dir_preview_20261120.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 3111503
+    },
+    {
+      "from": "E:\\BRAIN\\Pi5\\cherry_motion_v9_asymp_inhale_preview_20261120.mp4",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\Pi5_previews\\cherry_motion_v9_asymp_inhale_preview_20261120.mp4",
+      "reason": "preview mp4 cũ sprint v5-v9.3 (đã xem xong)",
+      "size_bytes": 3093193
+    },
+    {
+      "from": "E:\\BRAIN\\TONY_START.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\start_scripts_old\\TONY_START.bat",
+      "reason": "đường start cũ 30/10 — thay bằng KHOI_DONG_CHERRY (owner 19/11)",
+      "size_bytes": 5807
+    },
+    {
+      "from": "E:\\BRAIN\\TONY_STOP.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\start_scripts_old\\TONY_STOP.bat",
+      "reason": "đường stop cũ đi kèm TONY_START",
+      "size_bytes": 3160
+    },
+    {
+      "from": "E:\\BRAIN\\KHOI_DONG_24_7.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\start_scripts_old\\KHOI_DONG_24_7.bat",
+      "reason": "auto-start 24/7 — owner DISABLE manual-start từ 19/11",
+      "size_bytes": 4801
+    },
+    {
+      "from": "E:\\BRAIN\\FINAL_CLEANUP.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\setup_oneoff\\FINAL_CLEANUP.bat",
+      "reason": "cleanup 1-lần đã xong",
+      "size_bytes": 4529
+    },
+    {
+      "from": "E:\\BRAIN\\INSTALL_ONE_CLICK.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\setup_oneoff\\INSTALL_ONE_CLICK.bat",
+      "reason": "cài đặt 1-lần đã xong",
+      "size_bytes": 3281
+    },
+    {
+      "from": "E:\\BRAIN\\ONECLICK_SETUP_NEW_PC.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\setup_oneoff\\ONECLICK_SETUP_NEW_PC.bat",
+      "reason": "cài đặt 1-lần đã xong",
+      "size_bytes": 11187
+    },
+    {
+      "from": "E:\\BRAIN\\create_tony_shortcuts_vbs.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\setup_oneoff\\create_tony_shortcuts_vbs.bat",
+      "reason": "tạo shortcut 1-lần đã xong",
+      "size_bytes": 1020
+    },
+    {
+      "from": "E:\\BRAIN\\MO_TRAP_TRI_NHO_SQLITE.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\setup_oneoff\\MO_TRAP_TRI_NHO_SQLITE.bat",
+      "reason": "mở DB 1-lần",
+      "size_bytes": 444
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\khoi_dong_24_7_hidden.vbs",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\khoi_dong_24_7_hidden.vbs",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 144
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\run_cherry_autonomous.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\run_cherry_autonomous.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 360
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\run_cherry_autonomous_hidden.vbs",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\run_cherry_autonomous_hidden.vbs",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 157
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\setup_windows_services.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\setup_windows_services.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 4669
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\remove_services.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\remove_services.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 377
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\setup_hidden_tasks.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\setup_hidden_tasks.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 814
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\setup_tasks.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\setup_tasks.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 1640
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\start_server.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\start_server.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 1045
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\run_mirror_f.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\run_mirror_f.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 185
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\_spawn_dual_servers.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\_spawn_dual_servers.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 122
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\_spawn_responder.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\_spawn_responder.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 130
+    },
+    {
+      "from": "E:\\BRAIN\\tools\\_spawn_watchdog.bat",
+      "to": "E:\\BRAIN\\_QUARANTINE_20261123\\tools_start_scripts_old\\_spawn_watchdog.bat",
+      "reason": "script start/cài 1-lần cũ hoặc helper đã hết dùng (audit 23/11)",
+      "size_bytes": 221
+    }
+  ]
+}
