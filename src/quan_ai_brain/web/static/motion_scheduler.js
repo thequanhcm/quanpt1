@@ -35,6 +35,7 @@
   function _easeCosine(t) {
     return 0.5 - 0.5 * Math.cos(Math.PI * t);
   }
+  // V9: cosine là default cho gesture — mượt hơn ease-out
   var EASING = {
     linear: _easeLinear,
     "ease-in": _easeIn,

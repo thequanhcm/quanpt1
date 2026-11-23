@@ -5,13 +5,13 @@
 > bảo đảm tính minh bạch, độc lập và khả năng phục hồi phiên làm việc cho ChatGPT.
 
 ## 1. Thông tin phiên làm việc (Session Metadata)
-- **Mã phiên (UTC):** `2026-11-18T13:11:50.807181+00:00`
-- **Thời gian máy chủ:** `2026-11-18 20:11:50` (Local Time)
+- **Mã phiên (UTC):** `2026-11-18T14:02:54.735129+00:00`
+- **Thời gian máy chủ:** `2026-11-18 21:02:54` (Local Time)
 - **Workspace root:** `E:/BRAIN`
 - **Python Runtime:** `3.11.9` (64bit)
 - **Hệ điều hành:** `Windows-10-10.0.19045-SP0`
 - **Phiên bản ứng dụng:** `0.2.0` (Foundation Evolution — Phase A)
-- **Git Branch:** `feat/v6-m6-memory-truth` | **Commit:** `149e475`
+- **Git Branch:** `feat/v6-m6-memory-truth` | **Commit:** `8e600b4`
 - **Trạng thái Working Tree:** Có thay đổi chưa commit
 
 ## 2. Tóm tắt điều hành (Executive Summary)
@@ -21,7 +21,7 @@
   2. Hiện thực `SessionMemoryManager` (`src/quan_ai_brain/cognition/session_memory.py`) trích xuất sự thật người dùng và lưu trữ phiên hội thoại bền vững vào `data/brain.db`.
   3. Cài đặt `OutputGuardrails` (`src/quan_ai_brain/core/guardrails.py`) lọc rò rỉ credential, script tag injection và che giấu đường dẫn tệp nhạy cảm.
   4. Mở rộng `PromptContextBuilder` và API `/api/chat`, `/api/chat/history` trên Web Server phục vụ hội thoại đa lượt liên tục có trí nhớ.
-  5. Kết quả kiểm thử tự động phiên hiện tại: 4193 PASSED, 9 FAILED, 28 SKIPPED (Tổng: 4230 bài test, FAIL (9 test(s) failed)).
+  5. Kết quả kiểm thử tự động phiên hiện tại: 4191 PASSED, 11 FAILED, 28 SKIPPED (Tổng: 4230 bài test, FAIL (11 test(s) failed)).
 - **Các hạng mục đã hoàn thành:**
   - [x] Bộ định tuyến mô hình động `LLMRouter` với phân tầng fast / reasoning và fallback tin cậy.
   - [x] Quản lý bộ nhớ phiên `SessionMemoryManager` và trích xuất tự động danh tính, sở thích, chỉ thị của chủ sở hữu.
@@ -30,7 +30,7 @@
   - [x] Tích hợp lịch sử hội thoại gần nhất `[RECENT CONVERSATION HISTORY]` vào ngữ cảnh suy luận của LLM.
   - [x] Endpoint `GET /api/chat/history` và nâng cấp toàn diện `POST /api/chat` trên `BrainAPIHandler`.
   - [x] 5 bài kiểm thử E2E đầu cuối (`tests/test_end_to_end_chat.py`) xác minh đa lượt đàm thoại và trí nhớ dài hạn.
-  - [x] Kiểm thử tự động: 4193 bài PASS, 28 bài SKIP (Phần cứng Pi 5 offline), 9 bài FAIL (FAIL (9 test(s) failed)).
+  - [x] Kiểm thử tự động: 4191 bài PASS, 28 bài SKIP (Phần cứng Pi 5 offline), 11 bài FAIL (FAIL (11 test(s) failed)).
 - **Các hạng mục tiếp theo (Sprint 2):**
   - Kết nối TaskPlan vào `DurableTaskRegistry` (`data/tasks.db`) và xây dựng vòng lặp thực thi có kiểm soát an toàn (Inert Sandbox).
 - **Lưu ý kỹ thuật quan trọng cho kỹ sư tiếp theo:**
@@ -41,9 +41,7 @@
 ## 3. Thay đổi mã nguồn (Code Changes & Working Tree)
 - **Git Status:**
 ```text
-eck40.png
-?? data/rig_check41.png
-?? data/rig_check42.png
+ata/rig_check42.png
 ?? data/rig_check43.png
 ?? data/rig_check44.png
 ?? data/rig_check45.png
@@ -140,6 +138,7 @@ eck40.png
 ?? quarantine_audit_20261113/
 ?? quarantine_cleanup/
 ?? reports/CHERRY_COGNITIVE_DISCOVERY_REPORT.md
+?? reports/HANDOFF_20261118_201150.md
 ?? reports/intelligence_maturity/cisc_runs/cpsl_mini_20261112_103442.json
 ?? reports/intelligence_maturity/cisc_runs/cpsl_mini_20261112_104058.json
 ?? reports/intelligence_maturity/cisc_runs/cpsl_mini_20261112_104626.json
@@ -174,20 +173,18 @@ eck40.png
   - `tests/test_edge_client.py`: 6 bài test xác thực HMAC, nonce anti-replay, kiosk HTTP endpoints, fail-safe disconnect.
 
 ## 4. Kết quả kiểm thử (Test Verification)
-- **Kết luận kiểm thử:** **FAIL (9 test(s) failed)**
+- **Kết luận kiểm thử:** **FAIL (11 test(s) failed)**
 - **Lệnh thực thi:** `E:\BRAIN\.venv\Scripts\python.exe -m pytest -q tests`
-- **Tổng số bài test:** `4230` | **Passed:** `4193` | **Failed:** `9` | **Skipped:** `28`
-- **Thời gian chạy:** `705.04s`
+- **Tổng số bài test:** `4230` | **Passed:** `4191` | **Failed:** `11` | **Skipped:** `28`
+- **Thời gian chạy:** `707.91s`
 - **Exit Code:** `1`
 
 - **Định danh bộ test (`test_suite_identity`):** Bộ test hiện tại gồm `4230` bài trong thư mục `tests/`. Số test thay đổi theo từng sprint; KHÔNG đối chiếu số test trong tài liệu/báo cáo cũ với số này.
 - **Độ tươi của báo cáo (`report_freshness`):** Mọi tuyên bố trong các section bên dưới phản ánh trạng thái workspace TẠI THỜI ĐIỂM CHẠY BÁO CÁO. Trước khi dựa vào một tuyên bố (trạng thái module, hiệu năng, tích hợp), bắt buộc đối chiếu lại với code + test hiện tại trong workspace — báo cáo cũ có thể đã lỗi thời.
-- **Trạng thái xác minh (`verification_status`):** `FAIL (9 test(s) failed)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
+- **Trạng thái xác minh (`verification_status`):** `FAIL (11 test(s) failed)`. Định nghĩa: `CURRENT` = chạy trong phiên này; `AGING` = >7 ngày; `STALE` = >30 ngày hoặc working tree đã đổi sau lần chạy; `CONTRADICTED` = có bằng chứng mâu thuẫn; `UNKNOWN` = không có bằng chứng. Tuyên bố nào không có bằng chứng trong phiên này phải được coi là `UNKNOWN` cho đến khi xác minh lại.
 
 ```text
-n\Python311\Lib\subprocess.py", line 1026, in __init__
-      self._execute_child(args, executable, preexec_fn, close_fds,
-    File "C:\Users\DELL\AppData\Local\Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
+Programs\Python\Python311\Lib\subprocess.py", line 1538, in _execute_child
       hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   FileNotFoundError: [WinError 2] The system cannot find the file specified
@@ -196,7 +193,7 @@ n\Python311\Lib\subprocess.py", line 1026, in __init__
   See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
     warnings.warn(pytest.PytestUnhandledThreadExceptionWarning(msg))
 
-tests/test_process_containment.py::test_runner_fails_closed_on_containment_configuration_error
+tests/test_pi5_reboot_action.py::test_pc_forward_reboot_pi_returns_200_with_vn_message
   E:\BRAIN\.venv\Lib\site-packages\_pytest\threadexception.py:54: PytestUnhandledThreadExceptionWarning: Exception in thread Thread-912 (_do_reboot)
   
   Traceback (most recent call last):
@@ -290,8 +287,10 @@ FAILED tests/test_digital_identity_persona.py::test_voice_pipeline_spoken_saniti
 FAILED tests/test_edge_client.py::test_edge_client_daemon_local_kiosk_endpoints
 FAILED tests/test_media_only_dm.py::test_photo_success_returns_empty_text_only_image
 FAILED tests/test_web_executive_endpoints.py::test_executive_edge_telemetry_and_control
+FAILED tests/test_web_executive_endpoints.py::test_executive_edge_files_and_actions
+FAILED tests/test_web_executive_endpoints.py::test_executive_edge_startup_sequence
 FAILED tests/test_web_server.py::test_edge_control_speak_audio_forwarding - A...
-9 failed, 4193 passed, 28 skipped, 13 warnings in 705.04s (0:11:45)
+11 failed, 4191 passed, 28 skipped, 13 warnings in 707.91s (0:11:47)
 ```
 
 ## 5. Danh mục module & Trạng thái hiện tại
@@ -399,10 +398,10 @@ WORKSPACE: E:\BRAIN
 CURRENT_MILESTONE: Phase F (Self-Learning & Self-Upgrade Engine V1) Completed -> Ready for Phase B / C / Windows Job Object
 PYTHON_VERSION: 3.11.9 x64
 TEST_SUMMARY:
-  verdict: FAIL (9 test(s) failed)
+  verdict: FAIL (11 test(s) failed)
   total_tests: 4230
-  passed: 4193
-  failed: 9
+  passed: 4191
+  failed: 11
   skipped: 28
 CORE_CAPABILITIES_IMPLEMENTED:
   - Self-Learning & Self-Upgrade Engine V1 (src/quan_ai_brain/learning)

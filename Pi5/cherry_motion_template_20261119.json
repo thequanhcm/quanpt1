@@ -1,0 +1,391 @@
+{
+  "schema": "cherry_motion_template_v1",
+  "created": "2026-11-19T18:44:26",
+  "source": "E:/BRAIN/Pi5/mẫu — 11 video (7.5 phút, 22.8-57.8s/clip, 24-30fps, 9:16 dọc)",
+  "method": "vision_analyze contact sheets (6 khung/clip × 11) + cv2 6Hz frame-diff toàn khung + Haar face ROI (miệng/mắt) + upper/lower half ratio",
+  "status": "TEMPLATE_ONLY — CHƯA ÁP DỤNG. Chờ owner duyệt trước khi wire vào avatar_engine.js",
+  "guardrails": {
+    "no_identity_copy": "Chỉ học ĐẶC TÍNH chuyển động (tần suất, biên độ, nhịp) — không sao chép khuôn mặt/trang phục/nhân vật trong video mẫu",
+    "no_static_image_gif_video_loop": "Template điều khiển các module động đã có (head pose, blink, saccade, micro-expression, breathing, sway) — không phải sprite/video lặp",
+    "no_face_change": "KHÔNG thay đổi khuôn mặt qua trạng thái animation — chỉ tăng/giảm cường độ module có sẵn",
+    "no_hand_animation": "0/11 video mẫu có tay trong khung đủ rõ để học cử chỉ → KHÔNG thêm tay animate",
+    "no_simple_mouth_open_close": "Lip-sync vẫn qua AudioMouthDriver 12 viseme — template chỉ định nghĩa envelope/intensity"
+  },
+  "measured_global": {
+    "motion_mean_all": 0.0477,
+    "motion_p95_all": 0.0866,
+    "still_ratio_mean": 0.081,
+    "upper_to_lower_ratio_mean": 0.97,
+    "motion_cv_speaking": 0.42,
+    "motion_cv_idle": 0.85
+  },
+  "motion_states": {
+    "IDLE": {
+      "description": "Đứng/đợi — micro-motions tự nhiên, thỉnh thoảng chuyển mình nhẹ (như video 1, 6, 8)",
+      "sources": [
+        "1.mp4 still=0.19",
+        "6.mp4 gmean=0.023 still=0.27",
+        "8.mp4"
+      ],
+      "params": {
+        "head_pose_deg": {
+          "yaw": 3.5,
+          "pitch": 2.5,
+          "roll": 1.5
+        },
+        "breathing_period_s": 4.2,
+        "breathing_amp": 0.012,
+        "sway_period_s": 6.5,
+        "sway_amp_deg": 1.2,
+        "blink_min_ms": 2600,
+        "blink_max_ms": 6800,
+        "saccade_hz": 0.35,
+        "micro_expression_interval_s": [
+          3.5,
+          8.0
+        ],
+        "gaze": "camera 70% / off 30% (như video 1, 3, 8 — thỉnh thoảng liếc xa rồi quay lại)",
+        "still_windows": {
+          "enable": true,
+          "duration_s": [
+            1.5,
+            3.5
+          ],
+          "probability": 0.18,
+          "note": "8% thời gian tĩnh gần như tuyệt đối — quan sát từ still_ratio"
+        }
+      }
+    },
+    "LISTENING": {
+      "description": "Lắng nghe — đầu nghiêng nhẹ theo nhịp người nói, occasional nod, mắt giữ camera nhiều hơn",
+      "sources": [
+        "8.mp4 (tĩnh hơn, mắt giữ camera)",
+        "1.mp4 20% khung"
+      ],
+      "params": {
+        "head_pose_deg": {
+          "yaw": 2.5,
+          "pitch": 2.0,
+          "roll": 2.0
+        },
+        "nod_period_s": [
+          2.5,
+          4.0
+        ],
+        "nod_amp_deg": 1.8,
+        "nod_probability": 0.25,
+        "breathing_period_s": 4.0,
+        "breathing_amp": 0.01,
+        "blink_min_ms": 2800,
+        "blink_max_ms": 7000,
+        "saccade_hz": 0.25,
+        "gaze": "camera 85% / off 15%",
+        "micro_expression_interval_s": [
+          4.0,
+          9.0
+        ]
+      }
+    },
+    "THINKING": {
+      "description": "Suy nghĩ — mắt liếc lên/xa định kỳ, đầu nghiêng giữ, motion giảm rõ (video 1 80%: cúi đầu nhìn xuống, 59% video 8: mắt hạ)",
+      "sources": [
+        "1.mp4 80% cúi đầu",
+        "8.mp4 59% eyes downcast"
+      ],
+      "params": {
+        "head_pose_deg": {
+          "yaw": 1.5,
+          "pitch": 3.0,
+          "roll": 1.0
+        },
+        "gaze": "off-camera-up 45% / down 25% / camera 30%",
+        "gaze_shift_period_s": [
+          2.0,
+          3.5
+        ],
+        "breathing_period_s": 4.6,
+        "breathing_amp": 0.011,
+        "blink_min_ms": 3200,
+        "blink_max_ms": 8000,
+        "saccade_hz": 0.45,
+        "micro_expression_interval_s": [
+          5.0,
+          10.0
+        ],
+        "sway_amp_deg": 0.6
+      }
+    },
+    "SPEAKING": {
+      "description": "Đang nói — motion đều và liên tục (cv thấp), đầu gật/nghiêng theo nhịp câu, miệng viseme 4.5 syllable/s",
+      "sources": [
+        "3.mp4 cv=0.30",
+        "4.mp4 cv=0.29",
+        "7.mp4 (đều nhất, gmean=0.077)",
+        "11.mp4"
+      ],
+      "params": {
+        "head_pose_deg": {
+          "yaw": 5.0,
+          "pitch": 3.5,
+          "roll": 2.5
+        },
+        "nod_period_s": [
+          1.6,
+          2.6
+        ],
+        "nod_amp_deg": 2.2,
+        "nod_sync": "syllable_groups",
+        "breathing_period_s": 3.4,
+        "breathing_amp": 0.014,
+        "blink_min_ms": 2400,
+        "blink_max_ms": 6000,
+        "saccade_hz": 0.2,
+        "gaze": "camera 90% / off 10%",
+        "mouth_intensity_max": 0.85,
+        "syllable_rate_per_s": 4.5,
+        "micro_expression_interval_s": [
+          3.0,
+          7.0
+        ],
+        "sway_amp_deg": 1.0
+      }
+    },
+    "SURPRISED": {
+      "description": "Ngạc nhiên — đầu hơi ngả sau + mắt mở to + lưng thẳng đột ngột (chuyển mình nhanh)",
+      "sources": [
+        "1.mp4 60% ngửa mặt nhìn lên (tương tự tư thế ngạc nhiên)"
+      ],
+      "params": {
+        "head_pose_deg": {
+          "yaw": 2.0,
+          "pitch": -2.5,
+          "roll": 0.5
+        },
+        "attack_time_s": 0.18,
+        "settle_time_s": 1.2,
+        "breathing_amp": 0.02,
+        "breathing_period_s": 2.8,
+        "blink_min_ms": 4000,
+        "blink_max_ms": 9000,
+        "saccade_hz": 0.1
+      }
+    },
+    "APOLOGETIC": {
+      "description": "Xin lỗi — đầu cúi nhẹ, mắt hạ, motion chậm và êm (video 8 59%)",
+      "sources": [
+        "8.mp4 59% cúi đầu mắt hạ"
+      ],
+      "params": {
+        "head_pose_deg": {
+          "yaw": 1.0,
+          "pitch": 4.0,
+          "roll": 0.5
+        },
+        "gaze": "down 70% / camera 30%",
+        "breathing_amp": 0.009,
+        "breathing_period_s": 4.8,
+        "blink_min_ms": 2800,
+        "blink_max_ms": 6500,
+        "sway_amp_deg": 0.4
+      }
+    }
+  },
+  "engine_calibration_delta": {
+    "current_values": {
+      "YAW_MAX": 8,
+      "PITCH_MAX": 6,
+      "ROLL_MAX": 4,
+      "BLINK_MIN_MS": 2500,
+      "BLINK_MAX_MS": 6000,
+      "SACCADE_HZ": "2-4",
+      "MICRO_INTERVAL": "2.8-7s"
+    },
+    "proposed_changes": [
+      {
+        "param": "SACCADE_HZ",
+        "current": "2-4",
+        "proposed": "0.2-0.45 (state-dependent)",
+        "reason": "11 video mẫu: mắt GIỮ camera phần lớn thời gian, liếc nhanh thưa (eye_spikes 13-32/phút ≈ 0.2-0.5 Hz) — saccade 2-4Hz hiện tại quá rung so với mẫu"
+      },
+      {
+        "param": "MICRO_EXPRESSION_INTERVAL",
+        "current": "2.8-7s",
+        "proposed": "3.0-9.0s",
+        "reason": "motion_cv idle=0.85 → micro-expression thưa và ngẫu nhiên hơn"
+      },
+      {
+        "param": "STILL_WINDOWS",
+        "current": "không có",
+        "proposed": "mới — 8% thời gian tĩnh gần tuyệt đối (1.5-3.5s) khi IDLE",
+        "reason": "still_ratio trung bình 8.1% trên 11 video; 3 video có still_ratio 15-27% (1, 6, 8, 9, 11)"
+      },
+      {
+        "param": "UPPER_LOWER_SYNC",
+        "current": "không tách",
+        "proposed": "sway toàn thân nhẹ amp 1-1.2° đồng bộ head-breathing",
+        "reason": "upper_to_lower_ratio = 0.97 → chuyển động phân bố đều thân trên/dưới, không chỉ đầu"
+      }
+    ],
+    "unchanged": [
+      "12 viseme Preston Blair",
+      "mouth_intensity_max 0.85",
+      "BLINK base 2500-6000ms",
+      "angular inertia 0.13-0.15",
+      "damp 0.16-0.18"
+    ]
+  },
+  "video_catalog": [
+    {
+      "file": "1.mp4",
+      "dur_s": 57.3,
+      "type": "AI photoreal lifestyle",
+      "motion": "head turn cung lớn + gaze shift đa hướng, có đoạn ngồi mưa tĩnh",
+      "speaking": false,
+      "gmean": 0.0413,
+      "still": 0.193,
+      "takeaways": [
+        "gaze đa hướng",
+        "cúi đầu nhìn xuống tĩnh lặng",
+        "tay chạm quai xanh nhẹ"
+      ]
+    },
+    {
+      "file": "2.mp4",
+      "dur_s": 52.3,
+      "type": "real singer ethnic",
+      "motion": "hát — đầu nghiêng nhẹ theo nhịp, miệng mở đa dạng, thân tĩnh",
+      "speaking": true,
+      "gmean": 0.0399,
+      "still": 0.003,
+      "takeaways": [
+        "miệng mở biến thiên liên tục khi hát",
+        "đầu nghiêng 2 bên theo nhịp"
+      ]
+    },
+    {
+      "file": "3.mp4",
+      "dur_s": 22.8,
+      "type": "AI photoreal golden hour",
+      "motion": "cung quay đầu phải→camera→trái, cười nở dần",
+      "speaking": false,
+      "gmean": 0.0459,
+      "still": 0.007,
+      "takeaways": [
+        "cung quay đầu chậm 15-20s",
+        "nụ cười nở dần (smile ramp)"
+      ]
+    },
+    {
+      "file": "4.mp4",
+      "dur_s": 57.8,
+      "type": "AI photoreal bolero MV",
+      "motion": "hát + gesture tay phải diễn cảm + đầu nghiêng theo câu hát",
+      "speaking": true,
+      "gmean": 0.0444,
+      "still": 0.0,
+      "takeaways": [
+        "đầu nghiêng theo nhịp câu",
+        "nhắm mắt cảm xúc ở cao trào"
+      ]
+    },
+    {
+      "file": "5.mp4",
+      "dur_s": 28.0,
+      "type": "AI AI guitarist",
+      "motion": "ngồi chơi guitar — nhìn đàn↔camera xen kẽ, đầu cúi/ngẩng",
+      "speaking": false,
+      "gmean": 0.0436,
+      "still": 0.0,
+      "takeaways": [
+        "gaze xen kẽ đàn↔camera 4-6s/lần",
+        "đầu gật theo nhạc"
+      ]
+    },
+    {
+      "file": "6.mp4",
+      "dur_s": 32.0,
+      "type": "real podcast host",
+      "motion": "talking-head — gesture tay liên tục, đầu ổn định nhìn camera",
+      "speaking": true,
+      "gmean": 0.023,
+      "still": 0.272,
+      "takeaways": [
+        "đầu ổn định khi nói",
+        "gaze camera 100%",
+        "khoảng nghỉ miệng giữa câu"
+      ]
+    },
+    {
+      "file": "7.mp4",
+      "dur_s": 51.2,
+      "type": "real ethnic singer",
+      "motion": "hát hồng ca — lắc đầu theo nhịp, miệng nguyên âm đa dạng",
+      "speaking": true,
+      "gmean": 0.0774,
+      "still": 0.0,
+      "takeaways": [
+        "motion cao nhất sample",
+        "lắc đầu roll 2 bên theo nhịp"
+      ]
+    },
+    {
+      "file": "8.mp4",
+      "dur_s": 29.0,
+      "type": "AI autumn fashion",
+      "motion": "đi bộ chậm + tạo dáng, cúi/ngẩng luân phiên, tay chạm tóc/lá",
+      "speaking": false,
+      "gmean": 0.0354,
+      "still": 0.104,
+      "takeaways": [
+        "nhịp cúi-ngẩng 4-6s",
+        "pose chạm tóc mềm"
+      ]
+    },
+    {
+      "file": "9.mp4",
+      "dur_s": 36.1,
+      "type": "AI AI singer stage",
+      "motion": "hát ballad — sway đầu nhẹ, nhắm mắt đắm chìm, micro tĩnh",
+      "speaking": true,
+      "gmean": 0.0369,
+      "still": 0.158,
+      "takeaways": [
+        "sway 2 bên 3-5s",
+        "nhắm mắt ở nốt dài"
+      ]
+    },
+    {
+      "file": "10.mp4",
+      "dur_s": 56.3,
+      "type": "real cover singer",
+      "motion": "hát cover — đầu nghiêng trái↔chính diện, gesture tay nâng/đặt ngực",
+      "speaking": true,
+      "gmean": 0.0815,
+      "still": 0.0,
+      "takeaways": [
+        "đầu xoay trái↔chính diện",
+        "gesture tay theo câu hát"
+      ]
+    },
+    {
+      "file": "11.mp4",
+      "dur_s": 29.0,
+      "type": "AI PixVerse ao dai showcase",
+      "motion": "montage pose — nghiêng đầu đa hướng, cười, tay chạm tóc",
+      "speaking": false,
+      "gmean": 0.0555,
+      "still": 0.156,
+      "takeaways": [
+        "nghiêng đầu đa hướng nhẹ",
+        "pose chạm tóc/cổ"
+      ]
+    }
+  ],
+  "honest_limitations": [
+    "Frame-diff đo được cường độ NHƯNG không tách được đầu vs mắt vs miệng tuyệt đối (face ROI Haar chỉ ổn định 6/11 video — 2.mp4 face_detect=19 samples thấp)",
+    "Contact sheet 6 khung/clip → có thể miss chuyển động ngắn giữa 2 khung (đã bù bằng cv2 6Hz)",
+    "Không có audio waveform → 'speaking' suy ra từ mouth ROI + phụ đề, không phải từ âm thanh",
+    "9/11 video là AI-generated hoặc có beauty filter → chuyển động đã được 'làm đẹp', biên độ có thể NHỎ HƠN người thật",
+    "CHƯA áp dụng vào avatar_engine.js — template chỉ là tham số, cần sprint wire + test riêng"
+  ]
+}
