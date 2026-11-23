@@ -29,6 +29,7 @@ from quan_ai_brain.office.thread_analyzer import (  # noqa: E402
     format_thread_summary,
     normalize_subject,
 )
+from quan_ai_brain.office.memory_adapter import CherryMemoryAdapter  # noqa: E402  (S3)
 
 MAX_FETCH = 20  # list_messages clamp 1-20 (connector)
 
@@ -78,10 +79,27 @@ def main() -> int:
         return 0
 
     parts: list[str] = [f"🧵 TÓM TẮT LUỒNG EMAIL ({len(picked)} luồng / {len(msgs)} mail gần nhất)"]
+    # Sprint 3 (TASK-VMAIL-S3, owner duyệt 24/11): ghi Memory Candidate từ các
+    # mục đáng lưu (quyết định/cam kết/thay đổi) → quarantine R4 PENDING_REVIEW.
+    # §6.4: KHÔNG tự promote — owner duyệt qua approve; lỗi adapter không làm
+    # hỏng tóm tắt (degraded, in chú thích).
+    adapter = CherryMemoryAdapter()
+    total_candidates = 0
     for k, ms in picked:
         a = analyze_thread(ms)
         parts.append("\n" + "─" * 46)
         parts.append(format_thread_summary(a))
+        try:
+            cands = adapter.extract_candidates_from_thread(a, max_items=2)
+            made = [c for c in cands if c.created]
+            if made:
+                total_candidates += len(made)
+                for c in made:
+                    parts.append(f"🧠 Đã ghi candidate [{c.id[:8]}] → quarantine R4: “{c.content[:80]}”")
+        except Exception as exc:
+            parts.append(f"🧠 Ghi candidate lỗi (fail-honest, không ảnh hưởng tóm tắt): {type(exc).__name__}: {exc}")
+    if total_candidates:
+        parts.append(f"\n🧠 Tổng: {total_candidates} candidate vào quarantine R4 (chờ anh duyệt promote — em không tự xác minh).")
     parts.append("\n🛡️ R2: chỉ ĐỌC — không đánh dấu đã đọc, không gửi.")
     print("\n".join(parts))
     return 0

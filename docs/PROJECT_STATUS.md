@@ -2,6 +2,20 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 24/11/2026 — SPRINT 3 MEMORY-ADAPTER (MỚI) ✅ TRIỂN KHAI (owner: "duyệt" → Sprint 3 MEMORY-ADAPTER 24/11)
+- **Card**: TASK-VMAIL-S3 (§17 lộ trình: 2✅ Thread Analyzer → **3 Shared Memory** → 4 Reply Draft → 5 Workflow → 6 Dashboard).
+- **Module mới** `src/quan_ai_brain/office/memory_adapter.py` (~350 lines): `CherryMemoryAdapter` — lớp mỏng TRÊN Memory Service hiện có (master prompt §6: KHÔNG db trí nhớ độc lập, KHÔNG core thứ 2):
+  - **Retrieval §6.1/§6.3**: `retrieve_context/retrieve_email_history/retrieve_project_history/retrieve_decisions/retrieve_related_tasks` qua `MemoryFacade.search` (3.107 records: 3020 OBSERVED + 13 USER_PROVIDED + 72 VERIFIED); sort VERIFIED > OBSERVED > INFERENCE; **phát hiện mâu thuẫn** (2 hit tin được cùng chủ đề khác nội dung, token hóa bỏ dấu tiếng Việt ≥4 ký tự) → trả CẢ HAI kèm nguồn, không chọn hộ; mỗi hit giữ fact_level + source_ref + score.
+  - **Update §6.4**: `create_memory_candidate` — CHỈ nội dung có giá trị dài hạn (quyết định/cam kết/deadline/nhiệm vụ/thay đổi trạng thái, regex tiền tố); TỪ CHỐI email thô/nhạy cảm (mật khẩu/spam)/quá ngắn; đường ghi **QuarantineStore hiện có** (`data/quarantine.db`, status PENDING_REVIEW, expires 30 ngày) — KHÔNG BAO GIỜ tự vào semantic, KHÔNG tự promote (owner duyệt qua `approve()` riêng); quarantine thiếu → TỪ CHỐI ghi (fail-honest).
+  - **extract_candidates_from_thread**: quét ThreadAnalysis (S2) buckets decisions→commitments→changes, trích mail #id vào source_ref, max_items.
+  - **record_followup_experience**: ExperienceStore hiện có, OutcomeType.UNKNOWN (chưa có kết quả thật — fail-honest), phục vụ LessonLearner.
+- **Wire DM** `tools/office_thread_summary_runner.py`: sau analyze từng luồng → extract candidate (max 2/luồng) → in "🧠 Đã ghi candidate → quarantine R4"; lỗi adapter KHÔNG làm hỏng tóm tắt (degraded).
+- **Test**: `tests/test_office_memory_adapter.py` **24/24 PASS** (mock 100%); focused bộ office/vmail/tool **98/98 PASS**.
+- **Live E2E thật**: retrieval "battery" → 3 hits OBSERVED từ memory thật; candidate "chốt hạn nộp báo cáo" → quarantine.db **PENDING_REVIEW** (id 43ee2f5c…, source_ref email:LIVE_S3_SMOKE, expires 2026-12-23) → verify list_pending ✓ → đã dọn record smoke; brain.db sạch (xóa 2 record INFERENCE rác từ smoke facade-quarantine-None).
+- **Phát hiện + fix kiến trúc**: `MemoryFacade()` mặc định `quarantine=None` → `facade.add(memory_type='candidate')` rơi thẳng vào **semantic** với fact_level INFERENCE (hỏng §6.4) → adapter tự wire `QuarantineStore` trực tiếp + TỪ CHỐI ghi khi thiếu quarantine.
+- **Trung thực (chưa làm)**: DM tóm tắt luồng Khói 7 mail hiện không tạo candidate nào — 4 changes là yêu cầu hành động (điều chuyển vật tư) KHÔNG phải quyết định/cam kết tường minh → đúng chính sách nghiêm ngặt §6.4; BGE/semantic search của facade dùng in-memory fallback (BGE offline theo quyết định owner 18/11); chưa có lệnh DM "duyệt candidate" riêng (owner duyệt qua QuarantineStore.approve/id khi cần — sẽ wire DM nếu owner yêu cầu).
+
+
 ## 23/11/2026 ~20:30 — SPRINT 2 VMAIL THREAD-ANALYZER (MỚI) ✅ TRIỂN KHAI (owner: "duyệt, em làm các việc tiếp theo: Roadmap mục 6 Sprint 2 VMAIL Thread Analyzer")
 - **Card**: TASK-VMAIL-S2 (owner duyệt roadmap VMAIL 23/11: Thread Analyzer → Shared Memory → Reply Draft → Workflow → Dashboard).
 - **Module mới** `src/quan_ai_brain/office/thread_analyzer.py`: `normalize_subject()` (strip RE/FW + tách tag hủy/hoãn/dời khỏi key để ghép đúng gốc), `build_threads()`, `analyze_thread()` — **10 mục §5.3** (nội dung ban đầu, phản hồi, tham gia, yêu cầu, câu hỏi, cam kết, quyết định, thay đổi, tồn đọng, trạng thái) mỗi mục **dẫn nguồn mail #id + ngày**; `format_thread_summary()` **8 mục §5.4**; `format_10_items()`. Mâu thuẫn §5.3: hủy vs mời → trình bày CẢ HAI + nguồn, KHÔNG kết luận hộ. Deterministic, KHÔNG LLM, KHÔNG core thứ 2 (nạp trên VmailConnector Sprint 1).
