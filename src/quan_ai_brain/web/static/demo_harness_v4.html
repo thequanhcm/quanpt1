@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Motion Template Demo Harness v4 — Natural & Soft (21 videos)</title>
+<style>
+  html, body { margin:0; padding:0; background:#0a0e14; }
+  #stage { width: 540px; height: 540px; }
+  #label { position:fixed; top:8px; left:8px; color:#7fd8ff; font:600 20px monospace; z-index:9; }
+  #clock { position:fixed; top:34px; left:8px; color:#e8eef7; font:500 14px monospace; z-index:9; }
+  #template-note { position:fixed; bottom:8px; left:8px; color:#5a7a9a; font:12px monospace; z-index:9; }
+</style>
+</head>
+<body>
+<div id="label">—</div>
+<div id="clock">t=0.0s</div>
+<canvas id="stage" width="540" height="540"></canvas>
+<div id="template-note">TEMPLATE V2 — DEMO v4 (full pipeline · driver feedText · micro-gesture · emotion tone) — PREVIEW ONLY</div>
+<!-- ĐỦ 7 module giống index.html → toàn pipeline chuyển động thật hoạt động -->
+<script src="/static/avatar_protocol.js?v=v6m4b_1911"></script>
+<script src="/static/motion_scheduler.js?v=task001_1911"></script>
+<script src="/static/emotion_engine.js?v=task001_1911"></script>
+<script src="/static/audio_mouth_driver.js?v=amd_fix1_1911"></script>
+<script src="/static/presence_engine.js?v=task001_1911"></script>
+<script src="/static/body_motion_engine.js?v=v6mot_1911"></script>
+<script src="/static/avatar_engine.js?v=eyesfix1_1911"></script>
+<script>
+/* ============================================================
+   DEMO HARNESS v4 — "tự nhiên và mềm mại hơn nữa"
+   Khác v3 (đã vision-verified 0 ghost + miệng 5/5):
+   (A) FULL PIPELINE: load đủ 7 module như index.html thật →
+       PresenceEngine (gaze/eye-contact), BodyMotionEngine (shoulder sway +
+       lean + breathing + speech sync), MotionScheduler (micro-gesture),
+       EmotionTransitionEngine (chuyển tone mượt) đều chạy.
+   (B) MOUTH QUA DRIVER THẬT: AV._mouthDriver.feedText(text) + tick(60fps)
+       → viseme Preston Blair có open/jaw/spread riêng từng âm, physics
+       smooth 0.5 (không còn envelope thô) → onViseme cập nhật engine.
+       Bơm _audio_buf = intensity mỗi tick → envelope() THẬT →
+       MICRO-REST engine (restFactor 0.35 khi energy≤0.08) + body
+       speech-sync hoạt động đúng như production.
+   (C) MICRO-GESTURE: playGesture(context) thưa theo template 21 videos
+       (emphatic khi nhấn câu, curious khi hỏi, acknowledging khi nghe).
+   (D) EMOTION TONE theo câu: WARM_GREETING → CONFIDENT_SUCCESS →
+       CONSULTATIVE_INQUIRING → APOLOGETIC — khuôn mặt đổi tone mượt qua
+       EmotionTransitionEngine lerp.
+   (E) ANTI-GHOST giữ nguyên từ v2.2 (block _prevPortrait + preload).
+   ============================================================ */
+const SEQUENCE = [
+  {state:"IDLE",       dur:4.0, say:null, tone:"NEUTRAL",              gesture:null},
+  {state:"LISTENING",  dur:4.5, say:null, tone:"PATIENT_WAITING",      gesture:"listening", gAt:1.2},
+  {state:"THINKING",   dur:3.5, say:null, tone:"ANALYTICAL_THINKING",  gesture:"considering", gAt:1.5},
+  {state:"SPEAKING",   dur:8.5, say:"Xin chào anh, em là Cherry — trợ lý ảo của anh. Em đã học chuyển động từ hai mươi mốt video mẫu thật.", tone:"WARM_GREETING", gesture:"emphatic", gAt:4.0},
+  {state:"LISTENING",  dur:3.0, say:null, tone:"PATIENT_WAITING",      gesture:"acknowledging", gAt:1.5},
+  {state:"SPEAKING",   dur:7.0, say:"Hôm nay anh cần em hỗ trợ việc gì? Em sẽ kiểm tra lịch họp và báo cáo giúp anh ngay.", tone:"CONSULTATIVE_INQUIRING", gesture:"curious", gAt:3.5},
+  {state:"SURPRISED",  dur:2.8, say:null, tone:"SURPRISED",            gesture:null},
+  {state:"APOLOGETIC", dur:3.8, say:"Xin lỗi anh, em sẽ điều chỉnh lại ngay bây giờ.", tone:"APOLOGETIC", gesture:"empathic", gAt:1.8},
+  {state:"SPEAKING",   dur:6.0, say:"Toàn bộ chuyển động của em được đo từ video mẫu — anh thấy môi em mấp máy theo lời nói này.", tone:"CONFIDENT_SUCCESS", gesture:"responding", gAt:3.0},
+  {state:"IDLE",       dur:3.2, say:null, tone:"NEUTRAL",              gesture:null}
+];
+const TOTAL = SEQUENCE.reduce((s,x)=>s+x.dur,0); // 46.3s
+
+// PRELOAD toàn bộ portrait v3 (anti-ghost từ v2.2)
+const PORTRAITS = ["avatar_v3_thu_thai","avatar_v3_vui_suong","avatar_v3_tap_trung",
+  "avatar_v3_tuc_gian","avatar_v3_buon_ba","avatar_v3_nghieng_dau","avatar_v3_ngac_nhien",
+  "avatar_v3_chop_mat","avatar_v3_dang_noi","avatar_v3_lang_nghe"];
+const preloadDone = Promise.all(PORTRAITS.map(nm => new Promise(res => {
+  const im = new Image();
+  im.onload = () => res(nm); im.onerror = () => res(nm);
+  im.src = '/static/assets/avatar/' + nm + '.png?v=v6full2_1511';
+})));
+let t0 = null;
+const label = document.getElementById('label');
+const clockEl = document.getElementById('clock');
+
+let AV = null;
+window.__SEQ = SEQUENCE; window.__TOTAL = TOTAL;
+preloadDone.then(() => {
+  AV = new DigitalHumanAvatar('stage', {
+    basePath: '/static/assets/avatar',
+    initialState: 'IDLE'
+  });
+  window.__AV = AV;
+  setupHarness();
+  t0 = performance.now();
+  console.log('[harness-v4] full pipeline ready, timeline starts');
+});
+
+function setupHarness(){
+// ---------- (1) ANTI-GHOST: cấm crossfade 2 lớp (từ v2.2) ----------
+try {
+  Object.defineProperty(AV, '_prevPortrait', {
+    get() { return null; },
+    set(v) { /* blocked */ },
+    configurable: true
+  });
+} catch (e) { console.warn('defineProperty fail', e); }
+const _origSetState = AV.setState.bind(AV);
+AV.setState = function(s){
+  _origSetState(s);
+  this._prevPortrait = null;
+};
+
+// ---------- (2) MOUTH QUA DRIVER THẬT ----------
+// feedText → _text_buf visemes (Preston Blair, 80ms/viseme mặc định)
+// tick(16ms) → _cur {open,jaw,spread,intensity} physics-smooth
+// onViseme callback (constructor) tự cập nhật engine.activeViseme + currentOpenRatio
+const DRV = AV._mouthDriver;
+if (!DRV) { console.warn('[v4] NO MOUTH DRIVER — fallback missing!'); return; }
+
+let speechActive = false;
+// Tăng tốc độ nói 80ms/viseme (12.5 viseme/s char-level) — Tiếng Việt 1 char ≈
+// 0.5 syllable thực → đặt 62ms cho ~4.5 syll/s (template 21 videos)
+DRV._viseme_dur_ms = 62;
+
+function startSpeech(text){
+  DRV.start(null, {});            // _active=true (session)
+  DRV.feedText(text);             // mode=text, buf=visemes
+  speechActive = true;
+}
+function stopSpeech(){
+  speechActive = false;
+  DRV._mode = "idle";             // tick → REST mượt qua physics smooth
+  // giữ _active=false để engine body setSpeaking(false) → speech-sync tắt
+  DRV._active = false;
+}
+
+// Tick driver 60fps + BƠM _audio_buf = intensity → envelope() THẬT
+// (envelope = avg(_audio_buf)*4 clamp 0..1 — dùng cho micro-rest + body sync)
+const driverTick = setInterval(() => {
+  if (!AV || t0 === null) return;
+  const cur = DRV.tick(16);       // {viseme, open, jaw, spread, intensity}
+  // bơm RMS giả lập từ intensity thực của driver (0..0.7 text mode)
+  const rms = Math.min(0.25, (cur.intensity || 0) * 0.36);
+  DRV._audio_buf.push(rms);
+  if (DRV._audio_buf.length > DRV._audio_buf_max) DRV._audio_buf.shift();
+}, 16);
+
+// ---------- (2b) MOUTH CO-ARTICULATION (scale theo openRatio + spread) ----------
+// Engine _renderMouth chỉ đổi ALPHA theo openRatio — asset luôn full-open →
+// mọi viseme trông giống nhau ("2-3 pose loop" mà vision bắt được ở v4 pass 1).
+// Harness bọc _renderMouth: transform scale-Y quanh TÂM MIỆNG theo openRatio
+// (AA 0.85 → miệng mở cao; S_T/CH 0.20 → miệng hẹp; REST/MM 0.05 → gần khép)
+// + scale-X nhẹ theo spread (EE/WQ dẹt-tròn) → hình miệng THẬT SỰ khác nhau
+// từng âm, chuyển tiếp mượt vì openRatio đã physics-smooth trong driver.
+const _origRenderMouth = AV._renderMouth.bind(AV);
+AV._renderMouth = function(ctx, scaleX, scaleY, breathOffset){
+  const open = Math.max(0, Math.min(1, this.currentOpenRatio || 0));
+  if (open <= 0.08) { _origRenderMouth(ctx, scaleX, scaleY, breathOffset); return; }
+  // tâm miệng trong 1024 master space
+  const mb = this.MOUTH_BOX || {x:427, y:630, w:240, h:100};
+  const cx = (mb.x + mb.w/2) * scaleX;
+  const cy = (mb.y + mb.h/2) * scaleY + (breathOffset || 0);
+  // open 0.08..1 → scaleY 0.45..1.0 (khép = miệng hẹp lại, không chỉ mờ đi)
+  const sy = 0.45 + 0.55 * open;
+  // spread từ viseme hiện tại: EE +0.7 rộng, OO/WQ -0.3..-0.6 tròn lại
+  let spread = 0;
+  const vis = this.activeViseme;
+  if (vis === 'E' || vis === 'I') spread = 0.12;
+  else if (vis === 'O' || vis === 'U') spread = -0.10;
+  const sx = 1 + spread;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(sx, sy);
+  ctx.translate(-cx, -cy);
+  _origRenderMouth(ctx, scaleX, scaleY, breathOffset);
+  ctx.restore();
+};
+
+// ---------- (3) STATE MACHINE + SPEECH + TONE + GESTURE ----------
+let segIdx = -1;
+function findSeg(t){
+  let acc = 0;
+  for (let i = 0; i < SEQUENCE.length; i++){
+    if (t < acc + SEQUENCE[i].dur) return {idx: i, state: SEQUENCE[i].state, segT: t - acc, seg: SEQUENCE[i]};
+    acc += SEQUENCE[i].dur;
+  }
+  return null;
+}
+function speechDurationSec(text){
+  // feedText: 1 char → 1 viseme @62ms
+  return text.length * 0.062;
+}
+let gestureFired = false;
+
+const harnessTick = setInterval(() => {
+  if (!AV || t0 === null) return;
+  const now = performance.now();
+  const t = (now - t0) / 1000;
+  const cur = findSeg(t);
+  clockEl.textContent = 't=' + t.toFixed(1) + 's / ' + TOTAL + 's';
+  if (!cur){ clearInterval(harnessTick); clearInterval(driverTick); stopSpeech(); label.textContent = 'DEMO END'; return; }
+  if (cur.idx !== segIdx){
+    segIdx = cur.idx;
+    gestureFired = false;
+    AV.setState(cur.state);
+    if (cur.seg.say) startSpeech(cur.seg.say); else stopSpeech();
+    if (cur.seg.tone && AV.setMicroExpression) AV.setMicroExpression(cur.seg.tone);
+    label.textContent = cur.state + (cur.seg.say ? ' · driver lip-sync' : '') + (cur.seg.tone && cur.seg.tone !== 'NEUTRAL' ? ' · ' + cur.seg.tone : '');
+  }
+  // micro-gesture thưa (1 lần/segment, tại gAt giây) — scheduler blend mượt
+  if (cur.seg.gesture && !gestureFired && cur.segT >= cur.seg.gAt){
+    gestureFired = true;
+    const picked = AV.playGesture(cur.seg.gesture);
+    if (picked) console.log('[v4] gesture:', picked);
+  }
+  // hết câu nói → micro-rest tự nhiên (để driver decay về REST)
+  if (cur.seg.say && speechActive){
+    const spoken = (performance.now() - (DRV._viseme_start || now)) / 1000;
+    if (spoken > speechDurationSec(cur.seg.say) + 0.4) stopSpeech();
+  }
+}, 60);
+
+console.log('[harness-v4] booting, TOTAL=' + TOTAL + 's');
+}
+</script>
+</body>
+</html>

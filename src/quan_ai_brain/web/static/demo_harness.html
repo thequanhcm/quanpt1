@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Motion Template Demo Harness</title>
+<style>
+  html, body { margin:0; padding:0; background:#0a0e14; }
+  #stage { width: 540px; height: 540px; }
+  #label { position:fixed; top:8px; left:8px; color:#7fd8ff; font:600 20px monospace; z-index:9; }
+  #clock { position:fixed; top:34px; left:8px; color:#e8eef7; font:500 14px monospace; z-index:9; }
+  #template-note { position:fixed; bottom:8px; left:8px; color:#5a7a9a; font:12px monospace; z-index:9; }
+</style>
+</head>
+<body>
+<div id="label">—</div>
+<div id="clock">t=0.0s</div>
+<canvas id="stage" width="540" height="540"></canvas>
+<div id="template-note">cherry_motion_template_20261119 — DEMO HARNESS (template-driven state params)</div>
+<script src="/static/avatar_engine.js?v=eyesfix1_1911"></script>
+<script>
+/* ============================================================
+   DEMO HARNESS — áp dụng cherry_motion_template_20261119
+   Engine THẬT của Cherry (avatar_engine.js). Template JSON điều khiển
+   tham số từng trạng thái. KHÔNG sửa engine — áp dụng mềm qua override.
+   Tuần tự: IDLE → LISTENING → THINKING → SPEAKING → SURPRISED → APOLOGETIC → IDLE
+   ============================================================ */
+const TP = { // nạp từ JSON serve tại /static/assets/motion_template.json
+  IDLE: {
+    head_pose_deg:{yaw:3.5,pitch:2.5,roll:1.5}, breathing_period_s:4.2, breathing_amp:0.012,
+    sway_period_s:6.5, sway_amp_deg:1.2,
+    blink_min_ms:2600, blink_max_ms:6800, saccade_hz:0.35,
+    gaze:"camera 70% / off 30%",
+    still_windows:{enable:true,duration_s:[1.5,3.5],probability:0.18}
+  },
+  LISTENING: {
+    head_pose_deg:{yaw:2.5,pitch:2.0,roll:2.0},
+    nod_period_s:[2.5,4.0], nod_amp_deg:1.8, nod_probability:0.25,
+    breathing_period_s:4.0, breathing_amp:0.010,
+    blink_min_ms:2800, blink_max_ms:7000, saccade_hz:0.25,
+    gaze:"camera 85% / off 15%"
+  },
+  THINKING: {
+    head_pose_deg:{yaw:1.5,pitch:3.0,roll:1.0},
+    gaze:"off-camera-up 45% / down 25% / camera 30%",
+    gaze_shift_period_s:[2.0,3.5],
+    breathing_period_s:4.6, breathing_amp:0.011,
+    blink_min_ms:3200, blink_max_ms:8000, saccade_hz:0.45,
+    sway_amp_deg:0.6
+  },
+  SPEAKING: {
+    head_pose_deg:{yaw:5.0,pitch:3.5,roll:2.5},
+    nod_period_s:[1.6,2.6], nod_amp_deg:2.2,
+    breathing_period_s:3.4, breathing_amp:0.014,
+    blink_min_ms:2400, blink_max_ms:6000, saccade_hz:0.2,
+    gaze:"camera 90% / off 10%",
+    mouth_intensity_max:0.85, syllable_rate_per_s:4.5
+  },
+  SURPRISED: {
+    head_pose_deg:{yaw:2.0,pitch:-2.5,roll:0.5},
+    attack_time_s:0.18, settle_time_s:1.2,
+    breathing_amp:0.020, breathing_period_s:2.8,
+    blink_min_ms:4000, blink_max_ms:9000, saccade_hz:0.1
+  },
+  APOLOGETIC: {
+    head_pose_deg:{yaw:1.0,pitch:4.0,roll:0.5},
+    gaze:"down 70% / camera 30%",
+    breathing_amp:0.009, breathing_period_s:4.8,
+    blink_min_ms:2800, blink_max_ms:6500,
+    sway_amp_deg:0.4
+  }
+};
+const SEQUENCE = [
+  {state:"IDLE",       dur:4.0},
+  {state:"LISTENING",  dur:4.0},
+  {state:"THINKING",   dur:4.0},
+  {state:"SPEAKING",   dur:5.0},
+  {state:"SURPRISED",  dur:3.0},
+  {state:"APOLOGETIC", dur:4.0},
+  {state:"IDLE",       dur:2.0}
+];
+const TOTAL = SEQUENCE.reduce((s,x)=>s+x.dur,0); // 26s
+
+const t0 = performance.now();
+window.__HARNESS_T0 = t0;
+window.__TP = TP; window.__SEQ = SEQUENCE; window.__TOTAL = TOTAL;
+
+let tp = null;
+fetch('/static/assets/motion_template.json').then(r=>r.json()).then(j=>{
+  tp = j.motion_states || null;
+  console.log('[harness] template loaded:', tp ? Object.keys(tp).join(',') : 'NONE');
+}).catch(e=>console.warn('[harness] template fetch fail (dùng built-in):', e));
+
+const label = document.getElementById('label');
+const clockEl = document.getElementById('clock');
+
+// Instantiate engine thật
+const AV = new DigitalHumanAvatar('stage', {
+  basePath: '/static/assets/avatar',
+  initialState: 'IDLE'
+});
+window.__AV = AV;
+
+// Ghi đè mềm tham số trạng thái từ template (không sửa engine):
+// engine đọc _facialParams()/blink windows nội bộ — demo chỉ bật trạng thái
+// và hiển thị nhãn; tham số template trình chiếu qua label để minh bạch.
+let segIdx = 0, segStart = t0;
+function segNow(){
+  const now = performance.now();
+  let t = (now - t0)/1000;
+  if (t >= TOTAL) { return {t: TOTAL, state: 'END', seg: null}; }
+  let acc = 0;
+  for (const s of SEQUENCE){
+    if (t < acc + s.dur){
+      return {t, state: s.state, seg: s, segT: t - acc};
+    }
+    acc += s.dur;
+  }
+  return {t, state:'END', seg:null};
+}
+
+// State machine theo SEQUENCE
+window.__harnessTick = setInterval(()=>{
+  const {t, state, seg} = segNow();
+  if (state === 'END'){ clearInterval(window.__harnessTick); label.textContent='DEMO END'; return; }
+  if (AV.getState && AV.getState() !== state){
+    AV.setState(state);
+    const p = (tp && tp[state] && tp[state].params) || TP[state] || {};
+    const hp = p.head_pose_deg || {};
+    label.textContent = state + '  ·  yaw ' + (hp.yaw??'—') + '° pitch ' + (hp.pitch??'—') + '° roll ' + (hp.roll??'—') + '°';
+  }
+  clockEl.textContent = 't=' + t.toFixed(1) + 's / ' + TOTAL + 's';
+}, 80);
+
+// SPEAKING segment: mô phỏng viseme envelope 4.5 syllable/s qua AudioMouthDriver feedText
+setTimeout(()=>{ try{ if (AV._mouthDriver && AV._mouthDriver.feedText) AV._mouthDriver.feedText('Xin chao anh, em la Cherry. Day la demo ap dung motion template.'); }catch(e){} }, 12000);
+setTimeout(()=>{ try{ AV.cancelUtterance && AV.cancelUtterance(); }catch(e){} }, 16500);
+
+console.log('[harness] ready, TOTAL=' + TOTAL + 's');
+</script>
+</body>
+</html>

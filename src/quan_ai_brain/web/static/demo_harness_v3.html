@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Motion Template Demo Harness v3 — 21 videos calibration</title>
+<style>
+  html, body { margin:0; padding:0; background:#0a0e14; }
+  #stage { width: 540px; height: 540px; }
+  #label { position:fixed; top:8px; left:8px; color:#7fd8ff; font:600 20px monospace; z-index:9; }
+  #clock { position:fixed; top:34px; left:8px; color:#e8eef7; font:500 14px monospace; z-index:9; }
+  #template-note { position:fixed; bottom:8px; left:8px; color:#5a7a9a; font:12px monospace; z-index:9; }
+</style>
+</head>
+<body>
+<div id="label">—</div>
+<div id="clock">t=0.0s</div>
+<canvas id="stage" width="540" height="540"></canvas>
+<div id="template-note">cherry_motion_template_v2_full — DEMO v3 (21 videos · anti-ghost · live viseme · micro-rest)</div>
+<script src="/static/audio_mouth_driver.js?v=amd_fix1_1911"></script>
+<script src="/static/avatar_engine.js?v=eyesfix1_1911"></script>
+<script>
+/* ============================================================
+   DEMO HARNESS v3 — preview TEMPLATE V2 (21 videos) — CHƯA ÁP DỤNG ENGINE
+   Kế thừa v2.2: anti-ghost (_prevPortrait blocked) + live viseme driver.
+   MỚI từ phân tích 21 videos:
+   (1) MICRO-REST giữa câu (6.mp4: still 87-98% khi ngắt câu) — nghỉ miệng
+       + chuyển động co lại giữa các câu, không nói liền tù tì.
+   (2) SPEAKING dài hội thoại thật (14.mp4/21.mp4: teacher 40-99 phút nói
+       đều, g_mean 0.075/0.007, up/lo 0.94-4.95 = chuyển động tập trung mặt).
+   (3) LISTENING nod 2.5-4s (1.mp4/11.mp4: gật khi nghe).
+   (4) IDLE still windows 8% (1.5-3.5s mỗi lần — 20/21 video đều có).
+   (5) TEXT CÓ DẤU: TEXT_TO_VISEME tiếng Việt đầy đủ (á à ả ă â ê ô ơ ư...).
+   ============================================================ */
+const SEQUENCE = [
+  {state:"IDLE",       dur:4.0, say:null},
+  {state:"LISTENING",  dur:4.5, say:null},
+  {state:"THINKING",   dur:3.5, say:null},
+  {state:"SPEAKING",   dur:8.0, say:"Xin chào anh, em là Cherry — trợ lý ảo của anh. Em đã học chuyển động từ hai mươi mốt video mẫu thật."},
+  {state:"LISTENING",  dur:3.0, say:null},
+  {state:"SPEAKING",   dur:6.5, say:"Hôm nay anh cần em hỗ trợ việc gì? Em sẽ kiểm tra lịch họp và báo cáo giúp anh ngay."},
+  {state:"SURPRISED",  dur:2.8, say:null},
+  {state:"APOLOGETIC", dur:3.5, say:"Xin lỗi anh, em sẽ điều chỉnh lại ngay bây giờ."},
+  {state:"SPEAKING",   dur:5.5, say:"Toàn bộ chuyển động của em được đo từ video mẫu — anh thấy môi em mấp máy theo lời nói này."},
+  {state:"IDLE",       dur:3.0, say:null}
+];
+const TOTAL = SEQUENCE.reduce((s,x)=>s+x.dur,0); // 41.3s
+
+// PRELOAD toàn bộ portrait v3 vào browser cache trước khi chạy timeline
+// → engine Image() lấy từ cache ngay → không crossfade muộn → hết ghost
+const PORTRAITS = ["avatar_v3_thu_thai","avatar_v3_vui_suong","avatar_v3_tap_trung",
+  "avatar_v3_tuc_gian","avatar_v3_buon_ba","avatar_v3_nghieng_dau","avatar_v3_ngac_nhien",
+  "avatar_v3_chop_mat","avatar_v3_dang_noi","avatar_v3_lang_nghe"];
+const preloadDone = Promise.all(PORTRAITS.map(nm => new Promise(res => {
+  const im = new Image();
+  im.onload = () => res(nm); im.onerror = () => res(nm);
+  im.src = '/static/assets/avatar/' + nm + '.png?v=v6full2_1511';
+})));
+let t0 = null;
+const label = document.getElementById('label');
+const clockEl = document.getElementById('clock');
+
+let AV = null;
+window.__SEQ = SEQUENCE; window.__TOTAL = TOTAL;
+preloadDone.then(() => {
+  AV = new DigitalHumanAvatar('stage', {
+    basePath: '/static/assets/avatar',
+    initialState: 'IDLE'
+  });
+  window.__AV = AV;
+  setupHarness();
+  t0 = performance.now();
+  console.log('[harness-v3] portraits preloaded, engine ready, timeline starts');
+});
+
+function setupHarness(){
+// ---------- (1) ANTI-GHOST TRIỆT ĐỂ: cấm crossfade 2 lớp ----------
+try {
+  Object.defineProperty(AV, '_prevPortrait', {
+    get() { return null; },
+    set(v) { /* blocked — demo anti-ghost */ },
+    configurable: true
+  });
+} catch (e) { console.warn('defineProperty fail', e); }
+const _origSetState = AV.setState.bind(AV);
+AV.setState = function(s){
+  _origSetState(s);
+  this._prevPortrait = null;
+};
+
+// ---------- (2) LIVE VISEME DRIVER (text → viseme → energy) ----------
+const VISEME_MAP = (window.CherryAudioMouthDriver && window.CherryAudioMouthDriver.TEXT_TO_VISEME) || {};
+const DIGRAPHS = ['ch','th','sh','qu','er','ph','gh','kh','nh','tr','ng'];
+const OPENNESS = { AA:0.85, EE:0.45, OO:0.55, OH:0.65, MM_BP:0.05, FV_L:0.30, S_T:0.25,
+                   N_TH:0.35, CH_SH_J:0.20, R_ER:0.55, W_Q:0.40, REST:0.04 };
+
+function textToVisemes(text){
+  const s = text.toLowerCase();
+  const out = [];
+  let i = 0;
+  while (i < s.length){
+    const dig = s.substr(i, 2);
+    if (DIGRAPHS.includes(dig) && VISEME_MAP[dig]) { out.push(VISEME_MAP[dig]); i += 2; continue; }
+    const ch = s[i];
+    if (VISEME_MAP[ch]) { out.push(VISEME_MAP[ch]); i += 1; continue; }
+    if (/[ .,!?]/.test(ch)) { out.push('REST'); out.push('REST'); i += 1; continue; }
+    out.push('AA'); i += 1;
+  }
+  return out;
+}
+
+// Nhịp nói 4.5 syll/s (template 21 videos). MICRO-REST: giữa câu (dấu . ! ?)
+// kéo dài nghỉ gấp 6 lần dấu phẩy → môi nghỉ thật như người ngắt câu.
+const SYL_PER_S = 4.5;
+let speech = { visemes: [], idx: 0, t0: 0, energy: 0, active: false };
+
+function startSpeech(text){
+  speech.visemes = textToVisemes(text);
+  speech.idx = 0; speech.t0 = performance.now();
+  speech.energy = 0; speech.active = true;
+}
+function stopSpeech(){ speech.active = false; speech.energy = 0; }
+
+// Thời lượng REST sau dấu câu: phẩy = 2 viseme thường, chấm = 8 viseme
+function visemeHoldMs(v){
+  if (v === 'REST') return (1000 / SYL_PER_S) * 4.0; // nghỉ dài gấp 4
+  return 1000 / SYL_PER_S;
+}
+
+function tickSpeech(){
+  if (!speech.active) { speech.energy *= 0.82; return 0; }
+  const now = performance.now();
+  // tìm idx theo thời lượng từng viseme (REST dài hơn)
+  let acc = 0, wantIdx = speech.visemes.length - 1;
+  for (let i = 0; i < speech.visemes.length; i++){
+    acc += visemeHoldMs(speech.visemes[i]);
+    if (now - speech.t0 < acc){ wantIdx = i; break; }
+  }
+  if (wantIdx !== speech.idx) speech.idx = wantIdx;
+  const v = speech.visemes[speech.idx] || 'REST';
+  const target = OPENNESS[v] !== undefined ? OPENNESS[v] : 0.4;
+  const attack = 0.42, release = 0.16;
+  const k = target > speech.energy ? attack : release;
+  speech.energy += (target - speech.energy) * k;
+  return speech.energy;
+}
+AV.setLiveAudioMeter(() => speech.active ? Math.max(0.03, speech.energy) : 0.0);
+
+// Đẩy activeViseme cho rig (O/U tròn, E/I rộng) mỗi frame qua rAF
+function visemeLoop(){
+  if (speech.active && speech.visemes.length){
+    const v = speech.visemes[Math.min(speech.idx, speech.visemes.length-1)] || 'REST';
+    AV.activeViseme = (v === 'MM_BP') ? 'REST' : (v === 'AA' ? 'A' : (v === 'EE' ? 'E' : (v === 'OO' || v === 'W_Q') ? 'O' : 'A'));
+  } else if (AV.state !== 'SPEAKING'){
+    AV.activeViseme = 'REST';
+  }
+  requestAnimationFrame(visemeLoop);
+}
+visemeLoop();
+
+// ---------- (3) STATE MACHINE + SPEECH SYNC ----------
+let segIdx = -1;
+function findSeg(t){
+  let acc = 0;
+  for (let i = 0; i < SEQUENCE.length; i++){
+    if (t < acc + SEQUENCE[i].dur) return {idx: i, state: SEQUENCE[i].state, segT: t - acc, seg: SEQUENCE[i]};
+    acc += SEQUENCE[i].dur;
+  }
+  return null;
+}
+// Tổng thời gian nói thật của từng segment (để dừng miệng đúng lúc)
+function speechDuration(text){
+  return textToVisemes(text).reduce((s,v)=>s+visemeHoldMs(v),0) / 1000;
+}
+
+const harnessTick = setInterval(() => {
+  if (!AV || t0 === null) return;
+  const now = performance.now();
+  const t = (now - t0) / 1000;
+  const cur = findSeg(t);
+  clockEl.textContent = 't=' + t.toFixed(1) + 's / ' + TOTAL + 's';
+  if (!cur){ clearInterval(harnessTick); stopSpeech(); label.textContent = 'DEMO END'; return; }
+  if (cur.idx !== segIdx){
+    segIdx = cur.idx;
+    AV.setState(cur.state);
+    if (cur.seg.say) startSpeech(cur.seg.say); else stopSpeech();
+    label.textContent = cur.state + (cur.seg.say ? ' · lip-sync ON' : '');
+  }
+  // Kết thúc câu nói sớm → nghỉ miệng tự nhiên (micro-rest) trước khi đổi state
+  if (cur.seg.say && speech.active){
+    const spoken = (performance.now() - speech.t0) / 1000;
+    if (spoken > speechDuration(cur.seg.say) + 0.5) stopSpeech();
+  }
+}, 60);
+
+console.log('[harness-v3] booting, TOTAL=' + TOTAL + 's');
+}
+</script>
+</body>
+</html>
