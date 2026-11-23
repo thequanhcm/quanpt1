@@ -8,7 +8,7 @@
 |----------|---------|
 | Task Scheduler | 5 Ready (4 nền + 1 mirror D) + 3 Disabled (manual-start đúng chủ trương) |
 | Heartbeat runtime | 4/5 file (backup_2am ok, mirror ok, pi5_monitor ok, **morning_report error do netchat bot env test**, **pi5_file_sync error do Pi5 OFFLINE**) |
-| Full regression pytest | **4124 passed / 5 failed / 38 skipped** (232 file test, 4167 test cases) |
+| Full regression pytest | **4258 passed / 5 failed / 38 skipped** (full single run 15:26 phút, 4301 test cases — số chính thức) |
 | Core modules | 12/12 init OK (MemoryFacade, ApprovalCardService, VmailConnector, SOAPMailConnector, LessonLearner, CausalGraph, LongTermMemoryStore, PermissionResolver) |
 | Memory live data | 53 chunks pre-loaded (52 SEMANTIC + 1 PROCEDURAL), search live hoạt động |
 | Vmail LIVE | Auth OK (StructuredResult ok) + 13 folder thật (USER_ROOT, Archive, Briefcase...) |
@@ -106,13 +106,18 @@ Dev server:              OFF (manual-start)
 Cherry servers:          OFF (manual-start)
 ```
 
-## 9. FULL REGRESSION (232 file test, 4167 cases)
+## 9. FULL REGRESSION — FINAL CHÍNH THỨC (full single run)
+
+Chạy một lần toàn bộ suite (proc_087bb20fba3b, log `logs/pytest_final_20261123.log`, 322 dòng, 926.22s = 15:26):
 
 ```
-PASSED: 4124 (99.0%)
-FAILED: 5 (0.12% — TẤT CẢ EXPECTED)
-SKIPPED: 38 (0.91% — Pi5 env / BGE offline / launcher deprecated)
+PASSED:  4258 (99.0%)
+FAILED:  5 (0.12% — TẤT CẢ EXPECTED)
+SKIPPED: 38 (0.91% — Pi5 env / BGE offline / dual servers / launcher deprecated)
+TOTAL:   4301 test cases
 ```
+
+Ghi chú trung thực: lần chạy theo batch 10 file (phiên tối 24/11) cho 4124P/5F/38S — chênh 134 test so với full single run do một số test phụ thuộc thứ tự/state khi chạy rời. **Số chính thức = full single run: 4258/5/38.** 5 fail trùng khớp 100% danh sách expected.
 
 ### 5 FAILED (fail-honest đúng theo chủ trương hiện tại):
 
@@ -135,7 +140,7 @@ SKIPPED: 38 (0.91% — Pi5 env / BGE offline / launcher deprecated)
 
 - ✅ 5/5 Task Scheduler Ready hoạt động đúng chu kỳ
 - ✅ 4/5 Heartbeat live ghi được (1 expected error do netchat bot env test)
-- ✅ 4124/4167 test cases PASS (99.0%)
+- ✅ 4258/4301 test cases PASS (99.0% — full single run chính thức)
 - ✅ 5 fail = expected (fail-honest đúng nguyên nhân + chủ trương)
 - ✅ Memory có 53 chunks thật + search live OK
 - ✅ Vmail/Email LIVE (auth OK, 13 folder, 13 mails thật)
