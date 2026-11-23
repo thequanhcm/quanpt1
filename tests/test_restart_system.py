@@ -13,19 +13,21 @@ RESTART_TOOL = WORKSPACE_ROOT / "tools" / "restart_system.py"
 
 def test_restart_script_exists() -> None:
     assert RESTART_TOOL.exists()
-    # (30/10/2026) Launcher chuẩn hiện tại là TONY_START.bat; bat cũ
-    # KHOI_DONG_QUAN_AI_BRAIN.bat đã bị xóa trong cleanup b63d62d.
-    assert (WORKSPACE_ROOT / "TONY_START.bat").exists() or (
-        WORKSPACE_ROOT / "KHOI_DONG_QUAN_AI_BRAIN.bat"
-    ).exists()
-    assert (
-        (WORKSPACE_ROOT / "TU_DONG_KHOI_DONG_LAI_HE_THONG.bat").exists()
-        or (WORKSPACE_ROOT / "tools" / "legacy_launchers" / "TU_DONG_KHOI_DONG_LAI_HE_THONG.bat").exists()
+    # (23/11/2026) Manual-start chuẩn sau cleanup: KHOI_DONG_CHERRY.bat +
+    # TAT_CHERRY.bat (quyết định owner 19/11 — KHÔNG auto-start).
+    # Launcher cũ TONY_START / KHOI_DONG_QUAN_AI_BRAIN đã chuyển sang
+    # tools/legacy_launchers/ để dự phòng.
+    assert (WORKSPACE_ROOT / "KHOI_DONG_CHERRY.bat").exists(), (
+        "Manual-start launcher KHOI_DONG_CHERRY.bat missing"
     )
-    assert (
-        (WORKSPACE_ROOT / "RESTART_SYSTEM.bat").exists()
-        or (WORKSPACE_ROOT / "tools" / "legacy_launchers" / "RESTART_SYSTEM.bat").exists()
+    assert (WORKSPACE_ROOT / "TAT_CHERRY.bat").exists(), (
+        "Manual-stop launcher TAT_CHERRY.bat missing"
     )
+    legacy = WORKSPACE_ROOT / "tools" / "legacy_launchers"
+    assert legacy.is_dir(), "legacy_launchers/ archive missing"
+    # Restart-script cũ vẫn còn trong archive để rollback nếu cần
+    assert (legacy / "TU_DONG_KHOI_DONG_LAI_HE_THONG.bat").exists()
+    assert (legacy / "RESTART_SYSTEM.bat").exists()
 
 
 def test_restart_preflight_imports() -> None:

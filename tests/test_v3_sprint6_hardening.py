@@ -16,25 +16,29 @@ def _read(name: str) -> str:
 
 
 def test_khoi_dong_contains_ollama_block():
-    src = _read("KHOI_DONG_24_7.bat")
-    # Sprint 7a: khối Ollama chuyển sang python (khoi_dong_ollama.py) — cmd
-    # if/else với curl bị parse lỗi sau reboot thật (else unexpected).
-    assert "[0/5]" in src
-    assert "khoi_dong_ollama.py" in src
-    # file python gánh logic: check port 11434 + exist ollama.exe (fail-safe)
+    # (23/11/2026) Cleanup xóa KHOI_DONG_24_7.bat — manual-start hiện tại dùng
+    # tools/khoi_dong_ollama.py (fail-safe check port 11434 + ollama.exe) + đã
+    # chốt KHÔNG dùng Ollama local (owner 18/11 — 100% NetMind GLM).
     ollama_tool = _read("tools/khoi_dong_ollama.py")
-    assert "11434" in ollama_tool
-    assert "ollama.exe" in ollama_tool
+    assert "11434" in ollama_tool, "khoi_dong_ollama.py phai check port 11434"
+    assert "ollama.exe" in ollama_tool, "khoi_dong_ollama.py phai check ollama.exe"
+    # cherry_autonomous phải tắt đề xuất Ollama (chốt 18/11)
+    cherry = _read("tools/cherry_autonomous.py")
+    assert "ollama" in cherry.lower() or "netmind" in cherry.lower(), (
+        "cherry_autonomous phai reference ollama hoặc netmind (dung 100% GLM)"
+    )
 
 
 def test_khoi_dong_backup_task_name_consistent():
-    src = _read("KHOI_DONG_24_7.bat")
-    # Sprint 7a: đăng ký task chuyển sang sched_task_setup.py (python)
-    assert "sched_task_setup.py" in src
+    # (23/11/2026) Cleanup xóa KHOI_DONG_24_7.bat. Task registration chuyển sang
+    # tools/sched_task_setup.py (idempotent) — tên task đã chuẩn hóa.
     setup = _read("tools/sched_task_setup.py")
-    assert "QUAN_AI_BRAIN_BACKUP_2AM" in setup
-    # không còn tên task cũ rải rác
-    assert "QUAN_AIBRAIN_Backup_2AM" not in setup
+    assert "QUAN_AI_BRAIN_BACKUP_2AM" in setup, (
+        "sched_task_setup.py phai register task QUAN_AI_BRAIN_BACKUP_2AM"
+    )
+    assert "QUAN_AIBRAIN_Backup_2AM" not in setup, (
+        "khong con ten task cu sai spelling"
+    )
 
 
 def test_scheduled_task_registered_and_ready():

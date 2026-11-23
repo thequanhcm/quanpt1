@@ -300,7 +300,9 @@ def main() -> None:
         install_task()
         return
     if args.once or True:  # mặc định --once (idempotent, Task Scheduler)
-        raise SystemExit(run_once(quiet=args.quiet))
+        rc = run_once(quiet=args.quiet)
+        _write_heartbeat(rc == 0)
+        raise SystemExit(rc)
 
 
 def _write_heartbeat(success: bool) -> None:
