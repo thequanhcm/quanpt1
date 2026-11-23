@@ -31,9 +31,14 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "approve": ("phê duyệt", "phe duyet", "duyệt", "duyet", "approved", "đồng ý", "dong y"),
     # TASK-OFFICE-S1 (23/11): lệnh đọc+tóm tắt email — READONLY (R2 DRAFT-ONLY,
     # không gửi/xóa). Đặt TRƯỚC 'approve' để "duyệt email" không nuốt thành approve.
+    # TASK-VMAIL-S2 (23/11): tóm tắt luồng email (Thread Analyzer §5.3/§5.4) —
+    # đặt TRƯỚC email_today vì "tóm tắt email/luồng" cụ thể hơn.
+    "thread_summary": ("tóm tắt luồng", "tom tat luong", "luồng email", "luong email",
+                       "thread email", "tổng hợp luồng", "tong hop luong",
+                       "tóm tắt email", "tom tat email"),
     "email_today": ("email hôm nay", "email hom nay", "kiểm tra email", "kiem tra email",
                     "email mới", "email moi", "đọc email", "doc email",
-                    "tóm tắt email", "tom tat email", "hộp thư", "hop thu"),
+                    "hộp thư", "hop thu"),
     # SYNC-20261123: lịch họp VoIP (gián tiếp qua mail vofficeadmin — voffice_reader).
     # Đặt TRƯỚC email_today vì "lịch họp hôm nay" chứa cả 2; VoIP cụ thể hơn.
     "voffice_meetings": ("lịch họp voip", "lich hop voip", "lịch voip", "lich voip",
@@ -512,6 +517,61 @@ def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) ->
         return "⚠️ Đọc email quá 110s (hộp thư chậm phản hồi) — em dừng để không treo, anh thử lại giúp em."
     except Exception as exc:
         return f"⚠️ Lỗi đọc email: {type(exc).__name__}: {exc}"
+
+
+def handle_thread_summary(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """TASK-VMAIL-S2 (23/11, owner duyệt roadmap mục 6): 'tóm tắt luồng email' /
+    'luồng email <từ khóa>' — Thread Analyzer §5.3 (10 mục) + §5.4 (8 mục, dẫn nguồn).
+
+    Đường dữ liệu: VmailConnector (Sprint 1, SOAP READONLY) → build_threads
+    (subject-normalize + tag hủy/hoãn) → analyze_thread (10 mục) → format.
+
+    Cách dùng: 'tóm tắt luồng email' (không từ khóa → 3 luồng mới nhất có ≥2 mail
+    hoặc mail mới nhất hôm nay) hoặc 'tóm tắt luồng email <từ khóa>'.
+    R2 bất biến: CHỈ ĐỌC — không gửi/mark_read/delete.
+    Fail-honest: SOAP lỗi → báo lỗi, không fake luồng."""
+    import subprocess as _sp
+    import sys as _sys
+
+    brain_root = WORKSPACE
+    env = dict(**os.environ)
+    env["PYTHONPATH"] = (str(brain_root / "src") + os.pathsep
+                         + str(brain_root / "tools") + os.pathsep
+                         + str(brain_root / "user, pass, token") + os.pathsep
+                         + env.get("PYTHONPATH", ""))
+
+    # Trích từ khóa sau lệnh (nếu có): 'tóm tắt luồng email <kw>'
+    kw = ""
+    low = (text or "").lower()
+    for prefix in ("tóm tắt luồng email", "tom tat luong email", "tổng hợp luồng email",
+                   "tong hop luong email", "tóm tắt luồng", "tom tat luong",
+                   "luồng email", "luong email", "tóm tắt email", "tom tat email"):
+        if prefix in low:
+            kw = (text or "")[low.index(prefix) + len(prefix):].strip()
+            break
+    # Bỏ tiền tố "về/about" + dấu câu
+    kw = kw.strip(" ,.:;?!")
+    for w in ("về ", "ve ", "about "):
+        if kw.lower().startswith(w):
+            kw = kw[len(w):].strip()
+
+    try:
+        proc = _sp.run(
+            [_sys.executable, "-u", str(brain_root / "tools" / "office_thread_summary_runner.py"),
+             kw or "--latest"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=110, env=env, cwd=str(brain_root),
+        )
+        out = (proc.stdout or "").strip()
+        if proc.returncode != 0 or not out:
+            err = (proc.stderr or "").strip()[-300:] or "không có output"
+            return (f"⚠️ Tóm tắt luồng email thất bại (fail-honest): {err}\n"
+                    "Anh kiểm tra mạng/credentials rồi thử lại giúp em.")
+        return out
+    except _sp.TimeoutExpired:
+        return "⚠️ Tóm tắt luồng email quá 110s (SOAP chậm) — em dừng để không treo, anh thử lại giúp em."
+    except Exception as exc:
+        return f"⚠️ Lỗi tóm tắt luồng email: {type(exc).__name__}: {exc}"
 
 
 def handle_voffice_meetings(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -1971,6 +2031,8 @@ HANDLERS = {
     "todo": handle_todo_list,
     # TASK-OFFICE-S1 (23/11): email — READONLY tóm tắt A/B
     "email_today": handle_email_today,
+    # TASK-VMAIL-S2 (23/11): Thread Analyzer — READONLY tóm tắt luồng 10 mục
+    "thread_summary": handle_thread_summary,
     # SYNC-20261123: lịch họp VoIP — READONLY qua mail vofficeadmin
     "voffice_meetings": handle_voffice_meetings,
     "stop": handle_stop,
@@ -2242,6 +2304,10 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
         try:
             if intent == "voice_record":
                 # (13/11/2026) ghi âm cần thời lượng từ tin gốc ('ghi âm 1 phút')
+                return intent, handler(text)
+            if intent == "thread_summary":
+                # TASK-VMAIL-S2 (23/11): cần text gốc để trích từ khóa luồng
+                # ('tóm tắt luồng email <kw>') — không truyền thì kw rỗng → --latest
                 return intent, handler(text)
             return intent, handler()
         except Exception as exc:

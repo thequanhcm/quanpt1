@@ -2,6 +2,15 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 23/11/2026 ~20:30 — SPRINT 2 VMAIL THREAD-ANALYZER (MỚI) ✅ TRIỂN KHAI (owner: "duyệt, em làm các việc tiếp theo: Roadmap mục 6 Sprint 2 VMAIL Thread Analyzer")
+- **Card**: TASK-VMAIL-S2 (owner duyệt roadmap VMAIL 23/11: Thread Analyzer → Shared Memory → Reply Draft → Workflow → Dashboard).
+- **Module mới** `src/quan_ai_brain/office/thread_analyzer.py`: `normalize_subject()` (strip RE/FW + tách tag hủy/hoãn/dời khỏi key để ghép đúng gốc), `build_threads()`, `analyze_thread()` — **10 mục §5.3** (nội dung ban đầu, phản hồi, tham gia, yêu cầu, câu hỏi, cam kết, quyết định, thay đổi, tồn đọng, trạng thái) mỗi mục **dẫn nguồn mail #id + ngày**; `format_thread_summary()` **8 mục §5.4**; `format_10_items()`. Mâu thuẫn §5.3: hủy vs mời → trình bày CẢ HAI + nguồn, KHÔNG kết luận hộ. Deterministic, KHÔNG LLM, KHÔNG core thứ 2 (nạp trên VmailConnector Sprint 1).
+- **Runner** `tools/office_thread_summary_runner.py` (CLI: `--latest` | `<từ khóa>`, subprocess 110s).
+- **Wire DM** `tools/netchat_command_center.py`: intent `thread_summary` ("tóm tắt luồng email <kw>") đặt trước `email_today` + handler `handle_thread_summary` + truyền `text` cho handler (điểm khác voice_record).
+- **Test**: `tests/test_office_thread_analyzer.py` **19/19 PASS** (tiêu chí P1-3: "[Hủy cuộc họp]" ghép ĐÚNG gốc; DM trả đủ 10 mục). Focused bộ office/vmail/command_center: **109/109 PASS**.
+- **Live smoke SOAP thật (READONLY)**: luồng "Khói từ khay ổ đĩa cảnh báo CHÁY" 7 mail → ghép đúng, đủ 8 mục §5.4 + nguồn; search từ khóa "khói" OK.
+- **Trung thực (chưa làm)**: LLM tổng hợp tự nhiên (GLM) thuộc sprint sau; chưa ghi thread vào DB/email_intake (thuộc Sprint 3 MEMORY-ADAPTER); KPI §14 chưa đo (cần bộ dữ liệu gán nhãn).
+
 ## 18/11/2026 ~13:45 — SPRINT MEMORY-TRUTH P1+P4 (MỚI) ✅ TRIỂN KHAI (owner: "duyệt sprint kế Sprint MEMORY-TRUTH (P1+P4)… M6 chọn (c) Self-RAG lite + eval trí nhớ từ phân tích vivi-agent")
 - **Tiền đề**: PR #35 MERGED (998517a) + card TASK-SEMANTIC-MEMORY-M6 consumed (f8a27d37). Card mới TASK-MEMORY-TRUTH-M6 APPROVED + consumed.
 - **P1 Self-RAG lite** `cognition/self_check.py` (MỚI 208 LOC): grader GLM chấm ý không căn cứ (JSON strict) → repair CHỈ XÓA/RÚT GỌN (guard cấm thêm ý, vi phạm → refusal trung thực); fail-open mọi bước; greeting/điều khiển bypass. Wire `/api/chat` bước 3.9 + field `self_check` trong response.
