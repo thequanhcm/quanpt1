@@ -226,6 +226,14 @@ def main() -> int:
     print(report)
     ok = send_to_netchat(report)
     print(f"netchat_sent: {ok}")
+    # (24/11/2026) P0-4: ghi heartbeat sau khi chạy xong (cả morning_report
+    # cũng cần được monitor — collect_report chỉ READ heartbeat của task khác,
+    # KHÔNG ghi heartbeat cho chính nó → check CLI cảnh báo nhầm "no_heartbeat_yet").
+    try:
+        from heartbeat import write_heartbeat
+        write_heartbeat("QUAN_AI_BRAIN_MORNING_REPORT_8AM", "ok" if ok else "error")
+    except Exception:
+        pass
     return 0 if ok else 1
 
 
