@@ -159,3 +159,7 @@ data/pr_m4b_body.json
 
 # (23/11/2026) Cách ly audit toàn hệ thống — folder cách ly không track, owner duyệt mới dọn
 _QUARANTINE_20261123/
+
+# (23/11/2026) Heartbeat runtime + mirror logs — runtime, không track
+data/heartbeat/
+logs/mirror_d.log
