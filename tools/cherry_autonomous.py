@@ -251,16 +251,12 @@ def check_pi5(st: dict) -> None:
 # ---------------------------------------------------------------------------
 
 def propose_issues(st: dict) -> None:
-    """Bất thường không tự xử → DM đề xuất (rate-limit 30m/loại)."""
-    # Ollama chết
-    try:
-        with urllib.request.urlopen("http://127.0.0.1:11434/api/tags", timeout=4) as r:
-            r.read()
-        ollama_ok = True
-    except Exception:
-        ollama_ok = False
-    if not ollama_ok and _should_alert(st, "propose_ollama"):
-        _dm("💡 CHERRY đề xuất: Ollama (BGE-M3) không phản hồi ở 127.0.0.1:11434. Semantic search sẽ fallback. Anh muốn em thử khởi động Ollama không? (trả lời \'duyệt ollama\')")
+    """Bất thường không tự xử → DM đề xuất (rate-limit 30m/loại).
+
+    (18/11/2026) owner chốt: TẮT HẲN đề xuất Ollama — chat dùng GLM Cloud,
+    semantic fallback đã OK, không cần nhắc Ollama nữa để tránh phiền.
+    """
+    # Ollama: TẮT HẲN đề xuất theo lệnh owner 18/11 — không probe, không DM.
 
     # Disk
     try:

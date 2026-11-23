@@ -220,6 +220,53 @@ def _save_seen_state(ids: set) -> None:
     except Exception:
         pass  # state persistence là best-effort; poll vẫn hoạt động bình thường
 
+
+# (23/11/2026) THU GỌN TIN LẶP CÙNG NỘI DUNG — chống "nhiều tin chồng chéo cùng một
+# nội dung" (owner chụp màn hình 00:04-00:07 23/11: 4 reply giống nhau cho 4 tin
+# "Hi" cũ 23:31→00:03 trong catch-up 12h; "Chào em" lặp cũng vậy).
+# Cơ chế: lưu (text → ts) đã trả lời gần đây vào state; tin đến CÙNG text trong
+# DEDUP_TEXT_WINDOW_MIN phút thì SKIP — chỉ tin ĐẦU TIÊN được trả lời. Lệnh hệ
+# thống (bắt đầu bằng từ khóa điều khiển) KHÔNG bị gộp — lệnh lặp là chủ đích.
+DEDUP_TEXT_WINDOW_MIN = 60
+_ANSWERED_TEXTS_PATH = Path(_BRAIN_ROOT) / "data" / "netchat_answered_texts.json"
+
+
+def _load_answered_texts() -> dict[str, float]:
+    try:
+        data = json.loads(_ANSWERED_TEXTS_PATH.read_text(encoding="utf-8"))
+        return {str(k): float(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _save_answered_texts(texts: dict[str, float]) -> None:
+    try:
+        _ANSWERED_TEXTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        now = time.time()
+        # chỉ giữ text trong cửa sổ tối đa 24h (bounded)
+        bounded = {k: v for k, v in texts.items() if now - v < 86400}
+        _ANSWERED_TEXTS_PATH.write_text(
+            json.dumps(bounded, ensure_ascii=False), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _norm_text_for_dedup(text: str) -> str:
+    """Chuẩn hoá text để so sánh: bỏ khoảng trắng thừa + lowercase + bỏ dấu?"""
+    t = re.sub(r"\s+", " ", str(text or "")).strip().lower()
+    return t[:200]
+
+
+# Từ khoá lệnh hệ thống — tin lặp LỆNH không bị thu gọn (lặp lệnh = chủ đích owner)
+_CMD_KEYWORDS = ("tony ", "cherry ", "trạng thái", "báo cáo", "danh sách", "kiểm tra",
+                 "chụp hình", "chụp màn hình", "mở", "tắt", "bật", "status", "help",
+                 "lịch", "duty", "yêu cầu")
+
+
+def _is_system_command(text: str) -> bool:
+    t = _norm_text_for_dedup(text)
+    return any(t.startswith(k) for k in _CMD_KEYWORDS)
+
 _local_appdata = Path(os.environ.get("LOCALAPPDATA", r"C:\Users\DELL\AppData\Local"))
 _script_cand = [
     _local_appdata / "netmind_desktop" / "skills" / "bot-netchat" / "netchat_bot.py",
@@ -1263,6 +1310,34 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
         pass
     return ai_reply
 
+# (23/11/2026) SINGLE-INSTANCE LOCK — chặn 2 responder chạy cùng lúc.
+# Sự cố 00:04 23/11: 2 instance (python .venv + python hệ thống) cùng start trong
+# cùng 1 giây, cùng poll DM owner → mỗi tin "Hi" được trả lời 2-4 lần, tin nhắn
+# chồng chéo trong chat (owner chụp màn hình báo). File lock giữ exclusive trong
+# suốt vòng đời instance; instance kế tiếp thấy lock bận → tự thoát ngay.
+RESPONDER_LOCK_PATH = Path(_BRAIN_ROOT) / "data" / "netchat_responder.lock"
+_RESPONDER_LOCK_FP = None
+
+def _acquire_single_instance_lock() -> bool:
+    """Thử giữ exclusive lock; True = instance duy nhất, False = đã có instance khác."""
+    global _RESPONDER_LOCK_FP
+    try:
+        import msvcrt
+        RESPONDER_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _RESPONDER_LOCK_FP = open(RESPONDER_LOCK_PATH, "a+", encoding="utf-8")
+        msvcrt.locking(_RESPONDER_LOCK_FP.fileno(), msvcrt.LK_NBLCK, 1)
+        _RESPONDER_LOCK_FP.seek(0)
+        _RESPONDER_LOCK_FP.truncate()
+        _RESPONDER_LOCK_FP.write(str(os.getpid()))
+        _RESPONDER_LOCK_FP.flush()
+        return True
+    except OSError:
+        return False
+    except Exception:
+        # Hệ không hỗ trợ locking (hiếm) — fail-open để bot vẫn chạy.
+        return True
+
+
 def main():
     """Main auto-responder loop.
 
@@ -1271,6 +1346,15 @@ def main():
     CATCHUP_WINDOW_MIN) which are answered — so a restart never replays the
     whole history but still responds to fresh unanswered owner messages.
     """
+    # (23/11/2026) Khóa đơn-instance TRƯỚC mọi tác vụ gửi tin — chống trả lời trùng.
+    if not _acquire_single_instance_lock():
+        _pid = ""
+        try:
+            _pid = RESPONDER_LOCK_PATH.read_text(encoding="utf-8").strip()
+        except Exception:
+            pass
+        print(f"⛔ Responder instance khác đang chạy (PID {_pid}) — thoát để tránh trả lời trùng.")
+        return
     print("=" * 70)
     print("QUAN AI BRAIN — NetChat Auto-Responder (Command Center 2 chiều)")
     print("=" * 70)
@@ -1371,6 +1455,31 @@ def main():
                             _key = (m.get("message") or "").strip() or m.get("id", "")
                             _dedup[_key] = m
                         fresh = sorted(_dedup.values(), key=lambda x: x.get("create_at", 0))
+
+                # ---- (23/11/2026) THU GỌN TIN LẶP CÙNG NỘI DUNG (chống chồng chéo) ----
+                # Bỏ tin có text GIỐNG HỆT tin đã trả lời trong 60 phút qua — kể cả
+                # khác message_id (spam "Hi"/"Chào em" lặp chỉ được trả lời 1 lần).
+                # Lệnh hệ thống KHÔNG bị gộp (lặp lệnh = chủ đích).
+                try:
+                    _answered_texts = _load_answered_texts()
+                    _now_ts = time.time()
+                    _win_s = DEDUP_TEXT_WINDOW_MIN * 60
+                    _kept: list[dict] = []
+                    for m in fresh:
+                        _t = _norm_text_for_dedup(m.get("message") or "")
+                        if (not _t) or _is_system_command(_t):
+                            _kept.append(m)
+                            continue
+                        _last_ts = _answered_texts.get(_t)
+                        if _last_ts and (_now_ts - _last_ts) < _win_s:
+                            print(f"   🤫 Thu gọn: tin lặp cùng nội dung ({_t[:40]!r}) — đã trả "
+                                  f"{(_now_ts - _last_ts)/60:.0f}m trước, bỏ qua.")
+                            seen_ids.add(m.get("id"))
+                            continue
+                        _kept.append(m)
+                    fresh = _kept
+                except Exception as _td_err:
+                    print(f"   ⚠️ dedup text lỗi (đi tiếp, fail-open): {_td_err}")
 
                 # ---- (31/10/2026, owner) GHÉP CẶP ẢNH ↔ LỜI MÔ TẢ ----
                 # Lập kế hoạch CẢ LÔ trước khi xử lý: ảnh-đơn không chữ được
@@ -1474,6 +1583,16 @@ def main():
                         # mark 'đã trả lời' CHỈ KHI gửi thành công — tin gửi
                         # lỗi sẽ được quét lại ở vòng sau (không mất tin).
                         seen_ids.add(msg_id)
+                        # (23/11/2026) Ghi text đã trả lời → thu gọn tin lặp cùng
+                        # nội dung trong 60 phút (không chồng chéo reply).
+                        try:
+                            _at = _load_answered_texts()
+                            _nt = _norm_text_for_dedup(msg.get("message") or "")
+                            if _nt and not _is_system_command(_nt):
+                                _at[_nt] = time.time()
+                                _save_answered_texts(_at)
+                        except Exception:
+                            pass
                     _save_seen_state(seen_ids)
                     _save_state_files(seen_ids, _batch_pending)
                     # NetChat rate limit (HTTP 429) khi gửi dồn — nghỉ giữa các reply
