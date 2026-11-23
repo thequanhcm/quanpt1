@@ -303,5 +303,14 @@ def main() -> None:
         raise SystemExit(run_once(quiet=args.quiet))
 
 
+def _write_heartbeat(success: bool) -> None:
+    """P0-4 (23/11): heartbeat cho sync guard."""
+    try:
+        from heartbeat import write_heartbeat
+        write_heartbeat("QUAN_AI_BRAIN_PI5_FILE_SYNC_15MIN", "ok" if success else "error")
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
     main()

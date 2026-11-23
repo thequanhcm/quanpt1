@@ -53,6 +53,7 @@ def now_utc() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+
 def log(msg: str) -> None:
     line = f"{now_utc()} | {msg}"
     print(line)
@@ -112,16 +113,20 @@ def notify_owner(msg: str) -> bool:
         out = (r1.stdout + r1.stderr).strip()
         if r1.returncode == 0:
             return True
+
         import re
         m = re.search(r"CONFIRM-REQUIRED:\s*([0-9a-f]+)", out)
         if r1.returncode == 3 and m:
             r2 = subprocess.run(base + ["--confirmed", m.group(1)],
                                 capture_output=True, text=True, timeout=45)
             return r2.returncode == 0
+
         return False
+
     except Exception as exc:
         log(f"notify_owner error: {exc}")
         return False
+
 
 
 
@@ -129,14 +134,17 @@ def should_dm(state: dict, new_state: str) -> bool:
     """Rate-limit: 1 DM / 30 phút cho cùng trạng thái."""
     if state.get("last_dm_state") != new_state:
         return True
+
     last = state.get("last_dm_utc")
     if not last:
         return True
+
     try:
         last_dt = datetime.fromisoformat(last)
         return (datetime.now(timezone.utc) - last_dt).total_seconds() > DM_COOLDOWN_SEC
     except Exception:
         return True
+
 
 
 def run_once(notify: bool = False) -> dict:
@@ -221,11 +229,22 @@ def main():
     args = ap.parse_args()
     if args.install_task:
         install_task()
+        _write_heartbeat(True)
     elif args.once:
         out = run_once(notify=args.notify)
+        _write_heartbeat(True)
         print(json.dumps(out, ensure_ascii=False, indent=1))
     else:
         print(__doc__)
+
+
+def _write_heartbeat(success: bool) -> None:
+    """P0-4 (23/11): heartbeat cho Pi5 monitor."""
+    try:
+        from heartbeat import write_heartbeat
+        write_heartbeat("QUAN_AI_BRAIN_PI5_MONITOR_5MIN", "ok" if success else "error")
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

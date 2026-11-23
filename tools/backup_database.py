@@ -67,5 +67,16 @@ def main() -> bool:
         return False
 
 
+def _write_heartbeat(success: bool) -> None:
+    """P0-4 (23/11): ghi heartbeat khi backup hoàn tất (fail-safe)."""
+    try:
+        from heartbeat import write_heartbeat
+        write_heartbeat("QUAN_AI_BRAIN_BACKUP_2AM", "ok" if success else "error")
+    except Exception:
+        pass
+
+
 if __name__ == "__main__":
-    raise SystemExit(0 if main() else 1)
+    ok = main()
+    _write_heartbeat(ok)
+    raise SystemExit(0 if ok else 1)

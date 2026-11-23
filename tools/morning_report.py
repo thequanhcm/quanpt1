@@ -128,6 +128,15 @@ def collect_report() -> str:
     lines.append(f"• Ollama: {_ollama_status()}")
     lines.append(f"• Backup 2AM: {_backup_status()}")
 
+    # (23/11) P0-4 heartbeat: cảnh báo task nền bất thường (stale > ngưỡng)
+    try:
+        from heartbeat import summarize_stale
+        s = summarize_stale()
+        if s:
+            lines.append(s)
+    except Exception:
+        pass
+
     # Pending work
     cards, gaps = _pending_counts()
     if cards >= 0:
