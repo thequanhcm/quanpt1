@@ -119,6 +119,15 @@ TOTAL:   4301 test cases
 
 Ghi chú trung thực: lần chạy theo batch 10 file (phiên tối 24/11) cho 4124P/5F/38S — chênh 134 test so với full single run do một số test phụ thuộc thứ tự/state khi chạy rời. **Số chính thức = full single run: 4258/5/38.** 5 fail trùng khớp 100% danh sách expected.
 
+**Tính tái lập (reproducibility) — 2 full single run độc lập cho kết quả GIỐNG HỆT**:
+
+| Run | Process | Kết quả | Thời gian |
+|-----|---------|---------|-----------|
+| `pytest_final_20261123.log` | proc_087bb20fba3b | 4258P / 5F / 38S | 926.22s (15:26) |
+| `pytest_verify_20261123.log` | proc_be6fe307af17 | 4258P / 5F / 38S | 929.17s (15:29) |
+
+FAILED list 2 run identical (so sánh chuỗi=True) — full regression ổn định, tái lập được.
+
 ### 5 FAILED (fail-honest đúng theo chủ trương hiện tại):
 
 1. `test_bge_m3_embedding::test_bge_embedding_service_cache_and_similarity` — BGE model OFFLINE (expected)
