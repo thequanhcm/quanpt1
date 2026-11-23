@@ -66,7 +66,9 @@ def test_catalog_19_tools_with_10_attributes(tmp_path) -> None:
     rows = {r["tool_id"]: r for r in q.registered_tools()}
     # 25 = 19 tool chuẩn §2 + 6 alias v1 (backward-compat UAIIF-S4)
     assert len(rows) == 25
-    assert set(DIRECTIVE_NAMES.values()) <= set(rows)
+    # (24/11) MAIL_READ tool ngoài QPIG — không nằm trong catalog QPIG
+    # (chỉ trong DIRECTIVE_NAMES để ToolSelector resolve); loại khỏi subset check.
+    assert set(DIRECTIVE_NAMES.values()) - {"vmail_mail_read"} <= set(rows)
     assert set(DIRECTIVE_NAMES) == {
         "DEVICE_DISCOVERY", "DEVICE_IDENTIFICATION", "NETWORK_INSPECTION",
         "AGENT_DISCOVERY", "AGENT_AUTHENTICATION", "AGENT_COMMUNICATION",
@@ -74,7 +76,10 @@ def test_catalog_19_tools_with_10_attributes(tmp_path) -> None:
         "AGENT_PERMISSION_INSPECTION", "AGENT_PERMISSION_CONTROL",
         "AGENT_RUNTIME_INSPECTION", "AGENT_SERVICE_CONTROL", "AGENT_ISOLATION_REQUEST",
         "AGENT_RECOVERY", "DEVICE_CONTROL", "EVIDENCE_COLLECTION",
-        "ACTION_VERIFICATION", "ROLLBACK_EXECUTION"}
+        "ACTION_VERIFICATION", "ROLLBACK_EXECUTION",
+        # (24/11) mục 8 roadmap: MAIL_READ — tool ngoài QPIG (vmail_tool.py),
+        # đăng ký vào mapping để ToolSelector resolve directive → tool_id.
+        "MAIL_READ"}
     for tid, row in rows.items():
         td = q.registry.get(tid)
         assert td is not None

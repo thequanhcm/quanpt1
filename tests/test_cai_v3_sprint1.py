@@ -20,12 +20,13 @@ from quan_ai_brain.uaiif.qpig import QPIG  # noqa: E402
 
 # ─── §III.1-2: Tool Discovery + Registration ───
 def test_loader_auto_loads_qpig_tools(tmp_path) -> None:
-    """ToolRegistry rỗng → loader auto-load 25 tool từ QPIG."""
+    """ToolRegistry rỗng → loader auto-load tool từ QPIG.
+    24/11: 25 QPIG/UAG + 1 MAIL_READ (mục 8 roadmap — vmail_tool.py) = 26."""
     loader = ToolRegistryLoader()
     reg = loader.load()
-    assert len(reg.list_tools()) == 25
+    assert len(reg.list_tools()) == 26
     s = loader.summary()
-    assert s["loaded"] == 25 and s["rejected"] == 0
+    assert s["loaded"] == 26 and s["rejected"] == 0
 
 
 def test_loader_rejects_description_injection(tmp_path) -> None:
