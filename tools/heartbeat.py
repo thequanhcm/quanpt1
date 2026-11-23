@@ -25,6 +25,7 @@ TASK_THRESHOLDS = {
     "QUAN_AI_BRAIN_MORNING_REPORT_8AM": 26,
     "QUAN_AI_BRAIN_PI5_FILE_SYNC_15MIN": 1.0,   # 60 phút
     "QUAN_AI_BRAIN_PI5_MONITOR_5MIN": 0.5,     # 30 phút
+    "QUAN_AI_BRAIN_MIRROR_D_DAILY": 26,        # mirror 1 lần/ngày 02:30
 }
 
 
