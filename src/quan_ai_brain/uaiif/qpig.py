@@ -145,6 +145,10 @@ DIRECTIVE_NAMES: dict[str, str] = {
     "EVIDENCE_COLLECTION": "qpig_evidence_collection",
     "ACTION_VERIFICATION": "qpig_action_verification",
     "ROLLBACK_EXECUTION": "qpig_rollback_execution",
+    # (24/11) mục 8 roadmap CHERRY VMAIL: MAIL_READ — tool ngoài QPIG/UAG, đăng ký
+    # bởi tools/vmail_tool.py (R1 READONLY). Nằm trong mapping để ToolSelector
+    # resolve được directive → tool_id qua cùng cơ chế §III.6.
+    "MAIL_READ": "vmail_mail_read",
 }
 
 # v1 specs (giữ nguyên để tests/test_uaiif_s4.py xanh)
@@ -738,6 +742,15 @@ class QPIG:
         }
         h = handlers.get(tool_id)
         if h is None:
+            # (24/11) mục 8 roadmap CHERRY VMAIL: tool ngoài QPIG (vd vmail_mail_read)
+            # đăng ký ToolDefinition có handler riêng → chạy qua registry handler
+            # (vẫn validate_params + audit path ở trên — KHÔNG bypass governance).
+            td = self.registry.get(tool_id)
+            if td is not None and callable(getattr(td, "handler", None)):
+                try:
+                    return td.handler(params)
+                except Exception as exc:
+                    return {"success": False, "reason": f"lỗi thực thi: {exc}"}
             return {"success": False, "reason": "chưa có handler (skeleton)"}
         try:
             return h()

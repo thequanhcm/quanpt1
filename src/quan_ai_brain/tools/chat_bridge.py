@@ -46,6 +46,13 @@ class ToolSelection:
     operational: bool
 
 
+def _strip_tone(s: str) -> str:
+    """Bỏ dấu tiếng Việt (NFD + loại Mn) — dùng cho strong-phrase match."""
+    import unicodedata as _ud
+    n = _ud.normalize("NFD", s or "")
+    return "".join(c for c in n if _ud.category(c) != "Mn")
+
+
 class ToolSelector:
     """§III.6 Tool Selection — chọn tool theo intent, không chỉ tên.
 
@@ -71,6 +78,11 @@ class ToolSelector:
         "AGENT_RECOVERY": ["khôi phục agent", "agent recovery", "phục hồi"],
         "DEVICE_CONTROL": ["điều khiển thiết bị", "bật đèn", "tắt đèn", "robot"],
         "ROLLBACK_EXECUTION": ["rollback", "hoàn tác", "quay lại bản cũ"],
+        # (24/11) mục 8 roadmap CHERRY VMAIL: đọc mail qua tool MAIL_READ.
+        # List CỐ TÌNH NGẮN (6 cụm mạnh) — kw_score = hits/len(list), list dài
+        # làm confidence < MIN_CONFIDENCE (bài học lần patch đầu 24/11).
+        "MAIL_READ": ["đọc mail", "đọc email", "email mới", "hộp thư",
+                      "kiểm tra email", "luồng email"],
     }
 
     MIN_CONFIDENCE = 0.25
@@ -81,6 +93,10 @@ class ToolSelector:
         self._operational: dict[str, bool] = {
             r["tool_id"]: r.get("operational", False)
             for r in self.qpig.registered_tools()}
+        # (24/11) mục 8 roadmap: MAIL_READ đã E2E live (SOAP thật 23/11 — Sprint 1
+        # 42/42 + live smoke luồng Khói 7 mail, Sprint 2 19/19) → operational=True.
+        # Quy ước §8 PHASE-mapping: tool khai báo operational chỉ khi đã chạy thật.
+        self._operational.setdefault("vmail_mail_read", True)
 
     def select(self, query: str, *, top_k: int = 3) -> list[ToolSelection]:
         q = query.lower()
@@ -102,6 +118,17 @@ class ToolSelector:
             operational = self._operational.get(tool_id, False)
             op_bonus = 0.1 if operational else 0.0
             confidence = min(1.0, kw_score * 0.4 + name_score + op_bonus - risk_penalty)
+            # (24/11) Strong-phrase floor: query chứa 1 CỤM kw ≥2 từ (vd "đọc mail",
+            # "quét thiết bị") = intent tường minh hơn nhiều so với 1 từ đơn lẻ —
+            # kw_score chia tổng list làm cụm mạnh bị pha loãng. Floor 0.35 (trên
+            # MIN_CONFIDENCE 0.25, dưới multi-kw 0.4+) cho MỌI directive như nhau.
+            if kw_score > 0:
+                q_nt = _strip_tone(q)
+                strong = any(
+                    len(k.split()) >= 2 and (k in q or _strip_tone(k) in q_nt)
+                    for k in kws)
+                if strong:
+                    confidence = max(confidence, 0.35)
             if confidence < self.MIN_CONFIDENCE:
                 continue
             scored.append(ToolSelection(
@@ -150,6 +177,19 @@ class ToolRegistryLoader:
                 self._loaded.append(td.tool_id)
             else:
                 self._rejected.append({"tool_id": td.tool_id, "reason": "description_injection"})
+        # (24/11) mục 8 roadmap CHERRY VMAIL: đăng ký MAIL_READ (R1 READONLY) —
+        # tool ngoài QPIG, handler gọi VmailConnector (S1) + ThreadAnalyzer (S2).
+        # Đăng ký vào CẢ 2 registry: self.registry (chat pipeline) + qpig.registry
+        # (QPIG.call — §XIII điểm vào thống nhất; QPIG giữ registry riêng).
+        try:
+            from quan_ai_brain.tools.vmail_tool import register_vmail_tool
+            tid = register_vmail_tool(self.registry)
+            tid2 = register_vmail_tool(self.qpig.registry)
+            if tid or tid2:
+                self._loaded.append(tid or tid2)
+        except Exception as exc:  # không phá loader khi vmail tool lỗi import
+            self._rejected.append({"tool_id": "vmail_mail_read",
+                                   "reason": f"register_failed: {type(exc).__name__}: {exc}"})
         return self.registry
 
     def _is_safe(self, td: ToolDefinition) -> bool:
@@ -193,7 +233,8 @@ class ChatToolBridge:
     AUTO_DIRECTIVES = frozenset({
         "DEVICE_DISCOVERY", "NETWORK_INSPECTION", "AGENT_DISCOVERY",
         "AGENT_STATUS", "AGENT_AUTHENTICATION", "AGENT_PERMISSION_INSPECTION",
-        "AGENT_RUNTIME_INSPECTION", "EVIDENCE_COLLECTION", "ACTION_VERIFICATION"})
+        "AGENT_RUNTIME_INSPECTION", "EVIDENCE_COLLECTION", "ACTION_VERIFICATION",
+        "MAIL_READ"})  # (24/11) mục 8 roadmap: đọc mail vmail READONLY R1 — auto
 
     def __init__(self, qpig: QPIG, selector: ToolSelector) -> None:
         self.qpig = qpig

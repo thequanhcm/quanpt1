@@ -11,6 +11,13 @@
 - **Live smoke SOAP thật (READONLY)**: luồng "Khói từ khay ổ đĩa cảnh báo CHÁY" 7 mail → ghép đúng, đủ 8 mục §5.4 + nguồn; search từ khóa "khói" OK.
 - **Trung thực (chưa làm)**: LLM tổng hợp tự nhiên (GLM) thuộc sprint sau; chưa ghi thread vào DB/email_intake (thuộc Sprint 3 MEMORY-ADAPTER); KPI §14 chưa đo (cần bộ dữ liệu gán nhãn).
 
+## 23/11/2026 ~21:15 — ROADMAP MỤC 8: MAIL_READ WIRE ChatToolBridge/QPIG (MỚI) ✅ (owner duyệt roadmap 23/11)
+- **Tool mới** `src/quan_ai_brain/tools/vmail_tool.py`: `vmail_mail_read` — ToolDefinition R1 READONLY (side_effects=False, requires_owner_approval=False vì đọc mail đã owner duyệt 23/11), handler gọi VmailConnector (S1) + ThreadAnalyzer (S2) — 2 mode: messages / threads (10 mục §5.3).
+- **Wire đúng kiến trúc**: đăng ký qua `ToolRegistryLoader.load()` vào CẢ registry chat pipeline + `qpig.registry` (QPIG.call là điểm vào thống nhất §XIII); `QPIG.call` thêm nhánh fallback chạy `td.handler` cho tool ngoài QPIG (không bypass validate_params); `DIRECTIVE_NAMES["MAIL_READ"]`; `ToolSelector.INTENT_KEYWORDS["MAIL_READ"]` (6 cụm mạnh) + strong-phrase floor 0.35 (cụm ≥2 từ → intent tường minh, fix kw_score pha loãng); `ChatToolBridge.AUTO_DIRECTIVES += MAIL_READ`; operational=True (đã E2E SOAP thật).
+- **Test**: `tests/test_vmail_tool.py` 13/13 + UAIIF S4 34/34 (không phá) = **47/47 PASS**.
+- **Live E2E SOAP thật**: QPIG.call("vmail_mail_read") → success=True, 3 mail inbox; mode threads → luồng "Khói…CHÁY" 7 mail + summary 8 mục.
+- **Trung thực**: tool chạy qua QPIG.call in-process (dùng cho runtime mới + test); web /api/chat 8765 đang manual-start OFF — khi owner bật Cherry, tool tự available trong pipeline chat (không cần wire thêm).
+
 ## 18/11/2026 ~13:45 — SPRINT MEMORY-TRUTH P1+P4 (MỚI) ✅ TRIỂN KHAI (owner: "duyệt sprint kế Sprint MEMORY-TRUTH (P1+P4)… M6 chọn (c) Self-RAG lite + eval trí nhớ từ phân tích vivi-agent")
 - **Tiền đề**: PR #35 MERGED (998517a) + card TASK-SEMANTIC-MEMORY-M6 consumed (f8a27d37). Card mới TASK-MEMORY-TRUTH-M6 APPROVED + consumed.
 - **P1 Self-RAG lite** `cognition/self_check.py` (MỚI 208 LOC): grader GLM chấm ý không căn cứ (JSON strict) → repair CHỈ XÓA/RÚT GỌN (guard cấm thêm ý, vi phạm → refusal trung thực); fail-open mọi bước; greeting/điều khiển bypass. Wire `/api/chat` bước 3.9 + field `self_check` trong response.
