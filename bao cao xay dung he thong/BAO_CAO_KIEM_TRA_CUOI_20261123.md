@@ -128,6 +128,16 @@ Ghi chú trung thực: lần chạy theo batch 10 file (phiên tối 24/11) cho 
 
 FAILED list 2 run identical (so sánh chuỗi=True) — full regression ổn định, tái lập được.
 
+**Bằng chứng trước–sau (chuỗi nhân quả đầy đủ, 3 full run)**:
+
+| Run | Thời điểm | Kết quả | Ý nghĩa |
+|-----|-----------|---------|---------|
+| `pytest_full_afterfix_20261123.log` (proc_bfde70da8c02) | ĐANG patch test (code test cũ) | **14F / 4250P / 37S** | "TRƯỚC" — 9 fail chính là 9 test được sửa sau đó + 5 expected |
+| `pytest_final_20261123.log` (proc_087bb20fba3b) | Sau khi sửa xong test | **5F / 4258P / 38S** | "SAU" — chỉ còn 5 expected |
+| `pytest_verify_20261123.log` (proc_be6fe307af17) | Chạy lại độc lập | **5F / 4258P / 38S** | Xác nhận tái lập |
+
+9 fail của afterfix run khớp chính xác danh sách test đã sửa: digital_identity_persona, edge_client, media_only_dm, ok_confirmation_flow, sentinel_s3, web_executive_endpoints, web_server, avatar_emotion_sync_1314, cpsl_runner → sau fix, cả 9 PASS (đã verify riêng 136/0/2). Chuỗi nhân quả: sửa test → 14F giảm còn 5F, không có fail mới phát sinh.
+
 ### 5 FAILED (fail-honest đúng theo chủ trương hiện tại):
 
 1. `test_bge_m3_embedding::test_bge_embedding_service_cache_and_similarity` — BGE model OFFLINE (expected)
