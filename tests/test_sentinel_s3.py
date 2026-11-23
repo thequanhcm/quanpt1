@@ -242,16 +242,32 @@ class TestContainment:
         # watchdog PID thật đang chạy → whitelist phải refuse
         import subprocess as sp
 
-        r = sp.run(["tasklist", "/FI", "IMAGENAME eq pythonw.exe", "/FO", "CSV"],
-                   capture_output=True, text=True)
-        pids = []
-        for ln in (r.stdout or "").splitlines()[1:]:
-            parts = [p.strip('"') for p in ln.split('","')]
-            if len(parts) >= 2 and parts[1].isdigit():
-                pids.append(parts[1])          # cột 1 = PID trong CSV
-        if not pids:
-            pytest.skip("không có pythonw để test whitelist")
-        res = engine.execute("SUSPEND_PID", pids[0], by="sentinel", preapproved=True)
+        # (23/11/2026) Whitelist chặn theo PROTECTED_CMDLINE_MARKERS (hermes/
+        # netmind_desktop/quan_ai_brain/...). Chỉ pythonw có cmdline chứa marker
+        # TONY mới bị refuse — pythonw thường (không phải TONY) được phép.
+        r = sp.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-CimInstance Win32_Process -Filter \"Name = 'pythonw.exe'\" | "
+             "Select-Object ProcessId, CommandLine | ConvertTo-Json -Compress"],
+            capture_output=True, text=True, timeout=20)
+        import json as _json
+        try:
+            procs = _json.loads(r.stdout or "[]")
+            if isinstance(procs, dict):
+                procs = [procs]
+        except Exception:
+            procs = []
+        markers = ("hermes", "netmind_desktop", "netmind-agent", "quan_ai_brain",
+                   "e:\\brain", "watchdog.py")
+        target_pid = None
+        for pr in procs:
+            cmdline = (pr.get("CommandLine") or "").lower()
+            if any(mk in cmdline for mk in markers):
+                target_pid = str(pr["ProcessId"])
+                break
+        if target_pid is None:
+            pytest.skip("không có pythonw TONY/netMind đang chạy để test whitelist")
+        res = engine.execute("SUSPEND_PID", target_pid, by="sentinel", preapproved=True)
         assert res.success is False     # whitelist fail-closed chặn
 
     def test_result_to_dict(self, engine: ContainmentEngine) -> None:

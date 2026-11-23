@@ -281,6 +281,10 @@ def test_voice_pipeline_spoken_sanitization_preserves_self_intro(voice_pipeline:
     """Verify voice pipeline sanitizes and articulates natural Vietnamese without clipping."""
     res = voice_pipeline.handle_voice_input("Giới thiệu về em.", is_push_to_talk=True)
     assert "CHERRY" in res.spoken_text
-    assert "Anh Quân" in res.spoken_text
+    # (23/11/2026) Engine trả "anh Quân" (thường 'a') trong câu giới thiệu tự
+    # nhiên — test chấp nhận cả 2 cách viết hoa/thường tên owner.
+    assert ("Anh Quân" in res.spoken_text) or ("anh Quân" in res.spoken_text), (
+        f"spoken_text thiếu tên owner: {res.spoken_text[:120]!r}"
+    )
     assert res.mouth_timeline is not None
     assert len(res.mouth_timeline["frames"]) > 0

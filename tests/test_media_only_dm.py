@@ -62,9 +62,10 @@ def test_photo_success_returns_empty_text_only_image(patched):
     assert len(dm_calls) == 1
     path, caption = dm_calls[0]
     assert path == fake.pc_path
-    # metadata gộp vào caption — không mất thông tin tên file + dung lượng
-    assert fake.fname in caption
-    assert "KB" in caption
+    # (07/11/2026, owner) caption ngắn gọn "Em gửi ảnh vừa chụp ạ!" — metadata
+    # (tên file + KB) chuyển vào _audit thay vì caption. Test chỉ yêu cầu
+    # caption có nội dung + ảnh gửi đúng path.
+    assert caption  # caption không rỗng
 
 
 def test_photo_dm_fail_reports_honestly(monkeypatch, tmp_path):

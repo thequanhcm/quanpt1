@@ -394,8 +394,13 @@ def test_executive_edge_telemetry_and_control(executive_server_instance: str) ->
         assert resp.status == 200
         sdata = json.loads(resp.read().decode("utf-8"))
         assert sdata["success"] is True
-        assert "timeline" in sdata
-        assert len(sdata["timeline"]["frames"]) > 0
+        # (23/11/2026) FIX LATENCY 13/11: speak không kèm audio → background mode,
+        # timeline được synth + forward sau (~1s), KHÔNG nằm trong response ngay.
+        if sdata.get("tts_mode") == "background":
+            assert sdata.get("has_audio") is False
+        else:
+            assert "timeline" in sdata
+            assert len(sdata["timeline"]["frames"]) > 0
 
     # 2.6 Edge Control POST (Toggle Face-Only)
     ctrl_fo = json.dumps({"action": "toggle_face_only"}).encode("utf-8")

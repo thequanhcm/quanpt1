@@ -122,7 +122,12 @@ def test_responder_autoruns_probe_when_ai_asks_permission() -> None:
     assert out is not None
     assert "Đã xác nhận" in out
     assert "chờ lệnh" not in out  # permission beg removed
-    assert ("vẫn MẤT KẾT NỐI" in out) or ("HOẠT ĐỘNG" in out)
+    # (23/11/2026) _reprobe_full trả "MẤT KẾT NỐI" / "HOẠT ĐỘNG" / "ONLINE" /
+    # "OFFLINE" — assert bất kỳ marker trạng thái nào xuất hiện.
+    status_markers = ("MẤT KẾT NỐI", "HOẠT ĐỘNG", "ONLINE", "OFFLINE")
+    assert any(m in out for m in status_markers), (
+        f"output probe phải có marker trạng thái: {out[:200]!r}"
+    )
 
 
 def test_responder_keeps_normal_ai_replies_untouched() -> None:

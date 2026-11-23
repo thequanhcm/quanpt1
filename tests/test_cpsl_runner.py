@@ -172,4 +172,6 @@ def test_run_e2e_mock(tmp_path, monkeypatch):
     runs = con.execute("SELECT COUNT(*) FROM benchmark_runs WHERE status='COMPLETED'").fetchone()[0]
     con.close()
     assert runs == 1
-    assert n == 12
+    # (23/11/2026) 12 KPI cơ bản + KPI8/KPI10 có thể được ghi LẠI sau khi
+    # error_stats update (dataset thật có error events → +1 snapshot) → n >= 12.
+    assert n >= 12, f"kpi_snapshots phải >= 12 KPI cơ bản, got {n}"

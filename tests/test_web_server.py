@@ -123,8 +123,15 @@ def test_edge_control_speak_audio_forwarding(web_server_instance: str) -> None:
         data = json.loads(resp.read().decode("utf-8"))
         assert data.get("success") is True
         assert data.get("action") == "speak"
-        assert "timeline" in data
-        assert data.get("has_audio") is True
+        # (23/11/2026) FIX LATENCY 13/11: speak KHÔNG kèm audio_base64 →
+        # synth chạy background thread, response trả tts_mode=background
+        # (timeline được forward xuống kiosk sau ~1s, không nằm trong response).
+        if data.get("tts_mode") == "background":
+            assert data.get("has_audio") is False
+        else:
+            # mode đồng bộ (audio_base64 sẵn): phải có timeline + audio
+            assert "timeline" in data
+            assert data.get("has_audio") is True
 
 
 def test_edge_daemon_state_audio_propagation() -> None:
