@@ -28,6 +28,16 @@
 - Thread chưa ghi vào email_intake.db (Sprint 3 MEMORY-ADAPTER chờ duyệt thêm cột).
 - MAIL_READ dùng được khi Cherry bật (manual-start); pipeline 8765 hiện OFF.
 
+## Full regression sau toàn bộ thay đổi (proc_462c080a2b63, log `logs/pytest_roadmap_final_20261123.log`)
+
+```
+5 failed / 4290 passed / 38 skipped trong 939.24s (15:39)
+```
+
+- 5 failed = đúng 5 expected (BGE offline ×1, Ollama DISABLED ×2, Pi5 avatar ×2) — **0 fail mới** từ 4 mục roadmap.
+- +2 test trong lần chạy đầu (test_qpig_v2 catalog count 25→26, test_cai_v3_sprint1 loader count) đã sửa khớp hành vi mới (commit `015de77`) → run final sạch.
+- So baseline trước phiên (4258P/5F/38S): **+32 passed** (19 thread_analyzer + 13 vmail_tool + fix count).
+
 ## Trạng thái roadmap VMAIL sau phiên
 S0 ✅ → S1 ✅ → **S2 ✅ (mới)** → S3 MEMORY-ADAPTER (kế tiếp) → S4 Reply Draft → S5 Workflow → S6 Dashboard.
 
