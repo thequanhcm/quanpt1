@@ -2,6 +2,17 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 24/11/2026 ~10:45 — VMAIL ĐỌC + TOGGLE BẬT/TẮT (MỚI) ✅ TRIỂN KHAI (owner: ảnh image_be6a17 "cấu hình chức năng đọc vmail và tắt/bật vmail khi anh yêu cầu")
+- **Vấn đề thật từ ảnh**: owner nhắn "Tóm tắt các nội dung mail" (09:45) → CHERRY trả lời "em chưa có công cụ truy cập hộp thư" — do kw `email_today` chỉ có chữ "email", câu chứa "mail" trơn → `detect_intent` trả None → rơi vào GLM hội thoại.
+- **Fix 1 — kw mở rộng** (`tools/netchat_command_center.py` COMMAND_PATTERNS `email_today`): +17 kw "đọc mail/mail hôm nay/tóm tắt mail/nội dung mail/tin mail/đọc vmail/vmail hôm nay/tóm tắt vmail/kiểm tra mail(vmail)/hộp thư vmail/đọc hộp thư…" (có + không dấu). "Tóm tắt các nội dung mail" → `email_today` ✓.
+- **Fix 2 — intent mới `vmail_toggle`** + `handle_vmail_toggle` (L535): "tắt vmail/bật vmail/tắt đọc vmail/bật chức năng vmail/trạng thái vmail" (kw có+không dấu, đặt TRƯỚC `email_today` trong dict vì kw "đọc vmail" của email_today sẽ nuốt "tắt đọc vmail" nếu match trước; 4 kw "tắt mail/bật mail/tắt đọc mail/bật đọc mail" bị BỎ vì " tắt mail " ⊂ " tóm tắt mail " do space giữa "tóm|tắt" — nuốt nhầm). Route 2.5 thêm `vmail_toggle` vào nhóm ưu tiên trước pc_open/pc_close + truyền `t_for_args` (handler cần text để biết tắt/bật/trạng thái).
+- **Feature flag** `data/vmail_enabled.json` {"enabled": bool, "updated_at"} — ghi atomic (tmp+replace); đọc fail-open (thiếu/lỗi file = ON, không chặn chức năng đã duyệt). Wire gate vào 3 handler đọc `handle_email_today/handle_thread_summary/handle_reply_draft`: flag OFF → trả `_vmail_gate_reply()` và KHÔNG gọi SOAP. R2 giữ nguyên: khi BẬT vẫn CHỈ ĐỌC. Toggle ghi audit `netchat_command.vmail_toggle`.
+- **help menu** += 2 dòng (đọc mail + tắt/bật vmail).
+- **Test**: detect_intent **18/18** (câu owner + biến thể + guard không phá "tắt nhạc/tắt pi5/tắt chrome→pc_close/kiểm tra email/tóm tắt email/soạn trả lời email/lịch họp/trạng thái"); route_message E2E **7/7** (trạng thái → BẬT; tắt → OFF + 3 handler đều gate từ chối; bật → ON; "tắt chrome" vẫn pc_close đóng chrome thật); focused regression **104/104 PASS** (command_center + office_email_connector + thread_analyzer + reply_drafter + vmail_tool, 5.6s).
+- **Live E2E đọc mail thật**: `office_email_sync_runner.py` exit=0 24s → 10 mail mới (8 quan trọng: ACTION_REQUIRED 5/URGENT 3/INFORMATION 2, top PM GVM báo cáo nguồn 72/100).
+- **Trung thực**: E2E qua DM thật chưa chạy được từ phía test vì tin test gửi bằng bot token bị responder lọc đúng thiết kế (BOT_USER_ID guard L1448 chống echo) — owner nhắn từ tài khoản owner sẽ ăn ngay (route_message với sender_user_id owner đã verify 3/3); responder đã restart (pid 21096, 10:42) với code mới; side effect test thật: Chrome bị đóng 1 lần khi verify "tắt chrome"→pc_close.
+
+
 ## 24/11/2026 — SPRINT 4 REPLY-DRAFT (MỚI) ✅ TRIỂN KHAI (owner: "duyệt Sprint 4 REPLY-DRAFT (§17)")
 - **Card**: TASK-VMAIL-S4 (§17: 2✅ → 3✅ → **4 Reply Draft** → 5 Workflow → 6 Dashboard). Master prompt §7: Context-Aware Reply + 11 styles + Quality Check + Send Policy.
 - **Module mới** `src/quan_ai_brain/office/reply_drafter.py` (~330 lines): `ReplyDrafter` + `ReplyContext` + `DraftResult`:

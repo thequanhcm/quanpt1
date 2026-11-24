@@ -42,9 +42,29 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                     "soạn email trả lời", "soan email tra loi",
                     "soạn thư trả lời", "soan thu tra loi", "nháp trả lời",
                     "nhap tra loi", "draft reply"),
+    # TASK-VMAIL-TOGGLE (24/11/2026, owner ảnh image_be6a17): bật/tắt chức năng đọc
+    # vmail — PHẢI đứng TRƯỚC email_today (kw 'đọc vmail' của email_today sẽ nuốt
+    # 'tắt đọc vmail' nếu match trước). Flag: data/vmail_enabled.json.
+    "vmail_toggle": ("tắt vmail", "tat vmail", "tắt đọc vmail", "tat doc vmail",
+                     "bật vmail", "bat vmail", "bật đọc vmail", "bat doc vmail",
+                     "tắt chức năng vmail", "tat chuc nang vmail",
+                     "bật chức năng vmail", "bat chuc nang vmail",
+                     "tắt chức năng đọc vmail", "tat chuc nang doc vmail",
+                     "bật chức năng đọc vmail", "bat chuc nang doc vmail",
+                     "trạng thái vmail", "trang thai vmail"),
     "email_today": ("email hôm nay", "email hom nay", "kiểm tra email", "kiem tra email",
                     "email mới", "email moi", "đọc email", "doc email",
-                    "hộp thư", "hop thu"),
+                    "hộp thư", "hop thu",
+                    # (24/11/2026, owner ảnh image_be6a17) 'Tóm tắt các nội dung mail'
+                    # từng None vì chỉ có 'email' — thêm biến thể 'mail' + 'vmail':
+                    "đọc mail", "doc mail", "mail hôm nay", "mail hom nay",
+                    "mail mới", "mail moi", "tóm tắt mail", "tom tat mail",
+                    "nội dung mail", "noi dung mail", "tóm tắt các nội dung mail",
+                    "tom tat cac noi dung mail", "tin mail", "đọc vmail", "doc vmail",
+                    "vmail hôm nay", "vmail hom nay", "vmail mới", "vmail moi",
+                    "tóm tắt vmail", "tom tat vmail", "kiểm tra mail", "kiem tra mail",
+                    "kiểm tra vmail", "kiem tra vmail", "hộp thư vmail", "hop thu vmail",
+                    "đọc hộp thư", "doc hop thu"),
     # SYNC-20261123: lịch họp VoIP (gián tiếp qua mail vofficeadmin — voffice_reader).
     # Đặt TRƯỚC email_today vì "lịch họp hôm nay" chứa cả 2; VoIP cụ thể hơn.
     "voffice_meetings": ("lịch họp voip", "lich hop voip", "lịch voip", "lich voip",
@@ -491,6 +511,89 @@ def detect_intent(text: str) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+# TASK-VMAIL-TOGGLE (24/11/2026, owner ảnh image_be6a17): feature flag chức năng
+# đọc vmail — file data/vmail_enabled.json {"enabled": bool}. Mặc định ON khi
+# thiếu/lỗi file (fail-open cho đọc, KHÔNG chặn chức năng đã duyệt).
+_VMAIL_FLAG_PATH = WORKSPACE / "data" / "vmail_enabled.json"
+
+
+def _vmail_read_flag() -> bool:
+    """Đọc flag đọc-vmail; True (ON) khi thiếu/lỗi file — mặc định là BẬT."""
+    try:
+        with open(_VMAIL_FLAG_PATH, encoding="utf-8") as fh:
+            return bool(json.load(fh).get("enabled", True))
+    except Exception:
+        return True
+
+
+def _vmail_write_flag(enabled: bool) -> None:
+    """Ghi flag đọc-vmail; lỗi ghi → raise để handler báo fail-honest."""
+    _VMAIL_FLAG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _VMAIL_FLAG_PATH.with_suffix(".json.tmp")
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump({"enabled": bool(enabled), "updated_at": time.strftime("%Y-%m-%dT%H:%M:%S")}, fh)
+    tmp.replace(_VMAIL_FLAG_PATH)
+
+
+def _vmail_gate_reply() -> str:
+    """Thông báo khi chức năng đọc vmail đang TẮT (dùng chung 3 handler đọc)."""
+    return ("🔕 Chức năng đọc vmail đang TẮT (anh yêu cầu tắt trước đó).\n"
+            "Em không đọc hộp thư cho đến khi anh bật lại.\n"
+            "Bật lại: nhắn 'bật vmail'.")
+
+
+def handle_vmail_toggle(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """TASK-VMAIL-TOGGLE (24/11/2026, owner ảnh image_be6a17): 'tắt vmail' /
+    'bật vmail' / 'trạng thái vmail' — bật/tắt/xem chức năng ĐỌC vmail.
+
+    Tắt = 3 handler đọc (email_today/thread_summary/reply_draft) từ chối đọc hộp
+    thư, không gọi SOAP. R2 giữ nguyên: khi BẬT vẫn CHỈ ĐỌC — không gửi/mark/xóa.
+    Fail-honest: lỗi ghi flag → báo lỗi, không fake đã tắt/bật."""
+    low = (text or "").lower().strip()
+    if "trạng thái vmail" in low or "trang thai vmail" in low:
+        st = "BẬT" if _vmail_read_flag() else "TẮT"
+        return f"📬 Chức năng đọc vmail hiện đang: {st}\n• Tắt: nhắn 'tắt vmail'\n• Bật: nhắn 'bật vmail'"
+    want_off = ("tắt vmail" in low or "tat vmail" in low
+                or "tắt đọc vmail" in low or "tat doc vmail" in low
+                or "tắt chức năng" in low or "tat chuc nang" in low
+                or "tắt mail" in low or "tat mail" in low
+                or "tắt đọc mail" in low or "tat doc mail" in low)
+    want_on = ("bật vmail" in low or "bat vmail" in low
+               or "bật đọc vmail" in low or "bat doc vmail" in low
+               or "bật chức năng" in low or "bat chuc nang" in low
+               or "bật mail" in low or "bat mail" in low
+               or "bật đọc mail" in low or "bat doc mail" in low)
+    if want_off and not want_on:
+        try:
+            _vmail_write_flag(False)
+        except Exception as exc:
+            return f"⚠️ Không tắt được (lỗi ghi flag): {type(exc).__name__}: {exc}"
+        try:
+            from quan_ai_brain.core.audit import AuditLogger
+            AuditLogger(WORKSPACE).record("netchat_command.vmail_toggle", {"enabled": False})
+        except Exception:
+            pass
+        return ("🔕 Đã TẮT chức năng đọc vmail.\n"
+                "Em sẽ không đọc/tóm tắt/soạn nháp hộp thư cho đến khi anh bật lại.\n"
+                "Bật lại: nhắn 'bật vmail'.")
+    if want_on and not want_off:
+        try:
+            _vmail_write_flag(True)
+        except Exception as exc:
+            return f"⚠️ Không bật được (lỗi ghi flag): {type(exc).__name__}: {exc}"
+        try:
+            from quan_ai_brain.core.audit import AuditLogger
+            AuditLogger(WORKSPACE).record("netchat_command.vmail_toggle", {"enabled": True})
+        except Exception:
+            pass
+        return ("📬 Đã BẬT chức năng đọc vmail (chế độ CHỈ ĐỌC — em không gửi/xóa mail).\n"
+                "Thử ngay: nhắn 'đọc mail' hoặc 'tóm tắt các nội dung mail'.")
+    return ("🤔 Anh muốn tắt hay bật chức năng đọc vmail?\n"
+            "• 'tắt vmail' — em ngừng đọc hộp thư\n"
+            "• 'bật vmail' — em đọc lại bình thường\n"
+            "• 'trạng thái vmail' — xem đang bật hay tắt")
+
+
 def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) -> str:
     """TASK-OFFICE-S1 (23/11, card APPROVED): 'email hôm nay' / 'kiểm tra email' —
     đọc hộp thư vmail THẬT qua SOAP (tools/mail_reader READONLY) → intake store
@@ -500,6 +603,10 @@ def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) ->
     Fail-honest: SOAP lỗi → báo lỗi, không fake số liệu."""
     import subprocess as _sp
     import sys as _sys
+
+    # TASK-VMAIL-TOGGLE (24/11): flag tắt → từ chối đọc, KHÔNG gọi SOAP.
+    if not _vmail_read_flag():
+        return _vmail_gate_reply()
 
     brain_root = WORKSPACE
     env = dict(**os.environ)
@@ -538,6 +645,10 @@ def handle_thread_summary(text: str = "", payload: dict[str, Any] | None = None)
     Fail-honest: SOAP lỗi → báo lỗi, không fake luồng."""
     import subprocess as _sp
     import sys as _sys
+
+    # TASK-VMAIL-TOGGLE (24/11): flag tắt → từ chối đọc, KHÔNG gọi SOAP.
+    if not _vmail_read_flag():
+        return _vmail_gate_reply()
 
     brain_root = WORKSPACE
     env = dict(**os.environ)
@@ -590,6 +701,10 @@ def handle_reply_draft(text: str = "", payload: dict[str, Any] | None = None) ->
     Fail-honest: SOAP lỗi → báo lỗi thật, không fake nháp."""
     import subprocess as _sp
     import sys as _sys
+
+    # TASK-VMAIL-TOGGLE (24/11): flag tắt → từ chối đọc, KHÔNG gọi SOAP.
+    if not _vmail_read_flag():
+        return _vmail_gate_reply()
 
     brain_root = WORKSPACE
     env = dict(**os.environ)
@@ -906,6 +1021,8 @@ def handle_help(payload: dict[str, Any] | None = None) -> str:
     "(biến thể cũ tony … vẫn nhận trong thời gian quá độ)\n"
         "• hiển thị ảnh trên pi [N giây] — ảnh DM lên màn Pi5 rồi tự về avatar\n"
         "• mở <app> | đóng <app> | chụp màn hình | khóa máy  (PC)\n"
+        "• đọc mail / tóm tắt các nội dung mail — đọc + tóm tắt hộp thư (chỉ đọc)\n"
+        "• tắt vmail | bật vmail | trạng thái vmail — bật/tắt chức năng đọc hộp thư\n"
         "• stop — dừng khẩn cấp"
     )
 
@@ -2101,6 +2218,8 @@ HANDLERS = {
     "thread_summary": handle_thread_summary,
     # TASK-VMAIL-S4 (24/11): Reply Draft — DRAFT-ONLY soạn nháp §7 + .eml
     "reply_draft": handle_reply_draft,
+    # TASK-VMAIL-TOGGLE (24/11, owner ảnh image_be6a17): bật/tắt đọc vmail
+    "vmail_toggle": handle_vmail_toggle,
     # SYNC-20261123: lịch họp VoIP — READONLY qua mail vofficeadmin
     "voffice_meetings": handle_voffice_meetings,
     "stop": handle_stop,
@@ -2300,8 +2419,14 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
     if _pi_intent in ("tony_on", "tony_off", "tony_standby", "tony_status",
                       "tony_pi_live", "tony_pi_live_off",
                       # (31/10/2026, owner) HDMI: 'tắt hdmi' KHÔNG phải đóng app PC
-                      "tony_hdmi_hide", "tony_hdmi_approve"):
+                      "tony_hdmi_hide", "tony_hdmi_approve",
+                      # TASK-VMAIL-TOGGLE (24/11): 'tắt vmail'/'bật vmail' KHÔNG phải
+                      # pc_open/pc_close — động từ 'tắt/bật' trùng, ưu tiên vmail_toggle.
+                      "vmail_toggle"):
         try:
+            if _pi_intent == "vmail_toggle":
+                # (24/11) handler cần text gốc để biết tắt/bật/trạng thái
+                return _pi_intent, HANDLERS[_pi_intent](t_for_args)
             return _pi_intent, HANDLERS[_pi_intent]()
         except Exception as exc:
             return _pi_intent, f"⚠️ Lỗi thực thi lệnh '{_pi_intent}': {type(exc).__name__}: {exc}"
