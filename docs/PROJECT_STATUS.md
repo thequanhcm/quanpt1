@@ -2,6 +2,20 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 24/11/2026 ~11:10 — SELF-IMPROVEMENT S1 + KW ĐỘNG (MỚI) ✅ TRIỂN KHAI (owner: ảnh image_e2d705 "cherry tự hoàn thiện bản thân, tự học")
+- **Vấn đề thật từ ảnh**: "Tóm tắt 5 email gần nhất cho anh" (10:55) → vẫn trả lời "chưa có công cụ" dù Sprint TOGGLE vừa xong — kw tĩnh không phủ câu có số đếm ("5 email gần nhất") → detect_intent=None → GLM nói sai năng lực.
+- **Fix kw động** (`_DYNAMIC_COMMAND_RES` L38, detect_intent duyệt SAU kw tĩnh, chỉ câu mệnh lệnh): regex "(tóm tắt|đọc|kiểm tra|liệt kê|xem) N (email|mail|vmail)", "N (email|mail) (gần nhất|mới nhất)", "(tóm tắt) N luồng", "(soạn) email trả lời" → email_today/thread_summary/reply_draft. Guard câu hỏi giữ nguyên ("5 email gần nhất là gì?" → None).
+- **Module mới** `tools/self_improvement.py` (~280 lines): vòng tự học fail-honest 4 bước:
+  1. **Ghi nhận**: `log_unmatched()` — responder gọi khi route_message=None (L1237 netchat_auto_responder.py, try/except không phá chat) → `data/self_improve/unmatched.jsonl` (rotate 5000 dòng, cap 300 ký tự).
+  2. **Phân tích**: `stats()` bigram chuẩn hóa-bỏ-dấu (kw 1 từ dễ nuốt: 'bao' ⊂ 'báo cáo') + `propose()` → đề xuất kw mới PENDING_REVIEW (`proposals.json`), map intent theo `_DOMAIN_HINTS` (màn hình→pc_screenshot, tiến độ→tasks, báo cáo→report, email→email_today...).
+  3. **Duyệt**: `approve(kw|id)` — ĐIỂM DUYỆT DUY NHẤT ghi `learned_keywords.json`; duyệt 2 lần → từ chối; kw lạ → "không tìm thấy".
+  4. **Áp dụng**: detect_intent đọc learned SAU kw tĩnh (kw hệ thống ưu tiên, learned chỉ lấp khoảng trống), fail-open thiếu file.
+- **Wire DM** `netchat_command_center.py`: intent `self_improve` + `handle_self_improve` — "em tự học đi/tự hoàn thiện/đề xuất từ khóa" (phân tích + đề xuất), "duyệt học [kw]" (list/duyệt — đặt TRƯỚC approve trong detect_intent vì kw 'duyệt' nuốt), mặc định = báo hiện trạng tự học. Kw "em học được gì" GIỮ cho knowledge cũ (không tranh kw).
+- **Test**: `tests/test_self_improvement.py` **10/10** (log never-raise, bigram stats, propose không tự áp, approve 1-lần, fail-honest kw lạ, detect_intent nhận kw learned + kw tĩnh thắng learned); command_center **24/24**; focused bộ **114/114 PASS** (5.1s).
+- **E2E tự học verify**: 3 câu lạ → "em tự học đi" → 3 đề xuất PENDING → "duyệt học tiến độ" → learned tasks → detect "xem tiến độ abc"→tasks; state test đã dọn sạch.
+- **Trung thực**: (1) tự học S1 chỉ học KW ĐỊNH TUYẾN qua owner duyệt — KHÔNG tự sửa code, KHÔNG tự wire intent mới (đó là Sprint sau nếu duyệt); (2) 'tổng hợp' bị map nhầm email_today (nên tasks) — là đề xuất, owner không duyệt thì không áp; (3) responder đã restart (pid 2424, 11:05) với code mới; server 8765 ONLINE.
+
+
 ## 24/11/2026 ~10:45 — VMAIL ĐỌC + TOGGLE BẬT/TẮT (MỚI) ✅ TRIỂN KHAI (owner: ảnh image_be6a17 "cấu hình chức năng đọc vmail và tắt/bật vmail khi anh yêu cầu")
 - **Vấn đề thật từ ảnh**: owner nhắn "Tóm tắt các nội dung mail" (09:45) → CHERRY trả lời "em chưa có công cụ truy cập hộp thư" — do kw `email_today` chỉ có chữ "email", câu chứa "mail" trơn → `detect_intent` trả None → rơi vào GLM hội thoại.
 - **Fix 1 — kw mở rộng** (`tools/netchat_command_center.py` COMMAND_PATTERNS `email_today`): +17 kw "đọc mail/mail hôm nay/tóm tắt mail/nội dung mail/tin mail/đọc vmail/vmail hôm nay/tóm tắt vmail/kiểm tra mail(vmail)/hộp thư vmail/đọc hộp thư…" (có + không dấu). "Tóm tắt các nội dung mail" → `email_today` ✓.

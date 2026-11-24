@@ -1234,6 +1234,14 @@ def process_message(message_text, sender_user_id="", chat_session_id="default", 
         pass
     except Exception as e:
         print(f"   ⚠️ Command router error: {e}")
+    # (24/11/2026, SELF-IMPROVEMENT) Câu lệnh owner KHÔNG khớp intent nào → ghi
+    # nhận vào data/self_improve/unmatched.jsonl để đề xuất kw mới khi owner
+    # nhắn 'em tự học đi'. Chỉ ghi file, KHÔNG đổi hành vi trả lời (fail-safe).
+    try:
+        from tools.self_improvement import log_unmatched as _log_unmatched
+        _log_unmatched(message_text, sender=sender_user_id)
+    except Exception:
+        pass  # học phải KHÔNG BAO GIỜ phá luồng chat chính
     # (01/11/2026, M4-C ĐÃ DUYỆT) Self-Q&A wired: câu hỏi về bản thân CHERRY
     # ("em là ai", "em làm được gì", "hệ thống khỏe không"...) → trả lời TỪ DỮ
     # LIỆU SỐNG (SelfQA: self model + learning checkpoints + candidates + health)

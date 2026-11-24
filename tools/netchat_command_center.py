@@ -27,6 +27,22 @@ from typing import Any
 
 WORKSPACE = Path(__file__).resolve().parent.parent
 
+# (24/11/2026, owner ảnh image_e2d705) Regex lệnh ĐỘNG — phủ câu có số đếm/
+# biến thể tự nhiên mà kw tĩnh không bắt được ("Tóm tắt 5 email gần nhất cho anh",
+# "đọc 10 mail mới nhất", "5 email gần nhất"...). detect_intent duyệt SAU kw tĩnh
+# và CHỈ khi không phải câu hỏi. Thứ tự = thứ tự ưu tiên.
+_DYNAMIC_COMMAND_RES: list[tuple[re.Pattern[str], str]] = [
+    # tóm tắt N email/mail/vmail gần nhất/mới nhất → đọc hộp thư
+    (re.compile(r"(?:tóm\s*tắt|tom\s*tat|đọc|doc|kiểm\s*tra|kiem\s*tra|liệt\s*kê|liet\s*ke|xem)\s*\d*\s*(?:email|mail|vmail|thư|thu)", re.IGNORECASE), "email_today"),
+    (re.compile(r"\d*\s*(?:email|mail|vmail)\s*(?:gần\s*nhất|mới\s*nhất|gan\s*nhat|moi\s*nhat)", re.IGNORECASE), "email_today"),
+    (re.compile(r"(?:hộp\s*thư|hop\s*thu|hộp\s*mail|hop\s*mail)\s*(?:gần\s*nhất|mới\s*nhất|gan\s*nhat|moi\s*nhat)", re.IGNORECASE), "email_today"),
+    # luồng email có số/kw → thread_summary ("tóm tắt 3 luồng gần nhất")
+    (re.compile(r"(?:tóm\s*tắt|tom\s*tat|tổng\s*hợp|tong\s*hop)\s*\d*\s*(?:luồng|luong|thread)", re.IGNORECASE), "thread_summary"),
+    # soạn trả lời N email/mail → reply_draft
+    (re.compile(r"(?:soạn|soan|viết|viet|nháp|nhap)\s*(?:\d*\s*)?(?:email|mail|thư|thu)?\s*(?:trả\s*lời|tra\s*loi)", re.IGNORECASE), "reply_draft"),
+]
+
+
 COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "approve": ("phê duyệt", "phe duyet", "duyệt", "duyet", "approved", "đồng ý", "dong y"),
     # TASK-OFFICE-S1 (23/11): lệnh đọc+tóm tắt email — READONLY (R2 DRAFT-ONLY,
@@ -65,6 +81,12 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                     "tóm tắt vmail", "tom tat vmail", "kiểm tra mail", "kiem tra mail",
                     "kiểm tra vmail", "kiem tra vmail", "hộp thư vmail", "hop thu vmail",
                     "đọc hộp thư", "doc hop thu"),
+    # SELF-IMPROVEMENT (24/11): 'em học được gì'/'em tự học đi'/'duyệt học <kw>'
+    # — kw 'học' đứng đầu câu; câu hỏi ('học được gì vậy?') không kích hoạt.
+    "self_improve": ("em tự học đi", "em tu hoc di",
+                     "tự học đi", "tu hoc di", "đề xuất từ khóa", "de xuat tu khoa",
+                     "em tự hoàn thiện", "em tu hoan thien", "tự hoàn thiện đi",
+                     "tu hoan thien di"),
     # SYNC-20261123: lịch họp VoIP (gián tiếp qua mail vofficeadmin — voffice_reader).
     # Đặt TRƯỚC email_today vì "lịch họp hôm nay" chứa cả 2; VoIP cụ thể hơn.
     "voffice_meetings": ("lịch họp voip", "lich hop voip", "lịch voip", "lich voip",
@@ -488,6 +510,10 @@ def detect_intent(text: str) -> str | None:
     # qua loa Pi5; phải trả intent để responder không đưa câu này cho GLM paraphrase.
     if not question and _SPEAK_VERBATIM_RE.match(t):
         return "tony_speak_verbatim"
+    # (24/11/2026) SELF-IMPROVEMENT: 'duyệt học <kw>' phải TRƯỚC 'approve' —
+    # kw 'duyệt' của approve sẽ nuốt câu nếu duyệt tuần tự COMMAND_PATTERNS.
+    if t.startswith("duyệt học") or t.startswith("duyet hoc"):
+        return "self_improve"
     # (31/10/2026) 'giúp' chỉ là lệnh khi ĐỨNG ĐẦU câu — 'mở giúp anh chrome'
     # hay 'đọc giúp anh ảnh này' phải là mệnh lệnh/AI, không phải bảng help
     # (bug thật: câu chứa từ 'giúp' ở giữa bị nuốt thành help, lệch lệnh).
@@ -503,6 +529,23 @@ def detect_intent(text: str) -> str | None:
                     and p not in _UNACCENTED_IMPERATIVE_ONLY
                     and f" {p} " in f" {t} "):
                 return intent
+    # (24/11/2026, owner ảnh image_e2d705) Kw ĐỘNG có số đếm — "Tóm tắt 5 email
+    # gần nhất cho anh"/"đọc 10 mail mới nhất" từng None vì kw tĩnh không phủ số.
+    # Chỉ match câu MỆNH LỆNH (không phải câu hỏi), group(1) = intent đích.
+    if not question:
+        for _rx, _intent in _DYNAMIC_COMMAND_RES:
+            if _rx.search(t):
+                return _intent
+        # Self-Improvement (24/11): kw owner ĐÃ DUYỆT (learned_keywords.json) —
+        # chỉ kw tĩnh bổ sung, sau lệnh hệ thống; lỗi file → bỏ qua (fail-open).
+        try:
+            from tools.self_improvement import read_learned as _read_learned
+            for _intent, _kws in _read_learned().items():
+                for _kw in _kws:
+                    if _kw and (t.startswith(_kw.lower()) or f" {_kw.lower()} " in f" {t} "):
+                        return _intent
+        except Exception:
+            pass
     return None
 
 
@@ -540,6 +583,68 @@ def _vmail_gate_reply() -> str:
     return ("🔕 Chức năng đọc vmail đang TẮT (anh yêu cầu tắt trước đó).\n"
             "Em không đọc hộp thư cho đến khi anh bật lại.\n"
             "Bật lại: nhắn 'bật vmail'.")
+
+
+def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """Self-Improvement (24/11, owner: cherry tự hoàn thiện, tự học):
+
+    'em học được gì' — thống kê lệnh chưa nhận diện + kw đã học;
+    'em tự học đi' / 'đề xuất từ khóa' — phân tích + tạo đề xuất PENDING_REVIEW;
+    'duyệt học <kw|id>' — owner duyệt 1 đề xuất → kw áp vào detect_intent.
+    Fail-honest: lỗi → báo lỗi thật; KHÔNG tự áp kw chưa duyệt (R4-style)."""
+    try:
+        from tools.self_improvement import stats, propose, list_proposals, approve, read_learned
+    except Exception as exc:
+        return f"⚠️ Module tự học chưa sẵn sàng: {type(exc).__name__}: {exc}"
+    low = (text or "").lower().strip()
+
+    if "duyệt học" in low or "duyet hoc" in low:
+        arg = low.split("duyệt học", 1)[-1].split("duyet hoc", 1)[-1].strip(" :,.?")
+        if not arg:
+            pend = list_proposals("PENDING_REVIEW")
+            if not pend.get("ok"):
+                return f"⚠️ Không đọc được đề xuất: {pend.get('error')}"
+            items = pend.get("proposals", {})
+            if not items:
+                return ("📭 Không có đề xuất nào chờ duyệt.\n"
+                        "Nhắn 'em tự học đi' để em phân tích các câu anh nhắn mà em chưa hiểu.")
+            lines = [f"• {pid}: kw {p['kw']!r} → {p['intent']} (x{p['count']})" for pid, p in items.items()]
+            return ("📋 Đề xuất chờ duyệt:\n" + "\n".join(lines)
+                    + "\nDuyệt: nhắn 'duyệt học <kw>'.")
+        r = approve(arg)
+        if r.get("ok"):
+            return (f"🎓 Đã học: kw {r['kw']!r} → {r['intent']}.\n"
+                    f"Từ giờ câu chứa {r['kw']!r} sẽ chạy đúng chức năng (kw do anh duyệt).")
+        return f"⚠️ Không duyệt được: {r.get('error')}"
+
+    if "tự học" in low or "tu hoc" in low or "đề xuất từ khóa" in low or "de xuat tu khoa" in low:
+        r = propose(min_count=2, max_proposals=8)
+        if not r.get("ok"):
+            return f"⚠️ Không phân tích được: {r.get('error')} (em không fake kết quả)"
+        pend = {pid: p for pid, p in r.get("proposals", {}).items() if p.get("status") == "PENDING_REVIEW"}
+        if not pend:
+            return ("📚 Em đã phân tích các câu anh nhắn mà em chưa hiểu — chưa có từ nào lặp đủ 2 lần để đề xuất.\n"
+                    "Khi anh nhắn lệnh em chưa biết, em sẽ tự ghi nhận và học dần.")
+        lines = [f"• {p['kw']!r} → đề xuất {p['intent']} (x{p['count']})" for p in pend.values()]
+        return ("🎓 Em đã phân tích và ĐỀ XUẤT các từ khóa mới (chưa áp — chờ anh duyệt):\n"
+                + "\n".join(lines)
+                + "\nDuyệt từng từ: nhắn 'duyệt học <từ>'.")
+
+    # mặc định: 'em học được gì' → báo cáo trung thực
+    st = stats(limit=8)
+    learned = read_learned()
+    n_learned = sum(len(v) for v in learned.values())
+    out = ["📊 TỰ HỌC — hiện trạng:"]
+    out.append(f"• Câu anh nhắn mà em chưa hiểu (đã ghi nhận): {st.get('total', 0)}")
+    if st.get("top"):
+        tops = ", ".join(f"{w}(x{c})" for w, c in st["top"][:6])
+        out.append(f"• Từ lặp nhiều nhất: {tops}")
+    out.append(f"• Từ khóa đã học (anh duyệt): {n_learned}")
+    for it, kws in learned.items():
+        if kws:
+            out.append(f"   - {it}: {', '.join(kws)}")
+    out.append("Phát triển: nhắn 'em tự học đi' để em đề xuất kw mới; 'duyệt học <kw>' để áp.")
+    return "\n".join(out)
 
 
 def handle_vmail_toggle(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -2220,6 +2325,8 @@ HANDLERS = {
     "reply_draft": handle_reply_draft,
     # TASK-VMAIL-TOGGLE (24/11, owner ảnh image_be6a17): bật/tắt đọc vmail
     "vmail_toggle": handle_vmail_toggle,
+    # SELF-IMPROVEMENT (24/11, owner ảnh image_e2d705): tự học + hoàn thiện
+    "self_improve": handle_self_improve,
     # SYNC-20261123: lịch họp VoIP — READONLY qua mail vofficeadmin
     "voffice_meetings": handle_voffice_meetings,
     "stop": handle_stop,
@@ -2422,10 +2529,15 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
                       "tony_hdmi_hide", "tony_hdmi_approve",
                       # TASK-VMAIL-TOGGLE (24/11): 'tắt vmail'/'bật vmail' KHÔNG phải
                       # pc_open/pc_close — động từ 'tắt/bật' trùng, ưu tiên vmail_toggle.
-                      "vmail_toggle"):
+                      "vmail_toggle",
+                      # SELF-IMPROVEMENT (24/11): 'duyệt học <kw>' cần text gốc
+                      "self_improve"):
         try:
             if _pi_intent == "vmail_toggle":
                 # (24/11) handler cần text gốc để biết tắt/bật/trạng thái
+                return _pi_intent, HANDLERS[_pi_intent](t_for_args)
+            if _pi_intent == "self_improve":
+                # (24/11) handler cần text gốc để biết học/đề xuất/duyệt
                 return _pi_intent, HANDLERS[_pi_intent](t_for_args)
             return _pi_intent, HANDLERS[_pi_intent]()
         except Exception as exc:
