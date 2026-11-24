@@ -1422,3 +1422,12 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **E2E that**: nar._ocr_image(file_toeic.jpg) → 901 ky tu doc day du de (email Thomas Wheeler + Q151/152 + 4 lua chon). Dap an: 151=C (On Wednesday), 152=B (Workers' assignments).
 - **DM da gui cho owner**: (1) loi giai chi tiet 151=C/152=B + giai thich bay (Thursday = han nop report, khong phai ngay giao hang); (2) tin loi "--file ..." do sai cu syntax CLI (da minh bach); (3) cap nhat fix goc + dinh chinh Ms. Hardy (OCR doc dung, vision doc nham Hilary).
 - **Verify**: doc lai DM channel — 3 tin moi deu len channel (loi giai id essdwfke..., update id zgto4rx8...).
+
+
+### 24/11 ~19:20 — OCR NANG CAP: cherry doc + PHAN TICH MOI HINH ANH trong DM
+- **Yeu cau owner**: "cau hinh tinh nang OCR cho cherry de co the doc va phan tich MOI hinh anh va thuc hien theo yeu cau".
+- **Audit**: gateway NetMind KHONG co model vision (4 model deu text: MiniMax-M3, Qwen3.6-35B, Qwen3.5-122B, GLM-5.3-Flash) → kien truc dung: OCR offline + GLM phan tich tren text. _IMAGE_EXTS da phu .png/.jpg/.jpeg/.gif/.bmp/.webp.
+- **Nang cap 1 — PRE-PROCESS anh** trong _ocr_image (netchat_auto_responder.py): grayscale + autocontrast + upscale 2x neu nho hon 1400px + fallback engine(goc) khi engine(prep) rong. E2E: TOEIC 996 chars (truoc 901), nhanh hon (engine warm).
+- **Nang cap 2 — PROMPT PHAN TICH** trong extract_message_files (kind_note anh): yeu cau GLM xac dinh LOAI tai lieu (bai tap/bieu do/bao cao/bien bao/hoa don/screenshot...), cau truc, du lieu chinh, THUC HIEN DUNG YEU CAU (giai bai/doc so lieu/tom tat...), nhac OCR thieu phai noi ro KHONG DUOC doan.
+- **E2E that**: (1) bai TOEIC → 996 chars OCR; (2) anh BIEU DO cot ve thu (Q1/Q2/Q3) → OCR doc nhan + so lieu; (3) anh HOA DON ve thu → GLM xac dinh 'hoa don vat lieu', phan tich tung khoan, THANH THAT cho 'OCR dinh cot' thay vi bia so lieu (fail-honest dung design).
+- **Regression**: 44/44 focused PASS. Responder restart pid 14652 (code moi).

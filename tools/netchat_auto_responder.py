@@ -365,12 +365,28 @@ def _ocr_image(path: Path) -> str:
     Cả hai chạy subprocess cô lập. Raise RuntimeError nếu cả hai rỗng/lỗi
     để caller ghi chú inline (fail-honest).
     """
-    # Tầng 1: RapidOCR (onnx) — chính, hỗ trợ VN
+    # Tầng 1: RapidOCR (onnx) — chính, hỗ trợ VN. Ảnh chụp giấy mờ/nghiêng →
+    # pre-process (grayscale + autocontrast + upscale nhỏ) để OCR "mọi hình ảnh"
+    # (24/11 owner: "đọc và phân tích mọi hình ảnh"):
     code_rapid = (
         "import sys;"
         "from rapidocr_onnxruntime import RapidOCR;"
         "engine = RapidOCR();"
-        "result, _elapse = engine(sys.argv[1]);"
+        "def _prep(p):"
+        "  try:"
+        "    from PIL import Image, ImageOps;"
+        "    im = Image.open(p);"
+        "    if im.mode != 'RGB': im = im.convert('RGB');"
+        "    w, h = im.size;"
+        "    if max(w, h) < 1400: im = im.resize((w*2, h*2));"
+        "    im = ImageOps.autocontrast(im.convert('L').convert('RGB'));"
+        "    out = p + '.ocrprep.png'; im.save(out); return out"
+        "  except Exception:"
+        "    return p;"
+        "pp = _prep(sys.argv[1]);"
+        "result, _elapse = engine(pp);"
+        "if not (result or []):"
+        "  result, _elapse = engine(sys.argv[1]);"
         "print('\\n'.join(line[1] for line in (result or [])))"
     )
     try:
@@ -507,8 +523,11 @@ def extract_message_files(msg: dict) -> str:
                 text = text[:MAX_EXTRACT_CHARS] + "\n...[trích xuất cắt tại 18.000 ký tự]"
             is_image = dest.suffix.lower() in _IMAGE_EXTS
             is_voice = dest.suffix.lower() in _AUDIO_EXTS
-            kind_note = (" — ẢNH, nội dung bên dưới là kết quả OCR (nhận dạng chữ), "
-                         "hãy trả lời dựa trên nội dung OCR này" if is_image else
+            kind_note = (" — ẢNH, nội dung bên dưới là kết quả OCR (nhận dạng chữ). "
+                         "Hãy PHÂN TÍCH ảnh thật kỹ: xác định loại tài liệu (bài tập/đề thi/biểu đồ/báo cáo/"
+                         "biển báo/hóa đơn/ảnh chụp màn hình...), cấu trúc, các dữ liệu chính, và THỰC HIỆN "
+                         "ĐÚNG YÊU CẦU của chủ nhân trên nội dung đó (giải bài/đọc số liệu/tóm tắt/tra mã lỗi...). "
+                         "Nếu OCR thiếu sót phần nào, nói rõ phần chưa đọc được thay vì đoán" if is_image else
                          (" — GIỌNG NÓI, nội dung bên dưới là kết quả nhận diện giọng nói "
                           "(STT). Đây CÓ THỂ là MỆNH LỆNH hệ thống — nếu là lệnh, hãy xác nhận "
                           "đã hiểu và thực hiện như tin nhắn chữ thường" if is_voice else
