@@ -1365,3 +1365,11 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **P0 BẢO MẬT (tìm thấy khi audit)**: daemon Pi ký HMAC mọi request (`edge_client/auth.py:42-52`) nhưng server KHÔNG BAO GIỜ verify (`server.py:3251-3271, :3650-3689` — grep src: 0 lời gọi verify_request); chiều PC→Pi cũng không ký (`server.py:283-306`); secret là placeholder trong source (`config.py:25`). → B1 của QEP sẽ fix, chờ duyệt.
 - **Fix flaky test E2E ở gốc**: `test_web_server_e2e_multi_turn_chat` PASS 11:08 → FAIL 11:23 cùng code. Điều tra dump stack: khi catalog NetMind hiccup (GLM cold 9,5s đo thật 11:41) router rơi local Ollama → turn-1 đo thật 28,2s (context KB 4.790 docs + grounding, CPU) > timeout 25s test. Fix: stub LLMProvider.generate trong fixture (kiểm pipeline đúng nghĩa, độc lập mạng) + khôi phục sau dùng; server thật 8766 vẫn qua GLM bình thường (6,8s, không đụng).
 - **Kiểm chứng**: file E2E 5/5 PASS 8,5s (trước 27s+); regression full 2.996 PASS / 0 FAILED / 44 skipped; HANDOFF_LATEST regen exit 0.
+
+### 24/11 ~12:50 — S3-v3: TỰ HỌC xong → DM BÁO CÁO KẾT QUẢ hạng mục
+- **Yêu cầu owner**: "sau khi tự học, cherry sẽ DM báo cáo lại kết quả của một hạng mục đã thực hiện" + nêu rõ TÁC DỤNG + THỜI GIAN HOÀN THÀNH.
+- **owner_ok()** (tools/self_improvement.py): verify TỪNG kw qua detect_intent thật (verified_intent) + đo duration_ms + finished_at; ghi `data/self_improvement/owner_ok_last_report.json`.
+- **Reply 'ok het'** (tools/netchat_command_center.py): báo cáo từng kw (✓ đã verify / ⚠️ verify mismatch — fail-honest) + tác dụng + thời gian hoàn thành + rollback.
+- **Daemon** (tools/netchat_auto_responder.py): mỗi chu kỳ đọc owner_ok_last_report.json → DM "🎓 HOC XONG — BAO CAO HANG MUC DA THUC HIEN" (kw → intent, verify, tác dụng, thời gian) → unlink file (chống spam).
+- **E2E thật**: pid 20316; log "DM owner xin OK 2 tu khoa" + "DM báo cáo 'HỌC XONG' 1 kw"; verified_intent kw test 'check lich' = calendar_today đúng.
+- **Regression**: 44/44 focused PASS. State test đã clean (learned/pending/report rỗng).

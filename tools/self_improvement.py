@@ -270,6 +270,8 @@ def read_learned() -> dict[str, list[str]]:
 AUTO_CONFIG_PATH = DATA_DIR / "auto.json"
 AUTO_BACKUP_PATH = DATA_DIR / "learned_keywords.backup.json"
 AUTO_STATE_PATH = DATA_DIR / "auto_state.json"
+# (24/11 S3-v3) owner_ok_last_report: file báo cáo hạng mục học xong, daemon DM.
+OWNER_OK_REPORT_PATH = DATA_DIR / "owner_ok_last_report.json"
 # (24/11 S3-DM-GATE, owner: "trước khi học nâng cấp, gửi DM cho anh, anh OK/duyệt
 # mới thực hiện") — kw đủ tin cậy KHÔNG tự áp nữa: chuyển sang chờ owner OK qua DM.
 PENDING_DM_PATH = DATA_DIR / "pending_dm.json"
@@ -477,6 +479,7 @@ def owner_ok(keyword_or_all: str = "") -> dict[str, Any]:
     keyword_or_all: '' hoặc 'tất cả/toàn bộ/all/hết' = duyệt mọi item đang chờ;
     tên kw hoặc qid = duyệt 1. Trả báo cáo từng item, fail-honest.
     """
+    t_start = time.time()
     pending = _read_pending_dm()
     waiting = {pid: p for pid, p in pending.items()
                if isinstance(p, dict) and p.get("status") == "WAITING_OWNER"}
@@ -530,7 +533,30 @@ def owner_ok(keyword_or_all: str = "") -> dict[str, Any]:
         _write_pending_dm(pending)
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "fail_honest": True}
-    return {"ok": True, "applied": applied}
+    # (24/11 S3-v3, owner: "sau khi tự học, DM báo cáo lại kết quả của hạng mục
+    # đã thực hiện") — verify từng kw THẬT qua detect_intent + thời gian hoàn thành.
+    t_end = time.time()
+    duration_ms = int((t_end - t_start) * 1000)
+    for a in applied:
+        try:
+            import sys as _sys
+            if str(WORKSPACE / "tools") not in _sys.path:
+                _sys.path.insert(0, str(WORKSPACE / "tools"))
+            from netchat_command_center import detect_intent as _detect
+            a["verified_intent"] = _detect(a["kw"])  # intent thật khi owner nhắn kw này
+        except Exception as _ve:
+            a["verified_intent"] = None
+            a["verify_error"] = f"{type(_ve).__name__}"
+    # (24/11 S3-v3) ghi file báo cáo để daemon DM "HỌC XONG".
+    report = {"ok": True, "applied": applied, "duration_ms": duration_ms,
+              "finished_at": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    try:
+        _ensure_dir()
+        with open(OWNER_OK_REPORT_PATH, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+    return report
 
 
 def owner_reject(keyword_or_all: str = "") -> dict[str, Any]:

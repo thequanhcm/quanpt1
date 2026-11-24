@@ -1461,6 +1461,41 @@ def main():
                 if rep.get("applied"):
                     print(f"   🎓 [AUTO-TUNE] Tu ap {len(rep['applied'])} kw: "
                           + ", ".join(f"{a['kw']}->{a['intent']}" for a in rep["applied"]))
+                # (24/11 S3-v3, owner: "sau khi tự học, DM báo cáo lại kết quả")
+                # nếu owner vừa OK qua DM → owner_ok() đã ghi file báo cáo;
+                # daemon đọc → DM "HỌC XONG" chi tiết (kết quả + thời gian).
+                try:
+                    from tools.self_improvement import OWNER_OK_REPORT_PATH
+                    if OWNER_OK_REPORT_PATH.exists():
+                        _orep = _json.loads(OWNER_OK_REPORT_PATH.read_text(encoding="utf-8"))
+                        _applied = _orep.get("applied", [])
+                        _dur = _orep.get("duration_ms", 0) / 1000
+                        if _applied:
+                            _lines = []
+                            for a in _applied:
+                                _v = a.get("verified_intent")
+                                _vok = "OK" if _v == a.get("intent") else f"verify={_v}"
+                                _lines.append(f"  - {a['kw']!r} -> {a['intent']} ({_vok})")
+                            _report_lines = [
+                                "🎓 HOC XONG — BAO CAO HANG MUC DA THUC HIEN:",
+                                *_lines,
+                                "",
+                                f"• Tác dụng: từ giờ anh nhắn câu chứa các từ đã học, em chạy đúng chức năng.",
+                                f"• Thời gian hoàn thành: {_dur:.1f}s (lúc {_orep.get('finished_at')}).",
+                                "• Rollback: 'rollback từ khóa'.",
+                            ]
+                            _res2 = send_message("\n".join(_report_lines), target_channel=DM_CHANNEL_ID)
+                            if "error" in _res2:
+                                print(f"   ⚠️ [AUTO-TUNE] DM báo cáo lỗi: {_res2['error']}")
+                            else:
+                                print(f"   🎓 [AUTO-TUNE] DM báo cáo 'HỌC XONG' {len(_applied)} kw.")
+                        # xóa file sau khi DM để KHÔNG spam chu kỳ sau.
+                        try:
+                            OWNER_OK_REPORT_PATH.unlink()
+                        except Exception:
+                            pass
+                except Exception as _orep_e:
+                    print(f"   ⚠️ [AUTO-TUNE] owner_ok_report skip: {_orep_e}")
             except Exception as _si:
                 print(f"   ⚠️ [AUTO-TUNE] error (bỏ qua): {_si}")
 

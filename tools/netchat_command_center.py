@@ -649,9 +649,21 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
             r = owner_ok("tất cả")
             if r.get("ok"):
                 applied = r.get("applied", [])
-                lines = [f"• Da hoc: {a['kw']!r} -> {a['intent']}" for a in applied]
-                return ("🎓 ANH DA OK — DA HỌC " + str(len(applied)) + " tu khoa:\n" + "\n".join(lines) +
-                        "\n\nTu gio cac lenh nay se chay dung chuc nang. Cam on anh!")
+                # (24/11 S3-v3, owner: "sau khi tự học, DM báo cáo lại kết quả của
+                # hạng mục đã thực hiện") báo cáo có TÁC DỤNG + VERIFY + THỜI GIAN.
+                _dur_ms = r.get("duration_ms") or 0
+                _dur_s = f"{_dur_ms / 1000:.1f}s" if _dur_ms else "?"
+                lines = []
+                for a in applied:
+                    v = a.get("verified_intent")
+                    v_ok = "✓ đã verify" if v == a.get("intent") else f"⚠️ verify={v or 'None'}"
+                    lines.append(f"• {a['kw']!r} -> {a['intent']} ({v_ok})")
+                out = (f"🎓 ANH DA OK — BAO CAO HANG MUC HOC XONG:\n"
+                       + "\n".join(lines)
+                       + f"\n\n• Tác dụng: từ giờ anh nhắn câu chứa các từ trên, em chạy đúng chức năng (kw anh duyệt, backup đã lưu)."
+                       + f"\n• Thời gian hoàn thành: {_dur_s} (lúc {r.get('finished_at')})."
+                       + f"\n• Rollback nếu cần: 'rollback từ khóa'. Cảm ơn anh!")
+                return out
             return f"⚠️ Không duyệt được: {r.get('error')}"
 
     if "ok" in low or "oke" in low or "okie" in low or "okay" in low:
