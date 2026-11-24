@@ -49,7 +49,31 @@ def resolve_tesseract() -> str | None:
 
 
 def _ocr_image(path: Path) -> tuple[str, str]:
-    """OCR 1 ảnh → (text, ghi_chú_nguồn). Trả ('', note) khi lỗi — không raise."""
+    """OCR 1 ảnh → (text, ghi_chú_nguồn). Trả ('', note) khi lỗi — không raise.
+
+    (24/11/2026, owner: "cho cherry phân tích và đọc đúng nội dung") Tầng chính
+    = tools/ocr_module.py (RapidOCR + winocr — module đã phát triển + test 6/6;
+    DM TOEIC trước đó pytesseract thiếu module + thiếu tesseract.exe nên OCR
+    lỗi, pipeline phân tích ảnh báo sai "không có chữ"). pytesseract chỉ còn
+    là tầng dự phòng nếu ocr_module rỗng.
+    """
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "ocr_module", Path(__file__).resolve().parents[3] / "tools" / "ocr_module.py")
+        om = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(om)
+        r = om.ocr_image_structured(str(path))
+        if r.get("text_flat", "").strip():
+            note = f"OCR {r['engine']}"
+            if r.get("avg_score") is not None:
+                note += f" (score {r['avg_score']})"
+            return r["text_flat"], note
+        ocr_err = r.get("error") or "rỗng"
+    except Exception as exc:
+        ocr_err = f"{type(exc).__name__}: {exc}"
+
+    # Dự phòng: pytesseract (nếu máy có tesseract.exe + module)
     try:
         import pytesseract
         from PIL import Image
@@ -66,7 +90,7 @@ def _ocr_image(path: Path) -> tuple[str, str]:
             return text.strip(), "OCR eng (thiếu gói vie)"
         return text.strip(), "OCR vie+eng"
     except Exception as exc:
-        return "", f"OCR lỗi: {type(exc).__name__}: {exc}"
+        return "", f"OCR lỗi: {ocr_err}; pytesseract: {type(exc).__name__}: {exc}"
 
 
 def _image_facts(path: Path) -> dict[str, Any]:
@@ -117,6 +141,7 @@ def _fallback_search(paths: list[Path]) -> Path | None:
         best, best_mt = None, 0.0
         for f in d.iterdir():
             if f.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp"} \
+                    and not f.name.endswith(".ocrprep.png") \
                     and now - f.stat().st_mtime < 86400:  # ảnh trong 24h
                 mt = f.stat().st_mtime
                 if mt > best_mt:

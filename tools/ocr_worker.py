@@ -59,6 +59,13 @@ def main() -> int:
             result, _elapse = engine(pp)
             if not (result or []):
                 result, _elapse = engine(path)
+            # dọn file pre-process tạm (tránh _fallback_search nhầm nhặt)
+            try:
+                import os as _os
+                if pp.endswith(".ocrprep.png") and _os.path.exists(pp):
+                    _os.remove(pp)
+            except Exception:
+                pass
             out = [_box_to_xywh(line) for line in (result or [])]
             print(json.dumps(out, ensure_ascii=False))
             return 0

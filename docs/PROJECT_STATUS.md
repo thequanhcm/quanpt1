@@ -1441,3 +1441,11 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Wire _ocr_image (netchat_auto_responder.py)**: goi ocr_module qua importlib (khong con chuoi -c roi rac); RuntimeError giu fail-honest.
 - **Test**: tests/test_ocr_module.py MOI 6/6 PASS (doc text, giu gap cot, fallback chain, anh trang → raise fail-honest, winocr en-US that, worker ton tai). Focused tong 50/50. E2E qua _ocr_image: TOEIC 918 chars + gap '|'.
 - **Responder restart pid 13688 (code moi). Commit sprint nay.
+
+
+### 24/11 ~20:10 — FIX PIPELINE PHAN TICH ANH: ocr_module la tang chinh (owner: "cho cherry phan tich va doc dung noi dung")
+- **Tinh huong that (anh 6eb97b)**: owner DM "Phan tich anh nay" 18:39 (anh = trang TOEIC) → Cherry tra loi: boi canh GLM OK nhung "Chu nhan dien (OCR loi: ModuleNotFoundError pytesseract): khong co chu trong anh" — SAI (anh co chu). Owner nhac "em chi thuc hien doc noi dung trong anh" 18:40.
+- **Root cause**: pipeline phan tich anh (src/quan_ai_brain/vision/image_analyzer.py → analyze_image → _ocr_image) dung pytesseract duy nhat — may khong co module pytesseract trong venv + (pipeline that chay system python) → OCR loi → fail-honest bao "khong co chu" (sai y nghia: loi OCR ≠ khong co chu).
+- **Fix**: (1) _ocr_image dung tools/ocr_module.py (rapidocr + winocr, module phat trien sprint truoc) lam TANG CHINH; pytesseract chi con du phong; note ghi engine + score (OCR rapidocr (score 0.962)). (2) FIX PATH parents[2]→parents[3] (src/quan_ai_brain/vision → E:/BRAIN/tools). (3) BUG PHU PHAT HIEN khi E2E: file .ocrprep.png (pre-process temp) bi _fallback_search NHAM NHAT (mtime moi nhat) → phan tich nham file; FIX: ocr_worker xoa .ocrprep.png sau khi OCR + _fallback_search bo qua *.ocrprep.png.
+- **E2E that**: handle_tony_analyze_image (dung payload file_id TOEIC) → boi canh GLM chinh xac (thu dien tu giam doc san xuat gui nhom van hanh, mua thiet bi, bao cao truoc 5h chieu thu Nam) + OCR rapidocr score 0.962 doc dung toan bo de.
+- **Regression 50/50 PASS. Responder pid 2028 (code moi). Server 8765 khong import image_analyzer (verify) — khong can restart server.
