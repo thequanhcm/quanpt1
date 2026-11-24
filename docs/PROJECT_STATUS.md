@@ -1404,3 +1404,12 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Handler** handle_voffice_documents + kw 'van ban voffice/van ban nhan/cong van nhan/kiem tra van ban/van ban...' + parse 'tu ngay DD/MM'/'N thang gan day' + dispatch text (fix bug handler() khong text).
 - **Tu dong**: mail_alert.check_documents() chay cung chu ky 4h → van ban moi → DM 'VAN BAN VOFFICE MOI' kem tom tat (vb_docs_sent_ids chong re-DM; test: 2 doc → lan sau 0).
 - **E2E that**: 2 van bun tu 17/11 (Chi thi 1569/CT-CNVTQD kien ke kho nha thau; vBHXH tiep doan BHXH VN). 68/68 focused PASS. Responder pid 19744. Commit S3-v7.
+
+
+### 24/11 ~18:20 — AUTO-START RESTORE: Cherry tu chay lai sau moi lan khoi dong may
+- **Yeu cau owner moi (24/11 ~18:05)**: "anh muon Cherry tu chay lai sau moi lan khoi dong may" — dao nguoc quyet dinh manual-start cua owner ngay 19/11/20/11 (skill windows-daemon-ops: chi owner directive moi dao nguoc).
+- **Audit truoc sua**: 3 task auto-start BI DISABLE tu 20/11 (KHOI_DONG_LOGON + LIVENESS_30MIN + CHERRY_AUTONOMOUS); LOGON/LIVENESS tro tools/khoi_dong_24_7_hidden.vbs nhung FILE BI XOA trong cleanup 20/11 (verify: file khong ton tai) → enable khong du, phai tai tao file.
+- **Lam**: (1) tai tao tools/khoi_dong_24_7_hidden.vbs (ASCII + CRLF) — WshShell.CurrentDirectory "E:\BRAIN" + Run KHOI_DONG_CHERRY.bat window style 1 (CUA SO HIEN DIEN — owner 19/11: khong an cua so cherry; khong dung style 0 an); (2) Enable-ScheduledTask KHOI_DONG_LOGON + LIVENESS_30MIN (Ready, verify /Query); CHERRY_AUTONOMOUS GIU DISABLED (auto-mode rieng, owner chua yeu cau).
+- **E2E that (khong phai rehearsal)**: Start-ScheduledTask LOGON → 35s → port 8765 + 8766 HTTP 200 health; process tree DUNG 1 logical moi component (console_host + dual_servers + responder; moi cap = venv trampoline pair — skill: khong nham zombie); responder pair 10208/14508; log cuoi con DM 14 mail alert + "HOC XONG" (code S3-v7 chay tot).
+- **Idempotence verified**: Start LIVENESS_30MIN voi stack dang song → KHONG nhan ban (port-check cua .bat thoat dung) — backstop 30 phut an toan. Don dep 1 cua so .bat pause thua (pid 12496 tu lan test thu 2).
+- **Lu y trung thuc**: day la Rehearsal qua Start-ScheduledTask (khac biet nho voi boot that — skill: real boot test la bang chung duy nhat); lan reboot that toi se dien ra qua LOGON trigger. Cua so console CHERRY HIEN DIEN khi boot (theo yeu cau 19/11).
