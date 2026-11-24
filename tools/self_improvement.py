@@ -255,3 +255,202 @@ def read_learned() -> dict[str, list[str]]:
         return {}
     except Exception:
         return {}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# S2 (24/11/2026, owner: "cấu hình để tất cả các điều anh DM cho cherry đều tự
+# học để nâng cấp liên tục") — AUTO-TUNE CYCLE: tự đề xuất ĐỊNH KỲ + tự áp kw đủ
+# tin cậy (evidence mạnh) + rollback. Biên an toàn:
+#   • chỉ học KW ĐỊNH TUYẾN (không tự sửa code, không tự wire intent mới)
+#   • auto-apply CHỈ khi: count >= AUTO_MIN_COUNT và intent từ _DOMAIN_HINTS
+#     (có bằng chứng miền rõ ràng) và kw chưa tồn tại ở learned/kw tĩnh
+#   • mọi auto-apply có backup learned trước khi áp + tag "_auto" + audit
+#   • tắt/bật qua data/self_improve/auto.json {"auto_apply": bool, "auto_propose": bool}
+#   • rollback(kw|'toàn bộ') khôi phục learned từ backup gần nhất
+AUTO_CONFIG_PATH = DATA_DIR / "auto.json"
+AUTO_BACKUP_PATH = DATA_DIR / "learned_keywords.backup.json"
+AUTO_STATE_PATH = DATA_DIR / "auto_state.json"
+AUTO_MIN_COUNT = 3          # câu phải lặp >= 3 lần mới tự áp
+AUTO_APPLY_LIMIT = 5        # tối đa kw tự áp mỗi chu kỳ
+
+
+def _read_auto_config() -> dict[str, bool]:
+    try:
+        with open(AUTO_CONFIG_PATH, encoding="utf-8") as fh:
+            d = json.load(fh)
+        return {"auto_propose": bool(d.get("auto_propose", True)),
+                "auto_apply": bool(d.get("auto_apply", True))}
+    except Exception:
+        return {"auto_propose": True, "auto_apply": True}  # owner đã duyệt auto liên tục
+
+
+def set_auto(auto_propose: bool | None = None, auto_apply: bool | None = None) -> dict[str, bool]:
+    cfg = _read_auto_config()
+    if auto_propose is not None:
+        cfg["auto_propose"] = bool(auto_propose)
+    if auto_apply is not None:
+        cfg["auto_apply"] = bool(auto_apply)
+    try:
+        _ensure_dir()
+        with open(AUTO_CONFIG_PATH, "w", encoding="utf-8") as fh:
+            json.dump(cfg, fh, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+    return cfg
+
+
+def _static_keywords() -> set[str]:
+    """Kw tĩnh hệ thống (có dấu + không dấu) — auto-apply tránh khớp kw tĩnh."""
+    try:
+        import sys as _sys
+        if str(WORKSPACE / "tools") not in _sys.path:
+            _sys.path.insert(0, str(WORKSPACE / "tools"))
+        from netchat_command_center import COMMAND_PATTERNS
+        out: set[str] = set()
+        for kws in COMMAND_PATTERNS.values():
+            for k in kws:
+                out.add(k.lower())
+                out.add(_norm_token(k))
+        return out
+    except Exception:
+        return set()
+
+
+def auto_cycle(min_count: int | None = None, max_apply: int | None = None) -> dict[str, Any]:
+    """1 chu kỳ tự học: propose (nếu bật) → auto-apply kw đủ tin cậy (nếu bật).
+
+    Báo cáo trung thực từng bước; lỗi ghi trong report, không raise (chạy nền).
+    """
+    cfg = _read_auto_config()
+    min_c = min_count or AUTO_MIN_COUNT
+    cap = max_apply or AUTO_APPLY_LIMIT
+    report: dict[str, Any] = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                              "auto_propose": cfg["auto_propose"], "auto_apply": cfg["auto_apply"]}
+
+    # 1) Tự đề xuất từ unmatched (ngưỡng evidence đề xuất: 2 lần)
+    if cfg["auto_propose"]:
+        pr = propose(min_count=2, max_proposals=10)
+        report["propose"] = {"ok": pr.get("ok"), "created": pr.get("created", 0),
+                             "error": pr.get("error")}
+    else:
+        report["propose"] = {"ok": True, "created": 0, "skipped": "auto_propose tắt"}
+
+    # 2) Tự áp kw đủ tin cậy
+    applied: list[dict[str, Any]] = []
+    skipped: list[dict[str, str]] = []
+    if cfg["auto_apply"]:
+        st = stats(limit=60)
+        static_kws = _static_keywords()
+        learned = read_learned()
+        learned_all = {k for kws in learned.values() if k != "_auto" for k in kws}
+        try:
+            with open(PROPOSALS_PATH, encoding="utf-8") as fh:
+                proposals = json.load(fh)
+        except Exception:
+            proposals = {}
+        for word, cnt in st["top"]:
+            if len(applied) >= cap:
+                break
+            if cnt < min_c or len(word.replace(" ", "")) < (_MIN_KW_LEN + 2):
+                continue
+            if word in learned_all or word in static_kws or _norm_token(word) in static_kws:
+                continue
+            # intent PHẢI từ _DOMAIN_HINTS (bằng chứng miền rõ) — không đoán mù
+            intent = None
+            for hint, it in _DOMAIN_HINTS:
+                if hint in word:
+                    intent = it
+                    break
+            if intent is None:
+                skipped.append({"kw": word, "reason": "không rõ miền (không tự đoán)"})
+                continue
+            if not applied:
+                try:
+                    _ensure_dir()
+                    with open(AUTO_BACKUP_PATH, "w", encoding="utf-8") as fh:
+                        json.dump(learned, fh, ensure_ascii=False, indent=1)
+                except Exception:
+                    pass
+            kws = learned.setdefault(intent, [])
+            if word not in kws:
+                kws.append(word)
+            applied.append({"kw": word, "intent": intent, "count": cnt})
+            for pid, p in proposals.items():
+                if isinstance(p, dict) and p.get("kw") == word and p.get("status") == "PENDING_REVIEW":
+                    p["status"] = "AUTO_APPLIED"
+                    p["auto_applied_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        if applied:
+            try:
+                auto_tags = learned.get("_auto", [])
+                for a in applied:
+                    if a["kw"] not in auto_tags:
+                        auto_tags.append(a["kw"])
+                learned["_auto"] = auto_tags
+                with open(LEARNED_PATH, "w", encoding="utf-8") as fh:
+                    json.dump(learned, fh, ensure_ascii=False, indent=1)
+                with open(PROPOSALS_PATH, "w", encoding="utf-8") as fh:
+                    json.dump(proposals, fh, ensure_ascii=False, indent=1)
+            except Exception as exc:
+                report["apply_error"] = f"{type(exc).__name__}: {exc}"
+    else:
+        skipped.append({"kw": "*", "reason": "auto_apply tắt"})
+    report["applied"] = applied
+    report["skipped"] = skipped[:10]
+
+    # 3) State + 4) Audit — không bao giờ raise (chạy nền)
+    try:
+        _ensure_dir()
+        with open(AUTO_STATE_PATH, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+    try:
+        import sys as _sys
+        if str(WORKSPACE / "src") not in _sys.path:
+            _sys.path.insert(0, str(WORKSPACE / "src"))
+        from quan_ai_brain.core.audit import AuditLogger
+        AuditLogger(WORKSPACE).record("self_improvement.auto_cycle",
+                                      {"applied": len(applied),
+                                       "proposed": report.get("propose", {}).get("created", 0)})
+    except Exception:
+        pass
+    return report
+
+
+def auto_state() -> dict[str, Any]:
+    try:
+        with open(AUTO_STATE_PATH, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception as exc:
+        return {"error": f"chưa có chu kỳ nào chạy: {type(exc).__name__}: {exc}"}
+
+
+def rollback(keyword: str | None = None) -> dict[str, Any]:
+    """Rollback kw auto-applied (1 kw hoặc 'toàn bộ' kw auto) từ backup gần nhất."""
+    try:
+        with open(AUTO_BACKUP_PATH, encoding="utf-8") as fh:
+            backup = json.load(fh)
+    except Exception as exc:
+        return {"ok": False, "error": f"không có backup: {type(exc).__name__}: {exc}", "fail_honest": True}
+    learned = read_learned()
+    auto_tags = learned.get("_auto", [])
+    if keyword and keyword.lower() not in ("toàn bộ", "toan bo", "all"):
+        kw = keyword
+        removed = 0
+        for it, kws in learned.items():
+            if it == "_auto":
+                continue
+            if kw in kws:
+                kws.remove(kw)
+                removed += 1
+        learned["_auto"] = [k for k in auto_tags if k != kw]
+        out: dict[str, Any] = {"ok": True, "removed": removed, "kw": kw}
+    else:
+        learned = {**backup, "_auto": []}
+        out = {"ok": True, "removed": "toàn bộ kw auto", "restored_from": str(AUTO_BACKUP_PATH)}
+    try:
+        with open(LEARNED_PATH, "w", encoding="utf-8") as fh:
+            json.dump(learned, fh, ensure_ascii=False, indent=1)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "fail_honest": True}
+    return out

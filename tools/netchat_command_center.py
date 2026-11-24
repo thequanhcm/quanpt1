@@ -86,7 +86,9 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "self_improve": ("em tự học đi", "em tu hoc di",
                      "tự học đi", "tu hoc di", "đề xuất từ khóa", "de xuat tu khoa",
                      "em tự hoàn thiện", "em tu hoan thien", "tự hoàn thiện đi",
-                     "tu hoan thien di"),
+                     "tu hoan thien di", "tắt tự học", "tat tu hoc",
+                     "bật tự học", "bat tu hoc", "rollback từ khóa", "rollback tu khoa",
+                     "rollback học", "rollback hoc"),
     # SYNC-20261123: lịch họp VoIP (gián tiếp qua mail vofficeadmin — voffice_reader).
     # Đặt TRƯỚC email_today vì "lịch họp hôm nay" chứa cả 2; VoIP cụ thể hơn.
     "voffice_meetings": ("lịch họp voip", "lich hop voip", "lịch voip", "lich voip",
@@ -617,6 +619,25 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
                     f"Từ giờ câu chứa {r['kw']!r} sẽ chạy đúng chức năng (kw do anh duyệt).")
         return f"⚠️ Không duyệt được: {r.get('error')}"
 
+    if "rollback" in low:
+        from tools.self_improvement import rollback as _rollback
+        arg = low.split("rollback", 1)[-1].strip(" :,.?")
+        r = _rollback(arg or None)
+        if r.get("ok"):
+            return f"↩️ Đã rollback: {r.get('removed')} (kw {r.get('kw') or 'toàn bộ auto'}) — learned_keywords khôi phục từ backup."
+        return f"⚠️ Không rollback được: {r.get('error')}"
+
+    if "tắt tự học" in low or "tat tu hoc" in low:
+        from tools.self_improvement import set_auto
+        cfg = set_auto(auto_propose=False, auto_apply=False)
+        return ("🔕 Đã TẮT tự học liên tục (auto_propose=False, auto_apply=False).\n"
+                "Em vẫn học khi anh nhắn 'em tự học đi' và 'duyệt học <từ>' như cũ.\n"
+                "Bật lại: nhắn 'bật tự học'.")
+    if "bật tự học" in low or "bat tu hoc" in low:
+        from tools.self_improvement import set_auto
+        cfg = set_auto(auto_propose=True, auto_apply=True)
+        return "🔔 Đã BẬT tự học liên tục (chu kỳ 10 phút: tự đề xuất + tự áp kw đủ tin cậy, có backup + rollback)."
+
     if "tự học" in low or "tu hoc" in low or "đề xuất từ khóa" in low or "de xuat tu khoa" in low:
         r = propose(min_count=2, max_proposals=8)
         if not r.get("ok"):
@@ -628,22 +649,35 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
         lines = [f"• {p['kw']!r} → đề xuất {p['intent']} (x{p['count']})" for p in pend.values()]
         return ("🎓 Em đã phân tích và ĐỀ XUẤT các từ khóa mới (chưa áp — chờ anh duyệt):\n"
                 + "\n".join(lines)
-                + "\nDuyệt từng từ: nhắn 'duyệt học <từ>'.")
+                + "\nDuyệt từng từ: nhắn 'duyệt học <từ>'.\n"
+                "(Chế độ tự học liên tục đang bật: chu kỳ 10 phút em tự đề xuất + tự áp từ đủ tin cậy — anh không cần duyệt từng từ nếu không muốn.)")
 
     # mặc định: 'em học được gì' → báo cáo trung thực
     st = stats(limit=8)
     learned = read_learned()
-    n_learned = sum(len(v) for v in learned.values())
+    auto_kws = learned.get("_auto", [])
+    owner_kws = {it: kws for it, kws in learned.items() if it != "_auto"}
+    n_learned = sum(len(v) for v in owner_kws.values())
+    from tools.self_improvement import auto_state, _read_auto_config
+    cfg = _read_auto_config()
+    ast = auto_state()
     out = ["📊 TỰ HỌC — hiện trạng:"]
+    out.append(f"• Chế độ tự học liên tục: {'BẬT (chu kỳ 10 phút)' if cfg.get('auto_apply') or cfg.get('auto_propose') else 'TẮT'}")
     out.append(f"• Câu anh nhắn mà em chưa hiểu (đã ghi nhận): {st.get('total', 0)}")
     if st.get("top"):
         tops = ", ".join(f"{w}(x{c})" for w, c in st["top"][:6])
         out.append(f"• Từ lặp nhiều nhất: {tops}")
     out.append(f"• Từ khóa đã học (anh duyệt): {n_learned}")
-    for it, kws in learned.items():
+    for it, kws in owner_kws.items():
         if kws:
             out.append(f"   - {it}: {', '.join(kws)}")
-    out.append("Phát triển: nhắn 'em tự học đi' để em đề xuất kw mới; 'duyệt học <kw>' để áp.")
+    if auto_kws:
+        out.append(f"• Tự áp (auto): {', '.join(auto_kws)}")
+    if ast.get("applied") is not None:
+        out.append(f"• Chu kỳ gần nhất: {ast.get('ts')} — tự áp {len(ast.get('applied', []))} kw")
+    elif ast.get("error"):
+        out.append(f"• Chu kỳ: {ast['error']}")
+    out.append("Điều khiển: 'em tự học đi' (phân tích ngay) | 'duyệt học <kw>' | 'rollback từ khóa' | 'tắt tự học' | 'bật tự học'.")
     return "\n".join(out)
 
 

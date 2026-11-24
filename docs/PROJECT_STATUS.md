@@ -2,6 +2,17 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 24/11/2026 ~11:35 — SELF-IMPROVEMENT S2 AUTO-TUNE (MỚI) ✅ TRIỂN KHAI (owner: "cấu hình để tất cả các điều anh DM cho cherry đều tự học để nâng cấp liên tục")
+- **S2 mở rộng từ S1**: từ "học khi anh ra lệnh" → **tự học liên tục không cần ra lệnh**.
+- **Auto-tune daemon** (`netchat_auto_responder.py` main L1404): thread nền chạy `auto_cycle()` mỗi 10 phút — fail-safe (try/except không đụng vòng poll chính), log "🎓 [AUTO-TUNE]" khi tự áp.
+- **auto_cycle()** (`tools/self_improvement.py` S2 block ~150 lines): ① tự `propose()` từ unmatched; ② tự áp kw đủ tin cậy: lặp ≥3 lần + intent phải từ `_DOMAIN_HINTS` (không đoán mù — kw không rõ miền bị skip có lý do) + KHÔNG trùng kw tĩnh (check `_static_keywords()` cả có/không dấu) + KHÔNG trùng learned; ③ backup `learned_keywords.backup.json` trước lần áp đầu; ④ tag `_auto` trong learned; ⑤ state `auto_state.json` + audit `self_improvement.auto_cycle`.
+- **Điều khiển DM mới**: "rollback từ khóa [kw]" (khôi phục từ backup — không có backup → fail-honest), "tắt tự học" (set_auto False), "bật tự học", báo cáo hiện trạng += chế độ + kw auto + chu kỳ gần nhất. Kw tĩnh ưu tiên tuyệt đối — auto không thể đè.
+- **Fix 2 bug thật khi wire**: ① kw "tắt tự học/bật tự học/rollback từ khóa" thiếu trong COMMAND_PATTERNS → "tắt tự học" rơi vào pc_close (đóng app!) — thêm 6 kw vào self_improve (đứng trước pc_open/pc_close); ② thứ tự handler: "tắt tự học" chứa "tự học" → nhánh propose ăn trước nhánh tắt/bật — chuyển rollback/tắt/bật LÊN TRƯỚC nhánh propose.
+- **Test**: +6 test S2 (auto áp evidence mạnh, skip không rõ miền, tôn trọng off-switch, rollback khôi phục, rollback fail-honest, auto không đè kw tĩnh) — `test_self_improvement.py` **16/16**; focused **120/120 PASS** (5.1s).
+- **Live verify**: responder pid 14816 — log startup "🎓 [AUTO-TUNE] Vòng tự học nền ĐANG CHẠY (chu kỳ 10 phút)"; heartbeat OK.
+- **Trung thực**: auto chỉ học kw định tuyến có bằng chứng miền rõ; kw không rõ miền (vd "mở helpdesk") bị skip — cần owner duyệt tay "duyệt học helpdesk" nếu muốn; không tự sửa code/intent mới (S3 sau này nếu duyệt); chu kỳ đầu sẽ chạy sau 10 phút uptime responder.
+
+
 ## 24/11/2026 ~11:10 — SELF-IMPROVEMENT S1 + KW ĐỘNG (MỚI) ✅ TRIỂN KHAI (owner: ảnh image_e2d705 "cherry tự hoàn thiện bản thân, tự học")
 - **Vấn đề thật từ ảnh**: "Tóm tắt 5 email gần nhất cho anh" (10:55) → vẫn trả lời "chưa có công cụ" dù Sprint TOGGLE vừa xong — kw tĩnh không phủ câu có số đếm ("5 email gần nhất") → detect_intent=None → GLM nói sai năng lực.
 - **Fix kw động** (`_DYNAMIC_COMMAND_RES` L38, detect_intent duyệt SAU kw tĩnh, chỉ câu mệnh lệnh): regex "(tóm tắt|đọc|kiểm tra|liệt kê|xem) N (email|mail|vmail)", "N (email|mail) (gần nhất|mới nhất)", "(tóm tắt) N luồng", "(soạn) email trả lời" → email_today/thread_summary/reply_draft. Guard câu hỏi giữ nguyên ("5 email gần nhất là gì?" → None).

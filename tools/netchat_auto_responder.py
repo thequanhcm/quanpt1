@@ -1401,6 +1401,29 @@ def main():
     iteration = 0
     catchup_window_ms = CATCHUP_WINDOW_MIN * 60 * 1000
 
+    # (24/11/2026, S2 — owner: "tất cả điều anh DM cho cherry đều tự học nâng cấp
+    # liên tục") Thread nền chạy auto_cycle mỗi 10 phút: tự đề xuất + tự áp kw đủ
+    # tin cậy (backup + rollback-able + audit). Fail-safe: lỗi KHÔNG đụng vòng poll.
+    def _self_improve_daemon() -> None:
+        while True:
+            time.sleep(600)
+            try:
+                from tools.self_improvement import auto_cycle
+                rep = auto_cycle()
+                if rep.get("applied"):
+                    print(f"   🎓 [AUTO-TUNE] Tự áp {len(rep['applied'])} kw: "
+                          + ", ".join(f"{a['kw']}→{a['intent']}" for a in rep["applied"]))
+            except Exception as _si:
+                print(f"   ⚠️ [AUTO-TUNE] error (bỏ qua): {_si}")
+
+    try:
+        import threading as _threading
+        _t = _threading.Thread(target=_self_improve_daemon, daemon=True, name="self-improve")
+        _t.start()
+        print("🎓 [AUTO-TUNE] Vòng tự học nền ĐANG CHẠY (chu kỳ 10 phút — tự đề xuất + tự áp kw đủ tin cậy, có rollback).")
+    except Exception as _te:
+        print(f"   ⚠️ [AUTO-TUNE] không khởi động được (bỏ qua): {_te}")
+
     while True:
         iteration += 1
         touch_heartbeat()

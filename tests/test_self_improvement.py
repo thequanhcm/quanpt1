@@ -139,3 +139,101 @@ def test_vmail_and_dynamic_kw_still_work():
     assert cc.detect_intent("Tóm tắt 5 email gần nhất cho anh") == "email_today"
     assert cc.detect_intent("tắt vmail") == "vmail_toggle"
     assert cc.detect_intent("5 email gần nhất") == "email_today"
+
+
+# ─── S2 AUTO-TUNE (24/11, owner: tự học liên tục) ───
+
+def test_auto_cycle_applies_strong_evidence(tmp_path, monkeypatch):
+    import tools.self_improvement as si
+
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    monkeypatch.setattr(si, "UNMATCHED_PATH", tmp_path / "u.jsonl")
+    monkeypatch.setattr(si, "PROPOSALS_PATH", tmp_path / "p.json")
+    monkeypatch.setattr(si, "LEARNED_PATH", tmp_path / "l.json")
+    monkeypatch.setattr(si, "AUTO_CONFIG_PATH", tmp_path / "a.json")
+    monkeypatch.setattr(si, "AUTO_BACKUP_PATH", tmp_path / "b.json")
+    monkeypatch.setattr(si, "AUTO_STATE_PATH", tmp_path / "s.json")
+
+    for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c", "mở helpdesk"):
+        si.log_unmatched(txt)
+    rep = si.auto_cycle()
+    kws_applied = {a["kw"] for a in rep["applied"]}
+    assert "tiến độ" in kws_applied
+    assert rep["applied"][0]["intent"] == "tasks"
+    # backup + tag:
+    assert si.AUTO_BACKUP_PATH.exists()
+    learned = si.read_learned()
+    assert "tiến độ" in learned.get("_auto", [])
+    # detect_intent nhận:
+    import netchat_command_center as cc
+    assert cc.detect_intent("tiến độ dự án abc") == "tasks"
+
+
+def test_auto_cycle_skips_unclear_domain(tmp_path, monkeypatch):
+    import tools.self_improvement as si
+
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    for txt in ("mở helpdesk a", "mở helpdesk b", "mở helpdesk c"):
+        si.log_unmatched(txt)
+    rep = si.auto_cycle()
+    assert rep["applied"] == []  # không đoán mù
+    assert any("không rõ miền" in s["reason"] for s in rep["skipped"])
+
+
+def test_auto_cycle_respects_off_switch(tmp_path, monkeypatch):
+    import tools.self_improvement as si
+
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    si.set_auto(auto_apply=False)
+    for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c"):
+        si.log_unmatched(txt)
+    rep = si.auto_cycle()
+    assert rep["applied"] == []
+    assert si.read_learned().get("_auto", []) == []
+
+
+def test_rollback_restores_backup(tmp_path, monkeypatch):
+    import tools.self_improvement as si
+
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c"):
+        si.log_unmatched(txt)
+    si.auto_cycle()
+    assert "tiến độ" in si.read_learned().get("_auto", [])
+    r = si.rollback("toàn bộ")
+    assert r["ok"] is True
+    assert si.read_learned().get("_auto", []) == []
+
+
+def test_rollback_no_backup_fail_honest(tmp_path, monkeypatch):
+    import tools.self_improvement as si
+
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    r = si.rollback("toàn bộ")
+    assert r["ok"] is False and "không có backup" in r["error"]
+
+
+def test_auto_never_overrides_static_kw(tmp_path, monkeypatch):
+    import tools.self_improvement as si
+
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    # 'báo cáo' là kw tĩnh report — lặp 3 lần nhưng auto phải BỎ vì trùng kw tĩnh:
+    for txt in ("báo cáo abc", "báo cáo bcd", "báo cáo cde"):
+        si.log_unmatched(txt)
+    rep = si.auto_cycle()
+    assert "báo cáo" not in {a["kw"] for a in rep["applied"]}
