@@ -85,7 +85,18 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                     "đọc hộp thư", "doc hop thu",
                     # (24/11 S3, owner: "Check mail từ ngày 22/11") 'check' KHÔNG dấu:
                     "check mail", "check email", "check vmail", "check hộp thư",
-                    "check hop thu", "check hộp mail", "check hop mail"),
+                    "check hop thu", "check hộp mail", "check hop mail",
+                    # (24/11 S3-v4, owner ảnh image_9035c0: "kiểm tra trong 1 tháng
+                    # gần đây, anh có mail nào cần phải phản hồi không, tóm tắt các
+                    # nội dung mail đó" — None → GLM bịa "chưa có công cụ". Thêm
+                    # kw cần-phản-hồi + khoảng thời gian gần đây:
+                    "cần phản hồi", "can phan hoi", "cần phải phản hồi",
+                    "can phai phan hoi", "phản hồi không", "phan hoi khong",
+                    "mail cần", "mail can", "email cần", "email can",
+                    "mail gần đây", "mail gan day", "email gần đây", "email gan day",
+                    "mail tuần qua", "mail tuan qua", "email tuần qua",
+                    "mail tháng qua", "mail thang qua", "email tháng qua",
+                    "mail hôm qua", "mail hom qua", "email hôm qua", "email hom qua"),
     # SELF-IMPROVEMENT (24/11): 'em học được gì'/'em tự học đi'/'duyệt học <kw>'
     # — kw 'học' đứng đầu câu; câu hỏi ('học được gì vậy?') không kích hoạt.
     "self_improve": ("em tự học đi", "em tu hoc di",
@@ -529,6 +540,16 @@ def detect_intent(text: str) -> str | None:
     # (24/11 S3-DM-GATE) 'duyệt hết/tất cả' / 'đồng ý hết' — phải TRƯỚC approve:
     if t.startswith("duyệt hết") or t.startswith("duyet het") or t.startswith("duyệt tất cả") or t.startswith("duyet tat ca") or t.startswith("đồng ý hết") or t.startswith("dong y het"):
         return "self_improve"
+    # (24/11 S3-v4, owner ảnh image_9035c0: "kiểm tra trong 1 tháng gần đây, anh
+    # có mail nào cần phải phản hồi không, tóm tắt các nội dung mail đó") — câu
+    # GHÉP (mail + khoảng thời gian/cần phản hồi) phải là email_today, không rơi
+    # GLM tự bịa "chưa có công cụ". Composite: có mail/email/vmail/hộp thư
+    # AND (khoảng thời gian OR cần phản hồi OR tóm tắt) → email_today.
+    if re.search(r"mail|email|vmail|hộp thư|hop thu", t) and re.search(
+            r"gần đây|gan day|tuần|tuan|tháng|thang|ngày qua|ngay qua|hôm qua|hom qua"
+            r"|vài ngày|vai ngay|cần phản hồi|can phan hoi|cần phải phản hồi"
+            r"|can phai phan hoi|tóm tắt|tom tat|trong \d+ ngày|trong \d+ tuan|trong \d+ thang", t):
+        return "email_today"
     # (31/10/2026) 'giúp' chỉ là lệnh khi ĐỨNG ĐẦU câu — 'mở giúp anh chrome'
     # hay 'đọc giúp anh ảnh này' phải là mệnh lệnh/AI, không phải bảng help
     # (bug thật: câu chứa từ 'giúp' ở giữa bị nuốt thành help, lệch lệnh).
@@ -850,12 +871,42 @@ def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) ->
         m_since = _re.search(r"(?:from|since)\s+(\d{1,2})[/.](\d{1,2})", low_txt)
     if m_since:
         since = f"{int(m_since.group(1)):02d}/{int(m_since.group(2)):02d}"
+    # (24/11 S3-v4, owner ảnh image_9035c0: "kiểm tra trong 1 tháng gần đây, anh
+    # có mail nào cần phải phản hồi không") parse KHOẢNG ĐỘ DÀI: 'N ngày gần đây'
+    # / 'N tuần gần đây' / 'N tháng gần đây' / 'gần đây' (mặc định 7 ngày) /
+    # 'hôm qua' → since = hôm nay trừ N. Fail-honest giữ nguyên.
+    if not since:
+        import datetime as _dt
+        _today = _dt.date.today()
+        _m_days = _re.search(r"(\d{1,3})\s*(?:ngày|ngay)\s*(?:gần đây|gan day|trước|truoc|qua)", low_txt)
+        _m_weeks = _re.search(r"(\d{1,2})\s*(?:tuần|tuan)\s*(?:gần đây|gan day|trước|truoc|qua)", low_txt)
+        _m_months = _re.search(r"(\d{1,2})\s*(?:tháng|thang)\s*(?:gần đây|gan day|trước|truoc|qua)", low_txt)
+        _rel = None
+        if _m_days:
+            _rel = _today - _dt.timedelta(days=int(_m_days.group(1)))
+        elif _m_weeks:
+            _rel = _today - _dt.timedelta(weeks=int(_m_weeks.group(1)))
+        elif _m_months:
+            _rel = _today - _dt.timedelta(days=30 * int(_m_months.group(1)))
+        elif "gần đây" in low_txt or "gan day" in low_txt or "gần đây" in low_txt:
+            _rel = _today - _dt.timedelta(days=7)
+        elif "hôm qua" in low_txt or "hom qua" in low_txt:
+            _rel = _today - _dt.timedelta(days=1)
+        if _rel is not None:
+            since = f"{_rel.day:02d}/{_rel.month:02d}"
 
     # Chạy sync+analyze trong subprocess (SOAP có thể chậm — không treo responder)
     runner = brain_root / "tools" / "office_email_sync_runner.py"
     cmd = [_sys.executable, "-u", str(runner)]
     if since:
-        cmd += ["--since", since]
+        # (24/11 S3-v4) 'từ ngày DD/MM' = mail MỚI từ mốc (--since, dedupe giữ);
+        # khoảng tương đối ('N tháng gần đây', 'gần đây', 'tuần qua'...) =
+        # TÓM TẮT TOÀN BỘ mail trong khoảng (--range, không dedupe) — owner muốn
+        # bức tranh cả khoảng, kể cả mail đã xem.
+        _is_relative = bool(_re.search(
+            r"(?:gần đây|gan day|ngày qua|ngay qua|tuần|tuan|tháng|thang|hôm qua|hom qua|vài ngày|vai ngay)",
+            low_txt)) and not m_since
+        cmd += ["--range", since] if _is_relative else ["--since", since]
     try:
         proc = _sp.run(
             cmd,
@@ -2676,6 +2727,11 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
             if _pi_intent == "self_improve":
                 # (24/11) handler cần text gốc để biết học/đề xuất/duyệt
                 return _pi_intent, HANDLERS[_pi_intent](t_for_args)
+            # (24/11 S3-v4) email handlers cần text gốc để parse 'từ ngày DD/MM'
+            # / '1 tháng gần đây' → --since/--range (bug: gọi không text → luôn
+            # đọc hôm nay → 'Email mới: 0' dù owner hỏi cả tháng).
+            if _pi_intent in ("email_today", "thread_summary", "reply_draft"):
+                return _pi_intent, HANDLERS[_pi_intent](t_for_args)
             return _pi_intent, HANDLERS[_pi_intent]()
         except Exception as exc:
             return _pi_intent, f"⚠️ Lỗi thực thi lệnh '{_pi_intent}': {type(exc).__name__}: {exc}"
@@ -2754,6 +2810,12 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
             if intent == "reply_draft":
                 # TASK-VMAIL-S4 (24/11): cần text gốc để trích từ khóa + style
                 # ('soạn trả lời email <kw> [style]')
+                return intent, handler(text)
+            # (24/11 S3-v4, owner ảnh image_9035c0) email_today cần text gốc để
+            # parse 'từ ngày DD/MM' / '1 tháng gần đây' → --since/--range.
+            # Bug thật: handler() không text → luôn đọc hôm nay → 'Email mới: 0'
+            # dù owner hỏi cả tháng → GLM rơi ra "chưa có công cụ truy cập mail".
+            if intent == "email_today":
                 return intent, handler(text)
             return intent, handler()
         except Exception as exc:

@@ -1373,3 +1373,10 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Daemon** (tools/netchat_auto_responder.py): mỗi chu kỳ đọc owner_ok_last_report.json → DM "🎓 HOC XONG — BAO CAO HANG MUC DA THUC HIEN" (kw → intent, verify, tác dụng, thời gian) → unlink file (chống spam).
 - **E2E thật**: pid 20316; log "DM owner xin OK 2 tu khoa" + "DM báo cáo 'HỌC XONG' 1 kw"; verified_intent kw test 'check lich' = calendar_today đúng.
 - **Regression**: 44/44 focused PASS. State test đã clean (learned/pending/report rỗng).
+
+### 24/11 ~18:10 — S3-v4: FIX "mail nào cần phản hồi trong 1 tháng gần đây" (ảnh image_9035c0)
+- **Yêu cầu owner 17:34**: "kiểm tra trong 1 tháng gần đây, anh có mail nào cần phải phản hồi không, tóm tắt các nội dung mail đó" → CHERRY trả "chưa có công cụ truy cập hộp mail" (SAI — có SOAP READONLY sẵn).
+- **3 nguyên nhân thật** (audit): (1) detect_intent rơi None (câu ghép mail + khoảng thời gian) → GLM tự bịa "chưa có công cụ"; (2) handle_email_today chỉ parse 'từ ngày DD/MM' — không parse 'N tháng/tuần/ngày gần đây'; (3) **BUG dispatch**: route_message gọi `handler()` KHÔNG truyền text → handler luôn đọc hôm nay → 'Email mới: 0' kể cả khi route đúng.
+- **Fix**: (1) composite detect (mail AND khoảng thời gian/cần phản hồi/tóm tắt → email_today); (2) parse 'N ngày/tuần/tháng gần đây' + 'gần đây'(7 ngày) + 'hôm qua' → since; khoảng tương đối → `--range` (tóm tắt TOÀN BỘ mail trong khoảng, không dedupe — vẫn R2 READONLY); (3) dispatch truyền text cho email_today/thread_summary/reply_draft.
+- **E2E thật**: câu owner → **20 mail, 14 quan trọng, ACTION_REQUIRED 11, INFORMATION 6, URGENT 3** (25/10→24/11). Responder pid 16040 xử lý live "System command: email_today" + response sent.
+- **Regression**: 68/68 focused PASS (self_improve + command_center + office_email_connector). Commit S3-v4.
