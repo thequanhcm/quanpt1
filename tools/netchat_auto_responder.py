@@ -1507,6 +1507,52 @@ def main():
     except Exception as _te:
         print(f"   ⚠️ [AUTO-TUNE] không khởi động được (bỏ qua): {_te}")
 
+    # (24/11 S3-v6, owner: "cấu hình cho cherry tự động đọc mail 4h/lần, nếu có
+    # mail quan trọng, highlight, gấp... gửi đến anh cần xử lý thì hãy DM trực
+    # tiếp. khi DM hãy tóm tắt nội dung mail đó") — thread nền mail_alert:
+    def _mail_alert_daemon() -> None:
+        first = True
+        while True:
+            try:
+                from tools.mail_alert import read_config
+                cfg = read_config()
+                interval = int(cfg.get("interval_seconds", 14400))
+                enabled = bool(cfg.get("enabled", True))
+            except Exception:
+                interval, enabled = 14400, True
+            # chu kỳ đầu 90s sau start (để owner thấy nhịp nhanh), sau đó theo config
+            time.sleep(90 if first else interval)
+            first = False
+            if not enabled:
+                continue
+            try:
+                from tools.mail_alert import run_check, format_dm, mark_dm_sent
+                rep = run_check(mark_checked=True)
+                if not rep.get("ok"):
+                    print(f"   ⚠️ [MAIL-ALERT] đọc mail lỗi (thử chu kỳ sau): {rep.get('error')}")
+                    continue
+                dm = format_dm(rep)
+                if dm:
+                    res = send_message(dm, target_channel=DM_CHANNEL_ID)
+                    if "error" in res:
+                        print(f"   ⚠️ [MAIL-ALERT] DM lỗi (thử chu kỳ sau): {res['error']}")
+                    else:
+                        ids = [it["message_id"] for it in rep.get("important", [])]
+                        mark_dm_sent(ids)
+                        print(f"   🔔 [MAIL-ALERT] DM cảnh báo {len(ids)} mail quan trọng cho owner.")
+                else:
+                    print("   ✅ [MAIL-ALERT] Không có mail quan trọng mới.")
+            except Exception as _ma:
+                print(f"   ⚠️ [MAIL-ALERT] error (bỏ qua): {_ma}")
+
+    try:
+        import threading as _threading
+        _tm = _threading.Thread(target=_mail_alert_daemon, daemon=True, name="mail-alert")
+        _tm.start()
+        print("🔔 [MAIL-ALERT] Tự động đọc mail 4h/lần ĐANG CHẠY — mail quan trọng/gấp cần anh xử lý → DM tóm tắt ngay.")
+    except Exception as _me:
+        print(f"   ⚠️ [MAIL-ALERT] không khởi động được (bỏ qua): {_me}")
+
     while True:
         iteration += 1
         touch_heartbeat()

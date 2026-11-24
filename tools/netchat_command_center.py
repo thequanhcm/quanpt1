@@ -47,6 +47,10 @@ _DYNAMIC_COMMAND_RES: list[tuple[re.Pattern[str], str]] = [
 
 COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     "approve": ("phê duyệt", "phe duyet", "duyệt", "duyet", "approved", "đồng ý", "dong y"),
+    # (24/11 S3-v6, owner) cảnh báo mail tự động 4h/lần — PHẢI TRƯỚC email_today
+    # (composite 'mail' sẽ nuốt 'cảnh báo mail ngay' nếu match sau).
+    "mail_alert": ("cảnh báo mail", "canh bao mail", "mail alert",
+                   "báo thức mail", "bao thuc mail"),
     # TASK-OFFICE-S1 (23/11): lệnh đọc+tóm tắt email — READONLY (R2 DRAFT-ONLY,
     # không gửi/xóa). Đặt TRƯỚC 'approve' để "duyệt email" không nuốt thành approve.
     # TASK-VMAIL-S2 (23/11): tóm tắt luồng email (Thread Analyzer §5.3/§5.4) —
@@ -789,6 +793,54 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
             pass
         out.append("Điều khiển: 'em tự học đi' (phân tích ngay) | 'duyệt học <kw>' | 'ok hết' | 'rollback từ khóa' | 'tắt tự học' | 'bật tự học'.")
         return "\n".join(out)
+
+
+def handle_mail_alert(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """(24/11 S3-v6, owner) Cảnh báo mail tự động 4h/lần: bật/tắt/chạy ngay/xem trạng thái.
+
+    - 'cảnh báo mail ngay' — chạy check NGAY (không đổi mốc chu kỳ 4h) → nếu có
+      mail quan trọng sẽ tóm tắt trong reply này.
+    - 'tắt cảnh báo mail' / 'bật cảnh báo mail' — toggle enabled.
+    - 'trạng thái cảnh báo mail' — config + lần check cuối + số mail đã cảnh báo.
+    R2 giữ nguyên: chỉ ĐỌC mail; DM cảnh báo qua NetChat, không gửi mail trả lời.
+    """
+    import re as _re2
+    low = (text or "").lower()
+    try:
+        from tools.mail_alert import (read_config, write_config, run_check,
+                                      format_dm, _read_state)
+        cfg = read_config()
+    except Exception as exc:
+        return f"⚠️ Lỗi module cảnh báo mail: {type(exc).__name__}: {exc}"
+    if _re2.search(r"trạng thái|trang thai|bao lâu|bao lau|cấu hình|cau hinh", low):
+        st = _read_state()
+        hours = cfg.get("interval_seconds", 14400) / 3600
+        return ("🔔 CẢNH BÁO MAIL — trạng thái:\n"
+                f"• Đang: {'BẬT' if cfg.get('enabled') else 'TẮT'}\n"
+                f"• Chu kỳ: mỗi {hours:g} giờ\n"
+                f"• Loại mail cảnh báo: {', '.join(cfg.get('categories', []))}"
+                f" hoặc priority ≥ {cfg.get('min_priority', 60)}/100\n"
+                f"• Lần đọc cuối: {st.get('last_check_iso') or 'chưa có'}\n"
+                f"• Đã cảnh báo: {len(st.get('dm_sent_ids', []))} mail (không lặp lại)")
+    if _re2.search(r"tắt|tat|off|ngừng|ngung", low):
+        cfg["enabled"] = False
+        write_config(cfg)
+        return "🔕 ĐÃ TẮT cảnh báo mail tự động. Bật lại: 'bật cảnh báo mail'."
+    if _re2.search(r"bật|bat|kích hoạt|kich hoat", low) and "ngay" not in low and "ngay" not in low:
+        cfg["enabled"] = True
+        write_config(cfg)
+        return (f"🔔 ĐÃ BẬT cảnh báo mail tự động — mỗi {cfg.get('interval_seconds', 14400) // 3600} giờ/lần, "
+                "mail quan trọng → DM tóm tắt cho anh.")
+    # mặc định: chạy check NGAY (mark_checked=False — không đổi mốc chu kỳ 4h)
+    rep = run_check(mark_checked=False)
+    if not rep.get("ok"):
+        return f"⚠️ Đọc mail thất bại (fail-honest): {rep.get('error')}"
+    dm = format_dm(rep)
+    if not dm:
+        return (f"📭 Không có mail quan trọng mới (đọc được {rep.get('fetched', 0)} mail "
+                f"từ {rep.get('window_since')}). Em sẽ tự kiểm tra mỗi "
+                f"{cfg.get('interval_seconds', 14400) // 3600} giờ.")
+    return dm
 
 
 def handle_vmail_toggle(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -2520,6 +2572,8 @@ HANDLERS = {
     "reply_draft": handle_reply_draft,
     # TASK-VMAIL-TOGGLE (24/11, owner ảnh image_be6a17): bật/tắt đọc vmail
     "vmail_toggle": handle_vmail_toggle,
+    # (24/11 S3-v6) mail alert 4h/lần — mail quan trọng → DM tóm tắt
+    "mail_alert": handle_mail_alert,
     # SELF-IMPROVEMENT (24/11, owner ảnh image_e2d705): tự học + hoàn thiện
     "self_improve": handle_self_improve,
     # SYNC-20261123: lịch họp VoIP — READONLY qua mail vofficeadmin
@@ -2725,10 +2779,12 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
                       # TASK-VMAIL-TOGGLE (24/11): 'tắt vmail'/'bật vmail' KHÔNG phải
                       # pc_open/pc_close — động từ 'tắt/bật' trùng, ưu tiên vmail_toggle.
                       "vmail_toggle",
+                      # (24/11 S3-v6) 'cảnh báo mail ngay/tắt/bật/trạng thái' cần text
+                      "mail_alert",
                       # SELF-IMPROVEMENT (24/11): 'duyệt học <kw>' cần text gốc
                       "self_improve"):
         try:
-            if _pi_intent == "vmail_toggle":
+            if _pi_intent in ("vmail_toggle", "mail_alert"):
                 # (24/11) handler cần text gốc để biết tắt/bật/trạng thái
                 return _pi_intent, HANDLERS[_pi_intent](t_for_args)
             if _pi_intent == "self_improve":
@@ -2823,6 +2879,9 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
             # Bug thật: handler() không text → luôn đọc hôm nay → 'Email mới: 0'
             # dù owner hỏi cả tháng → GLM rơi ra "chưa có công cụ truy cập mail".
             if intent == "email_today":
+                return intent, handler(text)
+            # (24/11 S3-v6) mail_alert cần text ('cảnh báo mail ngay' vs 'tắt')
+            if intent == "mail_alert":
                 return intent, handler(text)
             return intent, handler()
         except Exception as exc:

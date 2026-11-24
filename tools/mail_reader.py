@@ -217,12 +217,17 @@ def read_since(date_ddmm: str, limit: int = 20) -> dict[str, Any]:
     """Mail từ ngày DD/MM (năm nay) đến giờ — lệnh 'check mail từ ngày 22/11'.
 
     Zimbra query after:MM/DD/YYYY (format US). Fail-honest giữ nguyên.
+    (24/11 fix E2E) Zimbra 'after:' KHÔNG tính chính ngày đó (strict greater) →
+    nếu DD/MM == hôm nay dùng 'date:' để không bỏ sót mail hôm nay.
     """
     try:
         dd, mm = date_ddmm.split("/")[:2]
         d = f"{int(mm):02d}/{int(dd):02d}/{_dt.date.today().year}"
     except Exception:
         return {"error": f"định dạng ngày sai: {date_ddmm!r} (cần DD/MM)"}
+    today = _dt.date.today().strftime("%m/%d/%Y")
+    if d == today:
+        return _list_emails(f"in:inbox date:{d}", limit=max(1, min(limit, 20)))
     return _list_emails(f"in:inbox after:{d}", limit=max(1, min(limit, 20)))
 
 

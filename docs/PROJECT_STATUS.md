@@ -1386,3 +1386,12 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Fix 3 lớp**: (1) `mail_reader._search` lấy TO/CC (e t="t"/t="c") + `_get_msg_addrs` GetMsg header to/cc (SearchRequest summary không trả đủ → GetMsg từng mail, chính xác tuyệt đối, READONLY); (2) `read_since_direct_only(DD/MM)` — query `to:<owner>` + lọc TO chỉ owner & CC rỗng (fail-honest: TO không đọc được → loại, không đoán); (3) `fetch_since_direct_only` connector + runner `--direct-only` + `handle_email_today` parse 'chỉ gửi đến anh / cá nhân anh / riêng anh / gửi riêng cho anh'.
 - **E2E thật (câu owner 17:45)**: 16 mail CHỈ gửi cá nhân (TO=quanpt1, CC rỗng) từ 25/10; 5 quan trọng; **Cần phản hồi: 2** — top: [CTĐ-CTCT] Nhận xét đánh giá Đảng viên hạn 20/11 (Priority 100/100, Urgency 95/100, "Kính gửi Đ/c Phạm Thế Quân"); FW Báo cáo năng lượng Q3 (cuongdm42); MEETING hủy họp đào tạo AI 24/11 (vofficeadmin).
 - **Regression**: 68/68 focused PASS. Responder pid 6288. Commit S3-v5.
+
+### 24/11 ~18:00 — S3-v6: MAIL ALERT TU DONG 4H/LAN — mail quan trong → DM tom tat
+- **Yeu cau owner**: "cau hinh cho cherry tu dong doc mail 4h/lan, neu co mail quan trong, highlight, gap... gui den anh can xu ly thi hay DM truc tiep. khi DM hay tom tat noi dung mail do".
+- **Module moi** tools/mail_alert.py: config data/mail_alert/config.json (enabled, interval_seconds=14400, min_priority=60, categories ACTION_REQUIRED/URGENT/NEED_REPLY, max 5 DM/chu ky) + state state.json (last_check + dm_sent_ids chong re-DM sau restart).
+- **Daemon** trong responder: chu ky dau 90s, sau do 4h/lan; doc mail tu lan check truoc (Zimbra, READONLY R2) → loc quan trong (category hoac priority>=60) → DM "CANT BAO MAIL — N mail quan trong can anh xu ly" (moi mail: [category] subject + nguoi gui + thoi gian + thoi han + viec can lam + tom tat 300 ky tu).
+- **Lenh DM**: 'canh bao mail ngay' (check khong doi moc), 'trang thai canh bao mail', 'bat/tat canh bao mail'.
+- **Fix E2E that**: Zimbra 'after:' KHONG tinh chinh ngay do → mail hom nay bi bo sot → read_since dung 'date:' khi DD/MM == hom nay. Truoc fix: fetched 0; sau fix: fetched 9, 6 quan trong.
+- **Chay that (17:57)**: log "DM canh bao 6 mail quan trong cho owner" + state 6 dm_sent_ids; run_check sau do → 0 mail moi (chong lap OK).
+- **Regression**: 68/68 focused PASS. Responder pid 6300. Commit S3-v6.
