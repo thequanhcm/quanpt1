@@ -1544,6 +1544,20 @@ def main():
                     print("   ✅ [MAIL-ALERT] Không có mail quan trọng mới.")
             except Exception as _ma:
                 print(f"   ⚠️ [MAIL-ALERT] error (bỏ qua): {_ma}")
+            # (24/11 S3-v7) văn bản Voffice mới → DM tóm tắt (cùng chu kỳ 4h):
+            try:
+                from tools.mail_alert import check_documents, format_documents_dm
+                rep_vb = check_documents(mark_checked=True)
+                if rep_vb.get("ok"):
+                    dm_vb = format_documents_dm(rep_vb)
+                    if dm_vb:
+                        res_vb = send_message(dm_vb, target_channel=DM_CHANNEL_ID)
+                        if "error" in res_vb:
+                            print(f"   ⚠️ [MAIL-ALERT] DM văn bản lỗi: {res_vb['error']}")
+                        else:
+                            print(f"   📄 [MAIL-ALERT] DM cảnh báo {len(rep_vb.get('documents', []))} văn bản Voffice mới.")
+            except Exception as _vb:
+                print(f"   ⚠️ [MAIL-ALERT] văn bản skip: {_vb}")
 
     try:
         import threading as _threading

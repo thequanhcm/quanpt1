@@ -180,6 +180,69 @@ def mark_dm_sent(message_ids: list[str]) -> None:
     _write_state(st)
 
 
+def check_documents(mark_checked: bool = True) -> dict[str, Any]:
+    """(24/11 S3-v7, owner: 'đọc và tóm tắt văn bản Voffice... DM đến anh')
+    Kiểm tra VĂN BẢN Voffice mới (gián tiếp qua mail) từ lần check trước.
+
+    Dùng cùng state last_check_iso với mail alert. Trả report.documents mới
+    (lọc theo vb_docs_sent_ids để không re-DM).
+    """
+    cfg = read_config()
+    st = _read_state()
+    now = _dt.datetime.now()
+    since_iso = st.get("last_check_iso") or ""
+    try:
+        since_dt = _dt.datetime.fromisoformat(since_iso) if since_iso else now - _dt.timedelta(hours=4)
+    except Exception:
+        since_dt = now - _dt.timedelta(hours=4)
+    if (now - since_dt).total_seconds() > 7 * 86400:
+        since_dt = now - _dt.timedelta(days=7)
+    checked_at = now.strftime("%Y-%m-%dT%H:%M:%S")
+    try:
+        from tools.voffice_documents import list_documents
+        res = list_documents(f"{since_dt.day:02d}/{since_dt.month:02d}", limit=20)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "checked_at": checked_at}
+    if "error" in res:
+        return {"ok": False, "error": res["error"], "checked_at": checked_at}
+    sent = set(st.get("vb_docs_sent_ids") or [])
+    new_docs = []
+    for d in res.get("documents", []):
+        key = d.get("mid") or d.get("subject", "").lower()
+        if key in sent:
+            continue
+        d["doc_key"] = key
+        new_docs.append(d)
+    report = {"ok": True, "checked_at": checked_at, "documents": new_docs,
+              "total_docs": res.get("count", 0)}
+    if mark_checked and new_docs:
+        # chỉ update vb_docs_sent_ids (last_check do mail alert quản)
+        st["vb_docs_sent_ids"] = sorted(set(st.get("vb_docs_sent_ids") or []) |
+                                        {d["doc_key"] for d in new_docs})[-100:]
+        _write_state(st)
+    return report
+
+
+def format_documents_dm(report: dict[str, Any]) -> str | None:
+    """DM cảnh báo văn bản mới. None = không có."""
+    docs = report.get("documents") or []
+    if not docs:
+        return None
+    lines = [f"📄 VĂN BẢN VOFFICE MỚI — {len(docs)} văn bản (nguồn gián tiếp qua mail):"]
+    for i, d in enumerate(docs[:5], 1):
+        lines.append("")
+        so = f"Số {d['so_ky_hieu']} · " if d.get("so_ky_hieu") else ""
+        lines.append(f"{i}. {so}{d['subject'][:100]}")
+        lines.append(f"   👤 {d['sender']} · 🕐 {d['received']}")
+        s = (d.get("summary") or "").strip()
+        if s:
+            lines.append(f"   💬 Tóm tắt: {s[:280]}{'…' if len(s) > 280 else ''}")
+    lines.append("")
+    lines.append("(Tự động kiểm tra 4h/lần — R2 chỉ đọc. Portal Voffice LAN-only, "
+                 "đọc trực tiếp cần anh login M-Suite.)")
+    return "\n".join(lines)
+
+
 def format_dm(report: dict[str, Any]) -> str | None:
     """Format DM cảnh báo — tóm tắt nội dung từng mail quan trọng. None = không có gì."""
     items = report.get("important") or []

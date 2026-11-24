@@ -51,6 +51,16 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
     # (composite 'mail' sẽ nuốt 'cảnh báo mail ngay' nếu match sau).
     "mail_alert": ("cảnh báo mail", "canh bao mail", "mail alert",
                    "báo thức mail", "bao thuc mail"),
+    # (24/11 S3-v7, owner) văn bản Voffice — PHẢI TRƯỚC email_today/voffice_meetings
+    # ('văn bản' không đụng kw mail nhưng 'voffice' có thể nuốt bởi kw khác).
+    "voffice_documents": ("văn bản voffice", "van ban voffice", "văn bản trên voffice",
+                          "van ban tren voffice", "vb voffice", "voffice văn bản",
+                          "voffice van ban", "văn bản nhận", "van ban nhan",
+                          "công văn nhận", "cong van nhan", "văn bản voffice nhận",
+                          "kiểm tra văn bản", "kiem tra van ban",
+                          "văn bản mới", "van ban moi",
+                          # (24/11) biến thể tự nhiên có từ xen giữa:
+                          "văn bản", "van ban", "công văn", "cong van"),
     # TASK-OFFICE-S1 (23/11): lệnh đọc+tóm tắt email — READONLY (R2 DRAFT-ONLY,
     # không gửi/xóa). Đặt TRƯỚC 'approve' để "duyệt email" không nuốt thành approve.
     # TASK-VMAIL-S2 (23/11): tóm tắt luồng email (Thread Analyzer §5.3/§5.4) —
@@ -841,6 +851,40 @@ def handle_mail_alert(text: str = "", payload: dict[str, Any] | None = None) -> 
                 f"từ {rep.get('window_since')}). Em sẽ tự kiểm tra mỗi "
                 f"{cfg.get('interval_seconds', 14400) // 3600} giờ.")
     return dm
+
+
+def handle_voffice_documents(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """(24/11 S3-v7, owner) Đọc + tóm tắt VĂN BẢN Voffice nhận được.
+
+    Nguồn GIÁN TIẾP qua mail Zimbra (portal voffice.viettel.vn LAN-only, máy nhà
+    không truy cập được — nói thật giới hạn). Parse số/ký hiệu + trích yếu +
+    ngày ban hành + tóm tắt nội dung. Hỗ trợ 'từ ngày DD/MM' / 'N tháng gần đây'.
+    R2 READONLY: chỉ đọc, không gửi/xóa.
+    """
+    import re as _re3
+    import datetime as _dt3
+    low = (text or "").lower()
+    try:
+        from tools.voffice_documents import list_documents, format_for_dm
+    except Exception as exc:
+        return f"⚠️ Lỗi module văn bản Voffice: {type(exc).__name__}: {exc}"
+    # parse mốc: 'từ ngày DD/MM' / 'N tháng gần đây' / 'N tuần gần đây' / 'gần đây'(7d)
+    q = "17/11"  # mặc định ~1 tuần
+    m = _re3.search(r"(?:từ|tu)\s+ngày\s+(\d{1,2})[/.](\d{1,2})", low)
+    if m:
+        q = f"{int(m.group(1)):02d}/{int(m.group(2)):02d}"
+    else:
+        m = _re3.search(r"(\d{1,2})\s*(?:tháng|thang)\s*(?:gần đây|gan day|qua)", low)
+        if m:
+            d0 = _dt3.date.today() - _dt3.timedelta(days=30 * int(m.group(1)))
+            q = f"{d0.day:02d}/{d0.month:02d}"
+        else:
+            m = _re3.search(r"(\d{1,2})\s*(?:tuần|tuan)\s*(?:gần đây|gan day|qua)", low)
+            if m:
+                d0 = _dt3.date.today() - _dt3.timedelta(weeks=int(m.group(1)))
+                q = f"{d0.day:02d}/{d0.month:02d}"
+    res = list_documents(q, limit=20)
+    return format_for_dm(res)
 
 
 def handle_vmail_toggle(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -2572,6 +2616,8 @@ HANDLERS = {
     "reply_draft": handle_reply_draft,
     # TASK-VMAIL-TOGGLE (24/11, owner ảnh image_be6a17): bật/tắt đọc vmail
     "vmail_toggle": handle_vmail_toggle,
+    # (24/11 S3-v7) văn bản Voffice — đọc + tóm tắt (gián tiếp qua mail)
+    "voffice_documents": handle_voffice_documents,
     # (24/11 S3-v6) mail alert 4h/lần — mail quan trọng → DM tóm tắt
     "mail_alert": handle_mail_alert,
     # SELF-IMPROVEMENT (24/11, owner ảnh image_e2d705): tự học + hoàn thiện
@@ -2784,8 +2830,8 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
                       # SELF-IMPROVEMENT (24/11): 'duyệt học <kw>' cần text gốc
                       "self_improve"):
         try:
-            if _pi_intent in ("vmail_toggle", "mail_alert"):
-                # (24/11) handler cần text gốc để biết tắt/bật/trạng thái
+            if _pi_intent in ("vmail_toggle", "mail_alert", "voffice_documents"):
+                # (24/11) handler cần text gốc để biết tắt/bật/trạng thái/khoảng
                 return _pi_intent, HANDLERS[_pi_intent](t_for_args)
             if _pi_intent == "self_improve":
                 # (24/11) handler cần text gốc để biết học/đề xuất/duyệt
@@ -2881,7 +2927,7 @@ def route_message(text: str, *, sender_user_id: str = "", chat_session_id: str =
             if intent == "email_today":
                 return intent, handler(text)
             # (24/11 S3-v6) mail_alert cần text ('cảnh báo mail ngay' vs 'tắt')
-            if intent == "mail_alert":
+            if intent in ("mail_alert", "voffice_documents"):
                 return intent, handler(text)
             return intent, handler()
         except Exception as exc:

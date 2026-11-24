@@ -1395,3 +1395,12 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Fix E2E that**: Zimbra 'after:' KHONG tinh chinh ngay do → mail hom nay bi bo sot → read_since dung 'date:' khi DD/MM == hom nay. Truoc fix: fetched 0; sau fix: fetched 9, 6 quan trong.
 - **Chay that (17:57)**: log "DM canh bao 6 mail quan trong cho owner" + state 6 dm_sent_ids; run_check sau do → 0 mail moi (chong lap OK).
 - **Regression**: 68/68 focused PASS. Responder pid 6300. Commit S3-v6.
+
+
+### 24/11 ~19:15 — S3-v7: DOC + TOM TAT VAN BAN VOFFICE (gian tiep qua mail)
+- **Yeu cau owner**: "em kiem tra duoc cac van ban anh nhan tren Voffice khong? cau hinh cherry de doc va tom tat duoc cac noi dung trong van ban nhan duoc va DM den anh".
+- **Khao sat that**: portal voffice.viettel.vn (10.60.7.120) LAN-only — TCP/443 timeout tu WiFi nha (192.168.1.9). Doc TRUC TIEP portal phai cho M-Suite ZTNA tunnel (owner login app). Nguon GIAN TIEP kha dung ngay: van ban chuyen tiep qua mail Zimbra (subject 'V/v', so/Ky hieu VB, chi thi, ke hoach...).
+- **Module moi** tools/voffice_documents.py: RE_VB nhan dien (so ky hieu, V/v, cong van, quyet dinh, ke hoach, chi thi, thong tu, nghi quyet, vBHXH) + exclude bao cao ca truc/quan so (trung mail-alert) + extract so_ky_hieu/trich_yeu/ngay_ban_hanh/noi_ban_hanh/summary + dedupe FW/RE. READONLY R2.
+- **Handler** handle_voffice_documents + kw 'van ban voffice/van ban nhan/cong van nhan/kiem tra van ban/van ban...' + parse 'tu ngay DD/MM'/'N thang gan day' + dispatch text (fix bug handler() khong text).
+- **Tu dong**: mail_alert.check_documents() chay cung chu ky 4h → van ban moi → DM 'VAN BAN VOFFICE MOI' kem tom tat (vb_docs_sent_ids chong re-DM; test: 2 doc → lan sau 0).
+- **E2E that**: 2 van bun tu 17/11 (Chi thi 1569/CT-CNVTQD kien ke kho nha thau; vBHXH tiep doan BHXH VN). 68/68 focused PASS. Responder pid 19744. Commit S3-v7.
