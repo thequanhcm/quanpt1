@@ -356,74 +356,32 @@ def _stt_audio(path: Path) -> str:
     raise RuntimeError(f"nhận diện giọng nói thất bại: {err}")
 
 def _ocr_image(path: Path) -> str:
-    """OCR ảnh — chuỗi 2 tầng, không phụ thuộc mạng:
+    """OCR ảnh — chuỗi 2 tầng, không phụ thuộc mạng (24/11: dùng tools/ocr_module).
 
-    1) RapidOCR (onnxruntime, offline, hỗ trợ tốt cả tiếng Việt có dấu) trong
-       venv agent — NHANH, CHÍNH, kết quả tốt nhất hiện có.
-    2) Windows OCR (winocr) dự phòng khi RapidOCR lỗi — vi-VN nếu gói đã cài,
-       ngược lại en-US. Winocr recognize_pil trả IAsyncOperation → .get().
-    Cả hai chạy subprocess cô lập. Raise RuntimeError nếu cả hai rỗng/lỗi
-    để caller ghi chú inline (fail-honest).
+    Module chuẩn hóa `tools/ocr_module.py` (owner: "phát triển module OCR trong
+    môi trường chạy của em"):
+      1) RapidOCR (onnxruntime, offline, hỗ trợ tiếng Việt có dấu) — engine chính,
+         pre-process (grayscale + autocontrast + upscale 2x ảnh nhỏ), ghép dòng
+         THEO TỌA ĐỘ (giữ cấu trúc bảng/biểu đồ, gap '|' giữa các cột xa).
+      2) Windows OCR (winocr) dự phòng — vi-VN rồi en-US (en-US đã cài Language
+         pack 24/11; vi-VN chờ owner bấm UAC cài pack).
+    Worker chạy subprocess cô lập (tools/ocr_worker.py). Raise RuntimeError nếu
+    cả hai rỗng/lỗi để caller ghi chú inline (fail-honest).
     """
-    # Tầng 1: RapidOCR (onnx) — chính, hỗ trợ VN. Ảnh chụp giấy mờ/nghiêng →
-    # pre-process (grayscale + autocontrast + upscale nhỏ) để OCR "mọi hình ảnh"
-    # (24/11 owner: "đọc và phân tích mọi hình ảnh"):
-    code_rapid = (
-        "import sys;"
-        "from rapidocr_onnxruntime import RapidOCR;"
-        "engine = RapidOCR();"
-        "def _prep(p):"
-        "  try:"
-        "    from PIL import Image, ImageOps;"
-        "    im = Image.open(p);"
-        "    if im.mode != 'RGB': im = im.convert('RGB');"
-        "    w, h = im.size;"
-        "    if max(w, h) < 1400: im = im.resize((w*2, h*2));"
-        "    im = ImageOps.autocontrast(im.convert('L').convert('RGB'));"
-        "    out = p + '.ocrprep.png'; im.save(out); return out"
-        "  except Exception:"
-        "    return p;"
-        "pp = _prep(sys.argv[1]);"
-        "result, _elapse = engine(pp);"
-        "if not (result or []):"
-        "  result, _elapse = engine(sys.argv[1]);"
-        "print('\\n'.join(line[1] for line in (result or [])))"
-    )
     try:
-        res = subprocess.run([PYTHON_EXE, "-c", code_rapid, str(path)],
-                             capture_output=True, creationflags=_NO_WIN, text=True, timeout=180)
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
-    except Exception:
-        pass
-
-    # Tầng 2: Windows OCR (winocr) — dự phòng
-    code_win = (
-        "import sys, winocr;"
-        "from PIL import Image;"
-        "img=Image.open(sys.argv[1]);"
-        "img.load();"
-        "op=winocr.recognize_pil(img, sys.argv[2]);"
-        "res=op.get();"
-        "print(res.text)"
-    )
-    last_err = ""
-    for lang in ("vi-VN", "en-US"):
-        try:
-            res = subprocess.run([PYTHON_EXE, "-c", code_win, str(path), lang],
-                                 capture_output=True, creationflags=_NO_WIN, text=True, timeout=120)
-        except Exception as exc:
-            last_err = f"{type(exc).__name__}: {exc}"
-            continue
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
-        last_err = (res.stderr or "").strip()[-200:]
-        if lang == "vi-VN":
-            continue  # gói OCR tiếng Việt thường chưa cài → thử en-US
-        break
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "ocr_module", Path(__file__).resolve().parent / "ocr_module.py")
+        om = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(om)
+        r = om.ocr_image_structured(path)
+    except Exception as exc:
+        raise RuntimeError(f"OCR module lỗi: {type(exc).__name__}: {exc}") from exc
+    if r.get("text_flat", "").strip():
+        return r["text_flat"]
     raise RuntimeError(
         "OCR trả rỗng (RapidOCR + Windows OCR đều thất bại). Ảnh có thể mờ, "
-        f"không chứa chữ, hoặc thiếu model. Chi tiết tầng cuối: {last_err}"
+        f"không chứa chữ, hoặc thiếu model. Chi tiết: {r.get('error')}"
     )
 
 def _extract_text(path: Path) -> str:

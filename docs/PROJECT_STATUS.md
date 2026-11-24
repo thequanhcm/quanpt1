@@ -1431,3 +1431,13 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Nang cap 2 — PROMPT PHAN TICH** trong extract_message_files (kind_note anh): yeu cau GLM xac dinh LOAI tai lieu (bai tap/bieu do/bao cao/bien bao/hoa don/screenshot...), cau truc, du lieu chinh, THUC HIEN DUNG YEU CAU (giai bai/doc so lieu/tom tat...), nhac OCR thieu phai noi ro KHONG DUOC doan.
 - **E2E that**: (1) bai TOEIC → 996 chars OCR; (2) anh BIEU DO cot ve thu (Q1/Q2/Q3) → OCR doc nhan + so lieu; (3) anh HOA DON ve thu → GLM xac dinh 'hoa don vat lieu', phan tich tung khoan, THANH THAT cho 'OCR dinh cot' thay vi bia so lieu (fail-honest dung design).
 - **Regression**: 44/44 focused PASS. Responder restart pid 14652 (code moi).
+
+
+### 24/11 ~19:50 — PHAT TRIEN MODULE OCR (owner: "cherry co mat, phat trien module OCR rapidocr+winocr trong moi truong chay")
+- **Audit**: responder chay system Python311 nhung PYTHON_EXE (subprocess OCR) = BRAIN venv (.venv) — module da cai OK. Khoang trong: (1) _ocr_image tra TEXT THO mat cau truc bang/cot (RapidOCR tra box+score bi bo qua); (2) winocr (tang 2) chua tung duoc test that; (3) khong co score chat luong.
+- **Module moi tools/ocr_module.py** (API chuan hoa): ocr_image_structured → {engine, text_flat, lines[{text,score,x,y,w,h}], avg_score, elapsed_ms, error}; ghep dong theo toa do (_group_lines cluster theo y, sort x trong dong, gap '|' giua cot xa — doc bang/bieu do dung cau truc); chuoi 2 tang RapidOCR → winocr vi-VN/en-US; fail-honest (ca 2 rong → engine 'none' + error, KHONG bia).
+- **tools/ocr_worker.py** (subprocess entry, thay cho chuoi -c dai gay SyntaxError): rapidocr | winocr mode; pre-process (gray+autocontrast+2x upscale neu <1400px, fallback anh goc); winocr fix API: OcrLine KHONG co bounding_rect → box = bao cac word box (word-level bounding_rect).
+- **Windows OCR en-US Language Pack**: cai qua Start-Process -Verb RunAs (owner bam UAC) — VERIFY EFFECT: winocr en-US doc 25 dong anh TOEIC trong 298ms. vi-VN pack chua cai (cho owner UAC lan nu).
+- **Wire _ocr_image (netchat_auto_responder.py)**: goi ocr_module qua importlib (khong con chuoi -c roi rac); RuntimeError giu fail-honest.
+- **Test**: tests/test_ocr_module.py MOI 6/6 PASS (doc text, giu gap cot, fallback chain, anh trang → raise fail-honest, winocr en-US that, worker ton tai). Focused tong 50/50. E2E qua _ocr_image: TOEIC 918 chars + gap '|'.
+- **Responder restart pid 13688 (code moi). Commit sprint nay.
