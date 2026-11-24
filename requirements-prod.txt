@@ -79,6 +79,10 @@ uvicorn==0.23.2
 gunicorn==21.2.0
 waitress==2.1.2
 
+# OCR — đọc ảnh trong DM NetChat (24/11: DM bài TOEIC thất bại vì thiếu 2 module này)
+rapidocr-onnxruntime>=1.4.4
+winocr>=0.0.15
+
 # Compression
 python-magic==0.4.27
 brotli==1.1.0

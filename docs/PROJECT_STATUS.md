@@ -1413,3 +1413,12 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **E2E that (khong phai rehearsal)**: Start-ScheduledTask LOGON → 35s → port 8765 + 8766 HTTP 200 health; process tree DUNG 1 logical moi component (console_host + dual_servers + responder; moi cap = venv trampoline pair — skill: khong nham zombie); responder pair 10208/14508; log cuoi con DM 14 mail alert + "HOC XONG" (code S3-v7 chay tot).
 - **Idempotence verified**: Start LIVENESS_30MIN voi stack dang song → KHONG nhan ban (port-check cua .bat thoat dung) — backstop 30 phut an toan. Don dep 1 cua so .bat pause thua (pid 12496 tu lan test thu 2).
 - **Lu y trung thuc**: day la Rehearsal qua Start-ScheduledTask (khac biet nho voi boot that — skill: real boot test la bang chung duy nhat); lan reboot that toi se dien ra qua LOGON trigger. Cua so console CHERRY HIEN DIEN khi boot (theo yeu cau 19/11).
+
+
+### 24/11 ~18:55 — FIX OCR ANH DM: cherry doc duoc anh gui trong DM (toeic)
+- **Tinh huong that**: owner DM anh bai TOEIC (Q151-152, Hoangology) + "Giai bai nay cho anh" 18:24. Cherry tra loi that bai that trung thuc: OCR tra rong (file 4kdta4xarbyjpki3wqe6ar631y.jpg DA TAI VE THANH CONG vao data/netchat_files/).
+- **Root cause**: rapidocr_onnxruntime + winocr KHONG DUOC CAI trong .venv (code _ocr_image goi subprocess import 2 module nay — ModuleNotFoundError ca 2). Chuoi OCR 2 tang deu chet vi thieu dependency, khong phai anh mo.
+- **Fix**: pip install rapidocr-onnxruntime==1.4.4 + winocr==0.0.15 vao .venv; them vao requirements-prod.txt (de rollback/rebuild ven khong mat). KHONG can restart responder (_ocr_image chay subprocess import runtime).
+- **E2E that**: nar._ocr_image(file_toeic.jpg) → 901 ky tu doc day du de (email Thomas Wheeler + Q151/152 + 4 lua chon). Dap an: 151=C (On Wednesday), 152=B (Workers' assignments).
+- **DM da gui cho owner**: (1) loi giai chi tiet 151=C/152=B + giai thich bay (Thursday = han nop report, khong phai ngay giao hang); (2) tin loi "--file ..." do sai cu syntax CLI (da minh bach); (3) cap nhat fix goc + dinh chinh Ms. Hardy (OCR doc dung, vision doc nham Hilary).
+- **Verify**: doc lai DM channel — 3 tin moi deu len channel (loi giai id essdwfke..., update id zgto4rx8...).
