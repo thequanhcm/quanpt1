@@ -246,6 +246,43 @@ class SOAPMailConnector:
             ))
         return out
 
+    def fetch_since(self, date_ddmm: str, limit: int = 20) -> list[EmailMessage]:
+        """Mail từ ngày DD/MM (năm nay) — 'check mail từ ngày 22/11' (S3-24/11)."""
+        import mail_reader as _mr
+        res = _mr.read_since(date_ddmm, limit=max(1, min(limit, 20)))
+        if "error" in res:
+            raise RuntimeError(res["error"])
+        out: list[EmailMessage] = []
+        for it in res.get("emails", []):
+            out.append(EmailMessage(
+                message_id=f"vmail-{it['id']}",
+                sender=it.get("from_addr", ""),
+                subject=it.get("subject", ""),
+                body_preview=(it.get("body_preview") or it.get("fragment") or "")[:500],
+                received_at_utc=it.get("date", ""),
+                source="vmail_soap",
+            ))
+        return out
+
+    def fetch_since_direct_only(self, date_ddmm: str, limit: int = 20) -> list[EmailMessage]:
+        """(24/11 S3-v5, owner: 'lọc đúng, chỉ gửi đến cá nhân anh') — CHỈ mail
+        gửi trực tiếp đến owner (TO chỉ owner, không CC khác). Vẫn READONLY."""
+        import mail_reader as _mr
+        res = _mr.read_since_direct_only(date_ddmm, limit=max(1, min(limit, 20)))
+        if "error" in res:
+            raise RuntimeError(res["error"])
+        out: list[EmailMessage] = []
+        for it in res.get("emails", []):
+            out.append(EmailMessage(
+                message_id=f"vmail-{it['id']}",
+                sender=it.get("from_addr", ""),
+                subject=it.get("subject", ""),
+                body_preview=(it.get("body_preview") or it.get("fragment") or "")[:500],
+                received_at_utc=it.get("date", ""),
+                source="vmail_soap",
+            ))
+        return out
+
 
 def sync_and_analyze(
     connector: Any,

@@ -1380,3 +1380,9 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Fix**: (1) composite detect (mail AND khoảng thời gian/cần phản hồi/tóm tắt → email_today); (2) parse 'N ngày/tuần/tháng gần đây' + 'gần đây'(7 ngày) + 'hôm qua' → since; khoảng tương đối → `--range` (tóm tắt TOÀN BỘ mail trong khoảng, không dedupe — vẫn R2 READONLY); (3) dispatch truyền text cho email_today/thread_summary/reply_draft.
 - **E2E thật**: câu owner → **20 mail, 14 quan trọng, ACTION_REQUIRED 11, INFORMATION 6, URGENT 3** (25/10→24/11). Responder pid 16040 xử lý live "System command: email_today" + response sent.
 - **Regression**: 68/68 focused PASS (self_improve + command_center + office_email_connector). Commit S3-v4.
+
+### 24/11 ~18:30 — S3-v5: LỌC ĐÚNG "mail chỉ gửi đến cá nhân anh" (ảnh image_3aeca9)
+- **Yêu cầu owner 17:45**: "kiểm tra trong 1 tháng gần đây, mail chỉ gửi đến anh, xem các mail đó có cần phải phản hồi không, tóm tắt" — lúc đó CHERRY trả 20 mail (gồm mail nhóm pdl viettel, bo td kv1) — KHÔNG đúng "chỉ gửi đến anh".
+- **Fix 3 lớp**: (1) `mail_reader._search` lấy TO/CC (e t="t"/t="c") + `_get_msg_addrs` GetMsg header to/cc (SearchRequest summary không trả đủ → GetMsg từng mail, chính xác tuyệt đối, READONLY); (2) `read_since_direct_only(DD/MM)` — query `to:<owner>` + lọc TO chỉ owner & CC rỗng (fail-honest: TO không đọc được → loại, không đoán); (3) `fetch_since_direct_only` connector + runner `--direct-only` + `handle_email_today` parse 'chỉ gửi đến anh / cá nhân anh / riêng anh / gửi riêng cho anh'.
+- **E2E thật (câu owner 17:45)**: 16 mail CHỈ gửi cá nhân (TO=quanpt1, CC rỗng) từ 25/10; 5 quan trọng; **Cần phản hồi: 2** — top: [CTĐ-CTCT] Nhận xét đánh giá Đảng viên hạn 20/11 (Priority 100/100, Urgency 95/100, "Kính gửi Đ/c Phạm Thế Quân"); FW Báo cáo năng lượng Q3 (cuongdm42); MEETING hủy họp đào tạo AI 24/11 (vofficeadmin).
+- **Regression**: 68/68 focused PASS. Responder pid 6288. Commit S3-v5.

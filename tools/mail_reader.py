@@ -135,6 +135,9 @@ def _search(token: str, query: str, limit: int) -> list[dict[str, Any]]:
         e_els = [e for e in m_el.findall(f"{{{MAIL_NS}}}e") if e.get("t") == "f"] or m_el.findall(f"{{{MAIL_NS}}}e")
         emails = [e.get("a") or "" for e in e_els]
         names = [e.get("p") or "" for e in e_els]
+        # (24/11 S3-v5, owner: "mail chỉ gửi đến anh") lấy TO/CC đầy đủ để lọc:
+        _to = sorted({e.get("a") or "" for e in m_el.findall(f"{{{MAIL_NS}}}e") if e.get("t") == "t"} - {""})
+        _cc = sorted({e.get("a") or "" for e in m_el.findall(f"{{{MAIL_NS}}}e") if e.get("t") == "c"} - {""})
         mid = m_el.get("id") or ""
         # id có thể dạng "123" hoặc "123-456" (conversation item) — lấy phần trước '-'
         short_id = mid.split("-")[0]
@@ -149,6 +152,8 @@ def _search(token: str, query: str, limit: int) -> list[dict[str, Any]]:
                 "fragment": _clean(fr.text if fr is not None else None),
                 "has_attachment": m_el.find(f"{{{MAIL_NS}}}a") is not None,
                 "read": m_el.get("f", "").find("u") == -1,  # flag u = unread
+                "to_addrs": _to,
+                "cc_addrs": _cc,
             }
         )
     return items
@@ -206,6 +211,95 @@ def read_today() -> dict[str, Any]:
     """Mail nhận trong ngày hôm nay."""
     d = _dt.date.today().strftime("%m/%d/%Y")
     return _list_emails(f"in:inbox after:{d}", limit=15)
+
+
+def read_since(date_ddmm: str, limit: int = 20) -> dict[str, Any]:
+    """Mail từ ngày DD/MM (năm nay) đến giờ — lệnh 'check mail từ ngày 22/11'.
+
+    Zimbra query after:MM/DD/YYYY (format US). Fail-honest giữ nguyên.
+    """
+    try:
+        dd, mm = date_ddmm.split("/")[:2]
+        d = f"{int(mm):02d}/{int(dd):02d}/{_dt.date.today().year}"
+    except Exception:
+        return {"error": f"định dạng ngày sai: {date_ddmm!r} (cần DD/MM)"}
+    return _list_emails(f"in:inbox after:{d}", limit=max(1, min(limit, 20)))
+
+
+def _get_msg_addrs(token: str, mid: str) -> tuple[set[str], set[str]]:
+    """GetMsgRequest header to/cc → (to_set, cc_set). Lỗi → ({}, {}) (fail-honest)."""
+    try:
+        out = _soap(
+            f'<GetMsgRequest xmlns="{MAIL_NS}">'
+            f'<m id="{mid}"><header n="to"/><header n="cc"/></m>'
+            f"</GetMsgRequest>",
+            token,
+        )
+        root = ET.fromstring(out)
+        to: set[str] = set()
+        cc: set[str] = set()
+        for e in root.iter(f"{{{MAIL_NS}}}e"):
+            a = (e.get("a") or "").lower()
+            if not a:
+                continue
+            t = e.get("t")
+            if t == "t":
+                to.add(a)
+            elif t == "c":
+                cc.add(a)
+        # header fallback (nếu SOAP không trả e):
+        if not to:
+            for h in root.iter(f"{{{MAIL_NS}}}header"):
+                if h.get("n") == "to" and h.text:
+                    to |= {x.strip().lower() for x in re.findall(r"[\w.+-]+@[\w.-]+", h.text)}
+                if h.get("n") == "cc" and h.text:
+                    cc |= {x.strip().lower() for x in re.findall(r"[\w.+-]+@[\w.-]+", h.text)}
+        return to, cc
+    except Exception:
+        return set(), set()
+
+
+def read_since_direct_only(date_ddmm: str, limit: int = 20) -> dict[str, Any]:
+    """(24/11 S3-v5, owner: 'lọc đúng, chỉ gửi đến cá nhân anh') — CHỈ mail gửi
+    TRỰC TIẾP đến owner (TO chứa owner; loại mail gửi danh sách/aliasgroup/broadcast).
+
+    2 bước: query 'to:<owner>' (Zimbra) → lọc client-side 'to_addrs' CHỈ gồm
+    owner (± cc_addrs rỗng). Mail nhóm (pdl viettel, bo td kv1, all-hands…)
+    bị loại — đúng nghĩa 'chỉ gửi đến cá nhân anh'.
+    """
+    try:
+        user, _ = _creds()
+    except _MailError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+    try:
+        dd, mm = date_ddmm.split("/")[:2]
+        d = f"{int(mm):02d}/{int(dd):02d}/{_dt.date.today().year}"
+    except Exception:
+        return {"error": f"định dạng ngày sai: {date_ddmm!r} (cần DD/MM)"}
+    res = _list_emails(f"in:inbox to:{user} after:{d}", limit=max(1, min(limit, 20)))
+    if "error" in res:
+        return res
+    # SearchRequest summary KHÔNG trả e t="t" đầy đủ → GetMsg từng mail lấy
+    # to/cc thật (chính xác tuyệt đối, vẫn READONLY).
+    try:
+        token = _auth()
+    except _MailError as e:
+        return {"error": str(e)}
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+    emails = []
+    for m in res.get("emails", []):
+        to, cc = _get_msg_addrs(token, m["id"])
+        m["to_addrs"] = sorted(to)
+        m["cc_addrs"] = sorted(cc)
+        # 'chỉ gửi đến anh' = TO chỉ có owner và KHÔNG có CC khác.
+        # TO rỗng (không đọc được header) → fail-honest: loại (không đoán).
+        if to and to <= {user} and not (cc - {user}):
+            emails.append(m)
+    return {"host": res.get("host", ""), "folder": f"query=in:inbox to:{user} (chỉ cá nhân) after:{d}",
+            "count": len(emails), "emails": emails}
 
 
 def read_unread(limit: int = 10) -> dict[str, Any]:

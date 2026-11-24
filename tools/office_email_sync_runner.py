@@ -40,11 +40,14 @@ def main() -> int:
     # --range DD/MM: TÓM TẮT TOÀN BỘ mail trong khoảng (KHÔNG dedupe 'đã thấy' —
     # mail cũ đã import vẫn được phân tích lại để owner thấy bức tranh khoảng).
     # R2 vẫn CHỈ ĐỌC: không mark-read, không xóa, không gửi.
+    # (24/11 S3-v5, owner ảnh image_3aeca9: "lọc đúng, chỉ gửi đến cá nhân anh")
+    # --direct-only: chỉ mail TO=owner (loại mail nhóm/broadcast/alias).
     if "--range" in sys.argv:
         i = sys.argv.index("--range")
         if i + 1 < len(sys.argv):
             since = sys.argv[i + 1]
             range_mode = True
+    direct_only = "--direct-only" in sys.argv
     connector = SOAPMailConnector()
     status = connector.status()
     if status.value == "NOT_CONFIGURED":
@@ -64,13 +67,17 @@ def main() -> int:
             return 2
 
         try:
-            raw = connector.fetch_since(since, limit=20)
+            if range_mode and direct_only:
+                raw = connector.fetch_since_direct_only(since, limit=20)
+            else:
+                raw = connector.fetch_since(since, limit=20)
         except Exception as exc:
             print(f"⚠️ Đọc mail từ {since} thất bại (fail-honest): {exc}")
             return 1
         if range_mode:
             # S3-v4: phân tích TOÀN BỘ (không skip already_seen) — owner muốn
             # tóm tắt mọi mail trong khoảng, kể cả đã đọc/import trước đó.
+            # S3-v5: --direct-only → chỉ mail gửi trực tiếp đến owner (fetch ở trên).
             from quan_ai_brain.office.email_connector import (
                 ConnectorStatus as _CS, IntakeResult as _IR, analyze_email as _ae)
             result = _IR(connector_status=_CS.CONNECTED, fetched=len(raw), new=len(raw))
@@ -81,6 +88,8 @@ def main() -> int:
                 result.by_category[a.category] = result.by_category.get(a.category, 0) + 1
                 if store.already_seen(msg.message_id):
                     result.duplicates += 1
+            _mode_note = " (CHỈ mail gửi trực tiếp đến anh — lọc TO cá nhân)" if direct_only else ""
+            print(f"ℹ️ Phạm vi: mail từ {since} đến nay{_mode_note}.")
             print(format_summary_ab(result, analyses, top_n=10))
             return 0
 

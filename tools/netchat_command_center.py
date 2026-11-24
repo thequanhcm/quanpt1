@@ -907,6 +907,13 @@ def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) ->
             r"(?:gần đây|gan day|ngày qua|ngay qua|tuần|tuan|tháng|thang|hôm qua|hom qua|vài ngày|vai ngay)",
             low_txt)) and not m_since
         cmd += ["--range", since] if _is_relative else ["--since", since]
+    # (24/11 S3-v5, owner ảnh image_3aeca9: "lọc đúng, chỉ gửi đến cá nhân anh")
+    # 'chỉ gửi đến anh' / 'cá nhân anh' / 'riêng anh' / 'direct' → --direct-only:
+    # chỉ mail TO=owner (loại mail nhóm/broadcast/alias — vẫn R2 READONLY).
+    if _re.search(r"(?:chỉ gửi đến|chi gui den|gửi đến riêng|gui den rieng|"
+                  r"cá nhân anh|ca nhan anh|riêng anh|rieng anh|gửi riêng cho anh|"
+                  r"gui rieng cho anh|chỉ gửi cho anh|chi gui cho anh)", low_txt):
+        cmd += ["--direct-only"]
     try:
         proc = _sp.run(
             cmd,
