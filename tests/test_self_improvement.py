@@ -143,44 +143,55 @@ def test_vmail_and_dynamic_kw_still_work():
 
 # ─── S2 AUTO-TUNE (24/11, owner: tự học liên tục) ───
 
-def test_auto_cycle_applies_strong_evidence(tmp_path, monkeypatch):
+def test_auto_cycle_creates_pending_dm_not_learned(tmp_path, monkeypatch):
+    """S3-DM-GATE: auto_cycle không tự áp nữa, chỉ tạo pending_dm + chờ owner OK."""
     import tools.self_improvement as si
 
     monkeypatch.setattr(si, "DATA_DIR", tmp_path)
-    monkeypatch.setattr(si, "UNMATCHED_PATH", tmp_path / "u.jsonl")
-    monkeypatch.setattr(si, "PROPOSALS_PATH", tmp_path / "p.json")
-    monkeypatch.setattr(si, "LEARNED_PATH", tmp_path / "l.json")
-    monkeypatch.setattr(si, "AUTO_CONFIG_PATH", tmp_path / "a.json")
-    monkeypatch.setattr(si, "AUTO_BACKUP_PATH", tmp_path / "b.json")
-    monkeypatch.setattr(si, "AUTO_STATE_PATH", tmp_path / "s.json")
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
 
     for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c", "mở helpdesk"):
         si.log_unmatched(txt)
     rep = si.auto_cycle()
-    kws_applied = {a["kw"] for a in rep["applied"]}
-    assert "tiến độ" in kws_applied
-    assert rep["applied"][0]["intent"] == "tasks"
-    # backup + tag:
-    assert si.AUTO_BACKUP_PATH.exists()
+    assert rep["applied"] == []  # không tự áp nữa
+    assert len(rep["requests"]) >= 1
+    req = rep["requests"][0]
+    assert req["kw"] == "tiến độ"
+    assert req["intent"] == "tasks"
+    # pending_dm có item WAITING_OWNER:
+    pend = si.list_pending_dm()["items"]
+    assert any(p["kw"] == "tiến độ" and p["status"] == "WAITING_OWNER" for p in pend.values())
+    # learned RỖNG (chờ owner OK):
+    assert si.read_learned() == {}
+    # owner_ok mới áp:
+    r = si.owner_ok("tất cả")
+    assert r["ok"] and len(r["applied"]) >= 1
     learned = si.read_learned()
+    assert "tiến độ" in learned.get("tasks", [])
     assert "tiến độ" in learned.get("_auto", [])
-    # detect_intent nhận:
+    # backup đã tạo:
+    assert si.AUTO_BACKUP_PATH.exists()
+    # detect_intent nhận kw đã OK:
     import netchat_command_center as cc
     assert cc.detect_intent("tiến độ dự án abc") == "tasks"
 
 
 def test_auto_cycle_skips_unclear_domain(tmp_path, monkeypatch):
+    """S3-DM-GATE: kw không rõ miền -> KHÔNG tạo request (chờ owner OK)."""
     import tools.self_improvement as si
 
     monkeypatch.setattr(si, "DATA_DIR", tmp_path)
     for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
-                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
         monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
     for txt in ("mở helpdesk a", "mở helpdesk b", "mở helpdesk c"):
         si.log_unmatched(txt)
     rep = si.auto_cycle()
-    assert rep["applied"] == []  # không đoán mù
-    assert any("không rõ miền" in s["reason"] for s in rep["skipped"])
+    assert rep["applied"] == []  # không tự áp nữa
+    assert rep["requests"] == []  # kw không rõ miền KHÔNG được build request
+    assert si.read_learned() == {}
 
 
 def test_auto_cycle_respects_off_switch(tmp_path, monkeypatch):
@@ -199,15 +210,17 @@ def test_auto_cycle_respects_off_switch(tmp_path, monkeypatch):
 
 
 def test_rollback_restores_backup(tmp_path, monkeypatch):
+    """S3-DM-GATE: owner_ok -> backup được tạo -> rollback phục hồi."""
     import tools.self_improvement as si
 
     monkeypatch.setattr(si, "DATA_DIR", tmp_path)
     for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
-                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
         monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
     for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c"):
         si.log_unmatched(txt)
     si.auto_cycle()
+    si.owner_ok("tất cả")  # backup + learned
     assert "tiến độ" in si.read_learned().get("_auto", [])
     r = si.rollback("toàn bộ")
     assert r["ok"] is True
@@ -226,14 +239,82 @@ def test_rollback_no_backup_fail_honest(tmp_path, monkeypatch):
 
 
 def test_auto_never_overrides_static_kw(tmp_path, monkeypatch):
+    """S3-DM-GATE: kw trùng kw tĩnh KHÔNG được build request (vì sẽ bị static ưu tiên)."""
     import tools.self_improvement as si
 
     monkeypatch.setattr(si, "DATA_DIR", tmp_path)
     for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
-                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH"):
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
         monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
     # 'báo cáo' là kw tĩnh report — lặp 3 lần nhưng auto phải BỎ vì trùng kw tĩnh:
     for txt in ("báo cáo abc", "báo cáo bcd", "báo cáo cde"):
         si.log_unmatched(txt)
     rep = si.auto_cycle()
-    assert "báo cáo" not in {a["kw"] for a in rep["applied"]}
+    kws_req = {a["kw"] for a in rep["requests"]}
+    assert "báo cáo" not in kws_req
+
+
+# ─── S3-DM-GATE (24/11, owner: trước khi học gửi DM, anh OK/duyệt mới thực hiện) ───
+
+def test_owner_ok_partial_one_keyword(tmp_path, monkeypatch):
+    """owner_ok nhận 1 kw cụ thể — chỉ duyệt đúng kw đó."""
+    import tools.self_improvement as si
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c",
+                "xem lịch họp d", "xem lịch họp e", "xem lịch họp f"):
+        si.log_unmatched(txt)
+    si.auto_cycle()
+    r = si.owner_ok("tiến độ")
+    assert r["ok"] and len(r["applied"]) == 1
+    learned = si.read_learned()
+    assert "tiến độ" in learned.get("tasks", [])
+    assert "lịch họp" not in (learned.get("tasks", []) + sum(learned.values(), []))
+
+
+def test_owner_reject_blocks_pending(tmp_path, monkeypatch):
+    """owner_reject: REJECTED — không học."""
+    import tools.self_improvement as si
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c"):
+        si.log_unmatched(txt)
+    si.auto_cycle()
+    pend_before = si.list_pending_dm()
+    assert pend_before["items"]
+    r = si.owner_reject("tất cả")
+    assert r["ok"] and len(r["rejected"]) >= 1
+    pend_after = si.list_pending_dm()
+    assert not pend_after["items"]  # đã rỗng WAITING_OWNER
+    # learned RỖNG (vì reject):
+    assert si.read_learned() == {}
+
+
+def test_owner_ok_unknown_fails_honest(tmp_path, monkeypatch):
+    """owner_ok với kw không có trong pending → fail-honest."""
+    import tools.self_improvement as si
+    monkeypatch.setattr(si, "DATA_DIR", tmp_path)
+    for name in ("UNMATCHED_PATH", "PROPOSALS_PATH", "LEARNED_PATH", "AUTO_CONFIG_PATH",
+                 "AUTO_BACKUP_PATH", "AUTO_STATE_PATH", "PENDING_DM_PATH"):
+        monkeypatch.setattr(si, name, tmp_path / f"{name}.json")
+    # seed 1 pending để có hàng chờ:
+    for txt in ("xem tiến độ a", "xem tiến độ b", "xem tiến độ c"):
+        si.log_unmatched(txt)
+    si.auto_cycle()
+    # giờ OK kw lạ → "không tìm thấy":
+    r = si.owner_ok("kw không tồn tại")
+    assert r["ok"] is False and "không tìm thấy" in r["error"]
+
+
+def test_detect_intent_ok_all_routes_to_self_improve():
+    """detect_intent cho 'ok/oke/ok hết/duyệt hết/đồng ý hết/hủy học' → self_improve."""
+    import netchat_command_center as cc
+    for t in ("ok", "oke", "okie", "okay", "ok anh",
+              "ok hết", "ok het", "duyệt hết", "duyet het",
+              "đồng ý hết", "dong y het", "duyệt tất cả", "duyet tat ca",
+              "hủy học", "huy hoc", "từ chối", "tu choi"):
+        assert cc.detect_intent(t) == "self_improve", f"FAIL on {t!r}"

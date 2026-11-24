@@ -1404,15 +1404,63 @@ def main():
     # (24/11/2026, S2 — owner: "tất cả điều anh DM cho cherry đều tự học nâng cấp
     # liên tục") Thread nền chạy auto_cycle mỗi 10 phút: tự đề xuất + tự áp kw đủ
     # tin cậy (backup + rollback-able + audit). Fail-safe: lỗi KHÔNG đụng vòng poll.
+    # (24/11 S3-DM-GATE, owner: "trước khi học nâng cấp, gửi DM cho anh, anh OK/duyệt
+    # mới thực hiện") Mỗi chu kỳ: (1) auto_cycle KHÔNG tự áp — chỉ build hàng chờ;
+    # (2) nếu có request MỚI (chưa từng DM trước đó) → send DM owner danh sách.
     def _self_improve_daemon() -> None:
+        # (24/11 S3-DM-GATE v2, owner: "tiếp tục cấu hình chi tiết") chu kỳ đọc
+        # từ config (auto.json cycle_seconds), chu kỳ ĐẦU 90s (nhanh vòng đầu);
+        # persist dm_sent — restart KHÔNG re-DM (chống spam).
+        first = True
         while True:
-            time.sleep(600)
             try:
-                from tools.self_improvement import auto_cycle
+                from tools.self_improvement import (auto_cycle, list_pending_dm,
+                                                    _read_auto_config, DATA_DIR)
+                import json as _json
+                cfg = _read_auto_config()
+                cycle_s = int(cfg.get("cycle_seconds", 600))
+            except Exception:
+                cycle_s = 600
+            time.sleep(90 if first else cycle_s)
+            first = False
+            try:
+                from tools.self_improvement import (auto_cycle, list_pending_dm,
+                                                    DATA_DIR)
+                import json as _json
                 rep = auto_cycle()
+                pending_now = list_pending_dm().get("items", {})
+                # qid đã DM trước đó (persist):
+                sent_path = DATA_DIR / "dm_sent.json"
+                try:
+                    dm_sent = set(_json.loads(sent_path.read_text(encoding="utf-8")))
+                except Exception:
+                    dm_sent = set()
+                new_qids = [q for q in pending_now if q not in dm_sent]
+                if new_qids:
+                    items = [pending_now[q] for q in new_qids]
+                    lines = [f"  - {it['kw']!r} -> {it['intent']} (x{it['count']})" for it in items]
+                    msg_lines = [
+                        "🎓 EM MUON HOC " + str(len(items)) + " TU KHOA MOI:",
+                        *lines,
+                        "",
+                        "Anh dong y het (hoac 'ok het' / 'duyet het' / 'dong y het'): duyet ca nhom",
+                        "Duyet 1 tu: 'duyet hoc <tu>' (hoac 'ok' neu chi co 1 tu khoa)",
+                        "Tu choi: 'huy hoc <tu>' / 'tu choi'",
+                        "Bat/tat chu ky tu hoc: 'tat tu hoc' / 'bat tu hoc'",
+                    ]
+                    res = send_message("\n".join(msg_lines), target_channel=DM_CHANNEL_ID)
+                    if "error" in res:
+                        print(f"   ⚠️ [AUTO-TUNE] DM lỗi (thử chu kỳ sau): {res['error']}")
+                    else:
+                        dm_sent.update(new_qids)
+                        try:
+                            sent_path.write_text(_json.dumps(sorted(dm_sent), ensure_ascii=False), encoding="utf-8")
+                        except Exception:
+                            pass
+                        print(f"   🎓 [AUTO-TUNE] DM owner xin OK {len(items)} tu khoa.")
                 if rep.get("applied"):
-                    print(f"   🎓 [AUTO-TUNE] Tự áp {len(rep['applied'])} kw: "
-                          + ", ".join(f"{a['kw']}→{a['intent']}" for a in rep["applied"]))
+                    print(f"   🎓 [AUTO-TUNE] Tu ap {len(rep['applied'])} kw: "
+                          + ", ".join(f"{a['kw']}->{a['intent']}" for a in rep["applied"]))
             except Exception as _si:
                 print(f"   ⚠️ [AUTO-TUNE] error (bỏ qua): {_si}")
 
@@ -1697,6 +1745,15 @@ def main():
 
 
 if __name__ == "__main__":
+    # (24/11) prepend src + BRAIN_ROOT vào sys.path ngay từ đầu — reminder job dùng
+    # 'quan_ai_brain.*' cần path, tránh 'No module named quan_ai_brain' lặp log.
+    import sys as _sys_path_init
+    _brain_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _brain_root not in _sys_path_init.path:
+        _sys_path_init.path.insert(0, _brain_root)
+    _brain_src = os.path.join(_brain_root, "src")
+    if _brain_src not in _sys_path_init.path:
+        _sys_path_init.path.insert(0, _brain_src)
     try:
         main()
     except Exception as e:

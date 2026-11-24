@@ -33,7 +33,9 @@ WORKSPACE = Path(__file__).resolve().parent.parent
 # và CHỈ khi không phải câu hỏi. Thứ tự = thứ tự ưu tiên.
 _DYNAMIC_COMMAND_RES: list[tuple[re.Pattern[str], str]] = [
     # tóm tắt N email/mail/vmail gần nhất/mới nhất → đọc hộp thư
-    (re.compile(r"(?:tóm\s*tắt|tom\s*tat|đọc|doc|kiểm\s*tra|kiem\s*tra|liệt\s*kê|liet\s*ke|xem)\s*\d*\s*(?:email|mail|vmail|thư|thu)", re.IGNORECASE), "email_today"),
+    (re.compile(r"(?:tóm\s*tắt|tom\s*tat|đọc|doc|kiểm\s*tra|kiem\s*tra|liệt\s*kê|liet\s*ke|xem|check)\s*\d*\s*(?:email|mail|vmail|thư|thu)", re.IGNORECASE), "email_today"),
+    # (24/11 S3) 'check mail/email/vmail từ ngày DD/MM' — có mốc thời gian:
+    (re.compile(r"(?:check|kiểm\s*tra|kiem\s*tra)\s+(?:mail|email|vmail).*(?:từ\s*ngày|tu\s*ngày|tu\s*ngay|from\s*date)\s*\d{1,2}[/.]\d{1,2}", re.IGNORECASE), "email_today"),
     (re.compile(r"\d*\s*(?:email|mail|vmail)\s*(?:gần\s*nhất|mới\s*nhất|gan\s*nhat|moi\s*nhat)", re.IGNORECASE), "email_today"),
     (re.compile(r"(?:hộp\s*thư|hop\s*thu|hộp\s*mail|hop\s*mail)\s*(?:gần\s*nhất|mới\s*nhất|gan\s*nhat|moi\s*nhat)", re.IGNORECASE), "email_today"),
     # luồng email có số/kw → thread_summary ("tóm tắt 3 luồng gần nhất")
@@ -80,7 +82,10 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                     "vmail hôm nay", "vmail hom nay", "vmail mới", "vmail moi",
                     "tóm tắt vmail", "tom tat vmail", "kiểm tra mail", "kiem tra mail",
                     "kiểm tra vmail", "kiem tra vmail", "hộp thư vmail", "hop thu vmail",
-                    "đọc hộp thư", "doc hop thu"),
+                    "đọc hộp thư", "doc hop thu",
+                    # (24/11 S3, owner: "Check mail từ ngày 22/11") 'check' KHÔNG dấu:
+                    "check mail", "check email", "check vmail", "check hộp thư",
+                    "check hop thu", "check hộp mail", "check hop mail"),
     # SELF-IMPROVEMENT (24/11): 'em học được gì'/'em tự học đi'/'duyệt học <kw>'
     # — kw 'học' đứng đầu câu; câu hỏi ('học được gì vậy?') không kích hoạt.
     "self_improve": ("em tự học đi", "em tu hoc di",
@@ -88,7 +93,12 @@ COMMAND_PATTERNS: dict[str, tuple[str, ...]] = {
                      "em tự hoàn thiện", "em tu hoan thien", "tự hoàn thiện đi",
                      "tu hoan thien di", "tắt tự học", "tat tu hoc",
                      "bật tự học", "bat tu hoc", "rollback từ khóa", "rollback tu khoa",
-                     "rollback học", "rollback hoc"),
+                     "rollback học", "rollback hoc",
+                     # (24/11 S3-DM-GATE) owner OK/duyệt qua DM:
+                     "ok", "oke", "okie", "okay", "ok anh", "ok em",
+                     "ok hết", "ok het", "duyệt hết", "duyet het",
+                     "duyệt tất cả", "duyet tat ca", "đồng ý hết", "dong y het",
+                     "hủy học", "huy hoc", "từ chối", "tu choi"),
     # SYNC-20261123: lịch họp VoIP (gián tiếp qua mail vofficeadmin — voffice_reader).
     # Đặt TRƯỚC email_today vì "lịch họp hôm nay" chứa cả 2; VoIP cụ thể hơn.
     "voffice_meetings": ("lịch họp voip", "lich hop voip", "lịch voip", "lich voip",
@@ -516,6 +526,9 @@ def detect_intent(text: str) -> str | None:
     # kw 'duyệt' của approve sẽ nuốt câu nếu duyệt tuần tự COMMAND_PATTERNS.
     if t.startswith("duyệt học") or t.startswith("duyet hoc"):
         return "self_improve"
+    # (24/11 S3-DM-GATE) 'duyệt hết/tất cả' / 'đồng ý hết' — phải TRƯỚC approve:
+    if t.startswith("duyệt hết") or t.startswith("duyet het") or t.startswith("duyệt tất cả") or t.startswith("duyet tat ca") or t.startswith("đồng ý hết") or t.startswith("dong y het"):
+        return "self_improve"
     # (31/10/2026) 'giúp' chỉ là lệnh khi ĐỨNG ĐẦU câu — 'mở giúp anh chrome'
     # hay 'đọc giúp anh ảnh này' phải là mệnh lệnh/AI, không phải bảng help
     # (bug thật: câu chứa từ 'giúp' ở giữa bị nuốt thành help, lệch lệnh).
@@ -543,6 +556,8 @@ def detect_intent(text: str) -> str | None:
         try:
             from tools.self_improvement import read_learned as _read_learned
             for _intent, _kws in _read_learned().items():
+                if _intent == "_auto":  # (24/11) chỉ kw AUTO tag — bỏ, intent không hợp lệ
+                    continue
                 for _kw in _kws:
                     if _kw and (t.startswith(_kw.lower()) or f" {_kw.lower()} " in f" {t} "):
                         return _intent
@@ -627,6 +642,47 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
             return f"↩️ Đã rollback: {r.get('removed')} (kw {r.get('kw') or 'toàn bộ auto'}) — learned_keywords khôi phục từ backup."
         return f"⚠️ Không rollback được: {r.get('error')}"
 
+    
+    # (24/11 S3-DM-GATE) owner OK/duyệt qua DM:
+    if "ok het" in low or "duyet het" in low or "duyet tat ca" in low or "dong y het" in low:
+            from tools.self_improvement import owner_ok
+            r = owner_ok("tất cả")
+            if r.get("ok"):
+                applied = r.get("applied", [])
+                lines = [f"• Da hoc: {a['kw']!r} -> {a['intent']}" for a in applied]
+                return ("🎓 ANH DA OK — DA HỌC " + str(len(applied)) + " tu khoa:\n" + "\n".join(lines) +
+                        "\n\nTu gio cac lenh nay se chay dung chuc nang. Cam on anh!")
+            return f"⚠️ Không duyệt được: {r.get('error')}"
+
+    if "ok" in low or "oke" in low or "okie" in low or "okay" in low:
+        # OK đơn = duyệt 1 (nếu có 1 pending) hoặc hỏi lại
+        from tools.self_improvement import list_pending_dm, owner_ok
+        pend = list_pending_dm()
+        items = pend.get("items", {})
+        if not items:
+            return ("📭 Không có đề xuất nào đang chờ anh OK.\n"
+                                "Nhán 'em tu hoc di' de em phan tich cac cau anh chua hieu.")
+        if len(items) == 1:
+            pid = list(items.keys())[0]
+            p = items[pid]
+            r = owner_ok(pid)
+            if r.get("ok"):
+                return f"🎓 Đã học: {p['kw']!r} -> {p['intent']}. Cảm ơn anh!"
+            return f"⚠️ Không duyệt được: {r.get('error')}"
+        # nhiều pending -> hỏi lại
+        lines = [f"• {p['kw']!r} -> {p['intent']} (x{p['count']})" for p in items.values()]
+        return ("📋 Co " + str(len(items)) + " de xuat cho anh OK:\n" + "\n".join(lines) +
+                        "\nOK tat ca: 'ok het' / 'duyet het'\nOK 1 tu: 'duyet hoc <tu>'")
+
+    if "hủy học" in low or "huy hoc" in low or "từ chối" in low or "tu choi" in low:
+        from tools.self_improvement import owner_reject
+        arg = low.split("hủy học", 1)[-1].split("huy hoc", 1)[-1].split("từ chối", 1)[-1].strip(" :,.?")
+        r = owner_reject(arg or "")
+        if r.get("ok"):
+            rej = r.get("rejected", [])
+            return f"🚫 Đã từ chối {len(rej)} đề xuất: " + ", ".join(f"{a['kw']!r}" for a in rej) + ". Em sẽ không học các từ này."
+        return f"⚠️ Không từ chối được: {r.get('error')}"
+
     if "tắt tự học" in low or "tat tu hoc" in low:
         from tools.self_improvement import set_auto
         cfg = set_auto(auto_propose=False, auto_apply=False)
@@ -662,7 +718,8 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
     cfg = _read_auto_config()
     ast = auto_state()
     out = ["📊 TỰ HỌC — hiện trạng:"]
-    out.append(f"• Chế độ tự học liên tục: {'BẬT (chu kỳ 10 phút)' if cfg.get('auto_apply') or cfg.get('auto_propose') else 'TẮT'}")
+    _cyc = cfg.get("cycle_seconds", 600)
+    out.append(f"• Chế độ tự học liên tục: {'BẬT (chu kỳ ' + str(_cyc // 60) + ' phút)' if cfg.get('auto_apply') or cfg.get('auto_propose') else 'TẮT'}")
     out.append(f"• Câu anh nhắn mà em chưa hiểu (đã ghi nhận): {st.get('total', 0)}")
     if st.get("top"):
         tops = ", ".join(f"{w}(x{c})" for w, c in st["top"][:6])
@@ -674,11 +731,31 @@ def handle_self_improve(text: str = "", payload: dict[str, Any] | None = None) -
     if auto_kws:
         out.append(f"• Tự áp (auto): {', '.join(auto_kws)}")
     if ast.get("applied") is not None:
-        out.append(f"• Chu kỳ gần nhất: {ast.get('ts')} — tự áp {len(ast.get('applied', []))} kw")
+        out.append(f"• Chu kỳ gần nhất: {ast.get('ts')} — đề xuất {len(ast.get('requests', []))} | đã áp {len(ast.get('applied', []))}")
+        hist = ast.get("history") or []
+        if hist:
+            out.append("• Lịch sử 10 vòng gần nhất:")
+            for h in hist:
+                nr = len(h.get("requests") or [])
+                na = len(h.get("applied") or [])
+                out.append(f"   - {h.get('ts')}: đề xuất {nr} | áp {na}")
     elif ast.get("error"):
         out.append(f"• Chu kỳ: {ast['error']}")
-    out.append("Điều khiển: 'em tự học đi' (phân tích ngay) | 'duyệt học <kw>' | 'rollback từ khóa' | 'tắt tự học' | 'bật tự học'.")
-    return "\n".join(out)
+        # (24/11 S3-DM-GATE) thống kê hàng chờ WAITING_OWNER — em muốn học nhưng chờ OK:
+        try:
+            from tools.self_improvement import list_pending_dm
+            pend = list_pending_dm().get("items", {})
+            if pend:
+                out.append(f"\n🎓 HÀNG CHỜ DM anh OK ({len(pend)} từ):")
+                for it in pend.values():
+                    out.append(f"   - {it['kw']!r} -> {it['intent']} (x{it['count']})")
+                out.append("   Anh OK cả nhóm: 'ok hết' / 'đồng ý hết' / 'duyệt hết'")
+                out.append("   OK 1 từ: 'duyệt học <từ>' / 'ok'")
+                out.append("   Từ chối: 'hủy học <từ>' / 'từ chối'")
+        except Exception:
+            pass
+        out.append("Điều khiển: 'em tự học đi' (phân tích ngay) | 'duyệt học <kw>' | 'ok hết' | 'rollback từ khóa' | 'tắt tự học' | 'bật tự học'.")
+        return "\n".join(out)
 
 
 def handle_vmail_toggle(text: str = "", payload: dict[str, Any] | None = None) -> str:
@@ -742,6 +819,7 @@ def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) ->
     Fail-honest: SOAP lỗi → báo lỗi, không fake số liệu."""
     import subprocess as _sp
     import sys as _sys
+    import re as _re
 
     # TASK-VMAIL-TOGGLE (24/11): flag tắt → từ chối đọc, KHÔNG gọi SOAP.
     if not _vmail_read_flag():
@@ -751,11 +829,24 @@ def handle_email_today(text: str = "", payload: dict[str, Any] | None = None) ->
     env = dict(**os.environ)
     env["PYTHONPATH"] = str(brain_root / "src") + os.pathsep + str(brain_root / "tools") + os.pathsep + env.get("PYTHONPATH", "")
 
+    # (24/11 S3, owner: "Check mail từ ngày 22/11 đến bây giờ") parse mốc thời gian
+    # 'từ ngày DD/MM' → truyền --since cho runner đọc đúng khoảng.
+    since = ""
+    low_txt = (text or "").lower()
+    m_since = _re.search(r"(?:từ|tu)\s+ngày\s+(\d{1,2})[/.](\d{1,2})", low_txt)
+    if not m_since:
+        m_since = _re.search(r"(?:from|since)\s+(\d{1,2})[/.](\d{1,2})", low_txt)
+    if m_since:
+        since = f"{int(m_since.group(1)):02d}/{int(m_since.group(2)):02d}"
+
     # Chạy sync+analyze trong subprocess (SOAP có thể chậm — không treo responder)
     runner = brain_root / "tools" / "office_email_sync_runner.py"
+    cmd = [_sys.executable, "-u", str(runner)]
+    if since:
+        cmd += ["--since", since]
     try:
         proc = _sp.run(
-            [_sys.executable, "-u", str(runner)],
+            cmd,
             capture_output=True, text=True, encoding="utf-8", errors="replace",
             timeout=110, env=env, cwd=str(brain_root),
         )

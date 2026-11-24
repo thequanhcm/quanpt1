@@ -270,26 +270,33 @@ def read_learned() -> dict[str, list[str]]:
 AUTO_CONFIG_PATH = DATA_DIR / "auto.json"
 AUTO_BACKUP_PATH = DATA_DIR / "learned_keywords.backup.json"
 AUTO_STATE_PATH = DATA_DIR / "auto_state.json"
+# (24/11 S3-DM-GATE, owner: "trước khi học nâng cấp, gửi DM cho anh, anh OK/duyệt
+# mới thực hiện") — kw đủ tin cậy KHÔNG tự áp nữa: chuyển sang chờ owner OK qua DM.
+PENDING_DM_PATH = DATA_DIR / "pending_dm.json"
 AUTO_MIN_COUNT = 3          # câu phải lặp >= 3 lần mới tự áp
 AUTO_APPLY_LIMIT = 5        # tối đa kw tự áp mỗi chu kỳ
 
 
-def _read_auto_config() -> dict[str, bool]:
+def _read_auto_config() -> dict[str, Any]:
     try:
         with open(AUTO_CONFIG_PATH, encoding="utf-8") as fh:
             d = json.load(fh)
         return {"auto_propose": bool(d.get("auto_propose", True)),
-                "auto_apply": bool(d.get("auto_apply", True))}
+                "auto_apply": bool(d.get("auto_apply", True)),
+                "cycle_seconds": int(d.get("cycle_seconds", 600))}
     except Exception:
-        return {"auto_propose": True, "auto_apply": True}  # owner đã duyệt auto liên tục
+        return {"auto_propose": True, "auto_apply": True, "cycle_seconds": 600}  # owner đã duyệt auto liên tục
 
 
-def set_auto(auto_propose: bool | None = None, auto_apply: bool | None = None) -> dict[str, bool]:
+def set_auto(auto_propose: bool | None = None, auto_apply: bool | None = None,
+             cycle_seconds: int | None = None) -> dict[str, Any]:
     cfg = _read_auto_config()
     if auto_propose is not None:
         cfg["auto_propose"] = bool(auto_propose)
     if auto_apply is not None:
         cfg["auto_apply"] = bool(auto_apply)
+    if cycle_seconds is not None:
+        cfg["cycle_seconds"] = max(60, int(cycle_seconds))  # tối thiểu 60s
     try:
         _ensure_dir()
         with open(AUTO_CONFIG_PATH, "w", encoding="utf-8") as fh:
@@ -317,7 +324,9 @@ def _static_keywords() -> set[str]:
 
 
 def auto_cycle(min_count: int | None = None, max_apply: int | None = None) -> dict[str, Any]:
-    """1 chu kỳ tự học: propose (nếu bật) → auto-apply kw đủ tin cậy (nếu bật).
+    """1 chu kỳ tự học: propose (nếu bật) → chuyển kw đủ tin cậy sang hàng chờ
+    DM owner (S3-DM-GATE 24/11: owner "trước khi học nâng cấp, gửi DM cho anh,
+    sau đó anh phản hồi OK hoặc duyệt thì thực hiện") — KHÔNG tự áp learned nữa.
 
     Báo cáo trung thực từng bước; lỗi ghi trong report, không raise (chạy nền).
     """
@@ -335,71 +344,36 @@ def auto_cycle(min_count: int | None = None, max_apply: int | None = None) -> di
     else:
         report["propose"] = {"ok": True, "created": 0, "skipped": "auto_propose tắt"}
 
-    # 2) Tự áp kw đủ tin cậy
-    applied: list[dict[str, Any]] = []
+    # 2) (S3-DM-GATE) Chuyển kw đủ tin cậy sang hàng chờ DM owner — KHÔNG tự áp.
+    # Owner phản hồi "ok"/"duyệt" trong DM -> owner_ok() mới áp vào learned.
+    requests: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
     if cfg["auto_apply"]:
-        st = stats(limit=60)
-        static_kws = _static_keywords()
-        learned = read_learned()
-        learned_all = {k for kws in learned.values() if k != "_auto" for k in kws}
-        try:
-            with open(PROPOSALS_PATH, encoding="utf-8") as fh:
-                proposals = json.load(fh)
-        except Exception:
-            proposals = {}
-        for word, cnt in st["top"]:
-            if len(applied) >= cap:
-                break
-            if cnt < min_c or len(word.replace(" ", "")) < (_MIN_KW_LEN + 2):
-                continue
-            if word in learned_all or word in static_kws or _norm_token(word) in static_kws:
-                continue
-            # intent PHẢI từ _DOMAIN_HINTS (bằng chứng miền rõ) — không đoán mù
-            intent = None
-            for hint, it in _DOMAIN_HINTS:
-                if hint in word:
-                    intent = it
-                    break
-            if intent is None:
-                skipped.append({"kw": word, "reason": "không rõ miền (không tự đoán)"})
-                continue
-            if not applied:
-                try:
-                    _ensure_dir()
-                    with open(AUTO_BACKUP_PATH, "w", encoding="utf-8") as fh:
-                        json.dump(learned, fh, ensure_ascii=False, indent=1)
-                except Exception:
-                    pass
-            kws = learned.setdefault(intent, [])
-            if word not in kws:
-                kws.append(word)
-            applied.append({"kw": word, "intent": intent, "count": cnt})
-            for pid, p in proposals.items():
-                if isinstance(p, dict) and p.get("kw") == word and p.get("status") == "PENDING_REVIEW":
-                    p["status"] = "AUTO_APPLIED"
-                    p["auto_applied_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-        if applied:
-            try:
-                auto_tags = learned.get("_auto", [])
-                for a in applied:
-                    if a["kw"] not in auto_tags:
-                        auto_tags.append(a["kw"])
-                learned["_auto"] = auto_tags
-                with open(LEARNED_PATH, "w", encoding="utf-8") as fh:
-                    json.dump(learned, fh, ensure_ascii=False, indent=1)
-                with open(PROPOSALS_PATH, "w", encoding="utf-8") as fh:
-                    json.dump(proposals, fh, ensure_ascii=False, indent=1)
-            except Exception as exc:
-                report["apply_error"] = f"{type(exc).__name__}: {exc}"
+        br = build_approval_requests(max_items=3)
+        if br.get("ok"):
+            requests = br.get("created", [])
+        else:
+            report["request_error"] = br.get("error")
     else:
         skipped.append({"kw": "*", "reason": "auto_apply tắt"})
-    report["applied"] = applied
+    report["requests"] = requests
+    report["applied"] = []  # (S3-DM-GATE) không còn tự áp
     report["skipped"] = skipped[:10]
 
-    # 3) State + 4) Audit — không bao giờ raise (chạy nền)
+    # 3) State (kèm history 10 vòng gần nhất — chi tiết "tự lớn" theo yêu cầu owner)
     try:
         _ensure_dir()
+        history: list[dict[str, Any]] = []
+        try:
+            with open(AUTO_STATE_PATH, encoding="utf-8") as fh:
+                prev = json.load(fh)
+            if isinstance(prev, dict) and isinstance(prev.get("history"), list):
+                history = prev["history"]
+        except Exception:
+            history = []
+        history.append({k: report.get(k) for k in ("ts", "requests", "applied")})
+        history = history[-10:]
+        report["history"] = history
         with open(AUTO_STATE_PATH, "w", encoding="utf-8") as fh:
             json.dump(report, fh, ensure_ascii=False, indent=1)
     except Exception:
@@ -410,11 +384,191 @@ def auto_cycle(min_count: int | None = None, max_apply: int | None = None) -> di
             _sys.path.insert(0, str(WORKSPACE / "src"))
         from quan_ai_brain.core.audit import AuditLogger
         AuditLogger(WORKSPACE).record("self_improvement.auto_cycle",
-                                      {"applied": len(applied),
+                                      {"requests": len(requests),
                                        "proposed": report.get("propose", {}).get("created", 0)})
     except Exception:
         pass
     return report
+
+
+
+def _read_pending_dm() -> dict[str, Any]:
+    try:
+        with open(PENDING_DM_PATH, encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+def _write_pending_dm(data: dict[str, Any]) -> None:
+    _ensure_dir()
+    with open(PENDING_DM_PATH, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=1)
+
+
+def list_pending_dm() -> dict[str, Any]:
+    """Đề xuất đang chờ owner OK qua DM."""
+    items = {pid: p for pid, p in _read_pending_dm().items()
+             if isinstance(p, dict) and p.get("status") == "WAITING_OWNER"}
+    return {"ok": True, "items": items}
+
+
+def build_approval_requests(max_items: int = 3) -> dict[str, Any]:
+    """Lấy proposal PENDING_REVIEW đủ tin cậy -> WAITING_OWNER (chờ DM OK).
+
+    Đủ tin cậy = count >= min_count (mặc định 2) và intent từ _DOMAIN_HINTS,
+    và KHÔNG trùng kw tĩnh/kw learned (vì static luôn thắng — auto-apply vô nghĩa).
+    KHÔNG áp learned — chỉ chuyển trạng thái; owner OK mới áp (owner_ok()).
+    """
+    try:
+        with open(PROPOSALS_PATH, encoding="utf-8") as fh:
+            proposals = json.load(fh)
+    except Exception:
+        proposals = {}
+    pending = _read_pending_dm()
+    static_kws = _static_keywords()
+    learned = read_learned()
+    learned_all = {kw2 for it2, kws2 in learned.items() if it2 != "_auto" for kw2 in kws2}
+    created: list[dict[str, Any]] = []
+    for pid, p in sorted(proposals.items()):
+        if not isinstance(p, dict) or p.get("status") != "PENDING_REVIEW":
+            continue
+        if len(created) >= max_items:
+            break
+        kw = p.get("kw") or ""
+        cnt = int(p.get("count") or 0)
+        if cnt < 2:
+            continue
+        # (24/11) bỏ kw trùng tĩnh/learned — auto-apply vô nghĩa, static thắng:
+        if (kw.lower() in static_kws or _norm_token(kw) in static_kws
+                or kw in learned_all or _norm_token(kw) in learned_all):
+            continue
+        intent = None
+        for hint, it in _DOMAIN_HINTS:
+            if hint in kw:
+                intent = it
+                break
+        if intent is None:
+            continue
+        if any(q.get("kw") == kw for q in pending.values() if isinstance(q, dict)):
+            continue  # đã có trong hàng chờ
+        qid = f"dm_{time.strftime('%Y%m%d_%H%M%S')}_{kw[:24]}"
+        pending[qid] = {
+            "kw": kw, "intent": intent, "count": cnt,
+            "status": "WAITING_OWNER",
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "source_pid": pid,
+        }
+        p["status"] = "WAITING_OWNER"
+        created.append({"qid": qid, "kw": kw, "intent": intent, "count": cnt})
+    if created:
+        try:
+            _write_pending_dm(pending)
+            with open(PROPOSALS_PATH, "w", encoding="utf-8") as fh:
+                json.dump(proposals, fh, ensure_ascii=False, indent=1)
+        except Exception as exc:
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "fail_honest": True}
+    return {"ok": True, "created": created}
+
+
+def owner_ok(keyword_or_all: str = "") -> dict[str, Any]:
+    """Owner OK/duyệt qua DM -> kw vào learned (điểm áp DUY NHẤT phần auto-DM).
+
+    keyword_or_all: '' hoặc 'tất cả/toàn bộ/all/hết' = duyệt mọi item đang chờ;
+    tên kw hoặc qid = duyệt 1. Trả báo cáo từng item, fail-honest.
+    """
+    pending = _read_pending_dm()
+    waiting = {pid: p for pid, p in pending.items()
+               if isinstance(p, dict) and p.get("status") == "WAITING_OWNER"}
+    if not waiting:
+        return {"ok": False, "error": "không có đề xuất nào đang chờ anh OK", "fail_honest": True}
+    norm = (keyword_or_all or "").strip().lower()
+    select_all = norm in ("", "tất cả", "tat ca", "toàn bộ", "toan bo", "all", "hết", "het")
+    targets = waiting if select_all else {
+        pid: p for pid, p in waiting.items()
+        if norm == pid or norm == (p.get("kw") or "").lower()
+        or norm == _norm_token(p.get("kw") or "")
+    }
+    if not targets:
+        return {"ok": False, "error": f"không tìm thấy đề xuất khớp {keyword_or_all!r}", "fail_honest": True}
+    # backup learned trước khi áp (rollback-able)
+    try:
+        _ensure_dir()
+        with open(AUTO_BACKUP_PATH, "w", encoding="utf-8") as fh:
+            json.dump(read_learned(), fh, ensure_ascii=False, indent=1)
+    except Exception:
+        pass
+    applied: list[dict[str, Any]] = []
+    learned = read_learned()
+    for pid, p in targets.items():
+        kw = p.get("kw") or ""
+        intent = p.get("intent") or "email_today"
+        kws = learned.setdefault(intent, [])
+        if kw not in kws:
+            kws.append(kw)
+        auto_tags = learned.setdefault("_auto", [])
+        if kw not in auto_tags:
+            auto_tags.append(kw)
+        p["status"] = "APPROVED_BY_OWNER_DM"
+        p["approved_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        sp = p.get("source_pid")
+        applied.append({"qid": pid, "kw": kw, "intent": intent})
+        # đồng bộ proposals gốc:
+        try:
+            with open(PROPOSALS_PATH, encoding="utf-8") as fh:
+                proposals = json.load(fh)
+            if sp and sp in proposals and isinstance(proposals[sp], dict):
+                proposals[sp]["status"] = "APPROVED_BY_OWNER_DM"
+                proposals[sp]["approved_at"] = p["approved_at"]
+            with open(PROPOSALS_PATH, "w", encoding="utf-8") as fh:
+                json.dump(proposals, fh, ensure_ascii=False, indent=1)
+        except Exception:
+            pass
+    try:
+        with open(LEARNED_PATH, "w", encoding="utf-8") as fh:
+            json.dump(learned, fh, ensure_ascii=False, indent=1)
+        _write_pending_dm(pending)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "fail_honest": True}
+    return {"ok": True, "applied": applied}
+
+
+def owner_reject(keyword_or_all: str = "") -> dict[str, Any]:
+    """Owner từ chối (DM 'hủy học <kw>'/'từ chối') -> REJECTED, không học."""
+    pending = _read_pending_dm()
+    waiting = {pid: p for pid, p in pending.items()
+               if isinstance(p, dict) and p.get("status") == "WAITING_OWNER"}
+    if not waiting:
+        return {"ok": False, "error": "không có đề xuất nào đang chờ", "fail_honest": True}
+    norm = (keyword_or_all or "").strip().lower()
+    select_all = norm in ("", "tất cả", "tat ca", "toàn bộ", "toan bo", "all", "hết", "het")
+    targets = waiting if select_all else {
+        pid: p for pid, p in waiting.items()
+        if norm == pid or norm == (p.get("kw") or "").lower()
+        or norm == _norm_token(p.get("kw") or "")
+    }
+    if not targets:
+        return {"ok": False, "error": f"không tìm thấy đề xuất khớp {keyword_or_all!r}", "fail_honest": True}
+    rejected = []
+    for pid, p in targets.items():
+        p["status"] = "REJECTED_BY_OWNER"
+        p["rejected_at"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+        sp = p.get("source_pid")
+        rejected.append({"qid": pid, "kw": p.get("kw")})
+        try:
+            with open(PROPOSALS_PATH, encoding="utf-8") as fh:
+                proposals = json.load(fh)
+            if sp and sp in proposals and isinstance(proposals[sp], dict):
+                proposals[sp]["status"] = "REJECTED_BY_OWNER"
+            with open(PROPOSALS_PATH, "w", encoding="utf-8") as fh:
+                json.dump(proposals, fh, ensure_ascii=False, indent=1)
+        except Exception:
+            pass
+    try:
+        _write_pending_dm(pending)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "fail_honest": True}
+    return {"ok": True, "rejected": rejected}
 
 
 def auto_state() -> dict[str, Any]:

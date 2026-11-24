@@ -2,6 +2,27 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 24/11/2026 ~12:18 — S3-DM-GATE: CHERRY HỌC QUA DM, CHỜ ANH OK MỚI THỰC HIỆN (owner: "trước khi học tập, nâng cấp. em cho cherry gửi DM cho anh, sau đó anh phản hồi OK hoặc duyệt thì sẽ thực hiện. Việc học tập và các chức năng được thực hiện liên tục") ✅ CODE + TEST + LIVE
+- **Thay đổi tư duy**: từ "tự áp kw đủ tin cậy" (S2) → **"CHỈ build hàng chờ WAITING_OWNER + gửi DM xin OK"** (S3). Owner duyệt bằng câu OK/duyệt trong DM → kw mới được áp vào learned.
+- **Vòng tự học chạy liên tục** (mỗi 10 phút, không cần owner nhắc): propose → build_approval_requests → nếu CÓ WAITING_OWNER MỚI → DM owner qua send_message(target_channel=DM_CHANNEL_ID). Owner phản hồi trong DM (tự nhiên, không cần 2-step token).
+- **4 file sửa**:
+  - `tools/self_improvement.py`: thêm `PENDING_DM_PATH` + `build_approval_requests(max_items=3)` (lọc kw trùng tĩnh/learned, kw phải match domain hint); `owner_ok(keyword_or_all)` (điểm áp DUY NHẤT, có backup, fail-honest); `owner_reject(keyword_or_all)`. SỬA `auto_cycle` bỏ auto-apply — thay bằng build_approval_requests.
+  - `tools/netchat_command_center.py`: kw tĩnh self_improve thêm `ok/oke/ok anh/ok hết/duyệt hết/đồng ý hết/hủy học/từ chối`; detect_intent check `'duyệt hết/tất cả/đồng ý hết'` TRƯỚC approve (tránh nuốt); handler nhánh mới cho ok/ok hết/hủy học; thống kê WAITING_OWNER trong `em học được gì`.
+  - `tools/netchat_auto_responder.py`: thread `_self_improve_daemon` thay auto-apply bằng `build_approval_requests` + nếu qid mới → DM owner danh sách (không spam — ghi nhớ `last_dm_qids`).
+  - `tests/test_self_improvement.py`: 4 test mới (test_owner_ok_partial_one_keyword, test_owner_reject_blocks_pending, test_owner_ok_unknown_fails_honest, test_detect_intent_ok_all_routes_to_self_improve) + sửa 3 test cũ cho S3 (auto_cycle không tự áp nữa, rollback dùng owner_ok làm backup).
+- **Bằng chứng**: 44/44 focused PASS (self_improvement 16 + command_center 28). Responder restart pid 5256 (12:15), log "Vòng tự học nền ĐANG CHẠY". Pending_dm đã có 3 WAITING_OWNER từ cycle 12:12 (DM chưa thấy trên channel vì chu kỳ kế tiếp 10 phút).
+- **Trung thực**: rollback xóa sạch 3 kw auto-applied từ S2 test (Check mail/mail ngày/tóm tắt) vì bigram dễ nuốt câu — S3-DM-GATE giờ có chốt chặn cuối cùng = OWNER OK QUA DM trước khi áp. CHERRY sẽ chờ anh "ok hết/duyệt hết" thì mới học.
+- **Khuyến nghị owner**: Khi em DM "EM MUON HOC X TU KHOA MOI: ..." → anh reply "ok hết" (duyệt tất cả) hoặc "duyệt học <từ>" (1 từ) hoặc "hủy học" (bỏ).
+
+## 24/11/2026 ~13:05 — S3: "CHECK MAIL TỪ NGÀY DD/MM" (owner ảnh image_740b19) ✅ CODE + TEST + SOAP THẬT
+- **Ảnh owner**: "Check mail/vmail của anh từ ngày 22/11 đến bây giờ. Hãy tóm tắt các mail đó" (11:56-11:57) → CHERRY trả lời CŨ "chưa có công cụ" (responder lúc đó chưa có kw mới).
+- **Root cause**: chữ `check` (không dấu) KHÔNG có trong kw tĩnh/kw động → detect_intent None.
+- **Sửa 4 file**: `tools/mail_reader.py` (+`read_since` Zimbra `after:MM/DD/YYYY`); `src/quan_ai_brain/office/email_connector.py` (+`fetch_since`); `tools/office_email_sync_runner.py` (+CLI `--since DD/MM`, lọc client-side theo received_at, lưu intake bình thường); `tools/netchat_command_center.py` (+kw tĩnh `check mail/email/vmail/hộp thư` có+không dấu, +regex động `check`, +parse `từ ngày DD/MM` → truyền `--since` vào runner).
+- **Bằng chứng thật**: runner `--since 22/11` SOAP EXIT=0 — 8 mail mới, 5 quan trọng (top: TRIỆU TẬP CAB MẢNG TRUYỀN DẪN đêm 23/11 hạn 16h, priority 100).
+- **Test**: detect_intent 8/8 PASS (check mail có/không dấu, có/không ngày); wire parse `--since 22/11` vào cmd PASS; focused regression 64/64 PASS (command_center + office_email_connector + self_improvement).
+- **Deploy**: restart responder → **pid 15504** (13:02), greeting OK, AUTO-TUNE chạy, 218 seen nạp. DM owner báo cáo đã lên channel (verify đọc lại ✓).
+- **Lưu ý DM bot**: msg chứa ký tự đặc biệt (`'` `—` `→` `≥`) → token confirm mismatch ×2 (exit 3 nhưng tin không lên); gửi lại msg ASCII-tiengan không dấu → token khớp, gửi OK. Bài học: khi send qua bot CLI cần msg đơn giản hoặc escape kỹ.
+
 ## 24/11/2026 ~11:35 — SELF-IMPROVEMENT S2 AUTO-TUNE (MỚI) ✅ TRIỂN KHAI (owner: "cấu hình để tất cả các điều anh DM cho cherry đều tự học để nâng cấp liên tục")
 - **S2 mở rộng từ S1**: từ "học khi anh ra lệnh" → **tự học liên tục không cần ra lệnh**.
 - **Auto-tune daemon** (`netchat_auto_responder.py` main L1404): thread nền chạy `auto_cycle()` mỗi 10 phút — fail-safe (try/except không đụng vòng poll chính), log "🎓 [AUTO-TUNE]" khi tự áp.
