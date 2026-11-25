@@ -1366,6 +1366,16 @@ Owner phê duyệt "BẮT ĐẦU M5" (M2/M3 vẫn chờ duyệt; gộp M4-B/C v�
 - **Fix flaky test E2E ở gốc**: `test_web_server_e2e_multi_turn_chat` PASS 11:08 → FAIL 11:23 cùng code. Điều tra dump stack: khi catalog NetMind hiccup (GLM cold 9,5s đo thật 11:41) router rơi local Ollama → turn-1 đo thật 28,2s (context KB 4.790 docs + grounding, CPU) > timeout 25s test. Fix: stub LLMProvider.generate trong fixture (kiểm pipeline đúng nghĩa, độc lập mạng) + khôi phục sau dùng; server thật 8766 vẫn qua GLM bình thường (6,8s, không đụng).
 - **Kiểm chứng**: file E2E 5/5 PASS 8,5s (trước 27s+); regression full 2.996 PASS / 0 FAILED / 44 skipped; HANDOFF_LATEST regen exit 0.
 
+
+### 25/11 — TOI UU CUA SO CHERRY: DUNG 1 CUA SO (owner: "sao cherry hien thi nhieu cua so the, hay toi uu chi 1 cua so")
+- **Nguyen nhan that (audit)**: LIVENESS_30MIN fire .bat moi 30 phut; khi Cherry DANG SONG, nhánh idempotent cua KHOI_DONG_CHERRY.bat in canh bao + PAUSE → moi chu ky tao 1 cua so cmd treo (tu 18:16 den 23:06 da cong don ~40 cua so rac); LOGON launcher + venv trampoline + host + services cung lam man hinh nhieu cua so python.
+- **Fix 3 lop**:
+  1. `tools/liveness_hidden.vbs` (moi): LIVENESS_30MIN chay .bat voi co `--hidden` + window style 0 — khi Cherry song → .bat thoat NGAM khong tao cua so; khi Cherry chet → khoi phuc va mo DUNG 1 cua so host.
+  2. `KHOI_DONG_CHERRY.bat`: nhan tham so `--hidden`; nhánh idempotent moi — thay vi pause, kiem tra `data\console_host.lock`: chua co → `start` console_host `--attach` (dung 1 cua so giam sat); da co → thoat ngam khi --hidden (khong pause, khong tao cua so rac). ASCII + CRLF (em-dash/echo-dau-ngoac trong block if = syntax error cmd).
+  3. `tools/cherry_console_host.py`: them che do `--attach` (khong spawn service — bam 3 log file cherry_servers/netchat/learning tron ve 1 cua so, mau rieng tung service; dong cua so = ngat xem, service van song) + marker lock `data/console_host.lock` chong double-spawn (check age <2h + pid con song; fail-open).
+- **E2E**: fire .bat --hidden 3 lan lien tiep → DUNG 1 host logic (venv trampoline pair) + DUNG 1 cua so "CHERRY - KHOI DONG TAY (1 cua so)"; lock file hoat dong; ports 8765+8766 HTTP 200; LOGON van giu cua so HIEN (owner 19/11); da dong 40 cua so rac.
+- **Test**: focused 50/50 PASS.
+
 ### 24/11 ~12:50 — S3-v3: TỰ HỌC xong → DM BÁO CÁO KẾT QUẢ hạng mục
 - **Yêu cầu owner**: "sau khi tự học, cherry sẽ DM báo cáo lại kết quả của một hạng mục đã thực hiện" + nêu rõ TÁC DỤNG + THỜI GIAN HOÀN THÀNH.
 - **owner_ok()** (tools/self_improvement.py): verify TỪNG kw qua detect_intent thật (verified_intent) + đo duration_ms + finished_at; ghi `data/self_improvement/owner_ok_last_report.json`.

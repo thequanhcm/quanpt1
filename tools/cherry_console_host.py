@@ -48,6 +48,40 @@ SERVICES = [
 ]
 
 
+
+LOCK_FILE = ROOT / "data" / "console_host.lock"
+
+
+def _acquire_lock() -> bool:
+    """Marker chống double-spawn (skill windows-daemon-ops): nếu lock còn FRESH
+    (< 2 giờ) và process ghi trong lock còn sống → đã có host → False."""
+    import os as _os
+    try:
+        if LOCK_FILE.exists():
+            age = time.time() - LOCK_FILE.stat().st_mtime
+            pid_txt = LOCK_FILE.read_text(encoding="ascii", errors="replace").strip()
+            if age < 7200 and pid_txt.isdigit():
+                # process còn sống không?
+                out = subprocess.run(["tasklist", "/FI", f"PID eq {pid_txt}"],
+                                     capture_output=True, text=True,
+                                     creationflags=subprocess.CREATE_NO_WINDOW)
+                if str(pid_txt) in (out.stdout or ""):
+                    return False
+        LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        LOCK_FILE.write_text(str(_os.getpid()), encoding="ascii")
+        return True
+    except Exception:
+        return True  # fail-open: tốt hơn là mở 2 cửa sổ giám sát than thiếu
+
+
+def _release_lock() -> None:
+    try:
+        if LOCK_FILE.exists():
+            LOCK_FILE.unlink()
+    except Exception:
+        pass
+
+
 def _stamp() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
@@ -87,6 +121,9 @@ def _start_services():
 
 
 def main() -> int:
+    if not _acquire_lock():
+        print("[SYSTEM] Đã có cửa sổ CHERRY đang chạy — thoát (không mở trùng).")
+        return 0
     print("=" * 78)
     print("  CHERRY — BẢNG ĐIỀU KHIỂN GỘP (1 cửa sổ: Servers + NetChat + Learning)")
     print("  Log chi tiết từng service: logs/cherry_servers.log / _netchat.log / _learning.log")
@@ -147,8 +184,95 @@ def main() -> int:
                 except Exception:
                     pass
         print("[SYSTEM] Đã dừng sạch. Đóng cửa sổ.")
+        _release_lock()
+    return 0
+
+
+
+
+def _ports_alive() -> bool:
+    """Kiểm tra nhanh stack đã chạy sẵn chưa (port 8765 listen?)."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(1.0)
+    try:
+        return s.connect_ex(("127.0.0.1", 8765)) == 0
+    finally:
+        s.close()
+
+
+def main_attach() -> int:
+    """(24/11/2026, owner: 'chi 1 cua so') CHẾ ĐỘ GẮN VÀO stack đang sống:
+    KHÔNG spawn service mới — chỉ đọc 3 log file hiện có và trộn in về cửa sổ.
+    Đóng cửa sổ = ngắt giám sát (service vẫn sống, không bị tắt).
+    """
+    if not _acquire_lock():
+        print("[SYSTEM] Đã có cửa sổ CHERRY đang chạy — thoát (không mở trùng).")
+        return 0
+    print("=" * 78)
+    print("  CHERRY — BẢNG ĐIỀU KHIỂN (chế độ GẮN VÀO: service đã chạy sẵn)")
+    print("  Đang xem log: servers + netchat + learning. Đóng cửa sổ này KHÔNG tắt Cherry.")
+    print("  Tắt hẳn Cherry: chạy TAT_CHERRY.bat")
+    print("=" * 78)
+    logs = [
+        ("SERVERS", LOG_DIR / "cherry_servers.log"),
+        ("NETCHAT", LOG_DIR / "cherry_netchat.log"),
+        ("LEARNING", LOG_DIR / "cherry_learning.log"),
+    ]
+    print("  [OK] Stack đang sống (port 8765) — bám log 3 service:")
+    for name, f in logs:
+        print(f"    - {name:<9} {f.name}")
+    print("-" * 78)
+    print("Đang theo dõi log (Ctrl+C hoặc đóng cửa sổ để ngắt xem)...")
+    print()
+    try:
+        # đọc từ cuối file trở đi
+        handles = []
+        for name, f in logs:
+            fh = open(f, "r", encoding="utf-8", errors="replace")
+            fh.seek(0, 2)  # EOF
+            handles.append((name, fh))
+        import queue as _q
+        q: "_q.Queue[tuple[str, str]]" = _q.Queue()
+        def _pump_file(name: str, fh):
+            for raw in iter(fh.readline, ""):
+                line = raw.rstrip("\r\n")
+                if line.strip():
+                    q.put((name, line))
+            # EOF — poll tiếp
+            while True:
+                line = fh.readline()
+                if line:
+                    line = line.rstrip("\r\n")
+                    if line.strip():
+                        q.put((name, line))
+                else:
+                    time.sleep(0.4)
+        threads = []
+        for name, fh in handles:
+            t = threading.Thread(target=_pump_file, args=(name, fh), daemon=True)
+            t.start()
+            threads.append(t)
+        while True:
+            deadline = time.time() + 0.5
+            shown = 0
+            while time.time() < deadline and shown < 200:
+                try:
+                    name, line = q.get(timeout=0.1)
+                except _q.Empty:
+                    break
+                color = COLORS.get(name, "")
+                print(f"{color}{_stamp()} {name:<9}\x1b[0m {line}")
+                shown += 1
+            time.sleep(0.05)
+    except KeyboardInterrupt:
+        print("\n[SYSTEM] Ngắt xem — Cherry vẫn chạy nền.")
+    finally:
+        _release_lock()
     return 0
 
 
 if __name__ == "__main__":
+    if "--attach" in sys.argv:
+        sys.exit(main_attach())
     sys.exit(main())

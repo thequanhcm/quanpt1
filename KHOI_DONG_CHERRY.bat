@@ -2,6 +2,9 @@
 
 chcp 65001 >nul
 
+set "HIDDEN=0"
+if /i "%~1"=="--hidden" set "HIDDEN=1"
+
 title CHERRY - KHOI DONG TAY (1 cua so)
 
 REM ============================================================
@@ -62,12 +65,16 @@ netstat -an | findstr /C:":8765 " | findstr LISTENING >nul 2>&1
 
 if not errorlevel 1 (
 
-    echo [CANH BAO] Cherry dang chay san 8765 - khong mo trung.
-
-    echo Tat truoc bang TAT_CHERRY.bat roi chay lai file nay.
-
-    pause
-
+    REM Cherry dang chay - neu CHUA co cua so console host thi mo dung 1 cua so
+    REM giam sat (--attach); neu da co thi thoat ngam, khong tao them cua so.
+    if exist "data\console_host.lock" (
+        if "%HIDDEN%"=="1" exit /b 0
+        echo [INFO] Cherry dang chay va cua so giam sat dang mo - khong mo trung.
+        timeout /t 3 >nul
+        exit /b 0
+    )
+    echo [INFO] Cherry dang chay - mo cua so giam sat attach.
+    start "CHERRY - KHOI DONG TAY (1 cua so)" ".venv\Scripts\python.exe" "tools\cherry_console_host.py" --attach
     exit /b 0
 
 )
