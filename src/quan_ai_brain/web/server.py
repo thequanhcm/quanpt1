@@ -2273,6 +2273,83 @@ class BrainAPIHandler(http.server.BaseHTTPRequestHandler):
             except Exception as ground_exc:
                 _audit("grounding_facts.error", {"error": str(ground_exc)[:200]})
 
+            # 2.52 Health Snapshot (Sprint CHERRY-CÓ-TƯ-DUY, 26/11) — câu hỏi
+            # phân tích/đánh giá ("thiếu sót gì?", "tư vấn", "đánh giá hệ thống")
+            # → nạp SNAPSHOT SỨC KHỎE (probe thật, chỉ đọc) vào context để model
+            # đưa QUAN ĐIỂM có căn cứ thay vì né. Fail-open: lỗi → không evidence,
+            # chat vẫn chạy. Không đụng R4/R5 (0 hành động, chỉ dữ liệu sống).
+            try:
+                from quan_ai_brain.tools.health_snapshot import (
+                    collect_health_snapshot,
+                    looks_like_analysis_query,
+                    render_health_snapshot_block,
+                )
+                if looks_like_analysis_query(query):
+                    _hs = collect_health_snapshot(current_model=selected_model)
+                    _hs_block = render_health_snapshot_block(_hs)
+                    context.system_instructions = (
+                        _hs_block + "\n\n" + (context.system_instructions or "")
+                    )
+                    _audit("health_snapshot.injected", {
+                        "errors": len(_hs.get("recent_errors", []) or []),
+                        "self_improve_pending": _hs.get("self_improve_pending", 0),
+                    })
+            except Exception as hs_exc:
+                _audit("health_snapshot.error", {"error": str(hs_exc)[:160]})
+
+            # 2.53 ROLE HAT (Sprint CHERRY-ĐA-NGHIỆP-VỤ, 26/11) — audit cho thấy
+            # ExecutiveRoleOrchestrator (10 vai trò) chỉ wire vào kênh giọng nói,
+            # kênh chat text chính KHÔNG bao giờ được phân vai → CHERRY trả lời
+            # mọi thứ bằng 1 giọng. Wire: classify_intent(query) → inject nhãn
+            # "[VAI TRÒ ĐANG MẶC]" vào system_instructions để GLM trả lời ĐÚNG
+            # chuyên môn nhưng vẫn tự nhiên (KHÔNG dùng response_text cứng của
+            # orchestrator — chỉ mũ vai trò). An toàn: kw SAFETY_OFFICER vẫn
+            # được classify như cũ; R4/R5 không đổi (chỉ nhãn, không hành động).
+            try:
+                _role = _GLOBAL_ROLE_ORCHESTRATOR.classify_intent(query)
+                _rmeta = ROLE_METADATA.get(_role, {})
+                _role_block = (
+                    f"[VAI TRÒ ĐANG MẶC: {_rmeta.get('title_vi', _role.value)} — "
+                    f"{_rmeta.get('description', '')}] "
+                    "Trả lời với chuyên môn, cách tiếp cận và trọng tâm đúng vai "
+                    "trò này, nhưng VẪN xưng 'em' gọi 'anh' tự nhiên như thường lệ; "
+                    "KHÔNG nhắc ra nhãn vai trò này trong câu trả lời."
+                )
+                context.system_instructions = (
+                    _role_block + "\n\n" + (context.system_instructions or "")
+                )
+                _audit("role_hat.applied", {"role": _role.value})
+            except Exception as role_exc:
+                _audit("role_hat.error", {"error": str(role_exc)[:160]})
+
+            # 2.54 EPISODIC TIME RECALL (Sprint CHERRY-ĐA-NGHIỆP-VỤ, 26/11) —
+            # feedback owner 12:35: "hôm qua anh đã hỏi em cái gì?" bị né dù
+            # brain.db có dữ liệu. Nguyên nhân: semantic recall chỉ match ngữ
+            # nghĩa (embedding), câu hỏi về THỜI GIAN không hit; không module
+            # nào tra episodes theo khung ngày; DB ghi UTC còn owner nói giờ VN.
+            # Wire: detector khớp → truy episodes theo khung ngày VN → inject
+            # block "[HỘI THOẠI NGÀY ...]" để trả lời bằng dữ liệu thật.
+            # Fail-open: lỗi → không block, chat vẫn chạy. Chỉ-đọc, không R4/R5.
+            try:
+                from quan_ai_brain.cognition.episodic_recall import (
+                    looks_like_past_query,
+                    recall_past_chat_turns,
+                    render_episodic_block,
+                )
+                if looks_like_past_query(query):
+                    _ep = recall_past_chat_turns(db_path, query)
+                    _ep_block = render_episodic_block(_ep)
+                    if _ep_block:
+                        context.system_instructions = (
+                            _ep_block + "\n\n" + (context.system_instructions or "")
+                        )
+                        _audit("episodic_recall.injected", {
+                            "items": len((_ep or {}).get("items") or []),
+                            "label": (_ep or {}).get("label", ""),
+                        })
+            except Exception as ep_exc:
+                _audit("episodic_recall.error", {"error": str(ep_exc)[:160]})
+
             # 2.55 Avatar: THINKING ngay khi nhận câu hỏi (trước tra cứu — owner thấy
             # phản ứng tức thì), rồi RESEARCHING nếu có tra cứu ngoài.
             try:

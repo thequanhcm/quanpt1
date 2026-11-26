@@ -2,6 +2,45 @@
 # QUAN AI BRAIN — Project Status
 
 
+## 26/11/2026 ~12:45 — SPRINT CHERRY-ĐA-NGHIỆP-VỤ: WIRE 10 VAI TRÒ + AUTO-REFRESH TRÍ NHỚ NGỮ NGHĨA (AUDIT TRƯỚC, SỬA SAU)
+
+**Yêu cầu owner:** "audit, rà soát, xây dựng để cherry có quan điểm, suy nghĩ, trí nhớ, tư duy..... như vai trò trợ lý đa nghiệp vụ"
+
+**Audit (tools/audit_cherry_cognition.py, 229 dòng, chỉ-đọc):**
+- SỐNG: trí nhớ dài hạn brain.db (3.273 memories, 72 VERIFIED), conversation_state đa lượt (get(channel), anaphora OK), teach→nhớ, Self-RAG, M4-C tự QA — 24/28 hạng mục sống
+- LẠC HẬU: semantic ChromaDB 6.578 chunks cũ, 392 memories/episodes mới chưa ingest (không có auto-refresh) — ĐÃ ingest tay lên 6.970-6.974
+- CHẾT ở kênh chat: ExecutiveRoleOrchestrator (10 vai trò) CHỈ wire vào kênh giọng nói (voice_pipeline.py:214) — /api/chat KHÔNG bao giờ phân vai
+- Probe sai 2 chỗ trong chính audit script (conversation_state API `load`→`get`, semantic stats key `chunks`→`n_chunks`) — ĐÃ sửa, mốc trung thực
+
+**Xây (3 thay đổi nhỏ, fail-open, không đụng R4/R5):**
+1. `web/server.py` mục 2.53 ROLE HAT — classify_intent(query) → inject "[VAI TRÒ ĐANG MẶC: ...]" từ ROLE_METADATA vào system_instructions; chỉ mũ vai trò, KHÔNG dùng response_text cứng; audit log `role_hat.applied`
+2. `start_dual_servers.py` — daemon `_semantic_refresh_daemon` ingest delta idempotent mỗi 30 phút (fail-honest, không giết servers)
+3. `tools/audit_cherry_cognition.py` — sửa 2 probe sai thành trung thực
+
+**Test:** tests/test_role_hat.py 18/18 PASS; focused regression 51/51; syntax OK 3 file
+
+**E2E thật qua /api/chat (servers đã restart PID 11876):**
+- "kiểm tra pi 5..." → role NOC_OPERATOR (audit.jsonl 05:44) + trả lời probe thật, không khẳng định bừa
+- "em tư vấn thấy hệ thống..." → health_snapshot.injected (3 lỗi thật) + role EXECUTIVE_ASSISTANT → trả lời CÓ QUAN ĐIỂM: Pi5 mất kết nối/reminder job sai venv/lỗi đọc DM + điểm tốt + hướng xử lý
+- Dạy "nhớ rằng anh đang tập trung làm sprint cherry đa nghiệp vụ" → nhớ SEMANTIC ID 247f508d; "vậy sprint đó..." → hiểu anaphora + trung thực chưa có chi tiết
+
+**Chưa làm (chờ duyệt):** commit (5 file: server.py, start_dual_servers.py, audit_cherry_cognition.py, test_role_hat.py, PROJECT_STATUS.md); kw-overlap DATA_ANALYST/RESEARCHER ('so sánh giải pháp') nếu muốn mapping khác
+
+**FIX 2 (12:55, feedback owner 2 ảnh 12:35): "hôm qua anh đã hỏi em cái gì?" bị NÉ** dù brain.db có 3.814 episodes (audit đúng 2 bản ghi 25/11: tài liệu BMS enteliVIZ string pin 48,9V). Gốc rễ: semantic recall chỉ match NGỮ NGHĨA (embedding — câu hỏi thời gian 0 hit), không module tra episodes theo khung ngày, DB ghi UTC còn owner nói giờ VN. Fix: `src/quan_ai_brain/cognition/episodic_recall.py` MỚI (detector thận trọng hôm qua/hôm nay/lần trước + resolve khung ngày VN→UTC + recall episodes + render block; khung rỗng → trung thực liệt kê ngày CÓ dữ liệu; fail-open chỉ-đọc) + server.py mục 2.54 wire sau Role Hat. Test: test_episodic_recall.py 18/18 PASS; focused 69/69 (gồm role_hat + health_snapshot). E2E thật: cùng câu hỏi trong ảnh → episodic_recall.injected (2 items, NGÀY 25/11) → trả lời ĐÚNG dữ liệu: "hôm qua anh đã gửi tài liệu BMS enteliVIZ... em đã tóm tắt điện áp 48,9V" ✅
+
+## 26/11/2026 ~11:00 — SPRINT CHERRY-CÓ-TƯ-DUY: SNAPSHOT SỨC KHỎE + QUAN ĐIỂM PHẢN BIỆN (owner: ảnh image_92b084 "cherry chưa có quan điểm, suy nghĩ. hãy xây dựng để cherry có tư duy") ✅ CODE + TEST 22/22 + LIVE PROBE
+- **Vấn đề thật từ ảnh**: owner DM CHERRY "em tư vấn thấy hệ thống của em có thiếu sót gì?" (09:47) → CHERRY không trả lời được chất lượng vì (1) system prompt 13 luật toàn "KHÔNG/CHỈ" → model bị dạy không được có ý kiến; (2) câu hỏi đánh giá không được nạp BẰNG CHỨNG SỐNG nào (health/errors chỉ có ở lệnh "trạng thái") → GLM hoặc bịa hoặc né bằng "em chưa đủ dữ kiện".
+- **Root cause**: pipeline /api/chat chỉ nạp grounding facts (kiến trúc) cho mọi câu hỏi, KHÔNG nạp dữ liệu vận hành cho câu hỏi PHÂN TÍCH; DEFAULT_SYSTEM_INSTRUCTIONS thiếu luật cho phép (và bắt buộc) đưa quan điểm khi owner chủ động hỏi ý kiến.
+- **3 file (1 mới + 2 sửa, fail-open, chỉ-đọc)**:
+  - `src/quan_ai_brain/tools/health_snapshot.py` (MỚI): `collect_health_snapshot()` probe thật 0-side-effect (components TCP + Pi5 edge + ổ E: + responder heartbeat + 5 lỗi gần nhất trong logs + hàng chờ tự học PENDING_REVIEW), không bao giờ raise; `render_health_snapshot_block()` render "[SNAPSHOT SỨC KHỎE HỆ THỐNG]" kèm 3 điều bắt buộc (a) nêu 1-3 điểm yếu THẬT + vì sao + hướng xử lý (b) nêu 1-2 điểm đang tốt (c) KHÔNG né "chưa đủ dữ kiện" — thiếu gì thì nói rõ thiếu gì; `looks_like_analysis_query()` detector câu phân tích (ngưỡng thận trọng: từ khóa phân tích + đối tượng hệ thống/em/bot, loại trừ tri thức chung, KHÔNG ăn lệnh "trạng thái/mở chrome/help").
+  - `src/quan_ai_brain/web/server.py` (_handle_api_chat, mục 2.52 sau grounding 2.5): detector khớp → inject snapshot block vào `context.system_instructions` + audit `health_snapshot.injected`. Fail-open: lỗi → không evidence, chat vẫn chạy.
+  - `src/quan_ai_brain/cognition/context_builder.py` (DEFAULT_SYSTEM_INSTRUCTIONS): +LUẬT 14 "CÓ QUAN ĐIỂM — TƯ DUY PHẢN BIỆN (26/11, CAO)": khi owner hỏi phân tích/đánh giá → PHẢI đưa quan điểm có căn cứ từ [BỘ SỰ THẬT SỐNG]/[SNAPSHOT SỨC KHỎE]/trí nhớ đã duyệt; luật 10-11 vẫn đứng (chỉ-đọc làm luôn, đổi trạng thái hỏi duyệt, không thêm khuyến cáo khi không được hỏi).
+- **Test**: `tests/test_health_snapshot.py` **22/22 PASS** (1.95s) — 6 câu positive kiểu owner (kể cả câu gốc ảnh), 10 negative (lệnh hệ thống, tri thức chung, chào) không false-positive; snapshot never-raise + đủ key; block chứa YÊU CẦU TƯ DUY + KHÔNG né + điểm TỐT; rule 14 có mặt và KHÔNG phá luật cũ (R0-R5/KHÔNG HỎI LÒNG VÒNG/TIẾNG VIỆT). Focused regression **32/32 PASS** (greeting_guard + reply_understanding + end_to_end_chat + m4_self_introspection, 62s).
+- **Live probe thật (máy QUANPT)**: detector PASS; snapshot bắt được 3 điểm yếu THẬT ngay lập tức — Pi5 DISCONNECTED (mất kết nối hình thể), `Error reading dm messages` trong responder log, `No module named 'quan_ai_brain'` trong reminder job — chính là nguyên liệu để CHERRY trả lời câu "thiếu sót gì?" có căn cứ. Disk E: 183.2GB free, heartbeat 2s.
+- **Trung thực**: (1) chưa test E2E qua DM thật từ tài khoản owner (responder lọc bot echo đúng thiết kế — owner nhắn từ tài khoản anh sẽ ăn ngay, tương tự các sprint trước); (2) rule 14 là hướng dẫn prompt — chất lượng quan điểm phụ thuộc model (GLM-5.3-Flash), KHÔNG phải đảm bảo tuyệt đối; (3) server 8765 cần restart để nhận code mới (không tự restart — chờ owner hoặc chu kỳ watchdog tiếp theo); (4) detect "tại sao...?" có thể kích hoạt oan cho câu hỏi "tại sao X?" không về hệ thống — nhưng chỉ thêm evidence chỉ-đọc, không đổi hành vi, rủi ro thấp.
+- **An toàn**: 0 hành động ghi/trạng thái; R4/R5 không đụng; tất cả probe timeout ≤2s, fail-open.
+- **Next (đề xuất)**: restart server 8765 + test E2E DM thật; nếu owner muốn tư duy sâu hơn → cho phép snapshot gợi ý "cách đo thêm" (đã có trong điều 8) và nối snapshot vào SelfQA.
+
 ## 24/11/2026 ~12:18 — S3-DM-GATE: CHERRY HỌC QUA DM, CHỜ ANH OK MỚI THỰC HIỆN (owner: "trước khi học tập, nâng cấp. em cho cherry gửi DM cho anh, sau đó anh phản hồi OK hoặc duyệt thì sẽ thực hiện. Việc học tập và các chức năng được thực hiện liên tục") ✅ CODE + TEST + LIVE
 - **Thay đổi tư duy**: từ "tự áp kw đủ tin cậy" (S2) → **"CHỈ build hàng chờ WAITING_OWNER + gửi DM xin OK"** (S3). Owner duyệt bằng câu OK/duyệt trong DM → kw mới được áp vào learned.
 - **Vòng tự học chạy liên tục** (mỗi 10 phút, không cần owner nhắc): propose → build_approval_requests → nếu CÓ WAITING_OWNER MỚI → DM owner qua send_message(target_channel=DM_CHANNEL_ID). Owner phản hồi trong DM (tự nhiên, không cần 2-step token).
