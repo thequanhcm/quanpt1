@@ -121,26 +121,38 @@ def run_check(*, mark_checked: bool = True, limit: int = 20) -> dict[str, Any]:
     # (24/11 fix E2E) Zimbra 'after:' KHÔNG bao gồm chính ngày đó (strict greater)
     # → mail hôm nay bị bỏ sót khi since=hôm nay. Dùng 'date:' cho hôm nay,
     # 'after:(ngày trước since)' cho các ngày trước rồi lọc client-side >= since.
+    # (26/11, owner: "chỉ cảnh báo các mail gửi đến cho riêng anh") — dùng
+    # read_since_direct_only (S3-v5): TO chỉ owner & CC rỗng (GetMsg header
+    # chính xác, READONLY). Mail nhóm/broadcast "Dear all" KHÔNG còn cảnh báo.
     try:
-        from quan_ai_brain.office.email_connector import SOAPMailConnector, analyze_email
-        connector = SOAPMailConnector()
-        if since_ddmm == f"{now.day:02d}/{now.month:02d}":
-            raw = connector.fetch_since(since_ddmm, limit=limit)  # date: qua read path? — dùng fetch_today-like
-        else:
-            prev = since_dt - _dt.timedelta(days=1)
-            raw = connector.fetch_since(f"{prev.day:02d}/{prev.month:02d}", limit=limit)
+        from quan_ai_brain.office.email_connector import analyze_email
+        import mail_reader as _mr
+        res = _mr.read_since_direct_only(since_ddmm, limit=limit)
+        if "error" in res:
+            raise RuntimeError(res["error"])
+        raw_items = res.get("emails", [])
     except Exception as exc:
         return {"ok": False, "error": f"{type(exc).__name__}: {exc}",
                 "checked_at": checked_at, "fail_honest": True}
     # lọc client-side: chỉ giữ mail >= since_dt (theo ngày để tránh lệch giờ):
     def _pdt(s):
         try:
-            return _dt.datetime.fromisoformat((s or "").replace("Z", "+00:00"))
+            return _dt.datetime.strptime((s or "")[:16], "%Y-%m-%d %H:%M")
         except Exception:
             return None
     _cutoff_day = since_dt.date()
-    raw = [m for m in raw
-           if (_pdt(m.received_at_utc) or _dt.datetime.min).date() >= _cutoff_day]
+    raw_items = [m for m in raw_items
+                 if (_pdt(m.get("date") or "") or _dt.datetime.min).date() >= _cutoff_day]
+    # chuyển sang EmailMessage để tái dùng analyze_email:
+    from quan_ai_brain.integration.email_intake import EmailMessage
+    raw = [EmailMessage(
+        message_id=f"vmail-{m['id']}",
+        sender=m.get("from_addr", ""),
+        subject=m.get("subject", ""),
+        body_preview=(m.get("body_preview") or m.get("fragment") or "")[:500],
+        received_at_utc=m.get("date", ""),
+        source="vmail_soap",
+    ) for m in raw_items]
     important = []
     for msg in raw:
         try:
