@@ -32,6 +32,12 @@ WORKSPACE = Path(__file__).resolve().parent.parent
 # "đọc 10 mail mới nhất", "5 email gần nhất"...). detect_intent duyệt SAU kw tĩnh
 # và CHỈ khi không phải câu hỏi. Thứ tự = thứ tự ưu tiên.
 _DYNAMIC_COMMAND_RES: list[tuple[re.Pattern[str], str]] = [
+    # (26/11, owner: "cherry đọc được mail và nội dung file đính kèm") PHẢI ĐỨNG
+    # ĐẦU: 'đọc file đính kèm mail 39110' / 'lưu file đính kèm mail <kw|id>' /
+    # 'tìm file đính kèm đã lưu <kw>' — nếu không sẽ bị email_today/report nuốt.
+    (re.compile(r"(?:đọc|doc|xem)\s+(?:file\s+)?đính\s*kèm\s+(?:của\s+)?mail", re.IGNORECASE), "mail_attachment_read"),
+    (re.compile(r"(?:lưu|luu)\s+(?:file\s+)?đính\s*kèm\s+(?:theo\s+)?mail", re.IGNORECASE), "mail_attachment_save"),
+    (re.compile(r"(?:tìm|tim|tra\s*cứu|tra\s*cuu|kho)\s+(?:file\s+)?đính\s*kèm\s+(?:đã\s*lưu|da\s*luu)", re.IGNORECASE), "mail_attachment_find"),
     # tóm tắt N email/mail/vmail gần nhất/mới nhất → đọc hộp thư
     (re.compile(r"(?:tóm\s*tắt|tom\s*tat|đọc|doc|kiểm\s*tra|kiem\s*tra|liệt\s*kê|liet\s*ke|xem|check)\s*\d*\s*(?:email|mail|vmail|thư|thu)", re.IGNORECASE), "email_today"),
     # (24/11 S3) 'check mail/email/vmail từ ngày DD/MM' — có mốc thời gian:
@@ -563,6 +569,16 @@ def detect_intent(text: str) -> str | None:
             r"gần đây|gan day|tuần|tuan|tháng|thang|ngày qua|ngay qua|hôm qua|hom qua"
             r"|vài ngày|vai ngay|cần phản hồi|can phan hoi|cần phải phản hồi"
             r"|can phai phan hoi|tóm tắt|tom tat|trong \d+ ngày|trong \d+ tuan|trong \d+ thang", t):
+        return "email_today"
+    # (26/11, owner ảnh image_653379: 'kiểm tra các mail về báo cáo ngày' và
+    # 'Báo cáo email mà anh nhận được' từng bị nuốt thành intent 'report'
+    # (kw 'báo cáo' match containment) → trả danh sách file .md nội bộ SAI ý,
+    # lặp y hệt 2 câu khác nhau. GHÉP mail+report → email_today; GHÉP
+    # report+nhận/nhận được → email_today (báo cáo TRONG EMAIL, không phải file).
+    if re.search(r"mail|email|vmail|hộp thư|hop thu", t) and re.search(r"báo cáo|bao cao", t):
+        return "email_today"
+    if re.search(r"báo cáo|bao cao", t) and re.search(
+            r"nhận được|nhan duoc|nhận|đã gửi|da gui|gửi cho em|gui cho em", t):
         return "email_today"
     # (31/10/2026) 'giúp' chỉ là lệnh khi ĐỨNG ĐẦU câu — 'mở giúp anh chrome'
     # hay 'đọc giúp anh ảnh này' phải là mệnh lệnh/AI, không phải bảng help
@@ -2245,6 +2261,59 @@ def handle_tony_music_stop(payload: dict[str, Any] | None = None) -> str:
         return f"⚠️ Không dừng được nhạc: {type(exc).__name__}: {exc}"
 
 
+# -----------------------------------------------------------------------
+# (26/11 sprint 4, owner ảnh image_653379) CHERRY đọc mail + file đính kèm.
+# 3 handler gọi qua quan_ai_brain.office.email_attachments — fail-open, có
+# fallback tiếng Việt nếu import/exception. Handler được wire vào HANDLERS
+# ở dòng ~2660 (chèn entry ngay sau 'tony_music_stop').
+# -----------------------------------------------------------------------
+
+def _mail_attachment_read(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """DM 'đọc file đính kèm mail <id|từ khóa>' → tóm tắt text từ xlsx/docx/pdf.
+
+    CHERRY trước đây KHÔNG đọc được đính kèm: _list_emails chỉ trả header
+    (from/subject/date/has_attachment), thiếu phần tải bytes. Module mới:
+      1) Zimbra GetMsg → danh sách part đính kèm (filename, part, size, ct)
+      2) REST /service/content/get?id=&part= → bytes thật (xlsx/docx/pdf)
+      3) Trích text: zipfile+regex cho xlsx/docx; pypdf cho pdf.
+    Fail-open: lỗi trả text VN tóm tắt đúng lỗi (không nuốt exception).
+    """
+    from quan_ai_brain.office.email_attachments import handle_read_mail_attachment
+    try:
+        return handle_read_mail_attachment(text or "")
+    except Exception as exc:
+        return f"⚠️ Đọc đính kèm mail lỗi: {exc}"
+
+
+def _mail_attachment_save(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """DM 'lưu file đính kèm mail <id|từ khóa>' → tải về data/email_attachments/.
+
+    (owner ảnh image_653379) 'lưu file đính kèm theo mail đó để sau lấy làm cơ
+    sở dữ liệu tra cứu thì thực hiện và update'. Lưu local:
+        data/email_attachments/<mid>_<part>_
+    Đăng ký DB: data/email_intake.db (SQLite) — email_intake schema có sẵn.
+    Tra cứu:    lệnh 'tìm file đính kèm đã lưu <từ khóa>'.
+    """
+    from quan_ai_brain.office.email_attachments import handle_save_mail_attachment
+    try:
+        return handle_save_mail_attachment(text or "")
+    except Exception as exc:
+        return f"⚠️ Lưu đính kèm mail lỗi: {exc}"
+
+
+def _mail_attachment_find(text: str = "", payload: dict[str, Any] | None = None) -> str:
+    """DM 'tìm file đính kèm đã lưu <từ khóa>' → liệt kê từ SQLite intake DB.
+
+    Tra theo filename + subject + from (LIKE %kw%). Owner dùng để 'lấy làm cơ
+    sở dữ liệu tra cứu' mà không cần lục thư mục tay.
+    """
+    from quan_ai_brain.office.email_attachments import handle_find_saved_attachment
+    try:
+        return handle_find_saved_attachment(text or "")
+    except Exception as exc:
+        return f"⚠️ Tìm đính kèm đã lưu lỗi: {exc}"
+
+
 # ---------------------------------------------------------------------------
 # UDC-1 (04/11/2026): điều khiển/khống chế thiết bị Pi5 theo DM của quanpt1
 # — gọi edge control API thật (server 8766 → kiosk 8768 → DeviceControlService).
@@ -2640,6 +2709,12 @@ HANDLERS = {
     "pc_screenshot": handle_pc_screenshot,
     # (31/10/2026) Pi5 web/nhạc — music_stop không cần đối số
     "tony_music_stop": handle_tony_music_stop,
+
+    # (26/11 sprint 4) wire 3 handler đính kèm mail — định nghĩa TRƯỚC dict này
+    # (đặt ngay sau handle_pc_screenshot, trước phần Pi5 còn lại).
+    "mail_attachment_read": _mail_attachment_read,
+    "mail_attachment_save": _mail_attachment_save,
+    "mail_attachment_find": _mail_attachment_find,
     # UDC-1 (04/11/2026): thiết bị/khống chế theo DM — relay_on/off cần text
     # → xử lý riêng ở route_message; list + emergency không cần đối số
     "device_list": handle_device_list,
@@ -3000,3 +3075,5 @@ def _vn_err(msg: Any, limit: int = 200) -> str:
         if en in low:
             return f"{vi} ({s[:limit]})"
     return s[:limit]
+
+
